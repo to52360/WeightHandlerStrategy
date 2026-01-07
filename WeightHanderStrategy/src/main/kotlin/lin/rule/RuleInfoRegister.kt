@@ -104,6 +104,9 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
         }
     }
 
+    /**
+     * 依赖也就是配置信息
+     */
     private fun processDep(ruleInfo: RuleInfo, conditionGroup: ConditionGroup): Boolean {
         //组权重处理
         ruleInfo.groupWeight = conditionGroup.groupWeight
