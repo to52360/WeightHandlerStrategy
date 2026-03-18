@@ -11,7 +11,7 @@ class GroupStrategyDao(private val jdbcTemplate: JdbcTemplate) {
             ConditionGroup(
                 groupId = rs.getInt("groupId"),
                 bindId = rs.toDouble("bindId"),
-                weightConditionId = rs.getString("weightConditionId"),
+                ruleId = rs.getString("weightConditionId"),
                 depByWeightIds = rs.toDouble("depByWeightIds"),
                 weight = rs.getDoubleOrNull("weight"),
                 unConditionWeight = rs.getDoubleOrNull("unConditionWeight"),

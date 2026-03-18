@@ -1,7 +1,7 @@
 package lin.domain.use
 
 import club.xiaojiawei.hsscriptcardsdk.bean.area.HandArea
-import club.xiaojiawei.hsscriptcardsdk.data.CARD_INFO_TRIE
+import club.xiaojiawei.hsscriptcardsdk.data.CARD_DATA_TRIE
 import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
 import lin.bean.ComboCard
 import lin.domain.MyWarManage
@@ -100,7 +100,7 @@ private fun WarInfo.useOption(comboCard: ComboCard): Boolean {
 
 fun useCard(comboCard: ComboCard): Boolean {
     val card = comboCard.card
-    val actionInfo = CARD_INFO_TRIE[card.cardId]
+    val actionInfo = CARD_DATA_TRIE[card.cardId]
     var result = true
     actionInfo?.let {
         card.action.autoPower(it)

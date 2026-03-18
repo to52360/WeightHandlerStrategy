@@ -19,7 +19,7 @@ import lin.domain.context.CostWeight
  class ConditionGroup(
     val groupId: Int, //唯一标识
     val bindId: Array<Double>,
-    val weightConditionId: String, //打出策略,依赖关联组 ,辅助类:核心卡没上手,依赖项:在手牌
+    val ruleId: String, //打出策略,依赖关联组 ,辅助类:核心卡没上手,依赖项:在手牌
     val depByWeightIds : Array<Double>,  //依赖权重数据
     weight: Double?, //基础优先度
     unConditionWeight: Double?,
@@ -40,14 +40,14 @@ import lin.domain.context.CostWeight
     val key : Int,
     groupId: Int,
     bindId: Double,
-    weightConditionId: Int,
+    ruleId: Int,
     groupWeight: Double,
      depByWeightId: Double
 ) :
     ConditionGroup(
         groupId,
         bindId,
-        weightConditionId,
+        ruleId,
         groupWeight,
         depByWeightId
     )*/

@@ -17,9 +17,11 @@ class BuildRuleFactory(infoMap: Map<String, CardWeightInfo>) {
         ids: ConditionGroup.() -> Array<Double>
     ): RuleBuilder {
         val factory: RuleFactory = { group ->
+            val weights = parse(group.ids())
             val ctx = RuleBuildContext(group, parse, ids)
             ctx.spec()
         }
+
         return RuleBuilder().factory(factory)
     }
 }

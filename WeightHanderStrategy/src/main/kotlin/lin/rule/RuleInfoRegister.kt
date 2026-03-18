@@ -47,7 +47,7 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
 
 
     fun parseConditionGroup(conditionGroup: ConditionGroup) {
-        val weightConditionId = conditionGroup.weightConditionId
+        val weightConditionId = conditionGroup.ruleId
         val weightCondition = groupCondition[weightConditionId]
         //获取到对应id条件实现
         weightCondition?.let {
@@ -71,8 +71,9 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
 
 
         } ?: run {//没有对应条件id实现
+            //todo
             val msg =
-                "groupId=${conditionGroup.groupId},没有匹配到conditionId:${conditionGroup.weightConditionId}的条件信息"
+                "groupId=${conditionGroup.groupId},没有匹配到规则:${conditionGroup.ruleId}的条件信息"
             myLog.warn { msg }
             return
 

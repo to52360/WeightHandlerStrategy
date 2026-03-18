@@ -1,12 +1,13 @@
 package lin.serviceLoader.cardInfoProvide
 
 
-import club.xiaojiawei.hsscriptcardsdk.data.CARD_WEIGHT_TRIE
+import club.xiaojiawei.hsscriptcardsdk.data.CARD_DATA_TRIE
+
 import lin.bean.CardWeightInfo
 
 class DefCardWeightInfoProvide : CardWeightInfoProvide {
     override fun getInfos(): Map<String, CardWeightInfo> {
-        val weightConfigs = CARD_WEIGHT_TRIE.data()
+        val weightConfigs = CARD_DATA_TRIE.data()
         return weightConfigs.associateBy(
             keySelector = { it.key }
         ) { weightCard ->
