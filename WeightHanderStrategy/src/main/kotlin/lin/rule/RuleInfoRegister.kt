@@ -32,15 +32,15 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
         myLog.info {
             "加载到的条件组id:${groupCondition.keys}"
         }
-        val weightGroupInfos: List<ConditionGroup>? = loadConfig()
-        weightGroupInfos?.let {
+        val weightGroupInfos: List<ConditionGroup> = loadConfig()
+        weightGroupInfos.let {
             it.forEach { conditionGroup -> parseConditionGroup(conditionGroup) }
         }
 
 
     }
 
-    private fun loadConfig(): List<ConditionGroup>? {
+    private fun loadConfig(): List<ConditionGroup> {
         val groupStrategyDao: GroupStrategyDao by inject()
         return groupStrategyDao.getAll()
     }

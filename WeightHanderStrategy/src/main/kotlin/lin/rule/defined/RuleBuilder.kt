@@ -18,7 +18,11 @@ class RuleBuilder {
     private var level = RuleLevel.DEF
     private lateinit var factory: RuleFactory
     private var metadata: RuleMetadata? = null
-
+        get() {
+            //没设置就用id作为名字
+            if (field == null) field = RuleMetadata(id, id)
+            return field!!
+        }
     fun id(id: String) = apply { this.id = id }
     fun level(level: RuleLevel) = apply { this.level = level }
     fun factory(factory: RuleFactory) = apply { this.factory = factory }

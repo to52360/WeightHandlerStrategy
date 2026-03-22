@@ -22,6 +22,7 @@
         <module>dropStrategy</module>
         <module>extWeightHandler</module>
         <module>accolades250909</module>
+        <module>configUi</module>
     </modules>
 
     <repositories>
@@ -112,7 +113,7 @@
         <dependency>
             <groupId>com.github.xjw580</groupId>
             <artifactId>hs-script-base-strategy-plugin</artifactId>
-            <version>1.1.0</version>
+            <version>1.1.4</version>
             <scope>provided</scope>
         </dependency>
         <!--策略SDK-->
