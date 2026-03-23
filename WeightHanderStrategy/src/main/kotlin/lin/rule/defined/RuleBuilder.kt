@@ -12,7 +12,6 @@ fun interface RuleLogic {
 
 typealias RuleFactory = (ConditionGroup) -> RuleLogic
 
-
 class RuleBuilder {
     private lateinit var id: String
     private var level = RuleLevel.DEF
@@ -27,12 +26,15 @@ class RuleBuilder {
     fun level(level: RuleLevel) = apply { this.level = level }
     fun factory(factory: RuleFactory) = apply { this.factory = factory }
     fun metadata(metadata: RuleMetadata) = apply { this.metadata = metadata }
-    fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc ?: name) }
+    fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc) }
 
     fun build(): RuleRegistration {
         return RuleRegistration(
-            id,
-            spec = RuleSpec(id, level, factory),
+            ruleId = id,
+            spec = RuleSpec(
+                ruleLevel = level,
+                ruleFactory = factory
+            ),
             metadata = metadata
         )
     }

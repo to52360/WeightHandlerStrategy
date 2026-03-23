@@ -21,6 +21,7 @@ import lin.domain.use.UseDomain
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.rule.RuleInfoRegister
+import lin.rule.defined.RuleRegistry
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.parse.LieRenParse
@@ -90,6 +91,7 @@ class ModulesLoad {
             val infos = get<Map<String, CardWeightInfo>>(named("weightInfo")).values
             RuleInfoRegister(infos, get())
         }
+        singleOf(::RuleRegistry)
     }
 
     val utilsModule = module {
