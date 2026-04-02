@@ -15,6 +15,7 @@ import org.koin.core.component.inject
 /**
  * 目的 降低ConditionWeightHandler的复杂
  * [lin.weightHandler.condition.ConditionWeightHandler]
+ * todo [lin.rule.defined.RuleFactory] ruleFactor 将从这里迁移到[lin.rule.defined.RuleRegistry] 这里只负责旧的Rule
  */
 class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: ConfigDispatcher) : KoinComponent {
     val groupCondition: HashMap<String, RuleInfo> = hashMapOf()
