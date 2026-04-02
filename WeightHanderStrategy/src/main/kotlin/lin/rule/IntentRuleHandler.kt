@@ -12,6 +12,9 @@ import lin.weightHandler.WeightHandler
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
+/**
+ * 待定,方案有问题,需要调整,只用于参考
+ */
 class IntentRuleHandler : KoinComponent, WeightHandler {
 
     init {
