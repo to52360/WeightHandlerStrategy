@@ -1,22 +1,20 @@
 package lin.rule
 
-import lin.domain.context.NotWeight
-
 
 /**
  * 可有意图的结果
  */
-sealed class IntentResult(var weight: Double = NotWeight)
+sealed interface IntentResult
 class EnableResult(
-    weight: Double, val modifyCard: ComboCardAction? = null
-) : IntentResult(weight)
+    val weight: Double, val modifyCard: ComboCardAction? = null
+) : IntentResult
 
 
 //跳过
-object SkipResult : IntentResult()
+object SkipResult : IntentResult
 
 //强制停止
-object StopResult : IntentResult()
+object StopResult : IntentResult
 
 
 
