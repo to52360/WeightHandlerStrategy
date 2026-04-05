@@ -1,7 +1,7 @@
 package lin.rule.tree
 
 import lin.rule.build.RuleLogic
-import lin.rule.build.RuleRegistry
+import lin.rule.registry.RuleRegistry
 
 data class ConditionTreeInstance(
     val bindIds: List<Double>,

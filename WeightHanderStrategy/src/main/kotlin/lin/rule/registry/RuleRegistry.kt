@@ -1,6 +1,9 @@
-package lin.rule.build
+package lin.rule.registry
 
 import lin.myLog
+import lin.rule.build.DynamicField
+import lin.rule.build.RuleLogic
+import lin.rule.build.RuleRegistration
 import lin.rule.tree.RuleConfig
 import lin.utils.serviceLoader.ServiceLoaderUtils
 
@@ -12,7 +15,8 @@ data class RuleUiItem(
 )
 
 class RuleRegistry(
-    providers: Collection<RuleRegistrationProvider> = ServiceLoaderUtils.getCacheServices(RuleRegistrationProvider::class.java)
+    providers: Collection<RuleRegistrationProvider> = ServiceLoaderUtils.getCacheServices(RuleRegistrationProvider::class.java),
+    private val validator: RuleConfigValidator = RuleConfigValidator()
 ) {
     private val registrationsById: Map<String, RuleRegistration>
 
@@ -50,38 +54,15 @@ class RuleRegistry(
         }
     }
 
+    fun jsonSchema(ruleId: String): Map<String, Any> {
+        val registration = require(ruleId)
+        val fields = registration.metadata?.dynamicFields.orEmpty()
+        return validator.jsonSchema(fields)
+    }
+
     fun build(ruleId: String, ruleConfig: RuleConfig): RuleLogic {
         val registration = require(ruleId)
-
-        // --- 校验动态参数 ---
-        registration.metadata?.dynamicFields?.forEach { field ->
-            val value = ruleConfig.args[field.propertyName]
-            requireNotNull(value) {
-                "Rule(ruleId='$ruleId') 构建错误: 缺少必填的动态参数 '${field.propertyName}'"
-            }
-
-            // 兼容性类型校验 (因为来自于 Json，可能是 Number/String)
-            when (field.type) {
-                Int::class.java -> {
-                    val isValid = value is Number || (value is String && value.toIntOrNull() != null)
-                    require(isValid) { "参数 '${field.propertyName}' 的值('$value') 必须可以转换为 Int 类型" }
-                }
-
-                Boolean::class.java -> {
-                    val isValid = value is Boolean || (value is String && value.toBooleanStrictOrNull() != null)
-                    require(isValid) { "参数 '${field.propertyName}' 的值('$value') 必须可以转换为 Boolean 类型" }
-                }
-            }
-
-            // 正则校验
-            if (!field.regex.isNullOrEmpty()) {
-                val strValue = value.toString()
-                require(strValue.matches(Regex(field.regex))) {
-                    "参数 '${field.propertyName}' 的值('$strValue') 校验失败，不符合正则: ${field.regex}"
-                }
-            }
-        }
-
+        validator.validate(ruleId, registration.metadata?.dynamicFields.orEmpty(), ruleConfig.args)
         return registration.spec.ruleFactory(ruleConfig)
     }
 

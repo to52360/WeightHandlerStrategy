@@ -17,30 +17,52 @@ class RuleBuilder {
     private val dynamicFields = mutableListOf<DynamicField>()
     private var metadata: RuleMetadata? = null
         get() {
-            //没设置就用id作为名字
             if (field == null) field = RuleMetadata(id, id)
             return field!!
         }
+
     fun id(id: String) = apply { this.id = id }
     fun factory(factory: RuleFactory) = apply { this.factory = factory }
     fun metadata(metadata: RuleMetadata) = apply { this.metadata = metadata }
     fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc) }
 
-    fun requireField(propertyName: String, type: Class<*>, regex: String? = null) = apply {
-        this.dynamicFields.add(DynamicField(propertyName, type, regex))
+    fun requireField(dynamicField: DynamicField) = apply {
+        this.dynamicFields.add(dynamicField)
     }
 
-    fun requireIntField(propertyName: String, regex: String? = null) = apply {
-        requireField(propertyName, Int::class.java, regex)
+    fun requireField(
+        propertyName: String,
+        type: DynamicFieldType,
+        required: Boolean = true,
+        regex: String? = null,
+        options: List<DynamicFieldOption> = emptyList()
+    ) = apply {
+        this.dynamicFields.add(
+            DynamicField(
+                propertyName = propertyName,
+                type = type,
+                required = required,
+                regex = regex,
+                options = options
+            )
+        )
     }
 
-    fun requireBooleanField(propertyName: String) = apply {
-        requireField(propertyName, Boolean::class.java)
+    inline fun <reified T : Any> requireField(
+        propertyName: String,
+        required: Boolean = true,
+        regex: String? = null,
+        options: List<DynamicFieldOption> = emptyList()
+    ) = apply {
+        requireField(
+            propertyName = propertyName,
+            type = fieldTypeOf<T>(),
+            required = required,
+            regex = regex,
+            options = options
+        )
     }
 
-    fun requireStringField(propertyName: String, regex: String? = null) = apply {
-        requireField(propertyName, String::class.java, regex)
-    }
 
     fun build(): RuleRegistration {
         val finalMetadata = metadata?.copy(
@@ -53,5 +75,14 @@ class RuleBuilder {
             ),
             metadata = finalMetadata
         )
+    }
+}
+
+inline fun <reified T : Any> fieldTypeOf(): DynamicFieldType {
+    return when (T::class) {
+        Int::class -> DynamicFieldType.INT
+        Boolean::class -> DynamicFieldType.BOOLEAN
+        String::class -> DynamicFieldType.STRING
+        else -> error("Unsupported dynamic field type: ${T::class.qualifiedName}")
     }
 }
