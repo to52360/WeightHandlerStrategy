@@ -1,4 +1,4 @@
-package lin.rule
+package lin.rule.handler
 
 interface IntentRuleContext
 

@@ -1,4 +1,4 @@
-package lin.rule
+package lin.rule.handler
 
 import lin.bean.ComboCard
 import lin.bean.cardExt.base.intentRuleMap
@@ -7,6 +7,7 @@ import lin.config.RuleMap
 import lin.config.processMoreConfig
 import lin.domain.MyWarManage
 import lin.domain.context.UnUseWeight
+import lin.rule.RuleInfoRegister
 import lin.serviceLoader.weightRule.IntentRuleInfo
 import lin.weightHandler.WeightHandler
 import org.koin.core.component.KoinComponent

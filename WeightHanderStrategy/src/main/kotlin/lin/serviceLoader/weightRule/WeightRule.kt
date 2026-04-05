@@ -4,8 +4,8 @@ import lin.bean.ComboCard
 
 
 import lin.domain.WarInfo
-import lin.rule.IntentResult
-import lin.rule.RuleLevel
+import lin.rule.handler.IntentResult
+import lin.rule.handler.RuleLevel
 
 /**
  * 表达意图规则接口

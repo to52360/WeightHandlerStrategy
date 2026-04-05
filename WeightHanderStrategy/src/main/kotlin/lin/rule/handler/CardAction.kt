@@ -1,4 +1,4 @@
-package lin.rule
+package lin.rule.handler
 
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.domain.use.UseAfterStrategy

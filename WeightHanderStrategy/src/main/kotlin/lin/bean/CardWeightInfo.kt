@@ -7,7 +7,7 @@ import lin.domain.use.UseAfterStrategy
 import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
 import lin.lifecycle.LifecycleRegister
-import lin.rule.RuleLevel
+import lin.rule.handler.RuleLevel
 import lin.serviceLoader.weightRule.IntentRule
 import lin.serviceLoader.weightRule.WeightRule
 import org.koin.core.component.KoinComponent

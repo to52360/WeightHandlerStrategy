@@ -4,7 +4,7 @@ package lin.config
 import lin.bean.CardWeightInfo
 import lin.bean.MetadataKey
 import lin.domain.use.UseStrategy
-import lin.rule.RuleLevel
+import lin.rule.handler.RuleLevel
 import lin.serviceLoader.weightRule.IntentRule
 import lin.serviceLoader.weightRule.WeightRule
 

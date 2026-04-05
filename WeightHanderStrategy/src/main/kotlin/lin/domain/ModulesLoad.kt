@@ -21,7 +21,7 @@ import lin.domain.use.UseDomain
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.rule.RuleInfoRegister
-import lin.rule.defined.RuleRegistry
+import lin.rule.build.RuleRegistry
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.parse.LieRenParse

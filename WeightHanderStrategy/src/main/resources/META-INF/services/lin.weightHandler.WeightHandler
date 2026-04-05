@@ -1,4 +1,4 @@
 lin.weightHandler.condition.ConditionWeightHandler
-lin.rule.IntentRuleHandler
+lin.rule.handler.IntentRuleHandler
 lin.weightHandler.GeneralMinionWeightHandler
 lin.weightHandler.WeaponWeightHandler

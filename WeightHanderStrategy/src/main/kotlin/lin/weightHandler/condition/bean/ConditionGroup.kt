@@ -23,7 +23,8 @@ import lin.domain.context.CostWeight
     val depByWeightIds : Array<Double>,  //依赖权重数据
     weight: Double?, //基础优先度
     unConditionWeight: Double?,
-    val num: Int?
+    val num: Int?,
+    val args: Map<String, Any> = emptyMap() // 存储 UI 或配置通过 Json 传入的动态属性值
 ){
     val groupWeight = weight ?: CostWeight
     val unConditionWeight = unConditionWeight ?: -groupWeight
