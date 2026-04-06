@@ -3,17 +3,20 @@ package lin.rule.build
 import lin.bean.ComboCard
 import lin.domain.WarInfo
 import lin.rule.handler.IntentResult
+import lin.rule.registry.RuleArgsParser
 import lin.rule.tree.RuleConfig
 
 fun interface RuleLogic {
     operator fun invoke(callCard: ComboCard, warInfo: WarInfo): IntentResult
 }
 
-typealias RuleFactory = (RuleConfig) -> RuleLogic
+typealias RuleFactory<T> = (RuleConfig, T) -> RuleLogic
 
-class RuleBuilder {
+class RuleBuilder<T : Any>(
+    private val argsParser: RuleArgsParser<T>
+) {
     private lateinit var id: String
-    private lateinit var factory: RuleFactory
+    private lateinit var factory: RuleFactory<T>
     private val dynamicFields = mutableListOf<DynamicField>()
     private var metadata: RuleMetadata? = null
         get() {
@@ -22,7 +25,7 @@ class RuleBuilder {
         }
 
     fun id(id: String) = apply { this.id = id }
-    fun factory(factory: RuleFactory) = apply { this.factory = factory }
+    fun factory(factory: RuleFactory<T>) = apply { this.factory = factory }
     fun metadata(metadata: RuleMetadata) = apply { this.metadata = metadata }
     fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc) }
 
@@ -64,18 +67,23 @@ class RuleBuilder {
     }
 
 
-    fun build(): RuleRegistration {
+    fun build(): RuleRegistration<T> {
         val finalMetadata = metadata?.copy(
             dynamicFields = (metadata?.dynamicFields.orEmpty() + dynamicFields).distinct()
         )
         return RuleRegistration(
             ruleId = id,
             spec = RuleSpec(
+                argsParser = argsParser,
                 ruleFactory = factory
             ),
             metadata = finalMetadata
         )
     }
+}
+
+fun <T : Any> ruleBuilder(argsParser: RuleArgsParser<T>): RuleBuilder<T> {
+    return RuleBuilder(argsParser)
 }
 
 inline fun <reified T : Any> fieldTypeOf(): DynamicFieldType {

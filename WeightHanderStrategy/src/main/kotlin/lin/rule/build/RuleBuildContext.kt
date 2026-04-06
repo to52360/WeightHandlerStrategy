@@ -7,26 +7,28 @@ import lin.rule.registry.RuleArgsReader
 import lin.rule.tree.RuleConfig
 import lin.serviceLoader.weightRule.utils.parseRace
 
-typealias ContextualRuleSpec = RuleBuildContext.() -> RuleLogic
+typealias ContextualRuleSpec<T> = RuleBuildContext<T>.() -> RuleLogic
 typealias RuleConfigParse = (List<Double>) -> List<CardWeightInfo>
 
 class BuildRuleFactory(infoMap: Map<String, CardWeightInfo>) {
     private val parse by lazy { ruleConfigParse(infoMap) }
 
-    private fun build(
-        spec: ContextualRuleSpec,
+    fun <T : Any> build(
+        spec: ContextualRuleSpec<T>,
+        argsParser: RuleArgsParser<T>,
         ids: RuleConfig.() -> List<Double>
-    ): RuleBuilder {
-        val factory: RuleFactory = { ruleConfig ->
-            val ctx = RuleBuildContext(ruleConfig, parse, ids)
+    ): RuleBuilder<T> {
+        val factory: RuleFactory<T> = { ruleConfig, params ->
+            val ctx = RuleBuildContext(ruleConfig, params, parse, ids)
             ctx.spec()
         }
-        return RuleBuilder().factory(factory)
+        return RuleBuilder(argsParser).factory(factory)
     }
 }
 
-class RuleBuildContext(
+class RuleBuildContext<T : Any>(
     val ruleConfig: RuleConfig,
+    val params: T,
     private val ruleConfigParse: RuleConfigParse,
     ids: RuleConfig.() -> List<Double>
 ) {
@@ -68,19 +70,18 @@ class RuleBuildContext(
         { comboCard -> ruleConfig.depByWeightIds.any { it == comboCard.groupId() } }
     }
 
-    fun <T : Any> parseArgs(parser: RuleArgsParser<T>): T {
+    fun <U : Any> parseArgs(parser: RuleArgsParser<U>): U {
         @Suppress("UNCHECKED_CAST")
-        val cached = parsedArgsCache[parser] as? T
+        val cached = parsedArgsCache[parser] as? U
         if (cached != null) return cached
         val parsed = parser.parse(ruleConfig.args)
         parsedArgsCache[parser] = parsed
         return parsed
     }
 
-    fun <T : Any> parseArgs(parser: RuleArgsReader.() -> T): T {
+    fun <U : Any> parseArgs(parser: RuleArgsReader.() -> U): U {
         return RuleArgsReader(ruleConfig.args).parser()
     }
-
 }
 
 fun ruleConfigParse(infoMap: Map<String, CardWeightInfo>): RuleConfigParse {

@@ -10,5 +10,7 @@ data class RuleConfig(
     val nodeId: String,
     val ruleId: String,
     val depByWeightIds: List<Double> = emptyList(),
+    val weight: Double, //基础优先度
+    val mismatchedWeight: Double,
     val args: Map<String, Any> = emptyMap()
 )

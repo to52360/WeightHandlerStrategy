@@ -18,10 +18,10 @@ class RuleRegistry(
     providers: Collection<RuleRegistrationProvider> = ServiceLoaderUtils.getCacheServices(RuleRegistrationProvider::class.java),
     private val validator: RuleConfigValidator = RuleConfigValidator()
 ) {
-    private val registrationsById: Map<String, RuleRegistration>
+    private val registrationsById: Map<String, RuleRegistration<*>>
 
     init {
-        val registrationMap = linkedMapOf<String, RuleRegistration>()
+        val registrationMap = linkedMapOf<String, RuleRegistration<*>>()
         providers.forEach { provider ->
             provider.getRuleRegistrations().forEach { registration ->
                 val previous = registrationMap.putIfAbsent(registration.ruleId, registration)
@@ -34,11 +34,11 @@ class RuleRegistry(
         myLog.info { "loaded RuleRegistration ids=${registrationsById.keys}" }
     }
 
-    fun all(): List<RuleRegistration> = registrationsById.values.toList()
+    fun all(): List<RuleRegistration<*>> = registrationsById.values.toList()
 
-    fun find(ruleId: String): RuleRegistration? = registrationsById[ruleId]
+    fun find(ruleId: String): RuleRegistration<*>? = registrationsById[ruleId]
 
-    fun require(ruleId: String): RuleRegistration {
+    fun require(ruleId: String): RuleRegistration<*> {
         return find(ruleId) ?: throw IllegalArgumentException("RuleRegistration not found: ruleId=$ruleId")
     }
 
@@ -63,10 +63,17 @@ class RuleRegistry(
     fun build(ruleId: String, ruleConfig: RuleConfig): RuleLogic {
         val registration = require(ruleId)
         validator.validate(ruleId, registration.metadata?.dynamicFields.orEmpty(), ruleConfig.args)
-        return registration.spec.ruleFactory(ruleConfig)
+        return buildTyped(registration, ruleConfig)
     }
 
     fun build(ruleConfig: RuleConfig): RuleLogic {
         return build(ruleConfig.ruleId, ruleConfig)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun buildTyped(registration: RuleRegistration<*>, ruleConfig: RuleConfig): RuleLogic {
+        val typedRegistration = registration as RuleRegistration<Any>
+        val params = typedRegistration.spec.argsParser.parse(ruleConfig.args)
+        return typedRegistration.spec.ruleFactory(ruleConfig, params)
     }
 }

@@ -1,8 +1,10 @@
 package lin.rule.build
 
-data class RuleRegistration(
+import lin.rule.registry.RuleArgsParser
+
+data class RuleRegistration<T : Any>(
     val ruleId: String,
-    val spec: RuleSpec,
+    val spec: RuleSpec<T>,
     val metadata: RuleMetadata?
 )
 
@@ -31,6 +33,7 @@ data class DynamicField(
     val options: List<DynamicFieldOption> = emptyList()
 )
 
-data class RuleSpec(
-    val ruleFactory: RuleFactory
+data class RuleSpec<T : Any>(
+    val argsParser: RuleArgsParser<T>,
+    val ruleFactory: RuleFactory<T>
 )
