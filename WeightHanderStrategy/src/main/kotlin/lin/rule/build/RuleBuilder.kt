@@ -32,38 +32,8 @@ class RuleBuilder<T : Any>(
     fun requireField(dynamicField: DynamicField) = apply {
         this.dynamicFields.add(dynamicField)
     }
-
-    fun requireField(
-        propertyName: String,
-        type: DynamicFieldType,
-        required: Boolean = true,
-        regex: String? = null,
-        options: List<DynamicFieldOption> = emptyList()
-    ) = apply {
-        this.dynamicFields.add(
-            DynamicField(
-                propertyName = propertyName,
-                type = type,
-                required = required,
-                regex = regex,
-                options = options
-            )
-        )
-    }
-
-    inline fun <reified T : Any> requireField(
-        propertyName: String,
-        required: Boolean = true,
-        regex: String? = null,
-        options: List<DynamicFieldOption> = emptyList()
-    ) = apply {
-        requireField(
-            propertyName = propertyName,
-            type = fieldTypeOf<T>(),
-            required = required,
-            regex = regex,
-            options = options
-        )
+    fun requireFields(dynamicField: List<DynamicField>) = apply {
+        this.dynamicFields.addAll(dynamicField)
     }
 
 
