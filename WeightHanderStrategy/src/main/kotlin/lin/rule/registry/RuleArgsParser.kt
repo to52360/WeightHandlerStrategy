@@ -1,29 +1,29 @@
 package lin.rule.registry
 
-fun interface RuleArgsParser<T : Any> {
-    fun parse(args: Map<String, Any>): T
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.json.JsonMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.KotlinModule
+import kotlin.reflect.KClass
+
+val defaultRuleArgsObjectMapper: ObjectMapper = JsonMapper.builder()
+    .addModule(KotlinModule.Builder().build())
+    .addModule(JavaTimeModule())
+    .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+    .build()
+
+fun <T : Any> mapToRuleArgs(
+    args: Map<String, Any>,
+    parameterType: KClass<T>,
+    objectMapper: ObjectMapper = defaultRuleArgsObjectMapper
+): T {
+    return objectMapper.convertValue(args, parameterType.java)
 }
 
-fun <T : Any> ruleArgsParser(parser: RuleArgsReader.() -> T): RuleArgsParser<T> {
-    return RuleArgsParser { args -> RuleArgsReader(args).parser() }
-}
-
-class RuleArgsReader(
-    private val args: Map<String, Any>
-) {
-    fun int(name: String, default: Int = 0): Int {
-        return (args[name] as? Number)?.toInt()
-            ?: args[name]?.toString()?.toIntOrNull()
-            ?: default
-    }
-
-    fun bool(name: String, default: Boolean = false): Boolean {
-        val value = args[name]
-        if (value is Boolean) return value
-        return value?.toString()?.toBooleanStrictOrNull() ?: default
-    }
-
-    fun string(name: String, default: String = ""): String {
-        return args[name]?.toString() ?: default
-    }
+inline fun <reified T : Any> mapToRuleArgs(
+    args: Map<String, Any>,
+    objectMapper: ObjectMapper = defaultRuleArgsObjectMapper
+): T {
+    return mapToRuleArgs(args, T::class, objectMapper)
 }

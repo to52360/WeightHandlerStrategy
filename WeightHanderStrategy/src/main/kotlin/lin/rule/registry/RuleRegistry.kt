@@ -73,7 +73,7 @@ class RuleRegistry(
     @Suppress("UNCHECKED_CAST")
     private fun buildTyped(registration: RuleRegistration<*>, ruleConfig: RuleConfig): RuleLogic {
         val typedRegistration = registration as RuleRegistration<Any>
-        val params = typedRegistration.spec.argsParser.parse(ruleConfig.args)
+        val params = mapToRuleArgs(ruleConfig.args, typedRegistration.spec.parameterType)
         return typedRegistration.spec.ruleFactory(ruleConfig, params)
     }
 }

@@ -2,10 +2,10 @@ package lin.rule.build
 
 import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
-import lin.rule.registry.RuleArgsParser
-import lin.rule.registry.RuleArgsReader
+import lin.rule.registry.mapToRuleArgs
 import lin.rule.tree.RuleConfig
 import lin.serviceLoader.weightRule.utils.parseRace
+import kotlin.reflect.KClass
 
 typealias ContextualRuleSpec<T> = RuleBuildContext<T>.() -> RuleLogic
 typealias RuleConfigParse = (List<Double>) -> List<CardWeightInfo>
@@ -15,14 +15,14 @@ class BuildRuleFactory(infoMap: Map<String, CardWeightInfo>) {
 
     fun <T : Any> build(
         spec: ContextualRuleSpec<T>,
-        argsParser: RuleArgsParser<T>,
+        parameterType: KClass<T>,
         ids: RuleConfig.() -> List<Double>
     ): RuleBuilder<T> {
         val factory: RuleFactory<T> = { ruleConfig, params ->
             val ctx = RuleBuildContext(ruleConfig, params, parse, ids)
             ctx.spec()
         }
-        return RuleBuilder(argsParser).factory(factory)
+        return RuleBuilder(parameterType).factory(factory)
     }
 }
 
@@ -32,7 +32,7 @@ class RuleBuildContext<T : Any>(
     private val ruleConfigParse: RuleConfigParse,
     ids: RuleConfig.() -> List<Double>
 ) {
-    private val parsedArgsCache = mutableMapOf<RuleArgsParser<*>, Any>()
+    private val parsedArgsCache = mutableMapOf<KClass<*>, Any>()
 
     val cardWeights by lazy {
         ruleConfigParse(ruleConfig.ids())
@@ -70,18 +70,16 @@ class RuleBuildContext<T : Any>(
         { comboCard -> ruleConfig.depByWeightIds.any { it == comboCard.groupId() } }
     }
 
-    fun <U : Any> parseArgs(parser: RuleArgsParser<U>): U {
+    fun <U : Any> parseArgs(parameterType: KClass<U>): U {
         @Suppress("UNCHECKED_CAST")
-        val cached = parsedArgsCache[parser] as? U
+        val cached = parsedArgsCache[parameterType] as? U
         if (cached != null) return cached
-        val parsed = parser.parse(ruleConfig.args)
-        parsedArgsCache[parser] = parsed
+        val parsed = mapToRuleArgs(ruleConfig.args, parameterType)
+        parsedArgsCache[parameterType] = parsed
         return parsed
     }
 
-    fun <U : Any> parseArgs(parser: RuleArgsReader.() -> U): U {
-        return RuleArgsReader(ruleConfig.args).parser()
-    }
+    inline fun <reified U : Any> parseArgs(): U = parseArgs(U::class)
 }
 
 fun ruleConfigParse(infoMap: Map<String, CardWeightInfo>): RuleConfigParse {

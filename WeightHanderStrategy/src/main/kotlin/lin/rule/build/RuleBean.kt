@@ -1,6 +1,6 @@
 package lin.rule.build
 
-import lin.rule.registry.RuleArgsParser
+import kotlin.reflect.KClass
 
 data class RuleRegistration<T : Any>(
     val ruleId: String,
@@ -30,10 +30,11 @@ data class DynamicField(
     val type: DynamicFieldType,
     val required: Boolean = true,
     val regex: String? = null,
-    val options: List<DynamicFieldOption> = emptyList()
+    val options: List<DynamicFieldOption> = emptyList(),
+    val dataSource: String? = null
 )
 
 data class RuleSpec<T : Any>(
-    val argsParser: RuleArgsParser<T>,
+    val parameterType: KClass<T>,
     val ruleFactory: RuleFactory<T>
 )

@@ -3,17 +3,15 @@ package lin.rule.build
 import lin.bean.ComboCard
 import lin.domain.WarInfo
 import lin.rule.handler.IntentResult
-import lin.rule.registry.RuleArgsParser
 import lin.rule.tree.RuleConfig
+import kotlin.reflect.KClass
 
-fun interface RuleLogic {
-    operator fun invoke(callCard: ComboCard, warInfo: WarInfo): IntentResult
-}
+typealias RuleLogic = (callCard: ComboCard, warInfo: WarInfo) -> IntentResult
 
 typealias RuleFactory<T> = (RuleConfig, T) -> RuleLogic
 
 class RuleBuilder<T : Any>(
-    private val argsParser: RuleArgsParser<T>
+    private val parameterType: KClass<T>
 ) {
     private lateinit var id: String
     private lateinit var factory: RuleFactory<T>
@@ -29,10 +27,11 @@ class RuleBuilder<T : Any>(
     fun metadata(metadata: RuleMetadata) = apply { this.metadata = metadata }
     fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc) }
 
-    fun requireField(dynamicField: DynamicField) = apply {
+    fun extraField(dynamicField: DynamicField) = apply {
         this.dynamicFields.add(dynamicField)
     }
-    fun requireFields(dynamicField: List<DynamicField>) = apply {
+
+    fun extraFields(dynamicField: List<DynamicField>) = apply {
         this.dynamicFields.addAll(dynamicField)
     }
 
@@ -44,7 +43,7 @@ class RuleBuilder<T : Any>(
         return RuleRegistration(
             ruleId = id,
             spec = RuleSpec(
-                argsParser = argsParser,
+                parameterType = parameterType,
                 ruleFactory = factory
             ),
             metadata = finalMetadata
@@ -52,8 +51,23 @@ class RuleBuilder<T : Any>(
     }
 }
 
-fun <T : Any> ruleBuilder(argsParser: RuleArgsParser<T>): RuleBuilder<T> {
-    return RuleBuilder(argsParser)
+fun <T : Any> ruleBuilder(
+    parameterType: KClass<T>,
+    extraFieldProcessor: RuleExtraFieldProcessor<T>,
+): RuleBuilder<T> {
+    return RuleBuilder(parameterType).extraFields(extraFieldProcessor.process(parameterType))
+}
+
+inline fun <reified T : Any> ruleBuilder(
+    processor: RuleExtraFieldProcessor<T> = JacksonRuleExtraFieldProcessor()
+): RuleBuilder<T> {
+    return ruleBuilder(T::class, processor)
+}
+
+inline fun <reified T : Any> jacksonRuleBuilder(
+    processor: RuleExtraFieldProcessor<T> = JacksonRuleExtraFieldProcessor()
+): RuleBuilder<T> {
+    return ruleBuilder(T::class, processor)
 }
 
 inline fun <reified T : Any> fieldTypeOf(): DynamicFieldType {
