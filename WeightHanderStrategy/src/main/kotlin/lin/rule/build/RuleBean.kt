@@ -4,8 +4,12 @@ import kotlin.reflect.KClass
 
 data class RuleRegistration<T : Any>(
     val ruleId: String,
-    val spec: RuleSpec<T>,
-    val metadata: RuleMetadata?
+    val metadata: RuleMetadata?,
+    // 动态可验证元数据能力（输入外貌描述）
+    val parameterType: KClass<T>,
+    val lazyFieldsResolver: () -> List<RuleFieldSpec>,
+    // 真正的逻辑规则创造工厂
+    val ruleFactory: RuleFactory<T>
 )
 
 data class RuleMetadata(
@@ -14,8 +18,3 @@ data class RuleMetadata(
 )
 
 data class DynamicFieldOption(val label: String, val value: String)
-
-data class RuleSpec<T : Any>(
-    val parameterType: KClass<T>,
-    val ruleFactory: RuleFactory<T>
-)
