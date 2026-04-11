@@ -1,5 +1,6 @@
 package lin.rule.build
 
+import club.xiaojiawei.hsscriptcardsdk.enums.CardRaceEnum
 import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
 import lin.serviceLoader.weightRule.utils.parseRace
@@ -26,11 +27,11 @@ fun <T : Any> RuleBuildContext<T>.cardWeights(ids: List<Double>): List<CardWeigh
     return ruleConfigParse(ids)
 }
 
-fun <T : HasTargetIds> RuleBuildContext<T>.defaultRaces(): Set<Int> {
+fun <T : HasTargetIds> RuleBuildContext<T>.defaultRaces(): Set<CardRaceEnum> {
     return defaultCardWeights().map { it.parseRace() }.toSet()
 }
 
-fun <T : Any> RuleBuildContext<T>.races(ids: List<Double>): Set<Int> {
+fun <T : Any> RuleBuildContext<T>.races(ids: List<Double>): Set<CardRaceEnum> {
     return cardWeights(ids).map { it.parseRace() }.toSet()
 }
 

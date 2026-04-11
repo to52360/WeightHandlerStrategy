@@ -5,6 +5,7 @@ import kotlin.reflect.typeOf
 /**
  * 提取的通用内联辅助方法：生成 RuleFieldSpec 并追加到 RuleBuilder 中
  * 使用 reified T 捕获真正的扩展字段类型。
+ * todo 能解析自定义,可行性分析
  */
 inline fun <reified V, T : Any> RuleBuilder<T>.extraField(
     propertyName: String,

@@ -36,7 +36,8 @@ class RuleBuilder<T : Any>(
 
     // 新增延迟接收 API，专门接收闭包形式的构建块
     fun extraFieldLazy(specProvider: () -> RuleFieldSpec) = apply {
-        this.extraFields.add(specProvider)
+
+    this.extraFields.add(specProvider)
     }
 
 
