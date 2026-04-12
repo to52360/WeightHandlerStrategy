@@ -28,16 +28,8 @@ class RuleBuildContext<T : Any>(
     val params: T,
     val ruleConfigParse: RuleConfigParse
 ) {
-    private val parsedArgsCache = mutableMapOf<KClass<*>, Any>()
-
-    fun <U : Any> parseArgs(parameterType: KClass<U>): U {
-        @Suppress("UNCHECKED_CAST")
-        val cached = parsedArgsCache[parameterType] as? U
-        if (cached != null) return cached
-        val parsed = mapToRuleArgs(ruleConfig.args, parameterType)
-        parsedArgsCache[parameterType] = parsed
-        return parsed
-    }
+    fun <U : Any> parseArgs(parameterType: KClass<U>): U =
+        mapToRuleArgs(ruleConfig.args, parameterType)
 
     inline fun <reified U : Any> parseArgs(): U = parseArgs(U::class)
 }
