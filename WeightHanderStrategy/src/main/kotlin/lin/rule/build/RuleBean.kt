@@ -1,5 +1,6 @@
 package lin.rule.build
 
+import lin.rule.parse.RuleFieldSpec
 import kotlin.reflect.KClass
 
 data class RuleRegistration<T : Any>(

@@ -1,4 +1,4 @@
-package lin.rule.build
+package lin.rule.parse
 
 /** 基础类型原子 */
 sealed interface FieldType {

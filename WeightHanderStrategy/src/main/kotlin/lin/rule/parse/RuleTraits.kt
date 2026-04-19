@@ -1,4 +1,4 @@
-package lin.rule.build
+package lin.rule.parse
 
 /**
  * 能力约束特征（Traits Bounds）

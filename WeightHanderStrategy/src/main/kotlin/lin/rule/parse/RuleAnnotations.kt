@@ -1,4 +1,4 @@
-package lin.rule.build
+package lin.rule.parse
 
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.RUNTIME)

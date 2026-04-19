@@ -3,6 +3,7 @@ package lin.rule.build
 import club.xiaojiawei.hsscriptcardsdk.enums.CardRaceEnum
 import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
+import lin.rule.parse.HasTargetIds
 import lin.serviceLoader.weightRule.utils.parseRace
 
 /**

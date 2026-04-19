@@ -1,4 +1,4 @@
-package lin.rule.registry
+package lin.rule.parse
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper

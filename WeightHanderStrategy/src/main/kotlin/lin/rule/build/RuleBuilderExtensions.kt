@@ -1,5 +1,8 @@
 package lin.rule.build
 
+import lin.rule.parse.FieldConstraint
+import lin.rule.parse.RuleFieldParser
+import lin.rule.parse.RuleFieldSpec
 import kotlin.reflect.typeOf
 
 /**

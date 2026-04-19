@@ -3,6 +3,8 @@ package lin.rule.build
 import lin.bean.ComboCard
 import lin.domain.WarInfo
 import lin.rule.handler.IntentResult
+import lin.rule.parse.RuleFieldParser
+import lin.rule.parse.RuleFieldSpec
 import lin.rule.tree.RuleConfig
 import kotlin.reflect.KClass
 

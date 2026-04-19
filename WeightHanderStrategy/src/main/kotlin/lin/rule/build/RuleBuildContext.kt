@@ -1,7 +1,7 @@
 package lin.rule.build
 
 import lin.bean.CardWeightInfo
-import lin.rule.registry.mapToRuleArgs
+import lin.rule.parse.mapToRuleArgs
 import lin.rule.tree.RuleConfig
 import kotlin.reflect.KClass
 

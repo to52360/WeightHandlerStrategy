@@ -1,4 +1,4 @@
-package lin.rule.build
+package lin.rule.parse
 
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
