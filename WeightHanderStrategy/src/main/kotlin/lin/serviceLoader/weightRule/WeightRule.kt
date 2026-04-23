@@ -1,18 +1,15 @@
 package lin.serviceLoader.weightRule
 
-import lin.bean.ComboCard
-
-
 import lin.domain.WarInfo
-import lin.rule.handler.IntentResult
 import lin.rule.handler.RuleLevel
+import lin.rule.handler.RuleResult
 
 /**
  * 表达意图规则接口
  */
 interface IntentRule : RuleId {
     val ruleLevel: RuleLevel
-    fun intentCmd(callCard: ComboCard, warInfo: WarInfo): IntentResult
+    fun intentCmd(callCard: ComboCard, warInfo: WarInfo): RuleResult
 }
 
 interface RuleId {

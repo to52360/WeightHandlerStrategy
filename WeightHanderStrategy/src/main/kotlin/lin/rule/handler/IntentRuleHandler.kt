@@ -6,8 +6,9 @@ import lin.config.ConfigDispatcher
 import lin.config.RuleMap
 import lin.config.processMoreConfig
 import lin.domain.MyWarManage
-import lin.domain.context.UnUseWeight
 import lin.rule.RuleInfoRegister
+import lin.rule.context.RuleContext
+import lin.rule.tree.ConditionInstanceNode
 import lin.serviceLoader.weightRule.IntentRuleInfo
 import lin.weightHandler.WeightHandler
 import org.koin.core.component.KoinComponent
@@ -38,41 +39,88 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
     override fun cardWeightCompute(callCard: ComboCard, warManage: MyWarManage): Double {
         var result = 0.0
         callCard.intentRuleMap()?.let { intentMap ->
-            //高等级启用信号,低等级停止信号变为跳过信号
-            var notHasEnable = true
             for ((_, levelRules) in intentMap) {
-                val results = levelRules.mapNotNull { rule ->
+                val successes = levelRules.mapNotNull { rule ->
                     val res = rule.intentCmd(callCard, warManage)
-                    if (res !is SkipResult) res else null
+                    if (res is RuleResult.Continue) res else null
                 }
-                val successes = results.filterIsInstance<EnableResult>()
-                val stops = results.filterIsInstance<StopResult>()
-                when {
-                    successes.isNotEmpty() -> {
-                        // 启用信号：累加权重，更新卡片
-                        notHasEnable = false
-                        successes.forEach {
-                            result += it.weight
-                            //todo-future 暂时这样,先转移操作权,后续再做打算
-                            it.modifyCard?.let { callCard.update(it) }
-                        }
-                    }
 
-                    stops.isNotEmpty() -> {
-                        // 同等级无成功但有 Stop：立即终止
-                        if (notHasEnable) //有成功就跳过
-                            return UnUseWeight
+                if (successes.isNotEmpty()) {
+                    successes.forEach {
+                        result += it.score
+                        it.modifyCard?.let { action -> callCard.update(action) }
                     }
+                    // TODO: 旧机制中如果有某种 "同一Level内命中后屏蔽低Level" 处理，可在调整后补充
+                }
+            }
+        }
+        return result
+    }
 
+    /**
+     * 【新架构】面向 AST 条件树的组合求值与意图收集器
+     */
+    fun evaluateConditionTree(
+        node: ConditionInstanceNode,
+        context: RuleContext,
+        collectedActions: MutableList<ComboCardAction>
+    ): RuleResult {
+        return when (node) {
+            is ConditionInstanceNode.RuleNode -> {
+                val res = node.ruleLogic(context)
+                if (res is RuleResult.Continue && res.modifyCard != null) {
+                    collectedActions.add(res.modifyCard)
+                }
+                res
+            }
+
+            is ConditionInstanceNode.AndNode -> {
+                var totalScore = 0.0
+                var allFeasible = true
+                for (child in node.children) {
+                    val res = evaluateConditionTree(child, context, collectedActions)
+                    if (res is RuleResult.Prune) return RuleResult.Prune
+                    if (res is RuleResult.Continue) {
+                        totalScore += res.score
+                        if (!res.feasible) allFeasible = false
+                    }
+                }
+                RuleResult.Continue(feasible = allFeasible, score = totalScore)
+            }
+
+            is ConditionInstanceNode.OrNode -> {
+                // OrNode 短路：只取第一个 feasible 为 true 的分支
+                for (child in node.children) {
+                    val localActions = mutableListOf<ComboCardAction>()
+                    val res = evaluateConditionTree(child, context, localActions)
+                    if (res is RuleResult.Continue && res.feasible) {
+                        collectedActions.addAll(localActions)
+                        return res
+                    }
+                }
+                RuleResult.Prune
+            }
+
+            is ConditionInstanceNode.NotNode -> {
+                val localActions = mutableListOf<ComboCardAction>()
+                val res = evaluateConditionTree(node.child, context, localActions)
+                if (res is RuleResult.Prune || (res is RuleResult.Continue && !res.feasible)) {
+                    RuleResult.Continue(feasible = true, score = 0.0)
+                } else {
+                    RuleResult.Prune
                 }
             }
 
+            is ConditionInstanceNode.BranchNode -> {
+                val conditionRes = node.condition(context)
+                if (conditionRes is RuleResult.Continue && conditionRes.feasible) {
+                    evaluateConditionTree(node.onTrue, context, collectedActions)
+                } else {
+                    evaluateConditionTree(node.onFalse, context, collectedActions)
+                }
+            }
         }
-        return result
-
     }
-
-
 }
 
 /**

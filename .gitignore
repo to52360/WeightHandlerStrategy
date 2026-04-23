@@ -43,3 +43,5 @@ build/
 /absolute/
 /WeightHanderStrategy/src/test/
 /WeightHanderStrategy/.agents
+/.agents
+/implementation

@@ -11,13 +11,18 @@ data class ConditionTreeInstance(
 sealed interface ConditionInstanceNode {
     data class RuleNode(
         val nodeId: String,
-        val ruleConfig: RuleConfig,
         val ruleLogic: RuleLogic
     ) : ConditionInstanceNode
 
     data class AndNode(val children: List<ConditionInstanceNode>) : ConditionInstanceNode
     data class OrNode(val children: List<ConditionInstanceNode>) : ConditionInstanceNode
     data class NotNode(val child: ConditionInstanceNode) : ConditionInstanceNode
+    data class BranchNode(
+        val nodeId: String,
+        val condition: RuleLogic,
+        val onTrue: ConditionInstanceNode,
+        val onFalse: ConditionInstanceNode
+    ) : ConditionInstanceNode
 }
 
 class ConditionTreeInstantiator(
@@ -31,7 +36,6 @@ class ConditionTreeInstantiator(
                         ?: error("RuleConfig not found for nodeId=${node.nodeId}")
                     ConditionInstanceNode.RuleNode(
                         nodeId = node.nodeId,
-                        ruleConfig = ruleConfig,
                         ruleLogic = ruleRegistry.build(ruleConfig)
                     )
                 }
@@ -39,6 +43,16 @@ class ConditionTreeInstantiator(
                 is ConditionNode.AndNode -> ConditionInstanceNode.AndNode(node.children.map(::instantiateNode))
                 is ConditionNode.OrNode -> ConditionInstanceNode.OrNode(node.children.map(::instantiateNode))
                 is ConditionNode.NotNode -> ConditionInstanceNode.NotNode(instantiateNode(node.child))
+                is ConditionNode.BranchNode -> {
+                    val ruleConfig = config.ruleConfigs[node.nodeId]
+                        ?: error("RuleConfig not found for nodeId=${node.nodeId}")
+                    ConditionInstanceNode.BranchNode(
+                        nodeId = node.nodeId,
+                        condition = ruleRegistry.build(ruleConfig),
+                        onTrue = instantiateNode(node.onTrue),
+                        onFalse = instantiateNode(node.onFalse)
+                    )
+                }
             }
         }
 

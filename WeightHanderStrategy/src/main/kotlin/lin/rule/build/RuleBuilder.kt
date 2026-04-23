@@ -1,14 +1,13 @@
 package lin.rule.build
 
-import lin.bean.ComboCard
-import lin.domain.WarInfo
-import lin.rule.handler.IntentResult
+import lin.rule.context.RuleContext
+import lin.rule.handler.RuleResult
 import lin.rule.parse.RuleFieldParser
 import lin.rule.parse.RuleFieldSpec
 import lin.rule.tree.RuleConfig
 import kotlin.reflect.KClass
 
-typealias RuleLogic = (callCard: ComboCard, warInfo: WarInfo) -> IntentResult
+typealias RuleLogic = RuleContext.() -> RuleResult
 
 typealias RuleFactory<T> = (RuleConfig, T) -> RuleLogic
 
