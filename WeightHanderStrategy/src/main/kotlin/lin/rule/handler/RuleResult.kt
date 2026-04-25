@@ -9,7 +9,6 @@ sealed class RuleResult {
 
     // 继续/评估完成
     data class Continue(
-        val feasible: Boolean,
         val score: Double,
         val modifyCard: ComboCardAction? = null
     ) : RuleResult()

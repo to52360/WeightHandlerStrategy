@@ -1,5 +1,6 @@
 package lin.serviceLoader.weightRule
 
+import lin.bean.ComboCard
 import lin.domain.WarInfo
 import lin.rule.handler.RuleLevel
 import lin.rule.handler.RuleResult

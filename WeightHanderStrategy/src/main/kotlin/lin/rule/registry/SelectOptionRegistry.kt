@@ -24,7 +24,7 @@ object SelectOptionRegistry {
 
     // 基于 SPI (ServiceLoaderUtils) 懒加载的服务提供者
     private val spiProviders: Map<String, SelectOptionProvider> by lazy {
-        ServiceLoaderUtils.getCacheServices(SelectOptionProvider::class.java)
+        ServiceLoaderUtils.loadServices(SelectOptionProvider::class.java)
             .associateBy { it.dataSourceId }
     }
 

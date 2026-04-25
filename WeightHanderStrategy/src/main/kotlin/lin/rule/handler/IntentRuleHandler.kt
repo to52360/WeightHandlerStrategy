@@ -8,7 +8,7 @@ import lin.config.processMoreConfig
 import lin.domain.MyWarManage
 import lin.rule.RuleInfoRegister
 import lin.rule.context.RuleContext
-import lin.rule.tree.ConditionInstanceNode
+import lin.rule.tree.EvaluatorInstanceNode
 import lin.serviceLoader.weightRule.IntentRuleInfo
 import lin.weightHandler.WeightHandler
 import org.koin.core.component.KoinComponent
@@ -61,39 +61,37 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
      * 【新架构】面向 AST 条件树的组合求值与意图收集器
      */
     fun evaluateConditionTree(
-        node: ConditionInstanceNode,
+        node: EvaluatorInstanceNode,
         context: RuleContext,
         collectedActions: MutableList<ComboCardAction>
     ): RuleResult {
         return when (node) {
-            is ConditionInstanceNode.RuleNode -> {
+            is EvaluatorInstanceNode.RuleNode -> {
                 val res = node.ruleLogic(context)
                 if (res is RuleResult.Continue && res.modifyCard != null) {
                     collectedActions.add(res.modifyCard)
                 }
                 res
             }
-
-            is ConditionInstanceNode.AndNode -> {
+            //todo 这里逻辑还没好
+            is EvaluatorInstanceNode.AndNode -> {
                 var totalScore = 0.0
-                var allFeasible = true
                 for (child in node.children) {
                     val res = evaluateConditionTree(child, context, collectedActions)
                     if (res is RuleResult.Prune) return RuleResult.Prune
                     if (res is RuleResult.Continue) {
                         totalScore += res.score
-                        if (!res.feasible) allFeasible = false
                     }
                 }
-                RuleResult.Continue(feasible = allFeasible, score = totalScore)
+                RuleResult.Continue(score = totalScore)
             }
 
-            is ConditionInstanceNode.OrNode -> {
-                // OrNode 短路：只取第一个 feasible 为 true 的分支
+            is EvaluatorInstanceNode.OrNode -> {
+                // OrNode 短路：只取第一个 Continue 的分支
                 for (child in node.children) {
                     val localActions = mutableListOf<ComboCardAction>()
                     val res = evaluateConditionTree(child, context, localActions)
-                    if (res is RuleResult.Continue && res.feasible) {
+                    if (res is RuleResult.Continue) {
                         collectedActions.addAll(localActions)
                         return res
                     }
@@ -101,19 +99,19 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
                 RuleResult.Prune
             }
 
-            is ConditionInstanceNode.NotNode -> {
+            is EvaluatorInstanceNode.NotNode -> {
                 val localActions = mutableListOf<ComboCardAction>()
                 val res = evaluateConditionTree(node.child, context, localActions)
-                if (res is RuleResult.Prune || (res is RuleResult.Continue && !res.feasible)) {
-                    RuleResult.Continue(feasible = true, score = 0.0)
+                if (res is RuleResult.Prune) {
+                    RuleResult.Continue(score = 0.0)
                 } else {
                     RuleResult.Prune
                 }
             }
 
-            is ConditionInstanceNode.BranchNode -> {
+            is EvaluatorInstanceNode.BranchNode -> {
                 val conditionRes = node.condition(context)
-                if (conditionRes is RuleResult.Continue && conditionRes.feasible) {
+                if (conditionRes is RuleResult.Continue) {
                     evaluateConditionTree(node.onTrue, context, collectedActions)
                 } else {
                     evaluateConditionTree(node.onFalse, context, collectedActions)

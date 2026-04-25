@@ -1,8 +1,8 @@
 package lin.rule.tree
 
-data class ConditionTreeConfig(
+data class EvaluatorTreeConfig(
     val bindIds: List<Double>,
-    val root: ConditionNode,
+    val root: EvaluatorNode,
     val ruleConfigs: Map<String, RuleConfig>
 )
 

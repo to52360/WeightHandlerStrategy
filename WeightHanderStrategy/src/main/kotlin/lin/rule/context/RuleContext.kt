@@ -12,3 +12,5 @@ data class RuleContext(
     val warInfo: WarInfo
     // TODO:后续扩展: val inferenceEngine: InferenceEngine
 )
+
+
