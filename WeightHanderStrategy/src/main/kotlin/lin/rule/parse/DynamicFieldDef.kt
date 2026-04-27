@@ -8,7 +8,7 @@ sealed interface FieldType {
     object DoubleType : FieldType
 
     // 下拉实际上就是一种自带数据源绑定的原子类型
-    data class SelectType(val dataSourceId: String) : FieldType
+    data class SelectType(val dataSourceId: String, val valueType: FieldType) : FieldType
 
     // 组合类型：对上面所有原子的包装
     data class ListType(val elementType: FieldType) : FieldType

@@ -1,16 +1,20 @@
 package lin.rule.build
 
 import lin.rule.context.RuleContext
+import lin.rule.context.RuleEnv
 import lin.rule.handler.RuleResult
 import lin.rule.parse.RuleFieldParser
 import lin.rule.parse.RuleFieldSpec
 import lin.rule.tree.RuleConfig
 import kotlin.reflect.KClass
 
-typealias RuleLogic = RuleContext.() -> RuleResult
+typealias RuleLogic = context(RuleEnv) RuleContext.() -> RuleResult
 
 typealias RuleFactory<T> = (RuleConfig, T) -> RuleLogic
 
+/**
+ * 泛型不支持基础类型
+ */
 class RuleBuilder<T : Any>(
     private val parameterType: KClass<T>
 ) {

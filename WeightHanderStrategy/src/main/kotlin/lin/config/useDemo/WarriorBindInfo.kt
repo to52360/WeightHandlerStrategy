@@ -1,9 +1,9 @@
 package lin.config.useDemo
 
 import lin.bean.ChangeGroupId
-import lin.config.BindInfoProvider
 import lin.config.UseConfig
 import lin.config.find.def.BindInfo
+import lin.serviceLoader.provider.BindInfoProvider
 
 /**
  * 任务战的绑定

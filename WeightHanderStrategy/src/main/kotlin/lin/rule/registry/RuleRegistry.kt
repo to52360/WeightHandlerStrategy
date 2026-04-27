@@ -8,6 +8,7 @@ import lin.rule.parse.FieldType
 import lin.rule.parse.RuleFieldSpec
 import lin.rule.parse.mapToRuleArgs
 import lin.rule.tree.RuleConfig
+import lin.serviceLoader.provider.RuleRegistrationProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
 
 // 提取为全局不变量，避免每次实例化 RuleUiItem 时产生重复的对象分配与 GC 开销

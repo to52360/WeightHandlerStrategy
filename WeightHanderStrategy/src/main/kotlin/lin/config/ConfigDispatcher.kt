@@ -4,6 +4,7 @@ import lin.bean.CardWeightInfo
 import lin.config.find.def.WeightInfoFinder
 import lin.config.handler.ConfigHandler
 import lin.myLog
+import lin.serviceLoader.provider.BindInfoProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.component.KoinComponent
 import kotlin.reflect.KClass

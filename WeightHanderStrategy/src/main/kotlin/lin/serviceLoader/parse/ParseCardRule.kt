@@ -1,9 +1,9 @@
 package lin.serviceLoader.parse
 
-import lin.config.BindInfoProvider
 import lin.config.Rules
 import lin.config.find.def.BindInfo
 import lin.myLog
+import lin.serviceLoader.provider.BindInfoProvider
 import lin.serviceLoader.weightRule.CardRule
 import lin.utils.serviceLoader.ServiceLoaderUtils
 

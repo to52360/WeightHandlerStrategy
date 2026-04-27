@@ -8,6 +8,7 @@ import lin.config.processMoreConfig
 import lin.domain.MyWarManage
 import lin.rule.RuleInfoRegister
 import lin.rule.context.RuleContext
+import lin.rule.context.RuleEnv
 import lin.rule.tree.EvaluatorInstanceNode
 import lin.serviceLoader.weightRule.IntentRuleInfo
 import lin.weightHandler.WeightHandler
@@ -42,7 +43,7 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
             for ((_, levelRules) in intentMap) {
                 val successes = levelRules.mapNotNull { rule ->
                     val res = rule.intentCmd(callCard, warManage)
-                    if (res is RuleResult.Continue) res else null
+                    res as? RuleResult.Continue
                 }
 
                 if (successes.isNotEmpty()) {
@@ -60,6 +61,7 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
     /**
      * 【新架构】面向 AST 条件树的组合求值与意图收集器
      */
+    context(ruleEnv: RuleEnv)
     fun evaluateConditionTree(
         node: EvaluatorInstanceNode,
         context: RuleContext,

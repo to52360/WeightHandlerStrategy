@@ -1,18 +1,9 @@
 package lin.rule.registry
 
 import lin.rule.build.DynamicFieldOption
+import lin.serviceLoader.provider.SelectOptionProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
 
-/**
- * SPI 扩展接口：外部插件或模块可通过实现此接口并配置 META-INF/services/lin.rule.registry.SelectOptionProvider 来自动注册下拉数据源
- */
-interface SelectOptionProvider {
-    // 数据源的唯一标识
-    val dataSourceId: String
-
-    // 返回对应的下拉选项
-    fun getOptions(): List<DynamicFieldOption>
-}
 
 /**
  * 动态下拉选项注册中心

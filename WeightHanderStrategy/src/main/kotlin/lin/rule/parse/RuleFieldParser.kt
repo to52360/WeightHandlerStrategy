@@ -71,19 +71,20 @@ object RuleFieldParser {
             return FieldType.ListType(innerStruct)
         }
 
-        // 情景 2：剥离了所有的壳子，它是原子类型了 (Primitives)
-        // 下拉框判断：只要是标明了具体数据源的，我们优先视为数据源依赖类型 (SelectType)
-        if (!dataSource.isNullOrEmpty()) {
-            return FieldType.SelectType(dataSource)
-        }
-
         // 常规原生原子类型推导
-        return when (classifier) {
+        val baseType = when (classifier) {
             String::class -> FieldType.StringType
             Int::class -> FieldType.IntType
             Boolean::class -> FieldType.BooleanType
             Double::class -> FieldType.DoubleType
             else -> FieldType.StringType // 你可以增加更多的映射，或新增一个 UnknownType
         }
+
+        // 下拉框判断：只要是标明了具体数据源的，我们优先视为数据源依赖类型 (SelectType)
+        if (!dataSource.isNullOrEmpty()) {
+            return FieldType.SelectType(dataSource, baseType)
+        }
+
+        return baseType
     }
 }
