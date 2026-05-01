@@ -1,7 +1,7 @@
 package lin.rule.tree
 
 data class EvaluatorTreeConfig(
-    val bindIds: List<Double>,
+    val bindByGroupId: String,
     val root: EvaluatorNode,
     val ruleConfigs: Map<String, RuleConfig>
 )
