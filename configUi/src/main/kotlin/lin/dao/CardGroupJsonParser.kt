@@ -34,7 +34,7 @@ object CardGroupJsonParser {
             System.getProperty("user.dir"),
             "../../data/cardgroup"
         )
-    ): List<CardGroupConfig> {
+    ): List<Pair<String, CardGroupConfig>> {
         if (!Files.exists(dirPath)) {
             return emptyList()
         }
@@ -44,7 +44,9 @@ object CardGroupJsonParser {
                 .map { path ->
                     try {
                         val content = Files.readString(path)
-                        mapper.readValue<CardGroupConfig>(content)
+                        val config = mapper.readValue<CardGroupConfig>(content)
+                        val groupId = path.fileName.toString().removeSuffix(".cardgroup")
+                        groupId to config
                     } catch (e: Exception) {
                         System.err.println("解析 JSON 失败: $path, 错误: ${e.message}")
                         null
@@ -61,6 +63,8 @@ class CardSelectOptionProvider : SelectOptionProvider {
 
     override fun getOptions(): List<DynamicFieldOption> {
         val groups = CardGroupJsonParser.loadAllCardGroups()
-        TODO()
+        return groups.map { (groupId, _) ->
+            DynamicFieldOption(value = groupId, label = groupId)
+        }
     }
 }
