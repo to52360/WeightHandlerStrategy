@@ -29,11 +29,12 @@ class TreeConfigService(private val repository: TreeConfigRepository) {
 
 
     fun saveConfig(name: String, config: EvaluatorTreeConfig, existingId: String? = null): String {
-        val id = existingId ?: UUID.randomUUID().toString()
+        val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
         val json = mapper.writeValueAsString(config)
         val entity = TreeConfigEntity(
             id = id,
-            groupId = config.bindByGroupId,
+            //todo 准备改成多个,暂时用toString解决报错
+            groupId = config.bindGroupIds.toString(),
             name = name,
             configData = json
         )

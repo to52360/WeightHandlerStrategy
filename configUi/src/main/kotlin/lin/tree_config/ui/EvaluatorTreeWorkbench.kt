@@ -26,6 +26,8 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     val configListView = ListView<ConfigListItem>()
     val logicTreeEditor = LogicTreeEditor<EvaluatorNodeWrapper>()
     val nodeTreeView get() = logicTreeEditor.treeView
+
+    //todo 等待改成多选
     val groupIdComboBox = ComboBox<String>()
     val propertyPanel = PropertyPanel()
 
@@ -45,9 +47,10 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         this.items.addAll(listPanel, treePanel, rightPanel)
         this.setDividerPositions(0.2, 0.6) // 初始化分隔条比例
 
-        // 绑定 LogicTreeEditor 的扩展区域与事件
+        // todo 调整为list
+        //  绑定 LogicTreeEditor 的扩展区域与事件
         val groupBox = HBox(10.0).apply { alignment = javafx.geometry.Pos.CENTER_LEFT }
-        groupBox.children.addAll(Label("绑定卡组分组 (bindByGroupId):"), groupIdComboBox)
+        groupBox.children.addAll(Label("绑定卡组分组 (bindGroupIds):"), groupIdComboBox)
         logicTreeEditor.customHeaderArea.children.add(groupBox)
 
         // 注册选中节点的 Behavior —— 驱动右侧属性面板

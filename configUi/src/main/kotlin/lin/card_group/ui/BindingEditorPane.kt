@@ -1,0 +1,194 @@
+package lin.card_group.ui
+
+import javafx.beans.property.ReadOnlyIntegerWrapper
+import javafx.beans.property.ReadOnlyStringWrapper
+import javafx.collections.FXCollections
+import javafx.geometry.Insets
+import javafx.scene.control.*
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
+import javafx.scene.layout.VBox
+import lin.card_group.service.BindingDraft
+import lin.dao.CardGroupJsonParser
+import lin.dao.CardWeightConfig
+
+/**
+ * 右侧：Binding 详情编辑面板
+ */
+class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
+
+    private val bindingTableView = TableView<BindingDraft>()
+    private val cardPoolListView = ListView<CardWeightConfig>()
+    private val selectedCardListView = ListView<String>()
+
+    // 内部的 Observable 数据源，用于 JavaFX 绑定
+    private val obsBindings = FXCollections.observableArrayList<BindingDraft>()
+    private val obsCardPool = FXCollections.observableArrayList<CardWeightConfig>()
+    private val obsSelectedCards = FXCollections.observableArrayList<String>()
+
+    // 防止在监听属性变化时触发循环调用
+    private var isUpdatingFromState = false
+
+    init {
+        padding = Insets(10.0)
+
+        // 1. Manager 基础配置区
+        val nameField = TextField().apply { promptText = "分组方案名称" }
+        val enabledCheck = CheckBox("启用")
+        val infoBox = HBox(10.0).apply {
+            alignment = javafx.geometry.Pos.CENTER_LEFT
+            children.addAll(Label("方案名称:"), nameField, enabledCheck)
+        }
+
+        // 监听输入，触发 Action
+        nameField.textProperty().addListener { _, _, newValue ->
+            if (!isUpdatingFromState) store.dispatch(
+                WorkbenchActions.updateManagerInfo(
+                    newValue,
+                    enabledCheck.isSelected
+                )
+            )
+        }
+        enabledCheck.selectedProperty().addListener { _, _, newValue ->
+            if (!isUpdatingFromState) store.dispatch(WorkbenchActions.updateManagerInfo(nameField.text, newValue))
+        }
+
+        // 2. 表格与控制栏
+        val tableBox = VBox(5.0).apply {
+            val toolBar = HBox(5.0).apply {
+                alignment = javafx.geometry.Pos.CENTER_LEFT
+
+                // 读取本地 .cardgroup 文件列表（仅文件名，不加载内容）
+                val fileNames = CardGroupJsonParser.listAvailableFiles()
+                val fileCombo = ComboBox<String>().apply {
+                    items = FXCollections.observableArrayList(fileNames)
+                    promptText = "选择 .cardgroup 文件"
+                }
+
+                val btnImport = Button("导入").apply {
+                    setOnAction {
+                        val selected = fileCombo.value
+                        if (!selected.isNullOrBlank()) {
+                            store.addBinding(selected)
+                        }
+                    }
+                }
+                val btnRemove = Button("移除选中").apply {
+                    setOnAction {
+                        val idx = bindingTableView.selectionModel.selectedIndex
+                        if (idx >= 0) store.dispatch(WorkbenchActions.removeBinding(idx))
+                    }
+                }
+                children.addAll(fileCombo, btnImport, btnRemove)
+            }
+
+            // 初始化表格列
+            val colNo = TableColumn<BindingDraft, String>("ID").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.binding.id) }
+                prefWidth = 250.0
+            }
+            val colSource = TableColumn<BindingDraft, String>("来源文件").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.sourceFile) }
+                prefWidth = 150.0
+            }
+            val colName = TableColumn<BindingDraft, String>("展示名").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.binding.name) }
+                prefWidth = 150.0
+            }
+            val colCardCount = TableColumn<BindingDraft, Number>("已选卡数").apply {
+                setCellValueFactory { ReadOnlyIntegerWrapper(it.value.binding.cardIds.size) }
+                prefWidth = 80.0
+            }
+            bindingTableView.columns.addAll(colNo, colSource, colName, colCardCount)
+
+            bindingTableView.items = obsBindings
+            bindingTableView.selectionModel.selectedIndexProperty().addListener { _, _, newValue ->
+                if (!isUpdatingFromState && store.state.selectedBindingIndex != newValue?.toInt()) {
+                    store.selectBinding(newValue?.toInt())
+                }
+            }
+
+            setVgrow(bindingTableView, Priority.ALWAYS)
+            children.addAll(toolBar, bindingTableView)
+        }
+
+        // 3. 底部选卡区 (左右两栏 SplitPane)
+        val cardSelectPane = SplitPane().apply {
+            cardPoolListView.items = obsCardPool
+            // 格式化卡池列表的显示
+            cardPoolListView.setCellFactory {
+                object : ListCell<CardWeightConfig>() {
+                    override fun updateItem(item: CardWeightConfig?, empty: Boolean) {
+                        super.updateItem(item, empty)
+                        text = if (empty || item == null) null else "${item.name} (${item.cardId})"
+                    }
+                }
+            }
+
+            selectedCardListView.items = obsSelectedCards
+
+            cardPoolListView.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
+                if (!isUpdatingFromState && newValue != null) {
+                    store.dispatch(WorkbenchActions.toggleCard(newValue.cardId, true))
+                }
+            }
+
+            selectedCardListView.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
+                if (!isUpdatingFromState && newValue != null) {
+                    store.dispatch(WorkbenchActions.toggleCard(newValue, false))
+                }
+            }
+
+            items.addAll(
+                VBox(Label("卡池 (点击添加)"), cardPoolListView).apply {
+                    VBox.setVgrow(
+                        cardPoolListView,
+                        javafx.scene.layout.Priority.ALWAYS
+                    )
+                },
+                VBox(Label("已选卡牌 (点击移除)"), selectedCardListView).apply {
+                    VBox.setVgrow(
+                        selectedCardListView,
+                        javafx.scene.layout.Priority.ALWAYS
+                    )
+                }
+            )
+        }
+
+        setVgrow(tableBox, Priority.ALWAYS)
+        setVgrow(cardSelectPane, Priority.ALWAYS)
+        children.addAll(infoBox, tableBox, cardSelectPane)
+
+        // =====================================
+        // State -> UI 更新逻辑
+        // =====================================
+        store.stateProperty.addListener { _, oldState, newState ->
+            isUpdatingFromState = true
+            try {
+                if (nameField.text != newState.managerName) nameField.text = newState.managerName
+                if (enabledCheck.isSelected != newState.managerEnabled) enabledCheck.isSelected =
+                    newState.managerEnabled
+
+                if (oldState.currentBindings != newState.currentBindings) {
+                    obsBindings.setAll(newState.currentBindings)
+                }
+
+                if (bindingTableView.selectionModel.selectedIndex != newState.selectedBindingIndex) {
+                    newState.selectedBindingIndex?.let {
+                        bindingTableView.selectionModel.select(it)
+                    } ?: bindingTableView.selectionModel.clearSelection()
+                }
+
+                if (oldState.currentCardPool != newState.currentCardPool) {
+                    obsCardPool.setAll(newState.currentCardPool)
+                }
+
+                if (oldState.selectedCards != newState.selectedCards) {
+                    obsSelectedCards.setAll(newState.selectedCards)
+                }
+            } finally {
+                isUpdatingFromState = false
+            }
+        }
+    }
+}

@@ -59,7 +59,8 @@ class SaveTreeAction : TreeWorkbenchAction {
         try {
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode)
             val config = EvaluatorTreeConfig(
-                bindByGroupId = workbench.groupIdComboBox.value ?: "",
+                //todo(暂时用listOf解决报错)
+                bindGroupIds = listOf(workbench.groupIdComboBox.value),
                 root = evaluatorNode,
                 ruleConfigs = workbench.ruleConfigs.toMap()
             )

@@ -1,5 +1,7 @@
 package lin.moduls
 
+import lin.card_group.repository.CardGroupRepository
+import lin.card_group.service.CardGroupService
 import lin.card_group.ui.CardGroupExtension
 import lin.rule.registry.RuleRegistry
 import lin.tree_config.repository.TreeConfigRepository
@@ -19,19 +21,10 @@ import java.nio.file.Path
 
 const val TestDBUrl = "weightHandlerStrategy.db"
 
-val configUiModule = module {
-    single {
-        val dbPath = Path.of(System.getProperty("user.dir"), TestDBUrl)
-        if (!Files.exists(dbPath)) {
-            Files.createFile(dbPath)
-        }
-        SqliteJdbcProvider(dbPath)
-    }
+val uiModule = module {
+
 
     single { RuleRegistry() }
-
-    single { TreeConfigRepository(get()) }
-    single { TreeConfigService(get()) }
 
     // UI 扩展注册
     single { CardGroupExtension() } bind UiExtension::class
@@ -43,11 +36,24 @@ val configUiModule = module {
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
 
 }
+val dbModule = module {
+    single {
+        val dbPath = Path.of(System.getProperty("user.dir"), TestDBUrl)
+        if (!Files.exists(dbPath)) {
+            Files.createFile(dbPath)
+        }
+        SqliteJdbcProvider(dbPath)
+    }
+    single { CardGroupRepository(get()) }
+    single { CardGroupService(get()) }
+    single { TreeConfigRepository(get()) }
+    single { TreeConfigService(get()) }
+}
 
 class ModelsDefine {
     fun loadModules() {
         startKoin {
-            modules(configUiModule)
+            modules(uiModule, dbModule)
         }
     }
 }

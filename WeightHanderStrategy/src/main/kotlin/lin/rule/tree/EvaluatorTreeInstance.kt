@@ -4,7 +4,7 @@ import lin.rule.build.RuleLogic
 import lin.rule.registry.RuleRegistry
 
 data class EvaluatorTreeInstance(
-    val bindByGroupId: String,
+    val bindGroupIds: List<String>,
     val root: EvaluatorInstanceNode
 )
 
@@ -57,7 +57,7 @@ class EvaluatorTreeInstantiator(
         }
 
         return EvaluatorTreeInstance(
-            bindByGroupId = config.bindByGroupId,
+            bindGroupIds = config.bindGroupIds,
             root = instantiateNode(config.root)
         )
     }
