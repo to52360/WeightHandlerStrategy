@@ -14,24 +14,28 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     // ─────────────────────── DDL ───────────────────────────────────────────
 
     private fun initSchema() {
-        // Manager 表：每条记录 = 一套分组方案
+        // 开发阶段直接重置表结构以适配字段变更
+        jdbcProvider.jdbcTemplate.execute("DROP TABLE IF EXISTS card_group_binding")
+        jdbcProvider.jdbcTemplate.execute("DROP TABLE IF EXISTS card_group_manager")
+
+        // Manager 表：每条记录 = 一套分组方案。source_file 绑定在这里。
         jdbcProvider.jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_manager (
-                id      TEXT    PRIMARY KEY,
-                name    TEXT    NOT NULL,
-                enabled INTEGER NOT NULL DEFAULT 1
+                id          TEXT    PRIMARY KEY,
+                name        TEXT    NOT NULL,
+                source_file TEXT    NOT NULL,
+                enabled     INTEGER NOT NULL DEFAULT 1
             );
             """.trimIndent()
         )
 
-        // Binding 表：使用 id 作为主键
+        // Binding 表：属于某个 Manager，具体卡组划分。
         jdbcProvider.jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_binding (
                 id          TEXT    PRIMARY KEY,
                 manger_id   TEXT    NOT NULL,
-                source_file TEXT    NOT NULL,
                 name        TEXT    NOT NULL,
                 card_ids    TEXT    NOT NULL
             );
@@ -45,6 +49,7 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
         CardManagerEntity(
             id = rs.getString("id"),
             name = rs.getString("name"),
+            sourceFile = rs.getString("source_file"),
             enabled = rs.getInt("enabled") == 1
         )
     }
@@ -52,13 +57,14 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     fun saveManager(entity: CardManagerEntity) {
         jdbcProvider.jdbcTemplate.update(
             """
-            INSERT INTO card_group_manager (id, name, enabled)
-            VALUES (?, ?, ?)
+            INSERT INTO card_group_manager (id, name, source_file, enabled)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                name    = excluded.name,
-                enabled = excluded.enabled
+                name        = excluded.name,
+                source_file = excluded.source_file,
+                enabled     = excluded.enabled
             """.trimIndent(),
-            entity.id, entity.name, if (entity.enabled) 1 else 0
+            entity.id, entity.name, entity.sourceFile, if (entity.enabled) 1 else 0
         )
     }
 
@@ -77,7 +83,6 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
         CardBindingEntity(
             id = rs.getString("id"),
             mangerId = rs.getString("manger_id"),
-            sourceFile = rs.getString("source_file"),
             name = rs.getString("name"),
             cardIds = rs.getString("card_ids")
         )
@@ -86,14 +91,13 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     fun saveBinding(entity: CardBindingEntity) {
         jdbcProvider.jdbcTemplate.update(
             """
-            INSERT INTO card_group_binding (id, manger_id, source_file, name, card_ids)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO card_group_binding (id, manger_id, name, card_ids)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                source_file = excluded.source_file,
                 name        = excluded.name,
                 card_ids    = excluded.card_ids
             """.trimIndent(),
-            entity.id, entity.mangerId, entity.sourceFile, entity.name, entity.cardIds
+            entity.id, entity.mangerId, entity.name, entity.cardIds
         )
     }
 

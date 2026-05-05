@@ -2,7 +2,6 @@ package lin.card_group.ui
 
 import javafx.beans.property.SimpleObjectProperty
 import lin.card_group.domain.CardManagerEntity
-import lin.card_group.service.BindingDraft
 import lin.card_group.service.CardGroupService
 import lin.dao.CardGroupJsonParser
 import lin.rule.tree.CardGroupBinding
@@ -39,17 +38,16 @@ class WorkbenchStore(private val service: CardGroupService) {
             dispatch(WorkbenchActions.selectManager(item, emptyList()))
         } else {
             // 查 DB 获取 Bindings
-            val bindings = service.loadBindingViews(item.entity!!.id).map {
-                BindingDraft(it.binding, it.sourceFile)
-            }
+            val bindings = service.loadBindings(item.entity!!.id)
             dispatch(WorkbenchActions.selectManager(item, bindings))
         }
     }
 
-    fun createNewManager() {
+    fun createNewManager(sourceFile: String, name: String) {
         val draftEntity = CardManagerEntity(
             id = UUID.randomUUID().toString().substring(0, 8),
-            name = "新分组方案",
+            name = name,
+            sourceFile = sourceFile,
             enabled = true
         )
         val newItem = CardManagerItem(draftEntity, isDraft = true)
@@ -64,8 +62,9 @@ class WorkbenchStore(private val service: CardGroupService) {
         // 收集数据并保存
         val id = service.saveManager(
             name = state.managerName,
+            sourceFile = state.managerSourceFile,
             enabled = state.managerEnabled,
-            drafts = state.currentBindings,
+            bindings = state.currentBindings,
             existingId = if (currentItem.isDraft) null else currentItem.entity?.id
         )
 
@@ -91,23 +90,19 @@ class WorkbenchStore(private val service: CardGroupService) {
             dispatch(WorkbenchActions.selectBinding(null, emptyList()))
             return
         }
-        val draft = state.currentBindings[index]
 
-        // 副作用：从文件加载全量卡池
-        val cardPool = CardGroupJsonParser.loadByFileName(draft.sourceFile)?.cards ?: emptyList()
+        // 副作用：从文件加载全量卡池 (使用 Manager 级别的 sourceFile)
+        val cardPool = CardGroupJsonParser.loadByFileName(state.managerSourceFile)?.cards ?: emptyList()
         dispatch(WorkbenchActions.selectBinding(index, cardPool))
     }
 
-    fun addBinding(sourceFile: String) {
-        val draft = BindingDraft(
-            binding = CardGroupBinding(
-                id = UUID.randomUUID().toString().substring(0, 8),
-                mangerId = state.selectedManagerItem?.entity?.id ?: "",
-                name = sourceFile,
-                cardIds = emptyList()
-            ),
-            sourceFile = sourceFile
+    fun addBinding() {
+        val binding = CardGroupBinding(
+            id = UUID.randomUUID().toString().substring(0, 8),
+            mangerId = state.selectedManagerItem?.entity?.id ?: "",
+            name = "新分组",
+            cardIds = emptyList()
         )
-        dispatch(WorkbenchActions.addBinding(draft))
+        dispatch(WorkbenchActions.addBinding(binding))
     }
 }

@@ -1,12 +1,13 @@
 package lin.card_group.ui
 
 import lin.card_group.domain.CardManagerEntity
-import lin.card_group.service.BindingDraft
 import lin.dao.CardWeightConfig
+import lin.rule.tree.CardGroupBinding
 
 /** 列表项展示模型 */
 data class CardManagerItem(val entity: CardManagerEntity?, val isDraft: Boolean = false) {
-    override fun toString() = if (isDraft) "[未保存] ${entity?.name ?: "新分组方案"}" else entity?.name ?: ""
+    override fun toString() =
+        if (isDraft) "[未保存] ${entity?.name ?: "新分组方案"}" else (entity?.name ?: "") + " (${entity?.sourceFile})"
 }
 
 /**
@@ -19,8 +20,9 @@ data class WorkbenchState(
 
     // 维度 2: 当前编辑的 Manager 草稿
     val managerName: String = "",
+    val managerSourceFile: String = "",
     val managerEnabled: Boolean = true,
-    val currentBindings: List<BindingDraft> = emptyList(),
+    val currentBindings: List<CardGroupBinding> = emptyList(),
 
     // 维度 3: 选中的具体 Binding 行
     val selectedBindingIndex: Int? = null,
@@ -42,10 +44,11 @@ object WorkbenchActions {
 
     fun setManagers(managers: List<CardManagerItem>): Action = { it.copy(managers = managers) }
 
-    fun selectManager(item: CardManagerItem?, bindings: List<BindingDraft>): Action = { state ->
+    fun selectManager(item: CardManagerItem?, bindings: List<CardGroupBinding>): Action = { state ->
         state.copy(
             selectedManagerItem = item,
             managerName = item?.entity?.name ?: "",
+            managerSourceFile = item?.entity?.sourceFile ?: "",
             managerEnabled = item?.entity?.enabled ?: true,
             currentBindings = bindings,
             selectedBindingIndex = null,
@@ -60,7 +63,7 @@ object WorkbenchActions {
 
     fun selectBinding(index: Int?, cardPool: List<CardWeightConfig>): Action = { state ->
         val selectedCards = if (index != null && index >= 0 && index < state.currentBindings.size) {
-            state.currentBindings[index].binding.cardIds.toSet()
+            state.currentBindings[index].cardIds.toSet()
         } else {
             emptySet()
         }
@@ -71,8 +74,8 @@ object WorkbenchActions {
         )
     }
 
-    fun addBinding(draft: BindingDraft): Action = { state ->
-        state.copy(currentBindings = state.currentBindings + draft)
+    fun addBinding(binding: CardGroupBinding): Action = { state ->
+        state.copy(currentBindings = state.currentBindings + binding)
     }
 
     fun removeBinding(index: Int): Action = { state ->
@@ -107,12 +110,10 @@ object WorkbenchActions {
         // 同步更新 currentBindings 中的数据
         val idx = state.selectedBindingIndex
         val newBindings = if (idx != null && idx in state.currentBindings.indices) {
-            val oldDraft = state.currentBindings[idx]
-            val newDraft = oldDraft.copy(
-                binding = oldDraft.binding.copy(cardIds = newCards.toList())
-            )
+            val oldBinding = state.currentBindings[idx]
+            val newBinding = oldBinding.copy(cardIds = newCards.toList())
             val list = state.currentBindings.toMutableList()
-            list[idx] = newDraft
+            list[idx] = newBinding
             list
         } else {
             state.currentBindings

@@ -8,21 +8,20 @@ import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
-import lin.card_group.service.BindingDraft
-import lin.dao.CardGroupJsonParser
 import lin.dao.CardWeightConfig
+import lin.rule.tree.CardGroupBinding
 
 /**
  * 右侧：Binding 详情编辑面板
  */
 class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
 
-    private val bindingTableView = TableView<BindingDraft>()
+    private val bindingTableView = TableView<CardGroupBinding>()
     private val cardPoolListView = ListView<CardWeightConfig>()
     private val selectedCardListView = ListView<String>()
 
     // 内部的 Observable 数据源，用于 JavaFX 绑定
-    private val obsBindings = FXCollections.observableArrayList<BindingDraft>()
+    private val obsBindings = FXCollections.observableArrayList<CardGroupBinding>()
     private val obsCardPool = FXCollections.observableArrayList<CardWeightConfig>()
     private val obsSelectedCards = FXCollections.observableArrayList<String>()
 
@@ -58,20 +57,8 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
             val toolBar = HBox(5.0).apply {
                 alignment = javafx.geometry.Pos.CENTER_LEFT
 
-                // 读取本地 .cardgroup 文件列表（仅文件名，不加载内容）
-                val fileNames = CardGroupJsonParser.listAvailableFiles()
-                val fileCombo = ComboBox<String>().apply {
-                    items = FXCollections.observableArrayList(fileNames)
-                    promptText = "选择 .cardgroup 文件"
-                }
-
-                val btnImport = Button("导入").apply {
-                    setOnAction {
-                        val selected = fileCombo.value
-                        if (!selected.isNullOrBlank()) {
-                            store.addBinding(selected)
-                        }
-                    }
+                val btnAdd = Button("添加分组").apply {
+                    setOnAction { store.addBinding() }
                 }
                 val btnRemove = Button("移除选中").apply {
                     setOnAction {
@@ -79,27 +66,23 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                         if (idx >= 0) store.dispatch(WorkbenchActions.removeBinding(idx))
                     }
                 }
-                children.addAll(fileCombo, btnImport, btnRemove)
+                children.addAll(btnAdd, btnRemove)
             }
 
             // 初始化表格列
-            val colNo = TableColumn<BindingDraft, String>("ID").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.binding.id) }
-                prefWidth = 250.0
+            val colNo = TableColumn<CardGroupBinding, String>("ID").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.id) }
+                prefWidth = 100.0
             }
-            val colSource = TableColumn<BindingDraft, String>("来源文件").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.sourceFile) }
-                prefWidth = 150.0
+            val colName = TableColumn<CardGroupBinding, String>("分组名称").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.name) }
+                prefWidth = 200.0
             }
-            val colName = TableColumn<BindingDraft, String>("展示名").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.binding.name) }
-                prefWidth = 150.0
-            }
-            val colCardCount = TableColumn<BindingDraft, Number>("已选卡数").apply {
-                setCellValueFactory { ReadOnlyIntegerWrapper(it.value.binding.cardIds.size) }
+            val colCardCount = TableColumn<CardGroupBinding, Number>("已选卡数").apply {
+                setCellValueFactory { ReadOnlyIntegerWrapper(it.value.cardIds.size) }
                 prefWidth = 80.0
             }
-            bindingTableView.columns.addAll(colNo, colSource, colName, colCardCount)
+            bindingTableView.columns.addAll(colNo, colName, colCardCount)
 
             bindingTableView.items = obsBindings
             bindingTableView.selectionModel.selectedIndexProperty().addListener { _, _, newValue ->

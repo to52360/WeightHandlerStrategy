@@ -10,6 +10,7 @@ private val mapper = jacksonObjectMapper()
 data class CardManagerEntity(
     val id: String,       // UUID，主键
     val name: String,
+    val sourceFile: String, // 新增：来源 .cardgroup 文件名
     val enabled: Boolean
 )
 
@@ -20,7 +21,6 @@ data class CardManagerEntity(
 data class CardBindingEntity(
     val id: String,
     val mangerId: String,
-    val sourceFile: String,
     val name: String,
     val cardIds: String // JSON 数组字符串
 ) {

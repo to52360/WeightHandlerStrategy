@@ -8,19 +8,7 @@ import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import java.util.*
 
-/**
- * UI 层向 Service 传入的 Binding 草稿，携带 sourceFile（持久化需要，业务层不感知）。
- */
-data class BindingDraft(
-    val binding: CardGroupBinding,
-    val sourceFile: String   // 来源 .cardgroup 文件名（不含扩展名）
-)
-
-/** UI 读取时携带 sourceFile 的视图对象（业务层 CardGroupBinding 不感知 sourceFile） */
-data class BindingView(
-    val binding: CardGroupBinding,
-    val sourceFile: String
-)
+// 由于 sourceFile 移到了 Manager，Binding 不再需要独立的 Draft/View 包装，直接使用领域对象 CardGroupBinding 即可。
 
 class CardGroupService(private val repository: CardGroupRepository) {
 
@@ -37,28 +25,23 @@ class CardGroupService(private val repository: CardGroupRepository) {
         }
     }
 
-    /**
-     * 保存 Manager 及其 Binding 列表。
-     * [existingId] 为 null 时新建（生成 UUID），否则执行 UPSERT。
-     * 返回最终使用的 managerId。
-     */
     fun saveManager(
         name: String,
+        sourceFile: String,
         enabled: Boolean,
-        drafts: List<BindingDraft>,
+        bindings: List<CardGroupBinding>,
         existingId: String? = null
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
-        repository.saveManager(CardManagerEntity(id = id, name = name, enabled = enabled))
+        repository.saveManager(CardManagerEntity(id = id, name = name, sourceFile = sourceFile, enabled = enabled))
 
-        // 整体替换该 Manager 下的 Binding，使用已有的 id 或者新生成
-        val entities = drafts.map { draft ->
+        // 整体替换该 Manager 下的 Binding
+        val entities = bindings.map { binding ->
             CardBindingEntity(
-                id = draft.binding.id,
+                id = binding.id,
                 mangerId = id,
-                sourceFile = draft.sourceFile,
-                name = draft.binding.name,
-                cardIds = mapper.writeValueAsString(draft.binding.cardIds)
+                name = binding.name,
+                cardIds = mapper.writeValueAsString(binding.cardIds)
             )
         }
         repository.replaceBindings(id, entities)
@@ -67,14 +50,9 @@ class CardGroupService(private val repository: CardGroupRepository) {
 
     fun deleteManager(id: String) = repository.deleteManager(id)
 
-    /** 加载某 Manager 下所有 Binding，含 sourceFile（供 UI 工作台使用） */
-    fun loadBindingViews(managerId: String): List<BindingView> =
-        repository.findBindingsByManager(managerId).map { entity ->
-            BindingView(
-                binding = entity.toDomain(),
-                sourceFile = entity.sourceFile
-            )
-        }
+    /** 加载某 Manager 下所有 Binding（供 UI 工作台使用） */
+    fun loadBindings(managerId: String): List<CardGroupBinding> =
+        repository.findBindingsByManager(managerId).map { it.toDomain() }
 
     /** 仅加载 Manager 摘要列表（id/name/enabled），不级联加载 Binding，供左侧列表刷新 */
     fun loadAllManagers(): List<CardManagerEntity> = repository.findAllManagers()
@@ -82,14 +60,13 @@ class CardGroupService(private val repository: CardGroupRepository) {
 
     // ─────────────────────── 单条 Binding ──────────────────────────────────
 
-    fun saveBinding(draft: BindingDraft) =
+    fun saveBinding(binding: CardGroupBinding) =
         repository.saveBinding(
             CardBindingEntity(
-                id = draft.binding.id,
-                mangerId = draft.binding.mangerId,
-                sourceFile = draft.sourceFile,
-                name = draft.binding.name,
-                cardIds = mapper.writeValueAsString(draft.binding.cardIds)
+                id = binding.id,
+                mangerId = binding.mangerId,
+                name = binding.name,
+                cardIds = mapper.writeValueAsString(binding.cardIds)
             )
         )
 
