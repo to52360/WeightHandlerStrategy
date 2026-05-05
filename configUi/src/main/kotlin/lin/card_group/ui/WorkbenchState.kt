@@ -100,6 +100,14 @@ object WorkbenchActions {
         }
     }
 
+    fun updateBindingName(index: Int, newName: String): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            newList[index] = newList[index].copy(name = newName)
+        }
+        state.copy(currentBindings = newList)
+    }
+
     fun toggleCard(cardId: String, isSelected: Boolean): Action = { state ->
         val newCards = if (isSelected) {
             state.selectedCards + cardId

@@ -97,12 +97,18 @@ class WorkbenchStore(private val service: CardGroupService) {
     }
 
     fun addBinding() {
+        val nextNum = state.currentBindings.size + 1
         val binding = CardGroupBinding(
             id = UUID.randomUUID().toString().substring(0, 8),
             mangerId = state.selectedManagerItem?.entity?.id ?: "",
-            name = "新分组",
+            name = "分组 $nextNum",
             cardIds = emptyList()
         )
         dispatch(WorkbenchActions.addBinding(binding))
+    }
+
+    fun updateBindingName(newName: String) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingName(idx, newName))
     }
 }

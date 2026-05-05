@@ -14,10 +14,6 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     // ─────────────────────── DDL ───────────────────────────────────────────
 
     private fun initSchema() {
-        // 开发阶段直接重置表结构以适配字段变更
-        jdbcProvider.jdbcTemplate.execute("DROP TABLE IF EXISTS card_group_binding")
-        jdbcProvider.jdbcTemplate.execute("DROP TABLE IF EXISTS card_group_manager")
-
         // Manager 表：每条记录 = 一套分组方案。source_file 绑定在这里。
         jdbcProvider.jdbcTemplate.execute(
             """
@@ -70,6 +66,14 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
 
     fun findAllManagers(): List<CardManagerEntity> =
         jdbcProvider.jdbcTemplate.query("SELECT * FROM card_group_manager", managerRowMapper)
+
+    fun findManagers(onlyEnabled: Boolean = false): List<CardManagerEntity> {
+        return if (onlyEnabled) {
+            jdbcProvider.jdbcTemplate.query("SELECT * FROM card_group_manager WHERE enabled = 1", managerRowMapper)
+        } else {
+            findAllManagers()
+        }
+    }
 
     fun deleteManager(id: String) {
         // 同时清理该 Manager 下的所有 Binding

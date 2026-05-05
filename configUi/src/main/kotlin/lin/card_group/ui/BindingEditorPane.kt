@@ -53,6 +53,12 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         }
 
         // 2. 表格与控制栏
+        val bindingNameField = TextField().apply {
+            promptText = "分组名称"
+            // 未选中时禁用
+            disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
+        }
+
         val tableBox = VBox(5.0).apply {
             val toolBar = HBox(5.0).apply {
                 alignment = javafx.geometry.Pos.CENTER_LEFT
@@ -67,6 +73,17 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                     }
                 }
                 children.addAll(btnAdd, btnRemove)
+            }
+
+            val bindingInfoBox = HBox(10.0).apply {
+                alignment = javafx.geometry.Pos.CENTER_LEFT
+                children.addAll(Label("当前选中分组名称:"), bindingNameField)
+            }
+
+            bindingNameField.textProperty().addListener { _, _, newValue ->
+                if (!isUpdatingFromState && newValue != null) {
+                    store.updateBindingName(newValue)
+                }
             }
 
             // 初始化表格列
@@ -92,7 +109,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
             }
 
             setVgrow(bindingTableView, Priority.ALWAYS)
-            children.addAll(toolBar, bindingTableView)
+            children.addAll(toolBar, bindingTableView, bindingInfoBox)
         }
 
         // 3. 底部选卡区 (左右两栏 SplitPane)
@@ -168,6 +185,17 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
 
                 if (oldState.selectedCards != newState.selectedCards) {
                     obsSelectedCards.setAll(newState.selectedCards)
+                }
+
+                // 同步当前选中的分组名称到输入框
+                val selectedIdx = newState.selectedBindingIndex
+                if (selectedIdx != null && selectedIdx in newState.currentBindings.indices) {
+                    val currentName = newState.currentBindings[selectedIdx].name
+                    if (bindingNameField.text != currentName) {
+                        bindingNameField.text = currentName
+                    }
+                } else {
+                    bindingNameField.clear()
                 }
             } finally {
                 isUpdatingFromState = false

@@ -16,9 +16,9 @@ class CardGroupService(private val repository: CardGroupRepository) {
 
     // ─────────────────────── Manager ───────────────────────────────────────
 
-    /** 加载所有 Manager，每个 Manager 内嵌其 Binding 列表 */
-    fun loadAll(): List<CardGroupManagerConfig> {
-        return repository.findAllManagers().map { managerEntity ->
+    /** 加载 Manager，每个 Manager 内嵌其 Binding 列表 */
+    fun loadAll(onlyEnabled: Boolean = false): List<CardGroupManagerConfig> {
+        return repository.findManagers(onlyEnabled).map { managerEntity ->
             val bindings = repository.findBindingsByManager(managerEntity.id)
                 .map { it.toDomain() }
             managerEntity.toDomain(bindings)

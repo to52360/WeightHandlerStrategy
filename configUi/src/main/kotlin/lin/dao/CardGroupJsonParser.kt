@@ -3,8 +3,11 @@ package lin.dao
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import lin.card_group.service.CardGroupService
 import lin.rule.build.DynamicFieldOption
 import lin.serviceLoader.provider.SelectOptionProvider
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isRegularFile
@@ -94,15 +97,24 @@ val CardGroupConfig.availableCards: List<CardWeightConfig>
     get() = cards
 
 /**
- * todo 数据提供错了
+ * 修正后的数据提供者：从 DB/Service 中获取所有已启用的 Manager 下的分组（Binding）
  */
-class CardSelectOptionProvider : SelectOptionProvider {
+class CardSelectOptionProvider : SelectOptionProvider, KoinComponent {
     override val dataSourceId: String = "cardGroup"
+    private val service: CardGroupService by inject()
 
     override fun getOptions(): List<DynamicFieldOption> {
-        val groups = CardGroupJsonParser.loadAllCardGroups()
-        return groups.map { (groupId, _) ->
-            DynamicFieldOption(value = groupId, label = groupId)
+        // 只加载已启用的 Manager 方案
+        val managers = service.loadAll(onlyEnabled = true)
+
+        // 展平所有方案下的具体分组（Binding）
+        return managers.flatMap { manager ->
+            manager.bindings.map { binding ->
+                DynamicFieldOption(
+                    value = binding.id,
+                    label = binding.name
+                )
+            }
         }
     }
 }

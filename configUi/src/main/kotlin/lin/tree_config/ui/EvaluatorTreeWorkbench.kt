@@ -83,7 +83,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
         // 初始化下拉选项
         try {
-            //todo 这里有问题
+            //todo 这里有问题,应该是多选,这里只映射value
             val options = CardSelectOptionProvider().getOptions()
             groupIdComboBox.items.addAll(options.map { it.value })
         } catch (e: Exception) {
