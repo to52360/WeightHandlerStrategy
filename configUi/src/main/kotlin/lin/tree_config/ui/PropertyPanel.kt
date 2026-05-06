@@ -4,10 +4,7 @@ import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.*
-import javafx.scene.layout.GridPane
-import javafx.scene.layout.HBox
-import javafx.scene.layout.Priority
-import javafx.scene.layout.VBox
+import javafx.scene.layout.*
 import lin.rule.build.DynamicFieldOption
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldType
@@ -89,7 +86,7 @@ class PropertyPanel : VBox(8.0), KoinComponent {
         }
         val allRules: List<RuleUiItem> = try {
             ruleRegistry.uiItems()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
         ruleIdCombo.items.addAll(allRules.map { it.ruleId })
@@ -121,9 +118,9 @@ class PropertyPanel : VBox(8.0), KoinComponent {
 
         // 若已有配置，触发一次初始渲染
         if (!existing?.ruleId.isNullOrEmpty()) {
-            val uiItem = allRules.find { it.ruleId == existing?.ruleId }
+            val uiItem = allRules.find { it.ruleId == existing.ruleId }
             if (uiItem != null) {
-                val currentArgs = existing?.args?.toMutableMap() ?: mutableMapOf()
+                val currentArgs = existing.args.toMutableMap() ?: mutableMapOf()
                 buildDynamicForm(dynamicFormArea, uiItem, nodeId, ruleIdCombo, existing, currentArgs, ruleConfigs)
             }
         }
@@ -144,12 +141,20 @@ class PropertyPanel : VBox(8.0), KoinComponent {
             hgap = 8.0
             vgap = 8.0
             padding = Insets(4.0, 0.0, 4.0, 0.0)
+
+            // 设置列约束：第一列（标签）不拉伸，第二列（控件）自动拉伸占满剩余空间
+            columnConstraints.addAll(
+                ColumnConstraints().apply { hgrow = Priority.NEVER },
+                ColumnConstraints().apply { hgrow = Priority.ALWAYS }
+            )
         }
 
         val allSpecs = uiItem.builtInWeightProps + uiItem.fields
         allSpecs.forEachIndexed { row, spec ->
             val label = Label(buildLabel(spec)).apply {
                 tooltip = Tooltip(spec.description)
+                // 确保标签不会因为控件占据太多空间而被挤压成 "..."
+                minWidth = javafx.scene.layout.Region.USE_PREF_SIZE
             }
             val control = buildControl(spec, existing, args)
 
@@ -209,20 +214,59 @@ class PropertyPanel : VBox(8.0), KoinComponent {
                 val combo = ComboBox<String>().apply { maxWidth = Double.MAX_VALUE }
                 val options: List<DynamicFieldOption> = try {
                     optionProviders[type.dataSourceId]?.getOptions() ?: emptyList()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     emptyList()
                 }
-                combo.items.addAll(options.map { it.value as? String ?: it.value.toString() })
+                combo.items.addAll(options.map { it.value ?: it.value })
                 currentValue?.toString()?.let { combo.selectionModel.select(it) }
                 combo
             }
 
-            is FieldType.ListType -> TextArea(currentValue?.toString() ?: "").apply {
-                prefRowCount = 3
-                promptText = "每行一个值"
-                maxWidth = Double.MAX_VALUE
+            is FieldType.ListType -> {
+                val elementType = type.elementType
+                if (elementType is FieldType.SelectType) {
+                    // 场景：List + DataSource -> 多选下拉框
+                    val menu = MenuButton("请选择...").apply { maxWidth = Double.MAX_VALUE }
+                    val content = VBox(5.0).apply { padding = Insets(5.0, 10.0, 5.0, 10.0) }
+                    val options = try {
+                        optionProviders[elementType.dataSourceId]?.getOptions() ?: emptyList()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+
+                    val selectedValues = (currentValue as? List<*>)?.map { it.toString() }?.toSet() ?: emptySet()
+
+                    options.forEach { opt ->
+                        val cb = CheckBox(opt.label).apply {
+                            userData = opt.value
+                            isSelected = selectedValues.contains(opt.value.toString())
+                        }
+                        content.children.add(cb)
+                    }
+
+                    val customItem = CustomMenuItem(content).apply { isHideOnClick = false }
+                    menu.items.add(customItem)
+                    updateMultiSelectText(menu, content)
+                    menu
+                } else {
+                    // 场景：普通 List -> TextArea (优化解析)
+                    val text =
+                        if (currentValue is List<*>) currentValue.joinToString("\n") else currentValue?.toString() ?: ""
+                    TextArea(text).apply {
+                        prefRowCount = 3
+                        promptText = "每行一个值"
+                        maxWidth = Double.MAX_VALUE
+                    }
+                }
             }
         }
+    }
+
+    private fun updateMultiSelectText(menu: MenuButton, content: VBox) {
+        val selectedLabels = content.children.filterIsInstance<CheckBox>()
+            .filter { it.isSelected }
+            .map { it.text }
+        menu.text = if (selectedLabels.isEmpty()) "请选择..." else selectedLabels.joinToString(", ")
     }
 
     private fun attachChangeListener(
@@ -249,14 +293,46 @@ class PropertyPanel : VBox(8.0), KoinComponent {
 
             is ComboBox<*> -> control.selectionModel.selectedItemProperty().addListener { _, _, newVal ->
                 if (newVal != null) {
-                    args[spec.propertyName] = newVal as Any
+                    args[spec.propertyName] = newVal
                     onChanged()
                 }
             }
 
             is TextArea -> control.textProperty().addListener { _, _, newVal ->
-                args[spec.propertyName] = newVal.lines().filter { it.isNotBlank() }
+                val lines = newVal.lines().filter { it.isNotBlank() }
+                val elementType = (spec.typeStruct as? FieldType.ListType)?.elementType
+                args[spec.propertyName] = when (elementType) {
+                    FieldType.IntType -> lines.mapNotNull { it.toIntOrNull() }
+                    FieldType.DoubleType -> lines.mapNotNull { it.toDoubleOrNull() }
+                    else -> lines
+                }
                 onChanged()
+            }
+
+            is MenuButton -> {
+                val customItem = control.items.firstOrNull() as? CustomMenuItem
+                val vBox = customItem?.content as? VBox
+                vBox?.children?.filterIsInstance<CheckBox>()?.forEach { cb ->
+                    cb.selectedProperty().addListener { _, _, _ ->
+                        val selectedValues = vBox.children.filterIsInstance<CheckBox>()
+                            .filter { it.isSelected }
+                            .map { it.userData }
+
+                        // 转换类型 (例如 List<Int>)
+                        val listType = spec.typeStruct as? FieldType.ListType
+                        val elementType = listType?.elementType
+                        val finalValues =
+                            if (elementType is FieldType.SelectType && elementType.valueType is FieldType.IntType) {
+                                selectedValues.mapNotNull { it.toString().toIntOrNull() }
+                            } else {
+                                selectedValues
+                            }
+
+                        args[spec.propertyName] = finalValues
+                        updateMultiSelectText(control, vBox)
+                        onChanged()
+                    }
+                }
             }
         }
     }

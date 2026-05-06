@@ -72,7 +72,7 @@ object TreeModelConverter {
 data class ConfigListItem(
     val id: String,
     val name: String,
-    val groupId: String,
+    val groupIds: List<String>,
     val config: EvaluatorTreeConfig?,
     val isDraft: Boolean = false
 ) {

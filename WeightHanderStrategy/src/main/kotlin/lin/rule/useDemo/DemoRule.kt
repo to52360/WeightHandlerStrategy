@@ -19,6 +19,9 @@ import lin.serviceLoader.provider.RuleRegistrationProvider
 data class IntValueArg(
     @RuleField("阈值设定", "规则的通用整形参数") val limit: Int
 )
+data class IntsValueArg(
+    @RuleField("阈值设定", "规则的通用整形参数") val limits: List<Int>
+)
 
 val typedSimpleRule = RuleBuilder(IntValueArg::class)
     .id("typed_simple_rule")
@@ -27,6 +30,20 @@ val typedSimpleRule = RuleBuilder(IntValueArg::class)
     .factory { ruleConfig, params ->
         // 🌟 优势：直接拿到强类型的值，编译期间绝对安全，没有 Map 的解构开销
         val limit = params.limit
+
+        val logic: RuleLogic = {
+            TODO("返回你的 RuleResult 结果")
+        }
+        logic
+    }
+    .build()
+val listSimpleRule = RuleBuilder(IntsValueArg::class)
+    .id("list_simple_rule")
+    .metadata(name = "强类型简单阈值规则", desc = "复用通用包装类实现强类型校验")
+    // 👉 核心操作：这里不需要写 extraField！Parser 会通过泛型自动扫描出 Limit 输入框！
+    .factory { ruleConfig, params ->
+        // 🌟 优势：直接拿到强类型的值，编译期间绝对安全，没有 Map 的解构开销
+        val limits = params.limits
 
         val logic: RuleLogic = {
             TODO("返回你的 RuleResult 结果")
@@ -61,7 +78,7 @@ fun printUiDataDemo() {
 class DemoRuleProvider : RuleRegistrationProvider {
     override fun getRuleRegistrations(): Collection<RuleRegistration<*>> {
         return listOf(
-            typedSimpleRule
+            typedSimpleRule, listSimpleRule
         )
     }
 }

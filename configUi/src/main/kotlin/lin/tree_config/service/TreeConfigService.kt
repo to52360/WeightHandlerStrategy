@@ -33,8 +33,7 @@ class TreeConfigService(private val repository: TreeConfigRepository) {
         val json = mapper.writeValueAsString(config)
         val entity = TreeConfigEntity(
             id = id,
-            //todo 准备改成多个,暂时用toString解决报错
-            groupId = config.bindGroupIds.toString(),
+            groupIds = config.bindGroupIds.joinToString(","),
             name = name,
             configData = json
         )

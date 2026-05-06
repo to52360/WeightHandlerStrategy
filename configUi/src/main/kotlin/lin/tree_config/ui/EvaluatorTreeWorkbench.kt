@@ -27,8 +27,8 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     val logicTreeEditor = LogicTreeEditor<EvaluatorNodeWrapper>()
     val nodeTreeView get() = logicTreeEditor.treeView
 
-    //todo 等待改成多选
-    val groupIdComboBox = ComboBox<String>()
+    val bindGroupMenuButton = MenuButton("请选择绑定卡组分组...")
+    private val groupCheckItems = mutableMapOf<String, CheckBox>()
     val propertyPanel = PropertyPanel()
 
     // 选中的规则配置 (目前先只在内存中修改)
@@ -50,7 +50,13 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         // todo 调整为list
         //  绑定 LogicTreeEditor 的扩展区域与事件
         val groupBox = HBox(10.0).apply { alignment = javafx.geometry.Pos.CENTER_LEFT }
-        groupBox.children.addAll(Label("绑定卡组分组 (bindGroupIds):"), groupIdComboBox)
+        val label = Label("绑定卡组分组:").apply {
+            // 给必填项加个红色的星号提示
+            val asterisk = Label("*").apply { style = "-fx-text-fill: red;" }
+            graphic = asterisk
+            contentDisplay = ContentDisplay.RIGHT
+        }
+        groupBox.children.addAll(label, bindGroupMenuButton)
         logicTreeEditor.customHeaderArea.children.add(groupBox)
 
         // 注册选中节点的 Behavior —— 驱动右侧属性面板
@@ -83,9 +89,18 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
         // 初始化下拉选项
         try {
-            //todo 这里有问题,应该是多选,这里只映射value
             val options = CardSelectOptionProvider().getOptions()
-            groupIdComboBox.items.addAll(options.map { it.value })
+            val content = VBox(5.0).apply { padding = Insets(5.0, 10.0, 5.0, 10.0) }
+            options.forEach { option ->
+                val cb = CheckBox(option.label).apply {
+                    userData = option.value
+                    selectedProperty().addListener { _, _, _ -> updateMenuButtonText() }
+                }
+                groupCheckItems[option.value] = cb
+                content.children.add(cb)
+            }
+            val customMenuItem = CustomMenuItem(content).apply { isHideOnClick = false }
+            bindGroupMenuButton.items.add(customMenuItem)
         } catch (e: Exception) {
             System.err.println("加载分组数据失败: ${e.message}")
         }
@@ -102,7 +117,8 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         configListView.items.clear()
         val configs = treeConfigService.loadAll()
         configs.forEach { (entity, config) ->
-            configListView.items.add(ConfigListItem(entity.id, entity.name, entity.groupId, config))
+            val ids = entity.groupIds.split(",").filter { it.isNotBlank() }
+            configListView.items.add(ConfigListItem(entity.id, entity.name, ids, config))
         }
         // 将未保存的草稿重新插入列表首部
         currentDrafts.forEach { configListView.items.add(0, it) }
@@ -115,7 +131,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         val draftItem = ConfigListItem(
             id = "draft_${System.currentTimeMillis()}",
             name = name,
-            groupId = "",
+            groupIds = emptyList(),
             config = null,
             isDraft = true
         )
@@ -142,7 +158,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
         configListView.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
             newValue?.let { item ->
-                groupIdComboBox.selectionModel.select(item.groupId)
+                setSelectedGroupIds(item.groupIds)
                 if (item.config != null) {
                     logicTreeEditor.treeView.root = TreeModelConverter.toTreeItem(item.config.root)
                     ruleConfigs.clear()
@@ -192,13 +208,52 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
                 changeMenu.items.add(MenuItem("${targetType.name} 节点").apply {
                     setOnAction {
                         treeItem.value.type = targetType
-                        // BRANCH 节点需要保证至少有两个子节点
-                        if (targetType == NodeType.BRANCH && treeItem.children.size < 2) {
-                            repeat(2 - treeItem.children.size) {
-                                treeItem.children.add(TreeItem(EvaluatorNodeWrapper(NodeType.AND)))
+
+                        // 1. 根据节点类型分配或清空 nodeId
+                        if (targetType == NodeType.RULE || targetType == NodeType.BRANCH) {
+                            val prefix = if (targetType == NodeType.RULE) "rule" else "branch"
+                            treeItem.value.nodeId = "${prefix}_${System.currentTimeMillis()}"
+                        } else {
+                            treeItem.value.nodeId = ""
+                        }
+
+                        // 2. 根据目标节点类型处理已有的子节点
+                        when (targetType) {
+                            NodeType.RULE -> {
+                                // RULE 节点不能有子节点
+                                treeItem.children.clear()
+                            }
+
+                            NodeType.NOT -> {
+                                // NOT 节点最多只能有一个子节点
+                                if (treeItem.children.size > 1) {
+                                    val first = treeItem.children.first()
+                                    treeItem.children.clear()
+                                    treeItem.children.add(first)
+                                }
+                            }
+
+                            NodeType.BRANCH -> {
+                                // BRANCH 节点强制清空并重建两个占位子节点（onTrue 和 onFalse）
+                                treeItem.children.clear()
+                                treeItem.children.addAll(
+                                    TreeItem(EvaluatorNodeWrapper(NodeType.AND)).also { it.isExpanded = true },
+                                    TreeItem(EvaluatorNodeWrapper(NodeType.AND)).also { it.isExpanded = true }
+                                )
+                            }
+
+                            NodeType.AND, NodeType.OR -> {
+                                // 保持现有子节点不变
                             }
                         }
+
                         logicTreeEditor.treeView.refresh()
+                        // 触发重新选中以刷新右侧面板
+                        val selectionModel = logicTreeEditor.treeView.selectionModel
+                        if (selectionModel.selectedItem == treeItem) {
+                            selectionModel.clearSelection()
+                            selectionModel.select(treeItem)
+                        }
                     }
                 })
             }
@@ -270,6 +325,26 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
             ruleConfigs[nodeId] = config
         }
         return propertyPanel
+    }
+
+    private fun updateMenuButtonText() {
+        val selectedLabels = groupCheckItems.values
+            .filter { it.isSelected }
+            .map { it.text }
+        bindGroupMenuButton.text = if (selectedLabels.isEmpty()) "请选择..." else selectedLabels.joinToString(", ")
+    }
+
+    fun getSelectedGroupIds(): List<String> {
+        return groupCheckItems.entries
+            .filter { it.value.isSelected }
+            .map { it.key }
+    }
+
+    fun setSelectedGroupIds(ids: List<String>) {
+        groupCheckItems.forEach { (id, item) ->
+            item.isSelected = ids.contains(id)
+        }
+        updateMenuButtonText()
     }
 
 }

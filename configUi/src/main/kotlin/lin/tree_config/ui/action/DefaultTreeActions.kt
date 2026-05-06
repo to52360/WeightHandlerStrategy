@@ -30,7 +30,7 @@ class CreateNewTreeAction : TreeWorkbenchAction {
             // 初始化编辑区
             val rootItem = TreeItem(EvaluatorNodeWrapper(NodeType.AND)).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
-            workbench.groupIdComboBox.selectionModel.clearSelection()
+            workbench.setSelectedGroupIds(emptyList())
             workbench.ruleConfigs.clear()
             workbench.propertyPanel.showPlaceholder()
 
@@ -57,10 +57,15 @@ class SaveTreeAction : TreeWorkbenchAction {
         }
 
         try {
+            val bindGroupIds = workbench.getSelectedGroupIds()
+            if (bindGroupIds.isEmpty()) {
+                showError("请选择至少一个绑定卡组分组")
+                return
+            }
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode)
             val config = EvaluatorTreeConfig(
-                //todo(暂时用listOf解决报错)
-                bindGroupIds = listOf(workbench.groupIdComboBox.value),
+                bindGroupIds = bindGroupIds,
+
                 root = evaluatorNode,
                 ruleConfigs = workbench.ruleConfigs.toMap()
             )

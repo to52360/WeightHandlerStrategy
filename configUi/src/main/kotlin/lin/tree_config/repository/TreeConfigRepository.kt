@@ -30,13 +30,13 @@ class TreeConfigRepository(private val jdbcProvider: SqliteJdbcProvider) {
                 name = excluded.name,
                 config_data = excluded.config_data
         """.trimIndent()
-        jdbcProvider.jdbcTemplate.update(sql, entity.id, entity.groupId, entity.name, entity.configData)
+        jdbcProvider.jdbcTemplate.update(sql, entity.id, entity.groupIds, entity.name, entity.configData)
     }
 
     private val rowMapper = RowMapper { rs, _ ->
         TreeConfigEntity(
             id = rs.getString("id"),
-            groupId = rs.getString("group_id"),
+            groupIds = rs.getString("group_id"),
             name = rs.getString("name"),
             configData = rs.getString("config_data")
         )
