@@ -12,7 +12,7 @@
 
 ## 目的
 
-能够更为快速实现复杂和可扩展的权重规则
+能够更为快速实现复杂和可扩展的权重规则,最终能通过Ai依赖可靠专属元语言生成可靠的规则,避免直接ai生成不该出现的预期
 
 ## 使用
 
@@ -24,8 +24,7 @@
 ## 权重的组成
 
 1.主体思路  
-权重按照多个"权重规则"计算得出,按照每点费用为10点权重统一刻度,还有combo表强制限制特定组合打出顺序  
-但是combo为了方便实现融入全局权重体系中,带来复杂的权重关系,现在想拆分工程量有点大  
+权重按照评分树,再通过评分选出最优组合
 2.大概计算规则  
 组权重由weightHandlerStrategy.db配置  
 总权重由combo权重(表combo_info)+组权重(表weight_group+WeightCondition)+单卡权重决定
@@ -49,37 +48,7 @@ comboWeight多种语义(对扩展和维护有麻烦,暂时没空整理)
 2.最后打出作为打出顺序使用  
 3.作为一起打出的组,组加权
 
-### 扩展(简单测试没问题)
 
-放在\plugin\WeightHandlerStrategy目录下
-服务发现使用java的SPI与Koin(koin只有ParseCardWeightInfo接口支持)
-1.组权重规则扩展  
-lin.serviceLoader.weightRule.WeightCondition  
-2.自定义权重信息获取  
-lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide  
-3.卡牌权重数据属性配置(用于没ui用编码方式来配置信息)
-lin.serviceLoader.parse.ParseCardWeightInfo  
-4.单卡权重规则  
-lin.serviceLoader.weightRule.CardRule  
-5.生命周期  
-lin.lifecycle
-6.模块(koin模块注册)
-lin.serviceLoader.module.ModulesInfo
-
-### 项目结构说明
-
-1.程序入口  
-lin.domain.ComboDomain  
-2.战场信息  
-lin.domain.MyWarManage  
-3.模块信息(Koin)    
-lin.domain.ModulesSetting  
-4.配置类(没有UI) ,应该用UI,现在修改配置需要编译打包
-lin.domain.context.ComboDefValue  
-5.查找Combo策略,主要用于优化性能  
-lin.domain.combo.FindStrategy
-6.使用策略
-lin.domain.combo.UseStrategy
 
 
 
