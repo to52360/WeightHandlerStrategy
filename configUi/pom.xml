@@ -46,7 +46,6 @@
         <dependency>
             <groupId>lin</groupId>
             <artifactId>WeightHandlerStrategy</artifactId>
-            <version>1.0.0</version>
         </dependency>
         <!-- ===== SQLite 纯 JDBC (不引入 Spring, 保持工具轻量) ===== -->
         <dependency>

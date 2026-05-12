@@ -22,6 +22,7 @@ import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.rule.RuleInfoRegister
 import lin.rule.registry.RuleRegistry
+import lin.rule.tree.engineTreeModule
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.parse.LieRenParse
@@ -118,7 +119,8 @@ class ModulesLoad {
                 comBoInfoModule,
                 utilsModule,
                 findStrategy,
-                configHandler
+                configHandler,
+                engineTreeModule
             )
             modules(module { singleOf(::LifecycleRegisterImpl) bind LifecycleRegister::class })
             val extraModule = ServiceLoaderUtils.loadServices(ModulesInfo::class.java)
