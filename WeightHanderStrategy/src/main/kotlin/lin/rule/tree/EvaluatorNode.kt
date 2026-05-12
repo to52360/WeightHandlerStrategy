@@ -1,14 +1,14 @@
 package lin.rule.tree
 
-// 如需扩展,采用注册解释器模式
-sealed interface EvaluatorNode {
-    data class RuleNode(val nodeId: String) : EvaluatorNode
-    data class AndNode(val children: List<EvaluatorNode>) : EvaluatorNode
-    data class OrNode(val children: List<EvaluatorNode>) : EvaluatorNode
-    data class NotNode(val child: EvaluatorNode) : EvaluatorNode
-    data class BranchNode(
-        val nodeId: String,
-        val onTrue: EvaluatorNode,
-        val onFalse: EvaluatorNode
-    ) : EvaluatorNode
+/**
+ * 评估树的业务层负载（Payload）
+ */
+sealed interface EvaluatorPayload {
+    data class Rule(val nodeId: String) : EvaluatorPayload
+    data class BranchCondition(val nodeId: String) : EvaluatorPayload
 }
+
+/**
+ * 向下兼容并特化出评估树的通用逻辑节点
+ */
+typealias EvaluatorNode = LogicNode<EvaluatorPayload>

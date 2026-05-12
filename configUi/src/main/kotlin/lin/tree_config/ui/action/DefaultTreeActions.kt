@@ -5,10 +5,11 @@ import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.ButtonType
 import javafx.scene.control.TextInputDialog
 import javafx.scene.control.TreeItem
+import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
-import lin.tree_config.ui.EvaluatorNodeWrapper
 import lin.tree_config.ui.EvaluatorTreeWorkbench
-import lin.tree_config.ui.NodeType
+import lin.tree_config.ui.LogicNodeType
+import lin.tree_config.ui.LogicNodeWrapper
 import lin.tree_config.ui.TreeModelConverter
 
 class CreateNewTreeAction : TreeWorkbenchAction {
@@ -28,7 +29,7 @@ class CreateNewTreeAction : TreeWorkbenchAction {
             val draftItem = workbench.addDraftItem(name)
 
             // 初始化编辑区
-            val rootItem = TreeItem(EvaluatorNodeWrapper(NodeType.AND)).also { it.isExpanded = true }
+            val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
             workbench.setSelectedGroupIds(emptyList())
             workbench.ruleConfigs.clear()
@@ -62,7 +63,7 @@ class SaveTreeAction : TreeWorkbenchAction {
                 showError("请选择至少一个绑定卡组分组")
                 return
             }
-            val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode)
+            val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
             val config = EvaluatorTreeConfig(
                 bindGroupIds = bindGroupIds,
 

@@ -4,28 +4,42 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import lin.rule.tree.EvaluatorNode
+import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
+import lin.rule.tree.LogicNode
+import lin.rule.tree.TreeConfigProvider
 import lin.tree_config.domain.TreeConfigEntity
 import lin.tree_config.repository.TreeConfigRepository
 import java.util.*
 
-// 采用 WRAPPER_OBJECT 模式，使得序列化后的 JSON 结构为 {"RuleNode": {...}} 而非 {"type": "RuleNode", ...}
-// 这种格式对 AI 生成配置更友好，同时与人工手写 JSON 的习惯更接近
+fun createTreeConfigMapper(): ObjectMapper {
+    return jacksonObjectMapper()
+        .addMixIn(LogicNode::class.java, EvaluatorNodeMixin::class.java)
+        .addMixIn(EvaluatorPayload::class.java, EvaluatorPayloadMixin::class.java)
+}
+
+// 采用 WRAPPER_OBJECT 模式，使得序列化后的 JSON 结构为 {"AndNode": {...}} 而非 {"type": "AndNode", ...}
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 @JsonSubTypes(
-    JsonSubTypes.Type(value = EvaluatorNode.RuleNode::class, name = "RuleNode"),
-    JsonSubTypes.Type(value = EvaluatorNode.AndNode::class, name = "AndNode"),
-    JsonSubTypes.Type(value = EvaluatorNode.OrNode::class, name = "OrNode"),
-    JsonSubTypes.Type(value = EvaluatorNode.NotNode::class, name = "NotNode"),
-    JsonSubTypes.Type(value = EvaluatorNode.BranchNode::class, name = "BranchNode")
+    JsonSubTypes.Type(value = LogicNode.Leaf::class, name = "Leaf"),
+    JsonSubTypes.Type(value = LogicNode.And::class, name = "AndNode"),
+    JsonSubTypes.Type(value = LogicNode.Or::class, name = "OrNode"),
+    JsonSubTypes.Type(value = LogicNode.Not::class, name = "NotNode"),
+    JsonSubTypes.Type(value = LogicNode.Branch::class, name = "BranchNode")
 )
 abstract class EvaluatorNodeMixin
 
-class TreeConfigService(private val repository: TreeConfigRepository) {
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+@JsonSubTypes(
+    JsonSubTypes.Type(value = EvaluatorPayload.Rule::class, name = "Rule"),
+    JsonSubTypes.Type(value = EvaluatorPayload.BranchCondition::class, name = "BranchCondition")
+)
+abstract class EvaluatorPayloadMixin
 
-    val mapper: ObjectMapper = jacksonObjectMapper()
-        .addMixIn(EvaluatorNode::class.java, EvaluatorNodeMixin::class.java)
+class TreeConfigService(
+    private val repository: TreeConfigRepository,
+    private val mapper: ObjectMapper
+) {
 
 
     fun saveConfig(name: String, config: EvaluatorTreeConfig, existingId: String? = null): String {
@@ -55,5 +69,25 @@ class TreeConfigService(private val repository: TreeConfigRepository) {
 
     fun delete(id: String) {
         repository.deleteById(id)
+    }
+}
+
+class SqliteTreeConfigProvider(
+    private val repository: TreeConfigRepository,
+    private val mapper: ObjectMapper
+) : TreeConfigProvider {
+    override fun findById(id: String): EvaluatorTreeConfig? {
+        val entity = repository.findById(id) ?: return null
+        return runCatching {
+            mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+        }.getOrNull()
+    }
+
+    override fun findAll(): List<EvaluatorTreeConfig> {
+        return repository.findAll().mapNotNull { entity ->
+            runCatching {
+                mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+            }.getOrNull()
+        }
     }
 }

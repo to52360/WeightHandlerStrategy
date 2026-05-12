@@ -1,70 +1,85 @@
 package lin.tree_config.ui
 
 import javafx.scene.control.TreeItem
-import lin.rule.tree.EvaluatorNode
 import lin.rule.tree.EvaluatorTreeConfig
+import lin.rule.tree.LogicNode
 
-enum class NodeType { AND, OR, NOT, RULE, BRANCH }
+enum class LogicNodeType { AND, OR, NOT, BRANCH, LEAF }
 
-class EvaluatorNodeWrapper(var type: NodeType, var nodeId: String = "") {
+class LogicNodeWrapper<L>(
+    var type: LogicNodeType,
+    var payload: L? = null,
+    val titleResolver: ((L?) -> String)? = null
+) {
     override fun toString(): String = when (type) {
-        NodeType.AND -> "AND"
-        NodeType.OR -> "OR"
-        NodeType.NOT -> "NOT"
-        NodeType.RULE -> "Rule: ${nodeId.ifEmpty { "<未命名>" }}"
-        NodeType.BRANCH -> "Branch: ${nodeId.ifEmpty { "<未命名>" }}"
+        LogicNodeType.AND -> "AND"
+        LogicNodeType.OR -> "OR"
+        LogicNodeType.NOT -> "NOT"
+        LogicNodeType.BRANCH -> "Branch: " + (titleResolver?.invoke(payload) ?: payload?.toString() ?: "<未命名>")
+        LogicNodeType.LEAF -> "Leaf: " + (titleResolver?.invoke(payload) ?: payload?.toString() ?: "<未命名>")
     }
 }
 
 object TreeModelConverter {
-    fun toTreeItem(node: EvaluatorNode): TreeItem<EvaluatorNodeWrapper> {
-        val item = TreeItem<EvaluatorNodeWrapper>()
+    fun <L> toTreeItem(
+        node: LogicNode<L>,
+        titleResolver: ((L?) -> String)? = null
+    ): TreeItem<LogicNodeWrapper<L>> {
+        val item = TreeItem<LogicNodeWrapper<L>>()
         item.isExpanded = true
         when (node) {
-            is EvaluatorNode.AndNode -> {
-                item.value = EvaluatorNodeWrapper(NodeType.AND)
-                node.children.forEach { item.children.add(toTreeItem(it)) }
+            is LogicNode.And -> {
+                item.value = LogicNodeWrapper(LogicNodeType.AND, titleResolver = titleResolver)
+                node.children.forEach { item.children.add(toTreeItem(it, titleResolver)) }
             }
 
-            is EvaluatorNode.OrNode -> {
-                item.value = EvaluatorNodeWrapper(NodeType.OR)
-                node.children.forEach { item.children.add(toTreeItem(it)) }
+            is LogicNode.Or -> {
+                item.value = LogicNodeWrapper(LogicNodeType.OR, titleResolver = titleResolver)
+                node.children.forEach { item.children.add(toTreeItem(it, titleResolver)) }
             }
 
-            is EvaluatorNode.NotNode -> {
-                item.value = EvaluatorNodeWrapper(NodeType.NOT)
-                item.children.add(toTreeItem(node.child))
+            is LogicNode.Not -> {
+                item.value = LogicNodeWrapper(LogicNodeType.NOT, titleResolver = titleResolver)
+                item.children.add(toTreeItem(node.child, titleResolver))
             }
 
-            is EvaluatorNode.BranchNode -> {
-                item.value = EvaluatorNodeWrapper(NodeType.BRANCH, node.nodeId)
-                item.children.add(toTreeItem(node.onTrue))
-                item.children.add(toTreeItem(node.onFalse))
+            is LogicNode.Branch -> {
+                item.value = LogicNodeWrapper(LogicNodeType.BRANCH, node.payload, titleResolver)
+                item.children.add(toTreeItem(node.onTrue, titleResolver))
+                item.children.add(toTreeItem(node.onFalse, titleResolver))
             }
 
-            is EvaluatorNode.RuleNode -> {
-                item.value = EvaluatorNodeWrapper(NodeType.RULE, node.nodeId)
+            is LogicNode.Leaf -> {
+                item.value = LogicNodeWrapper(LogicNodeType.LEAF, node.payload, titleResolver)
             }
         }
         return item
     }
 
-    fun fromTreeItem(item: TreeItem<EvaluatorNodeWrapper>): EvaluatorNode {
+    fun <L> fromTreeItem(
+        item: TreeItem<LogicNodeWrapper<L>>,
+        emptyPayloadFactory: () -> L
+    ): LogicNode<L> {
         val wrapper = item.value
         return when (wrapper.type) {
-            NodeType.AND -> EvaluatorNode.AndNode(item.children.map { fromTreeItem(it) })
-            NodeType.OR -> EvaluatorNode.OrNode(item.children.map { fromTreeItem(it) })
-            NodeType.NOT -> EvaluatorNode.NotNode(
-                if (item.children.isNotEmpty()) fromTreeItem(item.children[0]) else EvaluatorNode.RuleNode("empty")
+            LogicNodeType.AND -> LogicNode.And(item.children.map { fromTreeItem(it, emptyPayloadFactory) })
+            LogicNodeType.OR -> LogicNode.Or(item.children.map { fromTreeItem(it, emptyPayloadFactory) })
+            LogicNodeType.NOT -> LogicNode.Not(
+                if (item.children.isNotEmpty()) fromTreeItem(item.children[0], emptyPayloadFactory)
+                else LogicNode.Leaf(emptyPayloadFactory())
             )
 
-            NodeType.BRANCH -> EvaluatorNode.BranchNode(
-                wrapper.nodeId,
-                if (item.children.isNotEmpty()) fromTreeItem(item.children[0]) else EvaluatorNode.RuleNode("empty"),
-                if (item.children.size > 1) fromTreeItem(item.children[1]) else EvaluatorNode.RuleNode("empty")
+            LogicNodeType.BRANCH -> LogicNode.Branch(
+                wrapper.payload ?: emptyPayloadFactory(),
+                if (item.children.isNotEmpty()) fromTreeItem(item.children[0], emptyPayloadFactory) else LogicNode.Leaf(
+                    emptyPayloadFactory()
+                ),
+                if (item.children.size > 1) fromTreeItem(item.children[1], emptyPayloadFactory) else LogicNode.Leaf(
+                    emptyPayloadFactory()
+                )
             )
 
-            NodeType.RULE -> EvaluatorNode.RuleNode(wrapper.nodeId.ifEmpty { "empty" })
+            LogicNodeType.LEAF -> LogicNode.Leaf(wrapper.payload ?: emptyPayloadFactory())
         }
     }
 }

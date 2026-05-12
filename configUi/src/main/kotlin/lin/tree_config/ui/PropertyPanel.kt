@@ -11,6 +11,7 @@ import lin.rule.parse.FieldType
 import lin.rule.parse.RuleFieldSpec
 import lin.rule.registry.RuleRegistry
 import lin.rule.registry.RuleUiItem
+import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.RuleConfig
 import lin.serviceLoader.provider.SelectOptionProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
@@ -47,7 +48,7 @@ class PropertyPanel : VBox(8.0), KoinComponent {
         })
     }
 
-    fun showStructureNode(nodeType: NodeType) {
+    fun showStructureNode(nodeType: LogicNodeType) {
         clearContent()
         children.add(Label("类型: ${nodeType.name}").apply {
             style = "-fx-font-size: 14px;"
@@ -57,12 +58,17 @@ class PropertyPanel : VBox(8.0), KoinComponent {
         })
     }
 
-    fun showRuleConfigNode(wrapper: EvaluatorNodeWrapper, ruleConfigs: MutableMap<String, RuleConfig>) {
+    fun showRuleConfigNode(wrapper: LogicNodeWrapper<EvaluatorPayload>, ruleConfigs: MutableMap<String, RuleConfig>) {
         clearContent()
 
-        val nodeId = wrapper.nodeId
+        val payload = wrapper.payload
+        val nodeId = when (payload) {
+            is EvaluatorPayload.Rule -> payload.nodeId
+            is EvaluatorPayload.BranchCondition -> payload.nodeId
+            else -> return
+        }
         val existing = ruleConfigs[nodeId]
-        val isBranch = wrapper.type == NodeType.BRANCH
+        val isBranch = wrapper.type == LogicNodeType.BRANCH
 
         // ---- 标题 ----
         val typeLabel = if (isBranch) "Branch 节点" else "Rule 节点"
