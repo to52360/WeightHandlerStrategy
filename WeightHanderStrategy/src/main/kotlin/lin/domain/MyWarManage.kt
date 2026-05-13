@@ -15,6 +15,7 @@ import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
 import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
+import lin.serviceLoader.provider.CardGroupIndexProvider
 import lin.serviceLoader.weightRule.utils.war.WarStatus
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import lin.warExt.action.activeLocation
@@ -118,6 +119,7 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
     val toDieHandler = ToDieHandler(this)
     override val infoMap: Map<String, CardWeightInfo>
+    private val cardGroupIndex: Map<String, Set<String>>
 
     //private val statusReset: StatusReset
     init {
@@ -129,6 +131,7 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         this.warStatus = warStatus
 
         infoMap = getCardInfos()
+        cardGroupIndex = getCardGroupIndex()
         loadKoinModules(module {
             single(named("weightInfo")) { infoMap }
             single { lifecycleRegisterImpl } bind LifecycleRegister::class
@@ -153,6 +156,16 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         return infoMap
     }
 
+    private fun getCardGroupIndex(): Map<String, Set<String>> {
+        val mergedIndex = linkedMapOf<String, MutableSet<String>>()
+        ServiceLoaderUtils.loadServices(CardGroupIndexProvider::class.java).forEach { provider ->
+            provider.provide().forEach { (cardId, groupIds) ->
+                mergedIndex.getOrPut(cardId) { linkedSetOf() }.addAll(groupIds)
+            }
+        }
+        return mergedIndex.mapValues { (_, groupIds) -> groupIds.toSet() }
+    }
+
 
     //转化
     fun parseComboCards(cards: List<Card> = getHandCards()): List<ComboCard> {
@@ -164,7 +177,8 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     fun parseComboCard(card: Card): ComboCard {
         return ComboCard(
             cardWeightInfo = infoMap[card.cardId],
-            card = card
+            card = card,
+            runtimeGroupIds = cardGroupIndex[card.cardId].orEmpty()
         )
     }
 
@@ -379,6 +393,5 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
             }
     }
 }
-
 
 

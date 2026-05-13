@@ -73,7 +73,7 @@ val treeConfigProviderModule = module {
 class ModelsDefine {
     fun loadModules() {
         startKoin {
-            modules(uiModule, dbModule, treeConfigProviderModule, uiDBModule)
+            modules(uiModule, dbModule, uiDBModule)
         }
     }
 }

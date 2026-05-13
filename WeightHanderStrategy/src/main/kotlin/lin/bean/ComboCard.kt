@@ -17,23 +17,26 @@ typealias ComboRule = (ComboCard) -> Double
  * todo-future 1.为了快速实现,弄了个上帝类出来,有空再重构 2.为了方面使用弄了很多方法(应该用扩展方法去扩展)
  *
  */
-class ComboCard(val cardWeightInfo: CardWeightInfo? = null, val card: Card) {
+class ComboCard(
+    val cardWeightInfo: CardWeightInfo? = null,
+    val card: Card,
+    private val runtimeGroupIds: Set<String> = emptySet()
+) {
 
     val combo = cardWeightInfo?.combos
     //指定目标
     var pointCard: Card? = null
 
 
-
-
-
-
+    fun groupId() = cardWeightInfo?.groupId
     //换牌策略
     val changeComboRule
         get() = cardWeightInfo?.changeComboRule
 
     //基础信息
-    fun groupId() = cardWeightInfo?.groupId
+    fun groupIds(): Set<String> = runtimeGroupIds
+    fun hasGroup(groupId: String): Boolean = runtimeGroupIds.contains(groupId)
+    fun hasAnyGroup(groupIds: Collection<String>): Boolean = groupIds.any(::hasGroup)
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
@@ -150,4 +153,3 @@ class ComboCard(val cardWeightInfo: CardWeightInfo? = null, val card: Card) {
     }
 
 }
-

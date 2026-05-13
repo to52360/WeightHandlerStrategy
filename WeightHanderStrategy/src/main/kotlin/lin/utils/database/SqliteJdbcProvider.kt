@@ -11,7 +11,7 @@ import javax.sql.DataSource
  * 参考:
  * club.xiaojiawei.config.DBConfig
  */
-class SqliteJdbcProvider(private val dbPath: Path) {
+class SqliteJdbcProvider(private val dbPath: Path = DefDBUrl) {
     /**
      * [org.springframework.jdbc.support.SQLExceptionSubclassTranslator.doTranslate]
      */

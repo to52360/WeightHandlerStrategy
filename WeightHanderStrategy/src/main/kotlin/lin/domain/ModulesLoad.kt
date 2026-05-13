@@ -29,7 +29,6 @@ import lin.serviceLoader.parse.LieRenParse
 import lin.serviceLoader.parse.ParseCardWeightInfo
 import lin.serviceLoader.parse.ParseCombo
 import lin.serviceLoader.weightRule.utils.war.CleanWarUtils
-import lin.utils.database.DefDBUrl
 import lin.utils.database.SqliteJdbcProvider
 import lin.utils.database.dao.CardInfoDao
 import lin.utils.serviceLoader.ServiceLoaderUtils
@@ -46,7 +45,8 @@ import org.koin.dsl.module
 
 class ModulesLoad {
     val dbModules = module {
-        single { SqliteJdbcProvider(DefDBUrl).jdbcTemplate }
+        single { SqliteJdbcProvider() }
+        single { get<SqliteJdbcProvider>().jdbcTemplate }
         singleOf(::GroupStrategyDao)
         singleOf(::ComboInfoDao)
         singleOf(::CardInfoDao)
