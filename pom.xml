@@ -119,12 +119,6 @@
                 <artifactId>WeightHandlerStrategy</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>lin</groupId>
-                <artifactId>configUi</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <!-- 其他子模块也在这里声明... -->
         </dependencies>
     </dependencyManagement>
 

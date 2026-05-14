@@ -1,10 +1,10 @@
 package lin.tree_config.repository
 
 import lin.tree_config.domain.TreeConfigEntity
-import lin.utils.database.SqliteJdbcProvider
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 
-class TreeConfigRepository(private val jdbcProvider: SqliteJdbcProvider) {
+class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
     init {
         initSchema()
     }
@@ -18,7 +18,7 @@ class TreeConfigRepository(private val jdbcProvider: SqliteJdbcProvider) {
                 config_data TEXT NOT NULL
             );
         """.trimIndent()
-        jdbcProvider.jdbcTemplate.execute(sql)
+        jdbcTemplate.execute(sql)
     }
 
     fun save(entity: TreeConfigEntity) {
@@ -30,7 +30,7 @@ class TreeConfigRepository(private val jdbcProvider: SqliteJdbcProvider) {
                 name = excluded.name,
                 config_data = excluded.config_data
         """.trimIndent()
-        jdbcProvider.jdbcTemplate.update(sql, entity.id, entity.groupIds, entity.name, entity.configData)
+        jdbcTemplate.update(sql, entity.id, entity.groupIds, entity.name, entity.configData)
     }
 
     private val rowMapper = RowMapper { rs, _ ->
@@ -44,16 +44,16 @@ class TreeConfigRepository(private val jdbcProvider: SqliteJdbcProvider) {
 
     fun findAll(): List<TreeConfigEntity> {
         val sql = "SELECT * FROM tree_config"
-        return jdbcProvider.jdbcTemplate.query(sql, rowMapper)
+        return jdbcTemplate.query(sql, rowMapper)
     }
 
     fun findById(id: String): TreeConfigEntity? {
         val sql = "SELECT * FROM tree_config WHERE id = ?"
-        return jdbcProvider.jdbcTemplate.query(sql, rowMapper, id).firstOrNull()
+        return jdbcTemplate.query(sql, rowMapper, id).firstOrNull()
     }
 
     fun deleteById(id: String) {
         val sql = "DELETE FROM tree_config WHERE id = ?"
-        jdbcProvider.jdbcTemplate.update(sql, id)
+        jdbcTemplate.update(sql, id)
     }
 }

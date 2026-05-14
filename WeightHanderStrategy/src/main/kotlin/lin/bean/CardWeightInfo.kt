@@ -8,6 +8,7 @@ import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
 import lin.lifecycle.LifecycleRegister
 import lin.rule.handler.RuleLevel
+import lin.rule.tree.EvaluatorInstanceNode
 import lin.serviceLoader.weightRule.IntentRule
 import lin.serviceLoader.weightRule.WeightRule
 import org.koin.core.component.KoinComponent
@@ -89,6 +90,15 @@ data class CardWeightInfo(
     //只是简单的添加
     fun setIntentRuleMap(intentRuleMap: Map<RuleLevel, List<IntentRule>>) {
         _intentRuleMap = intentRuleMap
+    }
+
+    private var _intentEvaluatorRoots: MutableList<EvaluatorInstanceNode>? = null
+
+    val intentEvaluatorRoots: List<EvaluatorInstanceNode>
+        get() = _intentEvaluatorRoots ?: emptyList()
+
+    fun addIntentEvaluatorRoot(root: EvaluatorInstanceNode) {
+        _intentEvaluatorRoots = _intentEvaluatorRoots.addSafe(root)
     }
 
 

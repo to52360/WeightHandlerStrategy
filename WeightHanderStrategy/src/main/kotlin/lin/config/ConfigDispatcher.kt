@@ -42,7 +42,7 @@ class ConfigDispatcher(
      */
     private fun dispatch(cardConfigs: List<CardConfig>, cardWeightInfos: List<CardWeightInfo>) {
         val buckets = handlerMap.keys.associateWith { mutableListOf<CardConfig>() }
-        // 单次遍历 configs
+        // 第一步：分类 —— 将 configs 按 configType 分桶
         for (config in cardConfigs) {
             var matched = false
             for (groupType in handlerMap.keys) {
@@ -55,11 +55,12 @@ class ConfigDispatcher(
             if (!matched) {
                 myLog.warn { "No handler for: ${config::class.simpleName}" }
             }
-            for ((groupType, group) in buckets) {
-                if (group.isNotEmpty()) {
-                    @Suppress("UNCHECKED_CAST")
-                    (handlerMap[groupType] as ConfigHandler<CardConfig>).processConfig(group, cardWeightInfos)
-                }
+        }
+        // 第二步：消费 —— 对每个非空桶执行对应 handler
+        for ((groupType, group) in buckets) {
+            if (group.isNotEmpty()) {
+                @Suppress("UNCHECKED_CAST")
+                (handlerMap[groupType] as ConfigHandler<CardConfig>).processConfig(group, cardWeightInfos)
             }
         }
     }
@@ -89,14 +90,48 @@ class ConfigDispatcher(
                 myLog.warn { "不支持类型: $kClass" }
             }
         }
-        //todo-future 配置暂时还是放在一起,还没想好方案
-        dispatch(cardConfigs, cardWeightInfos)
+        // 按 cardId 去重，避免多个 finder 结果中包含同一 CardWeightInfo 导致重复绑定
+        val distinctInfos = cardWeightInfos.distinctBy { it.cardId }
+        dispatch(cardConfigs, distinctInfos)
 
+    }
+
+    /**
+     * 优化方法：当 ids 统一类型、configs 统一类型时使用。
+     * 跳过 groupBy 分组和 dispatch 分桶，直接按类型路由到对应 finder 和 handler。
+     */
+    fun <T : Any> processByType(ids: List<T>, cardConfigs: List<CardConfig>) {
+        if (ids.isEmpty()) return
+
+        // 1. 直接按 id 类型查 finder，跳过 groupBy
+        val kClass = ids.first()::class
+        val finder = bindInfoFindMap[kClass] ?: run {
+            myLog.warn { "不支持类型: $kClass" }
+            return
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val typedFinder = finder as WeightInfoFinder<T>
+        val cardWeightInfos = ids.flatMap { typedFinder.process(it) }
+            .distinctBy { it.cardId }
+        if (cardWeightInfos.isEmpty()) return
+
+        // 2. 优化 dispatch：如果所有 config 同类型，直接查找 handler 跳过分桶
+        if (cardConfigs.isNotEmpty()) {
+            val firstType = cardConfigs.first()::class
+            val directHandler = handlerMap[firstType]
+            if (directHandler != null && cardConfigs.all { it::class == firstType }) {
+                @Suppress("UNCHECKED_CAST")
+                (directHandler as ConfigHandler<CardConfig>).processConfig(cardConfigs, cardWeightInfos)
+                return
+            }
+        }
+        dispatch(cardConfigs, cardWeightInfos)
     }
 
 
 }
 
-fun ConfigDispatcher.processMoreConfig(key: Any, vararg cardConfig: CardConfig) {
-    processUniformList(listOf(key), cardConfig.toList())
+fun <T : Any> ConfigDispatcher.processMoreConfig(key: T, vararg cardConfig: CardConfig) {
+    processByType(listOf(key), cardConfig.toList())
 }

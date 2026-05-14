@@ -62,6 +62,9 @@ class UseConfigHandler : ConfigHandler<BaseConfig> {
                             info.setWeightRules(config.rules.toMutableList())
                         }
 
+                        is EvaluatorTreeRoot -> cardWeightInfos.forEach { info ->
+                            info.addIntentEvaluatorRoot(config.root)
+                        }
                     }
 
                 }

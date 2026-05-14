@@ -1,1 +1,1 @@
-lin.tree_config.service.SpiTreeConfigProvider
+lin.tree_config.service.SqliteTreeConfigProvider

@@ -2,15 +2,14 @@ package lin.card_group.service
 
 import lin.card_group.repository.CardGroupRepository
 import lin.serviceLoader.provider.CardGroupIndexProvider
-import lin.utils.database.SqliteJdbcProvider
-import java.nio.file.Path
+import lin.utils.resolveJdbcProvider
 
 /**
  * 供策略层通过 SPI 获取卡牌分组反向索引：cardId -> groupIds。
  */
 class SpiCardGroupIndexProvider : CardGroupIndexProvider {
     private val service by lazy {
-        CardGroupService(CardGroupRepository(SqliteJdbcProvider(defaultDbPath())))
+        CardGroupService(CardGroupRepository(resolveJdbcProvider().jdbcTemplate))
     }
 
     override fun provide(): Map<String, Set<String>> {
@@ -24,10 +23,5 @@ class SpiCardGroupIndexProvider : CardGroupIndexProvider {
                 }
             }
         return index.mapValues { (_, groupIds) -> groupIds.toSet() }
-    }
-
-    private fun defaultDbPath(): Path {
-        val rootPath = System.getProperty("user.dir")
-        return Path.of(rootPath, "/plugin/WeightHandlerStrategy/weightHandlerStrategy.db")
     }
 }

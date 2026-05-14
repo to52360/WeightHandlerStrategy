@@ -1,15 +1,10 @@
 package lin.moduls
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import lin.card_group.repository.CardGroupRepository
 import lin.card_group.service.CardGroupService
 import lin.card_group.ui.CardGroupExtension
 import lin.rule.registry.RuleRegistry
-import lin.rule.tree.TreeConfigProvider
-import lin.tree_config.repository.TreeConfigRepository
-import lin.tree_config.service.SqliteTreeConfigProvider
 import lin.tree_config.service.TreeConfigService
-import lin.tree_config.service.createTreeConfigMapper
 import lin.tree_config.ui.EvaluatorTreeExtension
 import lin.tree_config.ui.action.CreateNewTreeAction
 import lin.tree_config.ui.action.DeleteTreeAction
@@ -53,20 +48,13 @@ val dbModule = module {
         SqliteJdbcProvider(dbPath)
     }
 
+    single { get<SqliteJdbcProvider>().jdbcTemplate }
+
 }
 val uiDBModule = module {
     single { TreeConfigService(get(), get()) }
     single { CardGroupRepository(get()) }
     single { CardGroupService(get()) }
-}
-
-/**
- * TreeConfigProvider 服务模块，提供评估树配置的持久化服务 [TreeConfigProvider]
- */
-val treeConfigProviderModule = module {
-    single { TreeConfigRepository(get()) }
-    single<ObjectMapper> { createTreeConfigMapper() }
-    single<TreeConfigProvider> { SqliteTreeConfigProvider(get(), get()) }
 }
 
 

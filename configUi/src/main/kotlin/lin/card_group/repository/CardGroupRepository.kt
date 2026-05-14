@@ -2,10 +2,10 @@ package lin.card_group.repository
 
 import lin.card_group.domain.CardBindingEntity
 import lin.card_group.domain.CardManagerEntity
-import lin.utils.database.SqliteJdbcProvider
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 
-class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
+class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
 
     init {
         initSchema()
@@ -15,7 +15,7 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
 
     private fun initSchema() {
         // Manager 表：每条记录 = 一套分组方案。source_file 绑定在这里。
-        jdbcProvider.jdbcTemplate.execute(
+        jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_manager (
                 id          TEXT    PRIMARY KEY,
@@ -27,7 +27,7 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
         )
 
         // Binding 表：属于某个 Manager，具体卡组划分。
-        jdbcProvider.jdbcTemplate.execute(
+        jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_binding (
                 id          TEXT    PRIMARY KEY,
@@ -51,7 +51,7 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     }
 
     fun saveManager(entity: CardManagerEntity) {
-        jdbcProvider.jdbcTemplate.update(
+        jdbcTemplate.update(
             """
             INSERT INTO card_group_manager (id, name, source_file, enabled)
             VALUES (?, ?, ?, ?)
@@ -65,11 +65,11 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     }
 
     fun findAllManagers(): List<CardManagerEntity> =
-        jdbcProvider.jdbcTemplate.query("SELECT * FROM card_group_manager", managerRowMapper)
+        jdbcTemplate.query("SELECT * FROM card_group_manager", managerRowMapper)
 
     fun findManagers(onlyEnabled: Boolean = false): List<CardManagerEntity> {
         return if (onlyEnabled) {
-            jdbcProvider.jdbcTemplate.query("SELECT * FROM card_group_manager WHERE enabled = 1", managerRowMapper)
+            jdbcTemplate.query("SELECT * FROM card_group_manager WHERE enabled = 1", managerRowMapper)
         } else {
             findAllManagers()
         }
@@ -77,8 +77,8 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
 
     fun deleteManager(id: String) {
         // 同时清理该 Manager 下的所有 Binding
-        jdbcProvider.jdbcTemplate.update("DELETE FROM card_group_binding WHERE manger_id = ?", id)
-        jdbcProvider.jdbcTemplate.update("DELETE FROM card_group_manager WHERE id = ?", id)
+        jdbcTemplate.update("DELETE FROM card_group_binding WHERE manger_id = ?", id)
+        jdbcTemplate.update("DELETE FROM card_group_manager WHERE id = ?", id)
     }
 
     // ─────────────────────── Binding CRUD ──────────────────────────────────
@@ -93,7 +93,7 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
     }
 
     fun saveBinding(entity: CardBindingEntity) {
-        jdbcProvider.jdbcTemplate.update(
+        jdbcTemplate.update(
             """
             INSERT INTO card_group_binding (id, manger_id, name, card_ids)
             VALUES (?, ?, ?, ?)
@@ -107,18 +107,18 @@ class CardGroupRepository(private val jdbcProvider: SqliteJdbcProvider) {
 
     /** 替换某 Manager 下所有 Binding（先删后批量插） */
     fun replaceBindings(mangerId: String, entities: List<CardBindingEntity>) {
-        jdbcProvider.jdbcTemplate.update("DELETE FROM card_group_binding WHERE manger_id = ?", mangerId)
+        jdbcTemplate.update("DELETE FROM card_group_binding WHERE manger_id = ?", mangerId)
         entities.forEach { saveBinding(it) }
     }
 
     fun findBindingsByManager(mangerId: String): List<CardBindingEntity> =
-        jdbcProvider.jdbcTemplate.query(
+        jdbcTemplate.query(
             "SELECT * FROM card_group_binding WHERE manger_id = ?",
             bindingRowMapper, mangerId
         )
 
     fun deleteBinding(id: String) {
-        jdbcProvider.jdbcTemplate.update(
+        jdbcTemplate.update(
             "DELETE FROM card_group_binding WHERE id = ?", id
         )
     }

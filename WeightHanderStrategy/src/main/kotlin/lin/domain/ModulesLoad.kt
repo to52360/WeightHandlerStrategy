@@ -3,6 +3,7 @@ package lin.domain
 import club.xiaojiawei.hsscriptcardsdk.status.WAR
 import lin.bean.CardWeightInfo
 import lin.config.ConfigDispatcher
+import lin.config.find.BindingGroupFinder
 import lin.config.find.def.WeightInfoFinder
 import lin.config.find.findBy
 import lin.config.handler.ConfigHandler
@@ -22,6 +23,7 @@ import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.rule.RuleInfoRegister
 import lin.rule.registry.RuleRegistry
+import lin.rule.tree.BindingGroupId
 import lin.rule.tree.engineTreeModule
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.serviceLoader.module.ModulesInfo
@@ -85,6 +87,9 @@ class ModulesLoad {
             val infoMap = get<Map<String, CardWeightInfo>>(named("weightInfo")).values.groupBy { it.groupId }
             //根据 groupId 查找
             findBy { groupId -> infoMap[groupId] ?: emptyList() }
+        }
+        single<WeightInfoFinder<BindingGroupId>> {
+            BindingGroupFinder(get(named("finderByTypeString")))
         }
 
         single<ConfigDispatcher> { ConfigDispatcher(getAll(), getAll()) }

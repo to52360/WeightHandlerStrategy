@@ -10,6 +10,7 @@ import lin.rule.tree.LogicNode
 import lin.rule.tree.TreeConfigProvider
 import lin.tree_config.domain.TreeConfigEntity
 import lin.tree_config.repository.TreeConfigRepository
+import lin.utils.resolveJdbcProvider
 import java.util.*
 
 fun createTreeConfigMapper(): ObjectMapper {
@@ -76,6 +77,11 @@ class SqliteTreeConfigProvider(
     private val repository: TreeConfigRepository,
     private val mapper: ObjectMapper
 ) : TreeConfigProvider {
+    constructor() : this(
+        TreeConfigRepository(resolveJdbcProvider().jdbcTemplate),
+        createTreeConfigMapper()
+    )
+
     override fun findById(id: String): EvaluatorTreeConfig? {
         val entity = repository.findById(id) ?: return null
         return runCatching {

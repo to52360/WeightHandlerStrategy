@@ -47,3 +47,6 @@ build/
 /implementation
 /.claude/
 /WeightHanderStrategy/backup/
+/.codebuddy/
+/.workbuddy/
+/bash.exe.stackdump

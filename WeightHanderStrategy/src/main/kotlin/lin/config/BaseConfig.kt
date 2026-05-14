@@ -5,6 +5,7 @@ import lin.bean.CardWeightInfo
 import lin.bean.MetadataKey
 import lin.domain.use.UseStrategy
 import lin.rule.handler.RuleLevel
+import lin.rule.tree.EvaluatorInstanceNode
 import lin.serviceLoader.weightRule.IntentRule
 import lin.serviceLoader.weightRule.WeightRule
 
@@ -24,6 +25,7 @@ data class RuleMap(val ruleMap: Map<RuleLevel, List<IntentRule>>) : Rule
 data class Rules(val rules: List<WeightRule>) : Rule {
     constructor(rule: WeightRule) : this(listOf(rule))
 }
+data class EvaluatorTreeRoot(val root: EvaluatorInstanceNode) : Rule
 
 /**
  *  直接修改通用的,用于基础数值类型/临时过度,不分组管理的
