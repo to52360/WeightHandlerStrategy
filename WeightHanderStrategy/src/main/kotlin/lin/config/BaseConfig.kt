@@ -10,15 +10,16 @@ import lin.serviceLoader.weightRule.IntentRule
 import lin.serviceLoader.weightRule.WeightRule
 
 sealed interface BaseConfig : CardConfig
+sealed interface CardAttributeConfig : BaseConfig
 
 data class UseConfig(
     val useGroupId: Int? = null,
     val useGroupOrder: Double? = null,
     val useStrategyList: List<UseStrategy> = emptyList()
-) : BaseConfig
+) : CardAttributeConfig
 
 // 卡牌类型配置接口
-interface CardType : BaseConfig
+interface CardType : CardAttributeConfig
 
 sealed interface Rule : BaseConfig
 data class RuleMap(val ruleMap: Map<RuleLevel, List<IntentRule>>) : Rule
@@ -30,8 +31,8 @@ data class EvaluatorTreeRoot(val root: EvaluatorInstanceNode) : Rule
 /**
  *  直接修改通用的,用于基础数值类型/临时过度,不分组管理的
  */
-fun interface CardWeightConfigurer : BaseConfig {
+fun interface CardWeightConfigurer : CardAttributeConfig {
     operator fun invoke(cardWeightInfo: CardWeightInfo)
 }
 
-data class CardWeightContext<T : Any>(val key: MetadataKey<T>, val value: T) : BaseConfig
+data class CardWeightContext<T : Any>(val key: MetadataKey<T>, val value: T) : CardAttributeConfig

@@ -39,6 +39,7 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
         callCard.intentEvaluatorRoots()?.let { roots ->
             val context = RuleContext(callCard, warManage)
             val collectedActions = mutableListOf<ComboCardAction>()
+            //todo 需要把方法提级,不是每个card都创建一个
             with(WarInfoEnv(warManage)) {
                 for (root in roots) {
                     val res = evaluateConditionTree(root, context, collectedActions)

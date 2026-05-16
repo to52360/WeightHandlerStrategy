@@ -3,6 +3,7 @@ package lin.moduls
 import lin.card_group.repository.CardGroupRepository
 import lin.card_group.service.CardGroupService
 import lin.card_group.ui.CardGroupExtension
+import lin.config.AppConfig
 import lin.rule.registry.RuleRegistry
 import lin.tree_config.service.TreeConfigService
 import lin.tree_config.ui.EvaluatorTreeExtension
@@ -16,14 +17,16 @@ import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.nio.file.Files
-import java.nio.file.Path
 
-const val TestDBUrl = "weightHandlerStrategy.db"
 
 val uiModule = module {
 
 
-    single { RuleRegistry() }
+    single {
+        val providers =
+            lin.utils.serviceLoader.ServiceLoaderUtils.getCacheServices(lin.serviceLoader.provider.RuleRegistrationProvider::class.java)
+        RuleRegistry(providers)
+    }
 
     // UI 扩展注册
     single { CardGroupExtension() } bind UiExtension::class
@@ -41,7 +44,7 @@ val uiModule = module {
  */
 val dbModule = module {
     single {
-        val dbPath = Path.of(System.getProperty("user.dir"), TestDBUrl)
+        val dbPath = AppConfig.databasePath
         if (!Files.exists(dbPath)) {
             Files.createFile(dbPath)
         }

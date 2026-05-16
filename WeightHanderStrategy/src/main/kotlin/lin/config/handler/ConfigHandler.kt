@@ -16,9 +16,9 @@ interface ConfigHandler<T : CardConfig> {
     fun processConfig(cardConfigs: List<T>, cardWeightInfos: List<CardWeightInfo>)
 }
 
-class UseConfigHandler : ConfigHandler<BaseConfig> {
-    override val configType: KClass<out BaseConfig> = BaseConfig::class
-    override fun processConfig(cardConfigs: List<BaseConfig>, cardWeightInfos: List<CardWeightInfo>) {
+class UseConfigHandler : ConfigHandler<CardAttributeConfig> {
+    override val configType: KClass<out CardAttributeConfig> = CardAttributeConfig::class
+    override fun processConfig(cardConfigs: List<CardAttributeConfig>, cardWeightInfos: List<CardWeightInfo>) {
         cardConfigs.forEach { config ->
             when (config) {
                 is UseConfig -> {
@@ -51,26 +51,29 @@ class UseConfigHandler : ConfigHandler<BaseConfig> {
                         it.cardContext.addSafe(key, config.value)
                     }
                 }
-                is Rule -> {
-                    when (config) {
-                        is RuleMap -> cardWeightInfos.forEach { info ->
-                            info.setIntentRuleMap(config.ruleMap)
-                        }
-
-                        is Rules -> cardWeightInfos.forEach { info ->
-                            //还是复制一个
-                            info.setWeightRules(config.rules.toMutableList())
-                        }
-
-                        is EvaluatorTreeRoot -> cardWeightInfos.forEach { info ->
-                            info.addIntentEvaluatorRoot(config.root)
-                        }
-                    }
-
-                }
-
             }
         }
     }
 }
 
+class RuleConfigHandler : ConfigHandler<Rule> {
+    override val configType: KClass<out Rule> = Rule::class
+    override fun processConfig(cardConfigs: List<Rule>, cardWeightInfos: List<CardWeightInfo>) {
+        cardConfigs.forEach { config ->
+            when (config) {
+                is RuleMap -> cardWeightInfos.forEach { info ->
+                    info.setIntentRuleMap(config.ruleMap)
+                }
+
+                is Rules -> cardWeightInfos.forEach { info ->
+                    //还是复制一个
+                    info.setWeightRules(config.rules.toMutableList())
+                }
+
+                is EvaluatorTreeRoot -> cardWeightInfos.forEach { info ->
+                    info.addIntentEvaluatorRoot(config.root)
+                }
+            }
+        }
+    }
+}
