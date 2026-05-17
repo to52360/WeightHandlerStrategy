@@ -158,7 +158,7 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
 
     private fun getCardGroupIndex(): Map<String, Set<String>> {
         val mergedIndex = linkedMapOf<String, MutableSet<String>>()
-        ServiceLoaderUtils.loadServices(CardGroupIndexProvider::class.java).forEach { provider ->
+        getKoin().getAll<CardGroupIndexProvider>().forEach { provider ->
             provider.provide().forEach { (cardId, groupIds) ->
                 mergedIndex.getOrPut(cardId) { linkedSetOf() }.addAll(groupIds)
             }

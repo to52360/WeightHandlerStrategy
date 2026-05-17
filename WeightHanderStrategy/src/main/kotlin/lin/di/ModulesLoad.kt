@@ -2,7 +2,6 @@ package lin.di
 
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
-import lin.rule.tree.engineTreeModule
 import lin.serviceLoader.module.ModulesInfo
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.context.loadKoinModules
@@ -17,8 +16,7 @@ class ModulesLoad {
             modules(
                 dataModule,
                 domainModule,
-                configModule,
-                engineTreeModule
+                configModule
             )
             modules(module { singleOf(::LifecycleRegisterImpl) bind LifecycleRegister::class })
             val extraModule = ServiceLoaderUtils.loadServices(ModulesInfo::class.java)

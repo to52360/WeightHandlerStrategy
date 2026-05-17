@@ -1,17 +1,14 @@
-package lin.card_group.service
+package lin.provider
 
-import lin.card_group.repository.CardGroupRepository
+import lin.card_group.service.CardGroupService
 import lin.serviceLoader.provider.CardGroupIndexProvider
-import lin.utils.resolveJdbcProvider
 
 /**
  * 供策略层通过 SPI 获取卡牌分组反向索引：cardId -> groupIds。
  */
-class SpiCardGroupIndexProvider : CardGroupIndexProvider {
-    private val service by lazy {
-        CardGroupService(CardGroupRepository(resolveJdbcProvider().jdbcTemplate))
-    }
-
+class SpiCardGroupIndexProvider(
+    private val service: CardGroupService
+) : CardGroupIndexProvider {
     override fun provide(): Map<String, Set<String>> {
         val index = linkedMapOf<String, MutableSet<String>>()
         service.loadAll(onlyEnabled = true)

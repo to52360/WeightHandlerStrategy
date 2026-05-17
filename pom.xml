@@ -19,9 +19,7 @@
 
     <modules>
         <module>WeightHanderStrategy</module>
-        <module>dropStrategy</module>
         <module>extWeightHandler</module>
-        <module>accolades250909</module>
         <module>configUi</module>
     </modules>
 

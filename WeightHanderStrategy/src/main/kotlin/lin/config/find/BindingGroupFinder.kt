@@ -4,7 +4,7 @@ import lin.bean.CardWeightInfo
 import lin.config.find.def.WeightInfoFinder
 import lin.rule.tree.BindingGroupId
 import lin.serviceLoader.provider.BindingCardIdProvider
-import lin.utils.serviceLoader.ServiceLoaderUtils
+import org.koin.core.component.KoinComponent
 
 /**
  * 通过 BindingGroupId 查找 CardWeightInfo。
@@ -12,13 +12,13 @@ import lin.utils.serviceLoader.ServiceLoaderUtils
  */
 class BindingGroupFinder(
     private val cardIdFinder: WeightInfoFinder<String>
-) : WeightInfoFinder<BindingGroupId> {
+) : WeightInfoFinder<BindingGroupId>, KoinComponent {
 
     override val targetType = BindingGroupId::class
 
     private val bindingIndex: Map<String, List<String>> by lazy {
         val merged = linkedMapOf<String, MutableList<String>>()
-        ServiceLoaderUtils.loadServices(BindingCardIdProvider::class.java).forEach { provider ->
+        getKoin().getAll<BindingCardIdProvider>().forEach { provider ->
             provider.provide().forEach { (bindingId, cardIds) ->
                 merged.getOrPut(bindingId) { mutableListOf() }.addAll(cardIds)
             }

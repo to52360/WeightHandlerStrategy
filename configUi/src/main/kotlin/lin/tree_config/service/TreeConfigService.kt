@@ -7,10 +7,8 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.rule.tree.LogicNode
-import lin.rule.tree.TreeConfigProvider
 import lin.tree_config.domain.TreeConfigEntity
 import lin.tree_config.repository.TreeConfigRepository
-import lin.utils.resolveJdbcProvider
 import java.util.*
 
 fun createTreeConfigMapper(): ObjectMapper {
@@ -70,30 +68,5 @@ class TreeConfigService(
 
     fun delete(id: String) {
         repository.deleteById(id)
-    }
-}
-
-class SqliteTreeConfigProvider(
-    private val repository: TreeConfigRepository,
-    private val mapper: ObjectMapper
-) : TreeConfigProvider {
-    constructor() : this(
-        TreeConfigRepository(resolveJdbcProvider().jdbcTemplate),
-        createTreeConfigMapper()
-    )
-
-    override fun findById(id: String): EvaluatorTreeConfig? {
-        val entity = repository.findById(id) ?: return null
-        return runCatching {
-            mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-        }.getOrNull()
-    }
-
-    override fun findAll(): List<EvaluatorTreeConfig> {
-        return repository.findAll().mapNotNull { entity ->
-            runCatching {
-                mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-            }.getOrNull()
-        }
     }
 }

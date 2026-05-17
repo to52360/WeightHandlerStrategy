@@ -26,7 +26,7 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
     private fun bindRule() {
         val ruleRegistry = get<RuleRegistry>()
         val configDispatcher = get<ConfigDispatcher>()
-        val providers = get<List<TreeConfigProvider>>()
+        val providers = getKoin().getAll<TreeConfigProvider>()
         for (provider in providers) {
             for (config in provider.findAll()) {
                 val instance = config.instantiate(ruleRegistry::build)
