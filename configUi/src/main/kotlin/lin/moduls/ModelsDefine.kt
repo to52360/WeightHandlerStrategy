@@ -5,6 +5,7 @@ import lin.card_group.service.CardGroupService
 import lin.card_group.ui.CardGroupExtension
 import lin.config.AppConfig
 import lin.rule.registry.RuleRegistry
+import lin.serviceLoader.provider.RuleRegistrationProvider
 import lin.tree_config.service.TreeConfigService
 import lin.tree_config.ui.EvaluatorTreeExtension
 import lin.tree_config.ui.action.CreateNewTreeAction
@@ -13,6 +14,7 @@ import lin.tree_config.ui.action.SaveTreeAction
 import lin.tree_config.ui.action.TreeWorkbenchAction
 import lin.ui.UiExtension
 import lin.utils.database.SqliteJdbcProvider
+import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -24,7 +26,7 @@ val uiModule = module {
 
     single {
         val providers =
-            lin.utils.serviceLoader.ServiceLoaderUtils.getCacheServices(lin.serviceLoader.provider.RuleRegistrationProvider::class.java)
+            ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
         RuleRegistry(providers)
     }
 

@@ -1,12 +1,9 @@
 package lin.tree_config
 
-import io.mockk.every
-import io.mockk.mockk
 import lin.rule.handler.RuleResult
-import lin.rule.registry.RuleRegistry
 import lin.rule.tree.EvaluatorInstanceNode
 import lin.rule.tree.EvaluatorTreeConfig
-import lin.rule.tree.EvaluatorTreeInstantiator
+import lin.rule.tree.instantiate
 import lin.tree_config.service.createTreeConfigMapper
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -30,15 +27,12 @@ class EvaluatorTreeIntegrationTest {
         assertTrue(config.ruleConfigs.containsKey("rule_1778405395362"))
 
         // 2. 实例化为 Tree Instance
-        // 使用 MockK 替代原本复杂的 Provider 和实体！直接让 registry 返回一个假的空闭包
-
-
-// ...
-        val mockRegistry = mockk<RuleRegistry>()
-        every { mockRegistry.build(any()) } returns { RuleResult.Continue(1.0) }
-
-        val instantiator = EvaluatorTreeInstantiator(mockRegistry)
-        val instance = instantiator.instantiate(config)
+        // 【函数式魔法】：完全告别 MockK 和庞大的注册表！
+        // 直接传一个符合 (RuleConfig) -> RuleLogic 签名的 Lambda 进去。
+        val instance = config.instantiate { ruleConfig ->
+            // 直接返回一个假的规则执行闭包
+            { RuleResult.Continue(1.0) }
+        }
 
         // 3. 验证结果
         assertNotNull(instance)

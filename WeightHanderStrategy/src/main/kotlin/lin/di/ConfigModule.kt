@@ -11,6 +11,7 @@ import lin.config.handler.UseConfigHandler
 import lin.rule.RuleInfoRegister
 import lin.rule.registry.RuleRegistry
 import lin.rule.tree.BindingGroupId
+import lin.rule.tree.TreeConfigProvider
 import lin.serviceLoader.provider.RuleRegistrationProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.module.dsl.singleOf
@@ -42,7 +43,12 @@ val configModule = module {
         RuleInfoRegister(infos, get())
     }
     single<RuleRegistry> {
-        val providers = ServiceLoaderUtils.getCacheServices(RuleRegistrationProvider::class.java)
+        val providers = ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
         RuleRegistry(providers)
+    }
+
+    // 通过 SPI 动态加载配置提供者，并纳入 Koin 管理
+    single<List<TreeConfigProvider>> {
+        ServiceLoaderUtils.loadServices(TreeConfigProvider::class.java)
     }
 }

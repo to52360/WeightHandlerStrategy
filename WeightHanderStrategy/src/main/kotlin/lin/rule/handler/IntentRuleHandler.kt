@@ -8,10 +8,11 @@ import lin.domain.MyWarManage
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.context.WarInfoEnv
+import lin.rule.registry.RuleRegistry
 import lin.rule.tree.BindingGroupId
 import lin.rule.tree.EvaluatorInstanceNode
-import lin.rule.tree.EvaluatorTreeInstantiator
-import lin.rule.tree.TreeConfigProviders
+import lin.rule.tree.TreeConfigProvider
+import lin.rule.tree.instantiate
 import lin.weightHandler.WeightHandler
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -23,14 +24,17 @@ class IntentRuleHandler : KoinComponent, WeightHandler {
     }
 
     private fun bindRule() {
-        val instantiator = get<EvaluatorTreeInstantiator>()
+        val ruleRegistry = get<RuleRegistry>()
         val configDispatcher = get<ConfigDispatcher>()
-        for (config in TreeConfigProviders.findAll()) {
-            val instance = instantiator.instantiate(config)
-            configDispatcher.processByType(
-                instance.bindGroupIds.map { BindingGroupId(it) },
-                listOf(EvaluatorTreeRoot(instance.root))
-            )
+        val providers = get<List<TreeConfigProvider>>()
+        for (provider in providers) {
+            for (config in provider.findAll()) {
+                val instance = config.instantiate(ruleRegistry::build)
+                configDispatcher.processByType(
+                    instance.bindGroupIds.map { BindingGroupId(it) },
+                    listOf(EvaluatorTreeRoot(instance.root))
+                )
+            }
         }
     }
 
