@@ -61,10 +61,6 @@ class RuleConfigHandler : ConfigHandler<Rule> {
     override fun processConfig(cardConfigs: List<Rule>, cardWeightInfos: List<CardWeightInfo>) {
         cardConfigs.forEach { config ->
             when (config) {
-                is RuleMap -> cardWeightInfos.forEach { info ->
-                    info.setIntentRuleMap(config.ruleMap)
-                }
-
                 is Rules -> cardWeightInfos.forEach { info ->
                     //还是复制一个
                     info.setWeightRules(config.rules.toMutableList())

@@ -4,13 +4,17 @@ import lin.bean.CardWeightInfo
 import lin.config.ConfigDispatcher
 import lin.lifecycle.LifecycleRegister
 import lin.myLog
-import lin.serviceLoader.weightRule.*
+import lin.serviceLoader.weightRule.DepProcessor
+import lin.serviceLoader.weightRule.ExtConfig
+import lin.serviceLoader.weightRule.RuleInfo
+import lin.serviceLoader.weightRule.WeightCondition
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import lin.weightHandler.condition.bean.ConditionGroup
 import lin.weightHandler.condition.config.GroupStrategyDao
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
+import kotlin.reflect.KClass
 
 /**
  * 目的 降低ConditionWeightHandler的复杂
@@ -23,8 +27,9 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
     val lifecycleRegister = get<LifecycleRegister>()
 
     //支持的类型
-    private val regisTypes = setOf(WeightCondition::class, IntentRuleInfo::class)
-    val regisInfo = regisTypes.associateWith { mutableMapOf<Double, MutableList<RuleInfo>>() }.toMutableMap()
+    private val regisTypes: Set<KClass<out RuleInfo>> = setOf(WeightCondition::class)
+    val regisInfo: MutableMap<KClass<out RuleInfo>, MutableMap<Double, MutableList<RuleInfo>>> =
+        regisTypes.associateWith { mutableMapOf<Double, MutableList<RuleInfo>>() }.toMutableMap()
 
     init {
         ServiceLoaderUtils.loadServices(RuleInfo::class.java).forEach {
@@ -132,7 +137,10 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
 
     inline fun <reified T : RuleInfo> getRules(): Map<Double, List<T>> {
         // 永远返回空 Map，而不是 null
-        return (regisInfo[T::class] as? Map<Double, MutableList<T>>) ?: emptyMap()
+        val rules = regisInfo[T::class] ?: return emptyMap()
+        return rules.mapValues { (_, ruleList) ->
+            ruleList.filterIsInstance<T>()
+        }
     }
 
 

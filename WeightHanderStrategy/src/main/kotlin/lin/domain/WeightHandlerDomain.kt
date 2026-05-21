@@ -8,6 +8,10 @@ import lin.domain.result.EmptyWeightResult
 import lin.domain.result.EndWeightResult
 import lin.domain.result.WeightResult
 import lin.myLog
+import lin.rule.context.RuleEnv
+import lin.rule.context.WarInfoEnv
+import lin.rule.handler.evaluateCardRoots
+import lin.rule.handler.updateIntent
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import lin.warExt.my.base.getCost
 import lin.weightHandler.DiscoverWeightHandler
@@ -57,21 +61,54 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
      * 调用权重规则
      */
     private fun processWeight(weightResult: EndWeightResult) {
-        weightResult.canUseCards.forEach { comboCard ->
-            for (weightHandler in weightHandlers) {
-                val calWeight = weightHandler.cardWeightCompute(comboCard, warManage)
+        with(WarInfoEnv(warManage)) {
+            weightResult.canUseCards.forEach { comboCard ->
+                val calWeight = weightEvaluator(comboCard, warManage)
                 if (calWeight != NotWeight) {
-                    //不使用结束循环
                     if (calWeight == UnUseWeight) {
                         comboCard.unUse()
-                        break
+                    } else {
+                        comboCard.addWeight(calWeight)
                     }
-                    comboCard.addWeight(calWeight)
                 }
-
+                weightResult.processWeightAfter(comboCard)
             }
-            weightResult.processWeightAfter(comboCard)
         }
+    }
+
+    /**
+     * 单入口编排函数：先条件树求值，后 legacy handler 链。
+     * 需在 [RuleEnv] 作用域内调用（由 processWeight 中的 [with(WarInfoEnv)] 提供）。
+     */
+    context(ruleEnv: RuleEnv)
+    private fun weightEvaluator(
+        comboCard: ComboCard,
+        warManage: MyWarManage,
+    ): Double {
+        var total = 0.0
+
+        // 1. 条件树求值（新系统）
+        val treeResult = evaluateCardRoots(comboCard, warManage)
+        if (treeResult.pruned) {
+            return UnUseWeight
+        }
+        if (treeResult.actions.isNotEmpty()) {
+            comboCard.updateIntent(treeResult.actions)
+        }
+        total += treeResult.score
+
+        // 2. legacy handler 链（旧系统，兼容）
+        for (handler in weightHandlers) {
+            val w = handler.cardWeightCompute(comboCard, warManage)
+            if (w == UnUseWeight) {
+                return UnUseWeight
+            }
+            if (w != NotWeight) {
+                total += w
+            }
+        }
+
+        return total
     }
 
     /**

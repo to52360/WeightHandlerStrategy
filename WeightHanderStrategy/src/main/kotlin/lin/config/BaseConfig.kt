@@ -4,9 +4,8 @@ package lin.config
 import lin.bean.CardWeightInfo
 import lin.bean.MetadataKey
 import lin.domain.use.UseStrategy
-import lin.rule.handler.RuleLevel
+
 import lin.rule.tree.EvaluatorInstanceNode
-import lin.serviceLoader.weightRule.IntentRule
 import lin.serviceLoader.weightRule.WeightRule
 
 sealed interface BaseConfig : CardConfig
@@ -22,7 +21,7 @@ data class UseConfig(
 interface CardType : CardAttributeConfig
 
 sealed interface Rule : BaseConfig
-data class RuleMap(val ruleMap: Map<RuleLevel, List<IntentRule>>) : Rule
+
 data class Rules(val rules: List<WeightRule>) : Rule {
     constructor(rule: WeightRule) : this(listOf(rule))
 }

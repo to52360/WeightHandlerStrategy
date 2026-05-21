@@ -7,9 +7,9 @@ import lin.domain.use.UseAfterStrategy
 import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
 import lin.lifecycle.LifecycleRegister
-import lin.rule.handler.RuleLevel
+
 import lin.rule.tree.EvaluatorInstanceNode
-import lin.serviceLoader.weightRule.IntentRule
+
 import lin.serviceLoader.weightRule.WeightRule
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -81,16 +81,7 @@ data class CardWeightInfo(
         }
     }
 
-    private var _intentRuleMap: Map<RuleLevel, List<IntentRule>>? = null
 
-    //todo-future 应该移到ConditionHandler,为了一点性能增加复杂性不可取
-    val intentRuleMap: Map<RuleLevel, List<IntentRule>>
-        get() = _intentRuleMap ?: emptyMap()
-
-    //只是简单的添加
-    fun setIntentRuleMap(intentRuleMap: Map<RuleLevel, List<IntentRule>>) {
-        _intentRuleMap = intentRuleMap
-    }
 
     private var _intentEvaluatorRoots: MutableList<EvaluatorInstanceNode>? = null
 

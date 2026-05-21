@@ -21,7 +21,7 @@ interface WeightCondition : WeightRule, RuleInfo
  * 更多意图,兼用旧体系用的接口,且不用写WeightRule接口的calculateWeight实现
  * todo-future 过度方案,先测试可行性
  */
-interface IntentRuleInfo : RuleInfo, IntentRule
+
 
 interface ExtConfig {
     /**

@@ -4,6 +4,7 @@ import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.serviceLoader.module.ModulesInfo
 import lin.utils.serviceLoader.ServiceLoaderUtils
+import lin.utils.startup.StartupTask
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.startKoin
 import org.koin.core.module.dsl.singleOf
@@ -12,7 +13,7 @@ import org.koin.dsl.module
 
 class ModulesLoad {
     fun loadModules() {
-        startKoin {
+        val koinApp = startKoin {
             modules(
                 dataModule,
                 domainModule,
@@ -24,5 +25,7 @@ class ModulesLoad {
                 loadKoinModules(it.loadModules())
             }
         }
+        // 执行启动任务，如规则树绑定
+        koinApp.koin.getAll<StartupTask>().forEach { it.execute() }
     }
 }
