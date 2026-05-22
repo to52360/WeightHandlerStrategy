@@ -12,7 +12,7 @@ class EvaluatorTreeIntegrationTest {
     val testJson = """
         {"bindGroupIds":["19fd1490","29b7b85a"],
         "root":{"Leaf":{"payload":{"Rule":{"nodeId":"rule_1778405395362"}}}},
-        "ruleConfigs":{"rule_1778405395362":{"nodeId":"rule_1778405395362","ruleId":"typed_simple_rule","weight":1.0,"mismatchedWeight":2.0,"args":{"limit":3}}}}
+        "leafConfigs":{"rule_1778405395362":{"nodeId":"rule_1778405395362","sourceType":"RULE","sourceId":"typed_simple_rule","weight":1.0,"mismatchedWeight":2.0,"args":{"limit":3}}}}
         }
     """.trimIndent()
 
@@ -24,12 +24,12 @@ class EvaluatorTreeIntegrationTest {
 
         assertNotNull(config, "JSON 应当成功解析为 EvaluatorTreeConfig")
         assertEquals(2, config.bindGroupIds.size)
-        assertTrue(config.ruleConfigs.containsKey("rule_1778405395362"))
+        assertTrue(config.leafConfigs.containsKey("rule_1778405395362"))
 
         // 2. 实例化为 Tree Instance
         // 【函数式魔法】：完全告别 MockK 和庞大的注册表！
-        // 直接传一个符合 (RuleConfig) -> RuleLogic 签名的 Lambda 进去。
-        val instance = config.instantiate { ruleConfig ->
+        // 直接传一个符合 (EvaluatorLeafConfig) -> RuleLogic 签名的 Lambda 进去。
+        val instance = config.instantiate { leafConfig ->
             // 直接返回一个假的规则执行闭包
             { RuleResult.Continue(1.0) }
         }

@@ -5,13 +5,15 @@ import lin.bean.cardExt.base.intentEvaluatorRoots
 import lin.config.ConfigDispatcher
 import lin.config.EvaluatorTreeRoot
 import lin.domain.MyWarManage
+import lin.rule.build.RuleLogic
+import lin.rule.condition.ConditionLogic
+import lin.rule.condition.ConditionRegistry
+import lin.rule.condition.ConditionTreeConfigProvider
+import lin.rule.condition.compile
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.registry.RuleRegistry
-import lin.rule.tree.BindingGroupId
-import lin.rule.tree.EvaluatorInstanceNode
-import lin.rule.tree.TreeConfigProvider
-import lin.rule.tree.instantiate
+import lin.rule.tree.*
 import lin.utils.startup.StartupTask
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -23,12 +25,16 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
 
     override fun execute() {
         val ruleRegistry = get<RuleRegistry>()
+        val conditionRegistry = get<ConditionRegistry>()
         val configDispatcher = get<ConfigDispatcher>()
         val providers = getKoin().getAll<TreeConfigProvider>()
+        val conditionTreeProviders = getKoin().getAll<ConditionTreeConfigProvider>()
 
         for (provider in providers) {
             for (config in provider.findAll()) {
-                val instance = config.instantiate(ruleRegistry::build)
+                val instance = config.instantiate { leafConfig ->
+                    buildEvaluatorLeafLogic(leafConfig, ruleRegistry, conditionRegistry, conditionTreeProviders)
+                }
                 configDispatcher.processByType(
                     instance.bindGroupIds.map { BindingGroupId(it) },
                     listOf(EvaluatorTreeRoot(instance.root))
@@ -36,6 +42,41 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
             }
         }
     }
+}
+
+internal fun buildEvaluatorLeafLogic(
+    leafConfig: EvaluatorLeafConfig,
+    ruleRegistry: RuleRegistry,
+    conditionRegistry: ConditionRegistry,
+    conditionTreeProviders: List<ConditionTreeConfigProvider>
+): RuleLogic = when (leafConfig.sourceType) {
+    EvaluatorLeafSourceType.RULE -> ruleRegistry.build(leafConfig)
+    EvaluatorLeafSourceType.CONDITION -> {
+        val conditionLogic = conditionRegistry.build(leafConfig.sourceId, leafConfig.args)
+        conditionLogic.toWeightedRuleLogic(leafConfig)
+    }
+
+    EvaluatorLeafSourceType.CONDITION_TREE -> {
+        val conditionTree = conditionTreeProviders
+            .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
+            ?: error("Condition tree config not found: sourceId=${leafConfig.sourceId}")
+        val conditionLogic = conditionTree.root.compile(conditionRegistry)
+        conditionLogic.toWeightedRuleLogic(leafConfig)
+    }
+}
+
+private fun ConditionLogic.toWeightedRuleLogic(
+    leafConfig: EvaluatorLeafConfig
+): RuleLogic {
+    val conditionLogic = this
+    val logic: RuleLogic = {
+        if (conditionLogic(this)) {
+            RuleResult.Continue(score = leafConfig.weight)
+        } else {
+            RuleResult.Continue(score = leafConfig.mismatchedWeight)
+        }
+    }
+    return logic
 }
 
 // ────────────────────────────────────────────────────────────

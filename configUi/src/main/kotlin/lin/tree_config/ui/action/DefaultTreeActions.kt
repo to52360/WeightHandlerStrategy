@@ -32,7 +32,7 @@ class CreateNewTreeAction : TreeWorkbenchAction {
             val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
             workbench.setSelectedGroupIds(emptyList())
-            workbench.ruleConfigs.clear()
+            workbench.leafConfigs.clear()
             workbench.propertyPanel.showPlaceholder()
 
             // 自动选中新草稿
@@ -68,7 +68,7 @@ class SaveTreeAction : TreeWorkbenchAction {
                 bindGroupIds = bindGroupIds,
 
                 root = evaluatorNode,
-                ruleConfigs = workbench.ruleConfigs.toMap()
+                leafConfigs = workbench.leafConfigs.toMap()
             )
             // 草稿条目：不传入 existingId，直接新建数据库记录
             // 已保存条目：传入 existingId，执行 UPSERT

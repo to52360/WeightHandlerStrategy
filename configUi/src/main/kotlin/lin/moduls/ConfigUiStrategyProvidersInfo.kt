@@ -2,7 +2,12 @@ package lin.moduls
 
 import lin.card_group.repository.CardGroupRepository
 import lin.card_group.service.CardGroupService
+import lin.condition_tree.repository.ConditionTreeConfigRepository
+import lin.condition_tree.service.ConditionTreeConfigService
+import lin.condition_tree.service.createConditionTreeConfigMapper
+import lin.provider.SqliteConditionTreeConfigProvider
 import lin.provider.SqliteTreeConfigProvider
+import lin.rule.condition.ConditionTreeConfigProvider
 import lin.rule.tree.TreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.BindingCardIdProvider
@@ -21,6 +26,15 @@ val strategyProviderModule = module {
         SqliteTreeConfigProvider(
             repository = TreeConfigRepository(get()),
             mapper = createTreeConfigMapper()
+        )
+    }
+
+    single<ConditionTreeConfigProvider> {
+        SqliteConditionTreeConfigProvider(
+            service = ConditionTreeConfigService(
+                repository = ConditionTreeConfigRepository(get()),
+                mapper = createConditionTreeConfigMapper()
+            )
         )
     }
 

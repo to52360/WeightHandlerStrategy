@@ -60,8 +60,8 @@ class ConfigListPanel(
                 if (item.config != null) {
                     workbench.logicTreeEditor.treeView.root =
                         lin.tree_config.ui.TreeModelConverter.toTreeItem(item.config.root)
-                    workbench.ruleConfigs.clear()
-                    workbench.ruleConfigs.putAll(item.config.ruleConfigs)
+                    workbench.leafConfigs.clear()
+                    workbench.leafConfigs.putAll(item.config.leafConfigs)
                 }
             }
         }

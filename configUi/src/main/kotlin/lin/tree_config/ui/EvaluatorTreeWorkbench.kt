@@ -1,9 +1,9 @@
 package lin.tree_config.ui
 
 
-import javafx.scene.control.*
+import javafx.scene.control.SplitPane
+import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
-import lin.rule.tree.RuleConfig
 import lin.tree_config.service.TreeConfigService
 import lin.tree_config.ui.components.BindGroupSelector
 import lin.tree_config.ui.components.ConfigListPanel
@@ -27,8 +27,8 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
     val propertyPanel = PropertyPanel()
 
-    // 选中的规则配置 (目前先只在内存中修改)
-    val ruleConfigs = mutableMapOf<String, RuleConfig>()
+    // 选中的叶子配置 (目前先只在内存中修改)
+    val leafConfigs = mutableMapOf<String, EvaluatorLeafConfig>()
 
     private val bindGroupSelector = BindGroupSelector()
     private val configListPanel = ConfigListPanel(this, treeConfigService)
@@ -62,7 +62,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
                         when (wrapper.type) {
                             LogicNodeType.LEAF, LogicNodeType.BRANCH -> propertyPanel.showRuleConfigNode(
                                 wrapper,
-                                ruleConfigs
+                                leafConfigs
                             )
                             else -> propertyPanel.showStructureNode(wrapper.type)
                         }
@@ -97,7 +97,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
     private fun buildPropertyPanel(): PropertyPanel {
         propertyPanel.onRuleConfigChanged = { nodeId, config ->
-            ruleConfigs[nodeId] = config
+            leafConfigs[nodeId] = config
         }
         return propertyPanel
     }

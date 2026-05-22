@@ -28,22 +28,21 @@ sealed interface EvaluatorInstanceNode {
  * 函数式架构核心：
  * 把对依赖的解析交还给顶层，本文件只提供纯粹的转换逻辑（从 JSON 数据转换为运行时对象）。
  *
- * @param ruleBuilder 高阶函数，表示如何将一个具体的 RuleConfig 转为真正的可执行 RuleLogic 闭包
+ * @param leafBuilder 高阶函数，表示如何将一个具体的叶子配置转为真正的可执行 RuleLogic 闭包
  */
 fun EvaluatorTreeConfig.instantiate(
-    ruleBuilder: (RuleConfig) -> RuleLogic
+    leafBuilder: (EvaluatorLeafConfig) -> RuleLogic
 ): EvaluatorTreeInstance {
     fun instantiateNode(node: EvaluatorNode): EvaluatorInstanceNode {
         return when (node) {
             is LogicNode.Leaf -> {
                 when (val payload = node.payload) {
                     is EvaluatorPayload.Rule -> {
-                        val ruleConfig = this.ruleConfigs[payload.nodeId]
-                            ?: error("RuleConfig not found for nodeId=${payload.nodeId}")
+                        val leafConfig = this.leafConfigs[payload.nodeId]
+                            ?: error("EvaluatorLeafConfig not found for nodeId=${payload.nodeId}")
                         EvaluatorInstanceNode.RuleNode(
                             nodeId = payload.nodeId,
-                            // 👉 核心改变：直接调用传入的高阶函数，而不是 ruleRegistry.build()
-                            ruleLogic = ruleBuilder(ruleConfig)
+                            ruleLogic = leafBuilder(leafConfig)
                         )
                     }
 
@@ -57,11 +56,11 @@ fun EvaluatorTreeConfig.instantiate(
             is LogicNode.Branch -> {
                 val payload = node.payload as? EvaluatorPayload.BranchCondition
                     ?: error("Branch node payload must be BranchCondition")
-                val ruleConfig = this.ruleConfigs[payload.nodeId]
-                    ?: error("RuleConfig not found for nodeId=${payload.nodeId}")
+                val leafConfig = this.leafConfigs[payload.nodeId]
+                    ?: error("EvaluatorLeafConfig not found for nodeId=${payload.nodeId}")
                 EvaluatorInstanceNode.BranchNode(
                     nodeId = payload.nodeId,
-                    condition = ruleBuilder(ruleConfig),
+                    condition = leafBuilder(leafConfig),
                     onTrue = instantiateNode(node.onTrue),
                     onFalse = instantiateNode(node.onFalse)
                 )

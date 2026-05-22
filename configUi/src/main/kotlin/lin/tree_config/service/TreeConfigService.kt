@@ -6,27 +6,16 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
-import lin.rule.tree.LogicNode
 import lin.tree_config.domain.TreeConfigEntity
 import lin.tree_config.repository.TreeConfigRepository
+import lin.utils.json.registerLogicNodeMixin
 import java.util.*
 
 fun createTreeConfigMapper(): ObjectMapper {
     return jacksonObjectMapper()
-        .addMixIn(LogicNode::class.java, EvaluatorNodeMixin::class.java)
+        .registerLogicNodeMixin()
         .addMixIn(EvaluatorPayload::class.java, EvaluatorPayloadMixin::class.java)
 }
-
-// 采用 WRAPPER_OBJECT 模式，使得序列化后的 JSON 结构为 {"AndNode": {...}} 而非 {"type": "AndNode", ...}
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = LogicNode.Leaf::class, name = "Leaf"),
-    JsonSubTypes.Type(value = LogicNode.And::class, name = "AndNode"),
-    JsonSubTypes.Type(value = LogicNode.Or::class, name = "OrNode"),
-    JsonSubTypes.Type(value = LogicNode.Not::class, name = "NotNode"),
-    JsonSubTypes.Type(value = LogicNode.Branch::class, name = "BranchNode")
-)
-abstract class EvaluatorNodeMixin
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 @JsonSubTypes(

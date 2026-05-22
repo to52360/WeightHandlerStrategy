@@ -71,6 +71,6 @@ fun <T : HasTargetIds> RuleBuildContext<T>.hasRaceFunc(): (List<ComboCard>) -> B
  * 由于不在上下文中心类了，你可以随时在其他任意文件中开启针对 ComboCard 的特殊判断注入
  */
 // fun <T : Any> RuleBuildContext<T>.isGroupFunc(): (ComboCard) -> Boolean {
-//     val weightIds = ruleConfig.depByWeightIds // 假设存在此字段
+//     val weightIds = leafConfig.args["depByWeightIds"] // 假设存在此字段
 //     return { comboCard -> weightIds.contains(comboCard.groupId()) }
 // }

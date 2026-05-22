@@ -3,10 +3,18 @@ package lin.moduls
 import lin.card_group.repository.CardGroupRepository
 import lin.card_group.service.CardGroupService
 import lin.card_group.ui.CardGroupExtension
+import lin.condition_tree.repository.ConditionTreeConfigRepository
+import lin.condition_tree.service.ConditionTreeConfigService
+import lin.condition_tree.service.createConditionTreeConfigMapper
 import lin.config.AppConfig
+import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
+import lin.serviceLoader.provider.ConditionRegistrationProvider
 import lin.serviceLoader.provider.RuleRegistrationProvider
+import lin.tree_config.repository.TreeConfigRepository
+import lin.tree_config.service.EvaluatorLeafSourceCatalog
 import lin.tree_config.service.TreeConfigService
+import lin.tree_config.service.createTreeConfigMapper
 import lin.tree_config.ui.EvaluatorTreeExtension
 import lin.tree_config.ui.action.CreateNewTreeAction
 import lin.tree_config.ui.action.DeleteTreeAction
@@ -28,6 +36,11 @@ val uiModule = module {
         val providers =
             ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
         RuleRegistry(providers)
+    }
+    single {
+        val providers =
+            ServiceLoaderUtils.loadServices(ConditionRegistrationProvider::class.java)
+        ConditionRegistry(providers)
     }
 
     // UI 扩展注册
@@ -57,7 +70,11 @@ val dbModule = module {
 
 }
 val uiDBModule = module {
-    single { TreeConfigService(get(), get()) }
+    single { TreeConfigRepository(get()) }
+    single { TreeConfigService(get(), createTreeConfigMapper()) }
+    single { ConditionTreeConfigRepository(get()) }
+    single { ConditionTreeConfigService(get(), createConditionTreeConfigMapper()) }
+    single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupRepository(get()) }
     single { CardGroupService(get()) }
 }

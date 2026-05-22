@@ -5,12 +5,12 @@ import lin.rule.context.RuleEnv
 import lin.rule.handler.RuleResult
 import lin.rule.parse.RuleFieldParser
 import lin.rule.parse.RuleFieldSpec
-import lin.rule.tree.RuleConfig
+import lin.rule.tree.EvaluatorLeafConfig
 import kotlin.reflect.KClass
 
 typealias RuleLogic = context(RuleEnv) RuleContext.() -> RuleResult
 
-typealias RuleFactory<T> = (RuleConfig, T) -> RuleLogic
+typealias RuleFactory<T> = (EvaluatorLeafConfig, T) -> RuleLogic
 
 /**
  * 泛型不支持基础类型
@@ -60,7 +60,6 @@ class RuleBuilder<T : Any>(
         )
     }
 }
-
 
 
 

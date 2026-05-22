@@ -9,10 +9,14 @@ import lin.config.handler.ConfigHandler
 import lin.config.handler.RuleConfigHandler
 import lin.config.handler.UseConfigHandler
 import lin.rule.RuleInfoRegister
+import lin.rule.condition.ConditionRegistry
+import lin.rule.handler.RuleTreeBindingTask
 import lin.rule.registry.RuleRegistry
 import lin.rule.tree.BindingGroupId
+import lin.serviceLoader.provider.ConditionRegistrationProvider
 import lin.serviceLoader.provider.RuleRegistrationProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
+import lin.utils.startup.StartupTask
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
@@ -45,4 +49,10 @@ val configModule = module {
         val providers = ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
         RuleRegistry(providers)
     }
+    single<ConditionRegistry> {
+        val providers = ServiceLoaderUtils.loadServices(ConditionRegistrationProvider::class.java)
+        ConditionRegistry(providers)
+    }
+
+    single<StartupTask> { RuleTreeBindingTask() }
 }

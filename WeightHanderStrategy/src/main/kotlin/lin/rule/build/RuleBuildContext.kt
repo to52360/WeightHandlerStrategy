@@ -2,7 +2,7 @@ package lin.rule.build
 
 import lin.bean.CardWeightInfo
 import lin.rule.parse.mapToRuleArgs
-import lin.rule.tree.RuleConfig
+import lin.rule.tree.EvaluatorLeafConfig
 import kotlin.reflect.KClass
 
 typealias ContextualRuleSpec<T> = RuleBuildContext<T>.() -> RuleLogic
@@ -15,8 +15,8 @@ class BuildRuleFactory(infoMap: Map<String, CardWeightInfo>) {
         parameterType: KClass<T>,
         spec: ContextualRuleSpec<T>
     ): RuleBuilder<T> {
-        val factory: RuleFactory<T> = { ruleConfig, params ->
-            val ctx = RuleBuildContext(ruleConfig, params, parse)
+        val factory: RuleFactory<T> = { leafConfig, params ->
+            val ctx = RuleBuildContext(leafConfig, params, parse)
             ctx.spec()
         }
         return RuleBuilder(parameterType).factory(factory)
@@ -24,12 +24,12 @@ class BuildRuleFactory(infoMap: Map<String, CardWeightInfo>) {
 }
 
 class RuleBuildContext<T : Any>(
-    val ruleConfig: RuleConfig,
+    val leafConfig: EvaluatorLeafConfig,
     val params: T,
     val ruleConfigParse: RuleConfigParse
 ) {
     fun <U : Any> parseArgs(parameterType: KClass<U>): U =
-        mapToRuleArgs(ruleConfig.args, parameterType)
+        mapToRuleArgs(leafConfig.args, parameterType)
 
     inline fun <reified U : Any> parseArgs(): U = parseArgs(U::class)
 }
