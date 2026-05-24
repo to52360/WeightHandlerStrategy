@@ -1,9 +1,6 @@
-package lin.card_group.service
+package lin.card_group.db
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import lin.card_group.domain.CardBindingEntity
-import lin.card_group.domain.CardManagerEntity
-import lin.card_group.repository.CardGroupRepository
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import java.util.*

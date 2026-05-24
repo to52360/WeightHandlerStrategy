@@ -4,12 +4,15 @@ package lin.tree_config.ui
 import javafx.scene.control.SplitPane
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
-import lin.tree_config.service.TreeConfigService
+import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.ui.components.BindGroupSelector
 import lin.tree_config.ui.components.ConfigListPanel
 import lin.tree_config.ui.menu.TreeContextMenuFactory
+import lin.tree_config.ui.strategy.EvaluatorPayloadFactory
+import lin.tree_config.ui.strategy.EvaluatorPropertyEditorStrategy
 import lin.ui.components.LogicTreeEditor
 import lin.ui.components.TreeEditorBehavior
+import lin.ui.service.TreeConfigService
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -20,15 +23,16 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
     // 依赖注入
     val treeConfigService: TreeConfigService by inject()
+    private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
+
+    // 选中的叶子配置 (目前先只在内存中修改)
+    val leafConfigs = mutableMapOf<String, EvaluatorLeafConfig>()
 
     // 暴露核心 UI 组件供 Action 访问上下文状态
     val logicTreeEditor = LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>>()
     val nodeTreeView get() = logicTreeEditor.treeView
 
-    val propertyPanel = PropertyPanel()
-
-    // 选中的叶子配置 (目前先只在内存中修改)
-    val leafConfigs = mutableMapOf<String, EvaluatorLeafConfig>()
+    val propertyPanel = PropertyPanel(EvaluatorPropertyEditorStrategy(leafSourceCatalog, leafConfigs))
 
     private val bindGroupSelector = BindGroupSelector()
     private val configListPanel = ConfigListPanel(this, treeConfigService)
@@ -58,26 +62,20 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
                     if (newValue == null) {
                         propertyPanel.showPlaceholder()
                     } else {
-                        val wrapper = newValue.value
-                        when (wrapper.type) {
-                            LogicNodeType.LEAF, LogicNodeType.BRANCH -> propertyPanel.showRuleConfigNode(
-                                wrapper,
-                                leafConfigs
-                            )
-                            else -> propertyPanel.showStructureNode(wrapper.type)
-                        }
+                        propertyPanel.showNode(newValue.value)
                     }
                 }
             }
         })
 
         // 注册右键菜单的 Behavior
+        val contextMenuFactory = TreeContextMenuFactory(EvaluatorPayloadFactory())
         logicTreeEditor.addBehavior(object : TreeEditorBehavior<LogicNodeWrapper<EvaluatorPayload>> {
             override fun install(editor: LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>>) {
                 editor.cellInterceptors.add { cell, item, empty ->
                     if (!empty && item != null && cell.treeItem != null) {
                         cell.contextMenu =
-                            TreeContextMenuFactory.createContextMenu(cell.treeItem, logicTreeEditor.treeView)
+                            contextMenuFactory.createContextMenu(cell.treeItem, logicTreeEditor.treeView)
                     }
                 }
             }
@@ -95,10 +93,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         return logicTreeEditor
     }
 
-    private fun buildPropertyPanel(): PropertyPanel {
-        propertyPanel.onRuleConfigChanged = { nodeId, config ->
-            leafConfigs[nodeId] = config
-        }
+    private fun buildPropertyPanel(): PropertyPanel<EvaluatorPayload> {
         return propertyPanel
     }
 

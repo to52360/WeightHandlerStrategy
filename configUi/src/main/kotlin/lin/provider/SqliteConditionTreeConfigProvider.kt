@@ -1,6 +1,6 @@
 package lin.provider
 
-import lin.condition_tree.service.ConditionTreeConfigService
+import lin.condition_tree.db.ConditionTreeConfigService
 import lin.rule.condition.ConditionTreeConfig
 import lin.rule.condition.ConditionTreeConfigProvider
 

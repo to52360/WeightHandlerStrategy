@@ -39,13 +39,48 @@
                 </configuration>
             </plugin>
         </plugins>
+        <!-- 开发期不 shading，保持快速编译；发布时用 -P release 触发 -->
     </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <version>3.2.4</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>shade</goal>
+                                </goals>
+                                <configuration>
+                                    <artifactSet>
+                                        <includes>
+                                            <include>com.zaxxer:HikariCP</include>
+                                        </includes>
+                                    </artifactSet>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <dependencies>
         <!-- ===== 逻辑模块 (提供 RuleRegistry / RuleUiItem / RuleFieldSpec) ===== -->
         <dependency>
             <groupId>lin</groupId>
             <artifactId>WeightHandlerStrategy</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.insert-koin</groupId>
+            <artifactId>koin-core-jvm</artifactId>
         </dependency>
         <!-- ===== SQLite 纯 JDBC (不引入 Spring, 保持工具轻量) ===== -->
         <dependency>
@@ -72,6 +107,13 @@
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-kotlin</artifactId>
+        </dependency>
+
+        <!-- 连接池 (configUi 交互频繁，HikariCP 复用连接) -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>6.2.1</version>
         </dependency>
 
         <!-- ===== Test ===== -->

@@ -3,7 +3,7 @@ package lin.provider
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.rule.tree.TreeConfigProvider
-import lin.tree_config.repository.TreeConfigRepository
+import lin.tree_config.db.TreeConfigRepository
 
 /**
  * [TreeConfigProvider] 的 SQLite 实现，供策略层通过 SPI 加载评估树配置。

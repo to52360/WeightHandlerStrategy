@@ -1,15 +1,15 @@
 package lin.tree_config.ui.menu
 
 import javafx.scene.control.*
-import lin.rule.tree.EvaluatorPayload
 import lin.tree_config.ui.LogicNodeType
 import lin.tree_config.ui.LogicNodeWrapper
+import lin.ui.components.PayloadFactory
 
-object TreeContextMenuFactory {
+class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
 
     fun createContextMenu(
-        treeItem: TreeItem<LogicNodeWrapper<EvaluatorPayload>>,
-        treeView: TreeView<LogicNodeWrapper<EvaluatorPayload>>
+        treeItem: TreeItem<LogicNodeWrapper<L>>,
+        treeView: TreeView<LogicNodeWrapper<L>>
     ): ContextMenu {
         val menu = ContextMenu()
         val type = treeItem.value.type
@@ -22,7 +22,7 @@ object TreeContextMenuFactory {
                 createAddMenuItem("AND 节点", treeItem, LogicNodeType.AND),
                 createAddMenuItem("OR 节点", treeItem, LogicNodeType.OR),
                 createAddMenuItem("NOT 节点", treeItem, LogicNodeType.NOT),
-                createAddMenuItem("RULE 节点", treeItem, LogicNodeType.LEAF),
+                createAddMenuItem("LEAF 节点", treeItem, LogicNodeType.LEAF),
                 createAddMenuItem("BRANCH 节点", treeItem, LogicNodeType.BRANCH)
             )
             menu.items.add(addMenu)
@@ -34,7 +34,7 @@ object TreeContextMenuFactory {
             addMenu.items.addAll(
                 createAddMenuItem("AND 节点", treeItem, LogicNodeType.AND),
                 createAddMenuItem("OR 节点", treeItem, LogicNodeType.OR),
-                createAddMenuItem("RULE 节点", treeItem, LogicNodeType.LEAF)
+                createAddMenuItem("LEAF 节点", treeItem, LogicNodeType.LEAF)
             )
             menu.items.add(addMenu)
         }
@@ -47,14 +47,11 @@ object TreeContextMenuFactory {
                 setOnAction {
                     treeItem.value.type = targetType
 
-                    // 1. 根据节点类型分配或清空 nodeId
+                    // 1. 根据节点类型分配或清空 payload
                     if (targetType == LogicNodeType.LEAF || targetType == LogicNodeType.BRANCH) {
-                        val prefix = if (targetType == LogicNodeType.LEAF) "rule" else "branch"
-                        val id = "${prefix}_${System.currentTimeMillis()}"
                         treeItem.value.payload =
-                            if (targetType == LogicNodeType.LEAF) EvaluatorPayload.Rule(id) else EvaluatorPayload.BranchCondition(
-                                id
-                            )
+                            if (targetType == LogicNodeType.LEAF) payloadFactory.createEmptyLeaf()
+                            else payloadFactory.createEmptyBranch()
                     } else {
                         treeItem.value.payload = null
                     }
@@ -114,17 +111,15 @@ object TreeContextMenuFactory {
 
     private fun createAddMenuItem(
         text: String,
-        parentItem: TreeItem<LogicNodeWrapper<EvaluatorPayload>>,
+        parentItem: TreeItem<LogicNodeWrapper<L>>,
         type: LogicNodeType
     ): MenuItem {
         val item = MenuItem(text)
         item.setOnAction {
-            val wrapper = LogicNodeWrapper<EvaluatorPayload>(type)
+            val wrapper = LogicNodeWrapper<L>(type)
             when (type) {
-                LogicNodeType.LEAF -> wrapper.payload = EvaluatorPayload.Rule("rule_${System.currentTimeMillis()}")
-                LogicNodeType.BRANCH -> wrapper.payload =
-                    EvaluatorPayload.BranchCondition("branch_${System.currentTimeMillis()}")
-
+                LogicNodeType.LEAF -> wrapper.payload = payloadFactory.createEmptyLeaf()
+                LogicNodeType.BRANCH -> wrapper.payload = payloadFactory.createEmptyBranch()
                 else -> {}
             }
             val newItem = TreeItem(wrapper)
@@ -141,9 +136,9 @@ object TreeContextMenuFactory {
         return item
     }
 
-    private fun createLeafPlaceholder(suffix: String): TreeItem<LogicNodeWrapper<EvaluatorPayload>> {
-        val wrapper = LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.LEAF)
-        wrapper.payload = EvaluatorPayload.Rule("rule_${System.currentTimeMillis()}_$suffix")
+    private fun createLeafPlaceholder(suffix: String): TreeItem<LogicNodeWrapper<L>> {
+        val wrapper = LogicNodeWrapper<L>(LogicNodeType.LEAF)
+        wrapper.payload = payloadFactory.createEmptyLeaf()
         return TreeItem(wrapper).also { it.isExpanded = true }
     }
 }

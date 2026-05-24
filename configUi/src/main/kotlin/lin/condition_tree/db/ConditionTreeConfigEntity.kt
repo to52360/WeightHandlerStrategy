@@ -1,4 +1,4 @@
-package lin.condition_tree.domain
+package lin.condition_tree.db
 
 data class ConditionTreeConfigEntity(
     val id: String,

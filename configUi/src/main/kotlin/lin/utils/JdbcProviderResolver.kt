@@ -1,16 +1,27 @@
 package lin.utils
 
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 import lin.config.AppConfig
-import lin.utils.database.SqliteJdbcProvider
 import org.koin.core.context.GlobalContext
+import org.springframework.jdbc.core.JdbcTemplate
 
 /**
- * 从 Koin 容器获取 SqliteJdbcProvider；若容器尚未启动则回退到 AppConfig 配置的路径。
+ * 从 Koin 容器获取 [JdbcTemplate]（带连接池）；
+ * 若容器尚未启动则回退到 AppConfig 配置的路径创建临时数据源（仅供诊断用）。
  */
-fun resolveJdbcProvider(): SqliteJdbcProvider {
+fun resolveJdbcProvider(): JdbcTemplate {
     return runCatching {
-        GlobalContext.get().get<SqliteJdbcProvider>()
+        GlobalContext.get().get<JdbcTemplate>()
     }.getOrElse {
-        SqliteJdbcProvider(AppConfig.databasePath)
+        val dbPath = AppConfig.databasePath
+        val config = HikariConfig().apply {
+            driverClassName = "org.sqlite.JDBC"
+            jdbcUrl = "jdbc:sqlite:${dbPath.toAbsolutePath()}"
+            maximumPoolSize = 1
+            connectionTestQuery = "SELECT 1"
+            poolName = "FallbackPool"
+        }
+        JdbcTemplate(HikariDataSource(config))
     }
 }

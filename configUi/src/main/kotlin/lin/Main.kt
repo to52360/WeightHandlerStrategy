@@ -1,9 +1,10 @@
-package lin.ui
+package lin
 
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.stage.Stage
 import lin.moduls.ModelsDefine
+import lin.ui.MainShellView
 import org.koin.core.context.GlobalContext.stopKoin
 
 class ConfigUiApp : Application() {

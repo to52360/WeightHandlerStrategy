@@ -8,44 +8,34 @@ import java.nio.file.Path
 import javax.sql.DataSource
 
 /**
+ * 引擎侧轻量数据源——每次请求创建新连接，适合「启动一次性加载」的场景。
+ * configUi 侧因需要频繁读写，应自行配置 HikariCP 连接池。
+ *
  * 参考:
  * club.xiaojiawei.config.DBConfig
  */
 class SqliteJdbcProvider(private val dbPath: Path = DefDBUrl) {
-    /**
-     * [org.springframework.jdbc.support.SQLExceptionSubclassTranslator.doTranslate]
-     */
-    private val dataSource: DataSource by lazy {
-        // 1. 检查路径是否合法
-        validateDbPath(dbPath)
 
-        // 2. 创建数据源
+    private val dataSource: DataSource by lazy {
+        validateDbPath(dbPath)
         DriverManagerDataSource().apply {
             setDriverClassName("org.sqlite.JDBC")
             url = "jdbc:sqlite:${dbPath.toAbsolutePath()}"
         }
-
     }
-
-
 
     val jdbcTemplate: JdbcTemplate by lazy {
         JdbcTemplate(dataSource)
     }
 
     private fun validateDbPath(path: Path) {
-        // 确保父目录存在
         val parentDir = path.parent
         if (parentDir != null && !Files.exists(parentDir)) {
             throw ConditionException("数据库路径不存在: $parentDir")
         }
-
-        // 如果文件存在，确保是普通文件
         if (Files.exists(path) && !Files.isRegularFile(path)) {
             throw ConditionException("数据库路径不是一个文件: $path")
         }
-
-        // 如果文件不存在，尝试创建（可选）
         if (!Files.exists(path)) {
             throw ConditionException("数据库文件不存在")
         }

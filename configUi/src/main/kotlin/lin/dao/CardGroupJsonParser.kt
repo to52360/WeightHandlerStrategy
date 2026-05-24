@@ -3,7 +3,7 @@ package lin.dao
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import lin.card_group.service.CardGroupService
+import lin.card_group.db.CardGroupService
 import lin.rule.build.DynamicFieldOption
 import lin.serviceLoader.provider.SelectOptionProvider
 import org.koin.core.component.KoinComponent

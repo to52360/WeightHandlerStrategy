@@ -1,10 +1,10 @@
 package lin.moduls
 
-import lin.card_group.repository.CardGroupRepository
-import lin.card_group.service.CardGroupService
-import lin.condition_tree.repository.ConditionTreeConfigRepository
-import lin.condition_tree.service.ConditionTreeConfigService
-import lin.condition_tree.service.createConditionTreeConfigMapper
+import lin.card_group.db.CardGroupRepository
+import lin.card_group.db.CardGroupService
+import lin.condition_tree.db.ConditionTreeConfigRepository
+import lin.condition_tree.db.ConditionTreeConfigService
+import lin.condition_tree.db.createConditionTreeConfigMapper
 import lin.provider.SqliteConditionTreeConfigProvider
 import lin.provider.SqliteTreeConfigProvider
 import lin.rule.condition.ConditionTreeConfigProvider
@@ -12,8 +12,8 @@ import lin.rule.tree.TreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.BindingCardIdProvider
 import lin.serviceLoader.provider.CardGroupIndexProvider
-import lin.tree_config.repository.TreeConfigRepository
-import lin.tree_config.service.createTreeConfigMapper
+import lin.tree_config.db.TreeConfigRepository
+import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module
 import org.koin.dsl.module
 

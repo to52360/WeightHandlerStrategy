@@ -4,7 +4,7 @@ import lin.rule.handler.RuleResult
 import lin.rule.tree.EvaluatorInstanceNode
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.rule.tree.instantiate
-import lin.tree_config.service.createTreeConfigMapper
+import lin.ui.service.createTreeConfigMapper
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 

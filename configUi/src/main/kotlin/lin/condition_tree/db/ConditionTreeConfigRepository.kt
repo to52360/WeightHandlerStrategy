@@ -1,6 +1,5 @@
-package lin.condition_tree.repository
+package lin.condition_tree.db
 
-import lin.condition_tree.domain.ConditionTreeConfigEntity
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 

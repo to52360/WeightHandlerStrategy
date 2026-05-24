@@ -1,4 +1,4 @@
-package lin.card_group.domain
+package lin.card_group.db
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue

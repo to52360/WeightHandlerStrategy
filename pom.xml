@@ -117,6 +117,11 @@
                 <artifactId>WeightHandlerStrategy</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.insert-koin</groupId>
+                <artifactId>koin-core-jvm</artifactId>
+                <version>4.1.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

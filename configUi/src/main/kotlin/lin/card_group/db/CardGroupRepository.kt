@@ -1,7 +1,5 @@
-package lin.card_group.repository
+package lin.card_group.db
 
-import lin.card_group.domain.CardBindingEntity
-import lin.card_group.domain.CardManagerEntity
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 

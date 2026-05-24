@@ -12,6 +12,7 @@ import lin.rule.condition.ConditionTreeConfigProvider
 import lin.rule.condition.compile
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
+import lin.rule.parse.extractPrefixedArgs
 import lin.rule.registry.RuleRegistry
 import lin.rule.tree.*
 import lin.utils.startup.StartupTask
@@ -60,7 +61,11 @@ internal fun buildEvaluatorLeafLogic(
         val conditionTree = conditionTreeProviders
             .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
             ?: error("Condition tree config not found: sourceId=${leafConfig.sourceId}")
-        val conditionLogic = conditionTree.root.compile(conditionRegistry)
+        val args = leafConfig.args
+        val conditionLogic = conditionTree.root.compile { conditionRef ->
+            val conditionArgs = args.extractPrefixedArgs(conditionRef.refId)
+            conditionRegistry.build(conditionRef.conditionId, conditionArgs)
+        }
         conditionLogic.toWeightedRuleLogic(leafConfig)
     }
 }

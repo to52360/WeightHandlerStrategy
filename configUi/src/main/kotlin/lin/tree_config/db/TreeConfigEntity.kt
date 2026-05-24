@@ -1,4 +1,4 @@
-package lin.tree_config.domain
+package lin.tree_config.db
 
 data class TreeConfigEntity(
     val id: String,          // SQLite 主键

@@ -1,11 +1,9 @@
-package lin.condition_tree.service
+package lin.condition_tree.db
 
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import lin.condition_tree.domain.ConditionTreeConfigEntity
-import lin.condition_tree.repository.ConditionTreeConfigRepository
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionTreeConfig
 import lin.utils.json.registerLogicNodeMixin

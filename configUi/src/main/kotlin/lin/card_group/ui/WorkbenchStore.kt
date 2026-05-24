@@ -1,8 +1,8 @@
 package lin.card_group.ui
 
 import javafx.beans.property.SimpleObjectProperty
-import lin.card_group.domain.CardManagerEntity
-import lin.card_group.service.CardGroupService
+import lin.card_group.db.CardGroupService
+import lin.card_group.db.CardManagerEntity
 import lin.dao.CardGroupJsonParser
 import lin.rule.tree.CardGroupBinding
 import java.util.*

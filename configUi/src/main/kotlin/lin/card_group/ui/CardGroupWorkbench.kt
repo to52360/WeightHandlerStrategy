@@ -1,7 +1,7 @@
 package lin.card_group.ui
 
 import javafx.scene.control.SplitPane
-import lin.card_group.service.CardGroupService
+import lin.card_group.db.CardGroupService
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 

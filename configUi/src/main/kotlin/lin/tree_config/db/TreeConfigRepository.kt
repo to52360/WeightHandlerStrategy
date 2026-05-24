@@ -1,6 +1,5 @@
-package lin.tree_config.repository
+package lin.tree_config.db
 
-import lin.tree_config.domain.TreeConfigEntity
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 

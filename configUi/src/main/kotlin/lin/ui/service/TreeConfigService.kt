@@ -1,4 +1,4 @@
-package lin.tree_config.service
+package lin.ui.service
 
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
@@ -6,8 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
-import lin.tree_config.domain.TreeConfigEntity
-import lin.tree_config.repository.TreeConfigRepository
+import lin.tree_config.db.TreeConfigEntity
+import lin.tree_config.db.TreeConfigRepository
 import lin.utils.json.registerLogicNodeMixin
 import java.util.*
 

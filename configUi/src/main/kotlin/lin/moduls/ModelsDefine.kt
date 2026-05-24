@@ -1,31 +1,38 @@
 package lin.moduls
 
-import lin.card_group.repository.CardGroupRepository
-import lin.card_group.service.CardGroupService
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import lin.card_group.db.CardGroupRepository
+import lin.card_group.db.CardGroupService
 import lin.card_group.ui.CardGroupExtension
-import lin.condition_tree.repository.ConditionTreeConfigRepository
-import lin.condition_tree.service.ConditionTreeConfigService
-import lin.condition_tree.service.createConditionTreeConfigMapper
+import lin.condition_tree.db.ConditionTreeConfigRepository
+import lin.condition_tree.db.ConditionTreeConfigService
+import lin.condition_tree.db.createConditionTreeConfigMapper
+import lin.condition_tree.ui.ConditionTreeExtension
+import lin.condition_tree.ui.action.ConditionTreeWorkbenchAction
+import lin.condition_tree.ui.action.CreateConditionTreeAction
+import lin.condition_tree.ui.action.DeleteConditionTreeAction
+import lin.condition_tree.ui.action.SaveConditionTreeAction
 import lin.config.AppConfig
 import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.serviceLoader.provider.ConditionRegistrationProvider
 import lin.serviceLoader.provider.RuleRegistrationProvider
-import lin.tree_config.repository.TreeConfigRepository
-import lin.tree_config.service.EvaluatorLeafSourceCatalog
-import lin.tree_config.service.TreeConfigService
-import lin.tree_config.service.createTreeConfigMapper
+import lin.tree_config.db.EvaluatorLeafSourceCatalog
+import lin.tree_config.db.TreeConfigRepository
 import lin.tree_config.ui.EvaluatorTreeExtension
 import lin.tree_config.ui.action.CreateNewTreeAction
 import lin.tree_config.ui.action.DeleteTreeAction
 import lin.tree_config.ui.action.SaveTreeAction
 import lin.tree_config.ui.action.TreeWorkbenchAction
 import lin.ui.UiExtension
-import lin.utils.database.SqliteJdbcProvider
+import lin.ui.service.TreeConfigService
+import lin.ui.service.createTreeConfigMapper
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.springframework.jdbc.core.JdbcTemplate
 import java.nio.file.Files
 
 
@@ -46,27 +53,42 @@ val uiModule = module {
     // UI 扩展注册
     single { CardGroupExtension() } bind UiExtension::class
     single { EvaluatorTreeExtension() } bind UiExtension::class
+    single { ConditionTreeExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
     single { SaveTreeAction() } bind TreeWorkbenchAction::class
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
 
+    // 条件树工作台动作注册
+    single { CreateConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+    single { SaveConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+    single { DeleteConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+
 }
 
 /**
- * 数据库基础模块，提供 [SqliteJdbcProvider] 及其他数据库共享依赖
+ * 数据库基础模块，直接创建 HikariCP 连接池与 [JdbcTemplate]。
+ * configUi 交互频繁，与引擎侧的一次性加载模式不同，需要连接复用以降低开销。
  */
 val dbModule = module {
-    single {
+    single<JdbcTemplate> {
         val dbPath = AppConfig.databasePath
         if (!Files.exists(dbPath)) {
             Files.createFile(dbPath)
         }
-        SqliteJdbcProvider(dbPath)
+        val config = HikariConfig().apply {
+            driverClassName = "org.sqlite.JDBC"
+            jdbcUrl = "jdbc:sqlite:${dbPath.toAbsolutePath()}"
+            maximumPoolSize = 2
+            minimumIdle = 0
+            idleTimeout = 30_000
+            connectionTimeout = 10_000
+            connectionTestQuery = "SELECT 1"
+            poolName = "ConfigUiPool"
+        }
+        JdbcTemplate(HikariDataSource(config))
     }
-
-    single { get<SqliteJdbcProvider>().jdbcTemplate }
 
 }
 val uiDBModule = module {

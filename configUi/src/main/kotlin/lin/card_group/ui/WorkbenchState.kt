@@ -1,6 +1,6 @@
 package lin.card_group.ui
 
-import lin.card_group.domain.CardManagerEntity
+import lin.card_group.db.CardManagerEntity
 import lin.dao.CardWeightConfig
 import lin.rule.tree.CardGroupBinding
 
