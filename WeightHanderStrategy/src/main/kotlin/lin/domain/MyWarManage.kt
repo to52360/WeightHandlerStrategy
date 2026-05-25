@@ -117,7 +117,6 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
     val toDieHandler = ToDieHandler(this)
     override val infoMap: Map<String, CardWeightInfo>
-    private val cardGroupIndex: Map<String, Set<String>>
 
     //private val statusReset: StatusReset
     init {
@@ -129,7 +128,10 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         this.warStatus = warStatus
 
         infoMap = getKoin().get(named("weightInfo"))
-        cardGroupIndex = getCardGroupIndex()
+        // 注入运行时分组数据到 CardWeightInfo.groups
+        getCardGroupIndex().forEach { (cardId, groupIds) ->
+            infoMap[cardId]?.groups?.addAll(groupIds)
+        }
         loadKoinModules(module {
             single { lifecycleRegisterImpl } bind LifecycleRegister::class
         })
@@ -166,8 +168,7 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     fun parseComboCard(card: Card): ComboCard {
         return ComboCard(
             cardWeightInfo = infoMap[card.cardId],
-            card = card,
-            runtimeGroupIds = cardGroupIndex[card.cardId].orEmpty()
+            card = card
         )
     }
 
@@ -255,9 +256,6 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
 
     private var gameId: String? = null
 
-    /**
-     * todo debug看一下 判断游戏是否新的一局
-     */
     fun isStart(): Boolean {
         val me = war.me
         if (me.resources == 1) {

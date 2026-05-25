@@ -1,0 +1,16 @@
+SQLite configData JSON (含 bindGroupIds)
+        │
+        ▼  SqliteTreeConfigProvider.findAll()  — SPI 实现，在 configUi 项目里
+        │  反序列化 JSON → EvaluatorTreeConfig(bindGroupIds, root, leafConfigs)
+        │
+        ▼  RuleTreeBindingTask.execute()  — 引擎层启动任务 ★唯一消费点★
+        │  config.instantiate(...) → EvaluatorTreeInstance(bindGroupIds, root)
+        │  instance.bindGroupIds.map { BindingGroupId(it) }
+        │         │
+        │         ▼  ConfigDispatcher.processByType(bindingIds, roots)
+        │            │
+        │            ▼  BindingGroupFinder
+        │               BindingGroupId → cardIds → CardWeightInfo
+        │               → 将 EvaluatorTreeRoot 注入到对应卡牌的 intentEvaluatorRoots
+        │
+        ▼  运行时：evaluateCardRoots() 对每张卡求值绑定的评估树

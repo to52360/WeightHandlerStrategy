@@ -1,6 +1,7 @@
 package lin.bean
 
 
+import lin.bean.facet.CardGroupFacet
 import lin.config.CardType
 import lin.domain.context.NotWeight
 import lin.domain.use.UseAfterStrategy
@@ -40,6 +41,9 @@ data class CardWeightInfo(
     val groupId: Double = 1.0,
     val changeWeight: Double = NotWeight
 ) : KoinComponent {
+    // 卡牌分组分面
+    val groups = CardGroupFacet()
+
     // 卡牌类型集合
     private var _cardTypes: HashSet<CardType>? = null
     val cardTypes: Set<CardType>

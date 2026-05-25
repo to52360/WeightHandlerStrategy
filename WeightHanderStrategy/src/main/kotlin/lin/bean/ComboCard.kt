@@ -19,8 +19,7 @@ typealias ComboRule = (ComboCard) -> Double
  */
 class ComboCard(
     val cardWeightInfo: CardWeightInfo? = null,
-    val card: Card,
-    private val runtimeGroupIds: Set<String> = emptySet()
+    val card: Card
 ) {
 
     val combo = cardWeightInfo?.combos
@@ -34,9 +33,7 @@ class ComboCard(
         get() = cardWeightInfo?.changeComboRule
 
     //基础信息
-    fun groupIds(): Set<String> = runtimeGroupIds
-    fun hasGroup(groupId: String): Boolean = runtimeGroupIds.contains(groupId)
-    fun hasAnyGroup(groupIds: Collection<String>): Boolean = groupIds.any(::hasGroup)
+    fun hasGroup(groupId: String): Boolean = cardWeightInfo?.groups?.hasGroup(groupId) ?: false
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
