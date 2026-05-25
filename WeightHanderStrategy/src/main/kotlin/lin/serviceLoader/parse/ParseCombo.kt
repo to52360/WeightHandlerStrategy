@@ -10,7 +10,7 @@ import org.koin.core.error.NoDefinitionFoundException
 import org.koin.core.qualifier.named
 
 /**
- * 解析combo
+ * 解析combo todo 打出顺序的重构
  */
 class ParseCombo : ParseCardWeightInfo, KoinComponent {
     override fun parse(infoMap: Map<String, CardWeightInfo>) {

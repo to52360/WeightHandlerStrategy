@@ -13,6 +13,7 @@ import lin.rule.condition.ConditionRegistry
 import lin.rule.handler.RuleTreeBindingTask
 import lin.rule.registry.RuleRegistry
 import lin.rule.tree.BindingGroupId
+import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
 import lin.serviceLoader.provider.ConditionRegistrationProvider
 import lin.serviceLoader.provider.RuleRegistrationProvider
 import lin.utils.serviceLoader.ServiceLoaderUtils
@@ -23,6 +24,14 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 
 val configModule = module {
+    single<Map<String, CardWeightInfo>>(named("weightInfo")) {
+        val infoMap: MutableMap<String, CardWeightInfo> = HashMap()
+        ServiceLoaderUtils.loadServices(CardWeightInfoProvide::class.java).forEach {
+            infoMap.putAll(it.getInfos())
+        }
+        infoMap
+    }
+
     singleOf(::UseConfigHandler) bind ConfigHandler::class
     singleOf(::RuleConfigHandler) bind ConfigHandler::class
 

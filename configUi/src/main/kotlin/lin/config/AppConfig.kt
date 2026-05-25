@@ -8,4 +8,8 @@ object AppConfig {
     /** 数据库文件位置，支持通过系统属性 `-Dapp.db.path=xxx` 覆盖 */
     val databasePath: Path
         get() = Path.of(rootPath, TestDBUrl)
+
+
+    val defaultDirPath: Path =
+        Path.of(rootPath, "../data/cardgroup")
 }

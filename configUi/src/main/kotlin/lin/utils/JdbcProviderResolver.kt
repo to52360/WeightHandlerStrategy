@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate
  * 若容器尚未启动则回退到 AppConfig 配置的路径创建临时数据源（仅供诊断用）。
  */
 fun resolveJdbcProvider(): JdbcTemplate {
-    return runCatching {
+    return runCatchingLog("Koin容器未启动，使用回退数据源") {
         GlobalContext.get().get<JdbcTemplate>()
     }.getOrElse {
         val dbPath = AppConfig.databasePath

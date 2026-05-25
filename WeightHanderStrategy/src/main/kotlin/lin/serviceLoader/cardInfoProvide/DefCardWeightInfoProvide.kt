@@ -5,6 +5,9 @@ import club.xiaojiawei.hsscriptcardsdk.data.CARD_DATA_TRIE
 
 import lin.bean.CardWeightInfo
 
+/**
+ * todo 可以考虑这里塞分组信息
+ */
 class DefCardWeightInfoProvide : CardWeightInfoProvide {
     override fun getInfos(): Map<String, CardWeightInfo> {
         val weightConfigs = CARD_DATA_TRIE.data()

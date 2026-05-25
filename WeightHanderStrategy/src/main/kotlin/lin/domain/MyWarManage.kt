@@ -14,10 +14,8 @@ import lin.domain.use.tryUseCard
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
-import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
 import lin.serviceLoader.provider.CardGroupIndexProvider
 import lin.serviceLoader.weightRule.utils.war.WarStatus
-import lin.utils.serviceLoader.ServiceLoaderUtils
 import lin.warExt.action.activeLocation
 import lin.warExt.action.cleanPlay
 import lin.warExt.action.cleanPlayAll
@@ -130,10 +128,9 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         })
         this.warStatus = warStatus
 
-        infoMap = getCardInfos()
+        infoMap = getKoin().get(named("weightInfo"))
         cardGroupIndex = getCardGroupIndex()
         loadKoinModules(module {
-            single(named("weightInfo")) { infoMap }
             single { lifecycleRegisterImpl } bind LifecycleRegister::class
         })
 
@@ -147,14 +144,6 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         lifecycleRegisterImpl.logout(lifecycle)
     }
 
-    //把配置信息转化成上下文信息
-    private fun getCardInfos(): Map<String, CardWeightInfo> {
-        val infoMap: MutableMap<String, CardWeightInfo> = HashMap()
-        ServiceLoaderUtils.loadServices(CardWeightInfoProvide::class.java).forEach {
-            infoMap.putAll(it.getInfos())
-        }
-        return infoMap
-    }
 
     private fun getCardGroupIndex(): Map<String, Set<String>> {
         val mergedIndex = linkedMapOf<String, MutableSet<String>>()

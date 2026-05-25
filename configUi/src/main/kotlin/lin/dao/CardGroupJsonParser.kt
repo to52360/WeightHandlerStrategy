@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import lin.card_group.db.CardGroupService
+import lin.config.AppConfig.defaultDirPath
 import lin.rule.build.DynamicFieldOption
 import lin.serviceLoader.provider.SelectOptionProvider
 import org.koin.core.component.KoinComponent
@@ -34,7 +35,7 @@ object CardGroupJsonParser {
      * 返回 Pair<fileName(不含扩展名), CardGroupConfig>。
      */
     fun loadAllCardGroups(
-        dirPath: Path = defaultDirPath()
+        dirPath: Path = defaultDirPath
     ): List<Pair<String, CardGroupConfig>> {
         if (!Files.exists(dirPath)) return emptyList()
 
@@ -57,7 +58,7 @@ object CardGroupJsonParser {
     }
 
     /** 仅列出该目录下所有的 .cardgroup 文件名（不含扩展名），不解析文件内容 */
-    fun listAvailableFiles(dirPath: Path = defaultDirPath()): List<String> {
+    fun listAvailableFiles(dirPath: Path = defaultDirPath): List<String> {
         if (!Files.exists(dirPath)) return emptyList()
         return Files.list(dirPath).use { stream ->
             stream.filter { it.isRegularFile() && it.fileName.toString().endsWith(".cardgroup") }
@@ -73,7 +74,7 @@ object CardGroupJsonParser {
      */
     fun loadByFileName(
         fileName: String,
-        dirPath: Path = defaultDirPath()
+        dirPath: Path = defaultDirPath
     ): CardGroupConfig? {
         val file = dirPath.resolve("$fileName.cardgroup")
         if (!Files.exists(file)) return null
@@ -85,8 +86,6 @@ object CardGroupJsonParser {
         }
     }
 
-    private fun defaultDirPath(): Path =
-        Path.of(System.getProperty("user.dir"), "../../data/cardgroup")
 }
 
 /**

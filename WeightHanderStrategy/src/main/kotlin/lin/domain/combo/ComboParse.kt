@@ -6,7 +6,7 @@ import lin.bean.ComboRule
 import lin.domain.context.NotWeight
 import lin.myLog
 
-
+//todo 打出顺序的重构
 interface ComboParse {
     companion object {
         const val LAST = "last"
