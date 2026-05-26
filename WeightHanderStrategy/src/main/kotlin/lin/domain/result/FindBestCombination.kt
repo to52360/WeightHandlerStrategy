@@ -16,8 +16,6 @@ object DefaultFindBestCombination : FindBestCombination {
         // 初始化为一个非常小的值，确保任何合法地出牌都比它好
         var maxEffectiveScore = Double.NEGATIVE_INFINITY
 
-        val comboCards = targetList
-
         // 3. 定义一个递归函数（回溯）来查找所有可能的组合
         fun findBestCombination(
             startIndex: Int,
@@ -39,8 +37,8 @@ object DefaultFindBestCombination : FindBestCombination {
             }
 
             // 从 startIndex 开始遍历，继续添加新的牌来探索更深的组合
-            for (i in startIndex until comboCards.size) {
-                val newCard = comboCards[i]
+            for (i in startIndex until targetList.size) {
+                val newCard = targetList[i]
                 if (newCard.cost() <= remainingCost) {
                     //同组加权
                     var comboBonus = NotWeight

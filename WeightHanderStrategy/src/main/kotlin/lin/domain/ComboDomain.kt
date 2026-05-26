@@ -13,6 +13,7 @@ import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy
 import lin.domain.strategy.FindPlanner
 import lin.domain.use.UseDomain
+import lin.domain.use.order.UseOrderPlanner
 import lin.myLog
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.utils.serviceLoader.JarClassLoader
@@ -28,7 +29,7 @@ const val MaxStackNum: Int = 10
 
 class ComboDomain : KoinComponent {
     companion object {
-        val USE_ORDER = compareBy<ComboCard> { it.useGroupId }.thenByDescending { it.useGroupOrder }
+        val USE_ORDER: Comparator<ComboCard> = UseOrderPlanner.BASE_ORDER
     }
 
     //SPI没法抛异常把把val 改为 lateinit var
@@ -107,8 +108,9 @@ class ComboDomain : KoinComponent {
             unAbleUseCards.filter { it.cost() <= warManage.getCost() && costWeight + it.useGroupOrder > NotWeight && !(isFull && it.isMinion()) }
         if (moreTryCard.isEmpty()) return false
 
-        val bestCombos = DefaultFindBestCombination.findBestCombination(moreTryCard, warManage.getCost())
-            .sortedWith(USE_ORDER)
+        val bestCombos = UseOrderPlanner.sort(
+            DefaultFindBestCombination.findBestCombination(moreTryCard, warManage.getCost())
+        )
         //todo 还会存在打不出的情况
         for (bestCombo in bestCombos) {
             if (useCardAndIsReload(bestCombo)) return true
@@ -216,7 +218,7 @@ class ComboDomain : KoinComponent {
          * [MyWarManage.parseCombo]
          */
         val bestCombinationCombo =
-            bestCombination.sortedWith(USE_ORDER)
+            UseOrderPlanner.sort(bestCombination)
 
         myLog.info {
             val finalWeight = bestCombinationCombo.sumOf { it.powerWeight }
