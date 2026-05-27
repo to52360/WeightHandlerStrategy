@@ -2,6 +2,7 @@ package lin.domain.use.plan
 
 import lin.bean.ComboCard
 import lin.bean.usePlan.MustUseBefore
+import lin.bean.usePlan.UseIntent
 import lin.bean.usePlan.UseStage
 import lin.myLog
 import java.util.*
