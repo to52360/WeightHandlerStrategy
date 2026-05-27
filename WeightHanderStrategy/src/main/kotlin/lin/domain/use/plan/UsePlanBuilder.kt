@@ -1,7 +1,9 @@
 package lin.domain.use.plan
 
 import lin.bean.ComboCard
-import lin.bean.facet.groupIds
+import lin.bean.usePlan.ComboPlanDefinitionProvider
+import lin.bean.usePlan.TodoComboPlanDefinitionProvider
+
 
 class UsePlanBuilder(
     private val intentProvider: UseIntentProvider = TodoUseIntentProvider,

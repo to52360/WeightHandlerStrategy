@@ -6,7 +6,7 @@ import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.bean.War
 import club.xiaojiawei.hsscriptcardsdk.bean.isValid
 import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
-import lin.bean.CardWeightInfo
+import lin.bean.CardCombinedConfig
 import lin.bean.ComboCard
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
@@ -14,7 +14,6 @@ import lin.domain.use.tryUseCard
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
-import lin.serviceLoader.provider.CardGroupIndexProvider
 import lin.serviceLoader.weightRule.utils.war.WarStatus
 import lin.warExt.action.activeLocation
 import lin.warExt.action.cleanPlay
@@ -47,7 +46,7 @@ interface WarInfo {
     val playComboCards: List<ComboCard>
 
     //权重信息
-    val infoMap: Map<String, CardWeightInfo>
+    val infoMap: Map<String, CardCombinedConfig>
 
     val extCost: Int
 
@@ -116,7 +115,7 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         }
     }
     val toDieHandler = ToDieHandler(this)
-    override val infoMap: Map<String, CardWeightInfo>
+    override val infoMap: Map<String, CardCombinedConfig>
 
     //private val statusReset: StatusReset
     init {
@@ -128,10 +127,6 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         this.warStatus = warStatus
 
         infoMap = getKoin().get(named("weightInfo"))
-        // 注入运行时分组数据到 CardWeightInfo.groups
-        getCardGroupIndex().forEach { (cardId, groupIds) ->
-            infoMap[cardId]?.groups?.addAll(groupIds)
-        }
         loadKoinModules(module {
             single { lifecycleRegisterImpl } bind LifecycleRegister::class
         })
@@ -147,17 +142,6 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
 
 
-    private fun getCardGroupIndex(): Map<String, Set<String>> {
-        val mergedIndex = linkedMapOf<String, MutableSet<String>>()
-        getKoin().getAll<CardGroupIndexProvider>().forEach { provider ->
-            provider.provide().forEach { (cardId, groupIds) ->
-                mergedIndex.getOrPut(cardId) { linkedSetOf() }.addAll(groupIds)
-            }
-        }
-        return mergedIndex.mapValues { (_, groupIds) -> groupIds.toSet() }
-    }
-
-
     //转化
     fun parseComboCards(cards: List<Card> = getHandCards()): List<ComboCard> {
         return cards.map {
@@ -167,7 +151,7 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
 
     fun parseComboCard(card: Card): ComboCard {
         return ComboCard(
-            cardWeightInfo = infoMap[card.cardId],
+            combinedConfig = infoMap[card.cardId],
             card = card
         )
     }

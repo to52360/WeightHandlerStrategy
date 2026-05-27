@@ -1,6 +1,8 @@
 package lin.domain.use.plan
 
 import lin.bean.ComboCard
+import lin.bean.usePlan.SelectConstraint
+import lin.bean.usePlan.UseConstraint
 
 data class UsePlan(
     val cards: List<ComboCard>,

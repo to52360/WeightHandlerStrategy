@@ -1,7 +1,8 @@
 package lin.domain.use.plan
 
 import lin.bean.ComboCard
-import lin.bean.facet.groupIds
+import lin.bean.usePlan.*
+
 
 data class ComboUseConstraints(
     val selectConstraints: List<SelectConstraint>,
@@ -24,15 +25,6 @@ object ComboUseConstraintBuilder {
             val coreCards = cards.filter { it.groupIds().intersects(definition.coreGroupIds) }
             val depCards = cards.filter { it.groupIds().intersects(definition.depGroupIds) }
             if (coreCards.isEmpty() || depCards.isEmpty()) continue
-
-            if (definition.coreMutex) {
-                selectConstraints.add(
-                    MutexCoreGroups(
-                        groupIds = definition.coreGroupIds,
-                        reason = "combo:${definition.id} core mutex"
-                    )
-                )
-            }
 
             useConstraints += definition.toUseConstraints(coreCards, depCards)
         }

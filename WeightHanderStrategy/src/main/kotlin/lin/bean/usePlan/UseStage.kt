@@ -1,4 +1,4 @@
-package lin.domain.use.plan
+package lin.bean.usePlan
 
 /**
  * 使用阶段只表达“默认顺序”，不能表达强制关系。

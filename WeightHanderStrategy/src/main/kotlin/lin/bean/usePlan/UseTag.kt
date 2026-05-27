@@ -1,4 +1,4 @@
-package lin.domain.use.plan
+package lin.bean.usePlan
 
 enum class UseTag {
     /**

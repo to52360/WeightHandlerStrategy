@@ -1,4 +1,4 @@
-package lin.domain.use.plan
+package lin.bean.usePlan
 
 data class ComboPlanDefinition(
     val id: String,

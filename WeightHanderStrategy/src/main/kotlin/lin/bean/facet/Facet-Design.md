@@ -1,98 +1,56 @@
-# CardWeightInfo Facet 门面模式设计
+# CardWeightInfo Facet 与复合配置元组设计
 
 ## 背景
 
 `CardWeightInfo` 起初作为纯数据模型（`data class`），承载卡牌的基础元数据。随着配置类型增加（使用策略、权重规则、combo、意图评估、换牌规则、运行时分组等），字段持续膨胀，逐步演变为上帝类。
 
-此前尝试将部分配置逻辑剥离至 `MyWarManage` / `ComboCard`，但导致职责分散、多模块访问困难等问题。
+为了在满足高性能（单 HashMap 查询）的同时保证高内聚和高扩展性，我们经过演进，设计了**“复合配置元组（扁平直达 +
+复杂分面按需嵌套）”**的最终解决方案。
 
-## 核心矛盾
+---
 
-| 问题       | 症状                                                     |
-|----------|--------------------------------------------------------|
-| OCP 违反   | 每增加一种新配置类型都要修改 `CardWeightInfo` 主体                     |
-| 上帝类      | 字段数过多，难以理解和测试                                          |
-| 配置管线耦合   | `ConfigHandler` 直接操作 `CardWeightInfo` 字段，没有访问边界        |
-| 之前剥离的副作用 | `runtimeGroupIds` 放入 `ComboCard`，数据生命周期不匹配（瞬时对象持有稳定配置） |
+## 核心矛盾与架构演进
 
-## 方案：Faceted Decomposition（分面拆解）
+| 演进阶段                   | 方案                                                                                   | 优缺点分析                                                                                       |
+|:-----------------------|:-------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------|
+| **阶段 1：上帝类**           | 所有配置直接平铺声明在 `CardWeightInfo` 中，用 `var` 或 `MutableList`。                              | ❌ 违反 OCP（每次加配置必改本体），极易引发回溯搜索时的隐式引用共享污染。                                                     |
+| **阶段 2：直接 Facet 嵌套**   | 将属性按关注点归类为 Facet（如 `groups = CardGroupFacet()`），挂在复合元组上。在 `MyWarManage.init` 中后置注入。  | ⚠️ 解决了职责划分，但对于简单领域（如仅有单个字段的卡牌分组 `groupIds`），嵌套会导致多一层 JVM 指针寻址和冗余类定义。                        |
+| **阶段 3：按需扁平直达 (当前落地)** | **简单属性扁平直达，复杂属性 Facet 嵌套**。`groupIds: Set<String>` 直接平铺于复合元组 `CardCombinedConfig` 中。 | ✅ **极致极简与绝对性能**：简单配置零嵌套，少一层指针寻址；复杂领域（如包含十几个子字段的使用策略 `useConfig`）依然通过 Facet 隔离。100% 只读且线程安全。 |
 
-### 核心思想
+---
 
-**不把 `CardWeightInfo` 拆成多个独立类，而是将可变字段按关注点分组为"分面（Facet）"**。
-`CardWeightInfo` 仍然是唯一入口，但内部是分面组合。
-
-```
-CardWeightInfo(cardId, powerWeight, groupId, changeWeight)  ← 不可变核心
-├─ _cardTypes / _weightRules             ← 不塞 Facet，留在本体
-├─ val groups   = CardGroupFacet()       ← 卡牌分组（已落地）
-├─ val strategy = StrategyFacet()        ← (未来) 使用策略 + combo + 意图评估
-└─ val change   = ChangeFacet()          ← (未来) 换牌规则，独立领域
-```
-
-### 新建 Facet 的步骤（模板）
-
-以 `CardGroupFacet` 为例：
-
-1. **在 `lin.bean.facet` 包下新建 Facet 类**
-    - 封装该关注点的所有数据 + 方法
-    - 保持单一职责
-
-2. **在 `CardWeightInfo` 中声明为 `val` 属性**
-
-   ```kotlin
-   val groups = CardGroupFacet()
-   ```
-
-3. **在 `MyWarManage.init` 中一次性注入数据**
-
-   ```kotlin
-   getCardGroupIndex().forEach { (cardId, groupIds) ->
-       infoMap[cardId]?.groups?.addAll(groupIds)
-   }
-   ```
-
-4. **消费方通过 Facet 访问**
-
-   ```kotlin
-   // ComboCard 中的高頻方法可保留為委託
-   fun hasGroup(groupId: String) = cardWeightInfo?.groups?.hasGroup(groupId) ?: false
-   
-   // 低頻直接透過 Facet
-   comboCard.cardWeightInfo?.groups?.hasAnyGroup(ids)
-   ```
-
-### 设计原则
-
-| 原则        | 说明                                                                                                                |
-|-----------|-------------------------------------------------------------------------------------------------------------------|
-| **粒度控制**  | 一个 Facet 管一大分类，适当兼职。例如使用策略 + combo + 意图评估全塞 `StrategyFacet`。但不同领域（如换牌）独立成 Facet。小字段（CardType、weightRules）不勉强塞，留本体 |
-| **渐进迁移**  | 不要求一次性全拆。每次改到哪个领域就顺势抽一个 Facet，零风险                                                                                 |
-| **访问优先级** | 高频方法保留在消费方（如 `ComboCard.hasGroup`）内部委托；低频方法直接用 `info.groups.xxx()`                                                |
-| **注入时机**  | `MyWarManage.init`（启动时一次性完成），数据是稳定的配置而非运行时状态                                                                      |
-| **单例语义**  | 每个 `CardWeightInfo` 持有独立的 Facet 实例；Facet 实例与应用同生命周期                                                               |
-
-## 当前落地状态
-
-| Facet            | 位置               | 状态    |
-|------------------|------------------|-------|
-| `CardGroupFacet` | `lin.bean.facet` | ✅ 已落地 |
-
-## 与 ConfigDispatcher 的关系
-
-`ConfigDispatcher` / `ConfigHandler` 的签名 `processConfig(configs, cardWeightInfos)` 不变。
-未来，handler 内部从 `info.xxxField` 逐步迁移到 `info.xxxFacet.method()`，
-
-**对比：**
+## 核心架构大图
 
 ```
-改造前（无边界）:        改造后（分面）:
-info.useGroupId = 1       info.strategy.useGroupId = 1
-info.addCardType(config)  info.strategy.addCardType(config)
+                Map<String, CardCombinedConfig> (Koin: named("weightInfo"))
+                                 │
+                   ┌─────────────┴─────────────┐
+                   ▼                           ▼
+            combinedConfig (O(1) 字段直接访问，绝对高速)
+    ┌──────────────┼──────────────┐
+    ▼              ▼              ▼
+weightInfo      groupIds       useConfig
+(CardWeightInfo)(Set<String>) (CardUseConfig)
+(不可变基础权重)(只读扁平分组) (不可变使用配置分面)
 ```
 
-## 参考
+---
 
-- 首次讨论：`MyWarManage` 中 `runtimeGroupIds` 迁移至 `CardWeightInfo`
-- 第一次实现：新建 `CardGroupFacet` + `ComboCardGroupExt` 扩展文件
-- 本次调整：移除扩展文件（方法太少），Facet 集中纳入 `lin.bean.facet` 包
+## 落地规范与设计哲学
+
+当未来需要为卡牌增加新的配置维度或属性时，请严格遵守以下规则：
+
+1. **简单字段（如单集合、单标志位）**：
+    - 拒绝嵌套。直接作为 `CardCombinedConfig` 的第一级不可变只读属性。
+    - 在 `ComboCard` 内部暴露相同的属性或直达成员函数。
+    - **优势**：减少指针层级，极速访问。
+
+2. **复杂功能领域（包含多组属性、配置算法或子规则）**：
+    - 在 `lin.bean.facet` 包下新建对应的只读 Facet 类。
+    - 将 Facet 挂在 `CardCombinedConfig` 的一级属性上，保持主体清爽。
+
+3. **配置 100% 不可变 (Game-Time Immutable)**：
+   游戏决策运行期，所有的配置均为静态只读状态。任何运行时产生的动态状态只能缓存在瞬时出牌对象 `ComboCard` 上，严禁写回全局配置。
+
+4. **依赖容器解耦**：
+   Koin 仅声明长寿命的核心计算引擎组件。配置数据的静态编排生命周期完全交给 `StartupTask` 管线控制，实现启动期编排与运行期执行的物理解耦。

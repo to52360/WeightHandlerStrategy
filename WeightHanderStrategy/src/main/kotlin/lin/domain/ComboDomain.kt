@@ -56,7 +56,7 @@ class ComboDomain : KoinComponent {
             //不能移动,需要线程上下文
             warManage = get<MyWarManage>()
             //todo-future 配置绑定暂定放在这,需要warManage之后
-            CardConfigBind(warManage.infoMap)
+            CardConfigBind(warManage.infoMap.mapValues { it.value.weightInfo })
 
             weightHandlerDomain = get<WeightHandlerDomain>()
         }

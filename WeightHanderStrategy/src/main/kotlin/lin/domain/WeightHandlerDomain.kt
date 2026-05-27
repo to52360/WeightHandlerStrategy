@@ -27,7 +27,7 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
     init {
         try {
             val infos = warManage.infoMap
-            val cardWeightInfos =  infos.values.toList()
+            val cardWeightInfos = infos.values.map { it.weightInfo }
             val services = ServiceLoaderUtils.loadServicesByMutable(WeightHandler::class.java, weightHandlers)
 
             services.sortBy {

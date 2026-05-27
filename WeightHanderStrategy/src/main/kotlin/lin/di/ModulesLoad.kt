@@ -17,7 +17,8 @@ class ModulesLoad {
             modules(
                 dataModule,
                 domainModule,
-                configModule
+                configModule,
+                ruleModule // ✨ 独立引入
             )
             modules(module { singleOf(::LifecycleRegisterImpl) bind LifecycleRegister::class })
             val extraModule = ServiceLoaderUtils.loadServices(ModulesInfo::class.java)
@@ -25,7 +26,7 @@ class ModulesLoad {
                 loadKoinModules(it.loadModules())
             }
         }
-        // 执行启动任务，如规则树绑定
+        // 执行启动任务，如配置装配与规则树绑定
         koinApp.koin.getAll<StartupTask>().forEach { it.execute() }
     }
 }
