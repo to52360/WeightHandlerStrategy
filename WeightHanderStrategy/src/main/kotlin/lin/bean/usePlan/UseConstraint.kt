@@ -16,3 +16,10 @@ data class MustUseBefore(
     val after: ComboCard,
     val reason: String
 ) : UseConstraint
+
+data class MustUseTogether(
+    val first: ComboCard,
+    val second: ComboCard,
+    val reason: String
+) : UseConstraint
+

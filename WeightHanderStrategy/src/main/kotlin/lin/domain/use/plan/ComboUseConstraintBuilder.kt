@@ -34,7 +34,7 @@ object ComboUseConstraintBuilder {
 
     /**
      * 把 combo 的关系语义转成使用顺序约束。
-     * SCORE_ONLY 不影响顺序，TOGETHER 暂时保留为独立语义，不用 before 伪装。
+     * SCORE_ONLY 不影响顺序，其他时序根据 mustAdjacent 决定是 MustUseBefore 还是 MustUseTogether。
      */
     private fun ComboPlanDefinition.toUseConstraints(
         coreCards: List<ComboCard>,
@@ -43,14 +43,24 @@ object ComboUseConstraintBuilder {
         return when (relation) {
             ComboRelation.SCORE_ONLY -> emptyList()
             ComboRelation.CORE_BEFORE_DEP -> coreCards.flatMap { core ->
-                depCards.map { dep -> MustUseBefore(core, dep, "combo:$id core before dep") }
+                depCards.map { dep ->
+                    if (mustAdjacent) {
+                        MustUseTogether(core, dep, "combo:$id core together dep") as UseConstraint
+                    } else {
+                        MustUseBefore(core, dep, "combo:$id core before dep") as UseConstraint
+                    }
+                }
             }
 
             ComboRelation.DEP_BEFORE_CORE -> depCards.flatMap { dep ->
-                coreCards.map { core -> MustUseBefore(dep, core, "combo:$id dep before core") }
+                coreCards.map { core ->
+                    if (mustAdjacent) {
+                        MustUseTogether(dep, core, "combo:$id dep together core") as UseConstraint
+                    } else {
+                        MustUseBefore(dep, core, "combo:$id dep before core") as UseConstraint
+                    }
+                }
             }
-
-            ComboRelation.TOGETHER -> TODO("相邻打出需要单独的编排语义，不能伪装成 MustUseBefore")
         }
     }
 

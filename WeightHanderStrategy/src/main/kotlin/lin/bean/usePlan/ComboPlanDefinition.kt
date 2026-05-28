@@ -6,14 +6,14 @@ data class ComboPlanDefinition(
     val depGroupIds: Set<String>,
     val score: Double = 0.0,
     val coreMutex: Boolean = true,
-    val relation: ComboRelation = ComboRelation.SCORE_ONLY
+    val relation: ComboRelation = ComboRelation.SCORE_ONLY,
+    val mustAdjacent: Boolean = false
 )
 
 enum class ComboRelation {
     SCORE_ONLY,
     CORE_BEFORE_DEP,
-    DEP_BEFORE_CORE,
-    TOGETHER
+    DEP_BEFORE_CORE
 }
 
 fun interface ComboPlanDefinitionProvider {
