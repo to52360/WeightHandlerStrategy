@@ -50,6 +50,6 @@ build/
 /.codebuddy/
 /.workbuddy/
 /bash.exe.stackdump
-/openspec/
+/.agents/草稿/openspec/
 /.codex/
 /AGENTS.md
