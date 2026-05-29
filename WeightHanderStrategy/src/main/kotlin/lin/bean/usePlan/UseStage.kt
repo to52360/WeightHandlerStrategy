@@ -8,6 +8,7 @@ enum class UseStage {
     RESOURCE,
     SETUP,
     CLEAN,
+    SAVE_LIFE,
     COMBO,
     VALUE,
     FINISH

@@ -42,22 +42,34 @@ object ComboUseConstraintBuilder {
     ): List<UseConstraint> {
         return when (relation) {
             ComboRelation.SCORE_ONLY -> emptyList()
-            ComboRelation.CORE_BEFORE_DEP -> coreCards.flatMap { core ->
-                depCards.map { dep ->
-                    if (mustAdjacent) {
+            ComboRelation.CORE_BEFORE_DEP -> {
+                if (mustAdjacent) {
+                    // 强相邻下一对一配对，防冲突
+                    coreCards.zip(depCards).map { (core, dep) ->
                         MustUseTogether(core, dep, "combo:$id core together dep") as UseConstraint
-                    } else {
-                        MustUseBefore(core, dep, "combo:$id core before dep") as UseConstraint
+                    }
+                } else {
+                    // 非相邻下一对多/多对多拓扑先后关系是安全的
+                    coreCards.flatMap { core ->
+                        depCards.map { dep ->
+                            MustUseBefore(core, dep, "combo:$id core before dep") as UseConstraint
+                        }
                     }
                 }
             }
 
-            ComboRelation.DEP_BEFORE_CORE -> depCards.flatMap { dep ->
-                coreCards.map { core ->
-                    if (mustAdjacent) {
+            ComboRelation.DEP_BEFORE_CORE -> {
+                if (mustAdjacent) {
+                    // 强相邻下一对一配对，防冲突
+                    depCards.zip(coreCards).map { (dep, core) ->
                         MustUseTogether(dep, core, "combo:$id dep together core") as UseConstraint
-                    } else {
-                        MustUseBefore(dep, core, "combo:$id dep before core") as UseConstraint
+                    }
+                } else {
+                    // 非相邻下一对多/多对多拓扑先后关系是安全的
+                    depCards.flatMap { dep ->
+                        coreCards.map { core ->
+                            MustUseBefore(dep, core, "combo:$id dep before core") as UseConstraint
+                        }
                     }
                 }
             }

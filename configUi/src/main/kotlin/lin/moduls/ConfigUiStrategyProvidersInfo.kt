@@ -1,12 +1,18 @@
 package lin.moduls
 
+import lin.bean.usePlan.ComboPlanDefinitionProvider
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
+import lin.card_use.db.CardUseConfigRepository
+import lin.combo_plan.db.ComboPlanDefinitionRepository
 import lin.condition_tree.db.ConditionTreeConfigRepository
 import lin.condition_tree.db.ConditionTreeConfigService
 import lin.condition_tree.db.createConditionTreeConfigMapper
+import lin.domain.use.plan.UseIntentProvider
+import lin.provider.SqliteComboPlanDefinitionProvider
 import lin.provider.SqliteConditionTreeConfigProvider
 import lin.provider.SqliteTreeConfigProvider
+import lin.provider.SqliteUseIntentProvider
 import lin.rule.condition.ConditionTreeConfigProvider
 import lin.rule.tree.TreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
@@ -20,6 +26,22 @@ import org.koin.dsl.module
 val strategyProviderModule = module {
     single {
         CardGroupService(CardGroupRepository(get()))
+    }
+
+    single {
+        ComboPlanDefinitionRepository(get())
+    }
+
+    single {
+        CardUseConfigRepository(get())
+    }
+
+    single<ComboPlanDefinitionProvider> {
+        SqliteComboPlanDefinitionProvider(get())
+    }
+
+    single<UseIntentProvider> {
+        SqliteUseIntentProvider(get())
     }
 
     single<TreeConfigProvider> {

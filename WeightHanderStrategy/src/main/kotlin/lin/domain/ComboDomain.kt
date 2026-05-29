@@ -14,6 +14,8 @@ import lin.domain.strategy.FindComboStrategy
 import lin.domain.strategy.FindPlanner
 import lin.domain.use.UseDomain
 import lin.domain.use.order.UseOrderPlanner
+import lin.domain.use.plan.UsePlanBuilder
+import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.utils.serviceLoader.JarClassLoader
@@ -32,10 +34,9 @@ class ComboDomain : KoinComponent {
         val USE_ORDER: Comparator<ComboCard> = UseOrderPlanner.BASE_ORDER
     }
 
-    //SPI没法抛异常把把val 改为 lateinit var
-    //存储转化权重信息
     private lateinit var warManage: MyWarManage
     private lateinit var weightHandlerDomain: WeightHandlerDomain
+    private val usePlanBuilder = get<UsePlanBuilder>()
 
     private val classLoader = JarClassLoader(parent = javaClass.classLoader).classLoader() ?: run {
         myLog.warn { "没有获取到类加载器" }
@@ -108,8 +109,10 @@ class ComboDomain : KoinComponent {
             unAbleUseCards.filter { it.cost() <= warManage.getCost() && costWeight + it.useGroupOrder > NotWeight && !(isFull && it.isMinion()) }
         if (moreTryCard.isEmpty()) return false
 
-        val bestCombos = UseOrderPlanner.sort(
+        val bestCombos = UsePlanOrderer.order(
+            usePlanBuilder.build(
             DefaultFindBestCombination.findBestCombination(moreTryCard, warManage.getCost())
+            )
         )
         //todo 还会存在打不出的情况
         for (bestCombo in bestCombos) {
@@ -218,7 +221,7 @@ class ComboDomain : KoinComponent {
          * [MyWarManage.parseCombo]
          */
         val bestCombinationCombo =
-            UseOrderPlanner.sort(bestCombination)
+            UsePlanOrderer.order(usePlanBuilder.build(bestCombination))
 
         myLog.info {
             val finalWeight = bestCombinationCombo.sumOf { it.powerWeight }

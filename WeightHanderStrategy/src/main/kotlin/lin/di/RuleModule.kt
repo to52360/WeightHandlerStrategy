@@ -1,6 +1,7 @@
 package lin.di
 
 import lin.bean.CardCombinedConfig
+import lin.domain.use.plan.UsePlanBuilder
 import lin.rule.RuleInfoRegister
 import lin.rule.condition.ConditionRegistry
 import lin.rule.handler.RuleTreeBindingTask
@@ -25,6 +26,13 @@ val ruleModule = module {
     single<RuleInfoRegister> {
         val infos = get<Map<String, CardCombinedConfig>>(named("weightInfo")).values.map { it.weightInfo }
         RuleInfoRegister(infos, get())
+    }
+
+    single<UsePlanBuilder> {
+        UsePlanBuilder(
+            intentProvider = get(),
+            definitionProvider = get()
+        )
     }
 
     // 🌟 先注册配置组装，后注册规则树绑定，保证 StartupTask 执行顺序

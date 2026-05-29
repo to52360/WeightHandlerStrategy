@@ -1,9 +1,6 @@
 package lin.domain.use.plan
 
-import lin.bean.usePlan.CardUseConfig
-import lin.bean.usePlan.UseIntent
-import lin.bean.usePlan.UseStage
-import lin.bean.usePlan.UseTag
+import lin.bean.usePlan.*
 
 /**
  * 卡牌的使用意图配置（可与 DB/JSON 配置或 UI 直接绑定）。
@@ -16,11 +13,12 @@ import lin.bean.usePlan.UseTag
 object UseIntentDeriver {
     fun derive(config: CardUseConfig, orderWeight: Double = 0.0): UseIntent {
         val derivedStage = config.stageOverride ?: when {
+            config.purposeTags.contains(PurposeTag.SAVE_LIFE) -> UseStage.SAVE_LIFE
             config.tags.contains(UseTag.RESOURCE) -> UseStage.RESOURCE
             config.tags.contains(UseTag.DRAW) -> UseStage.SETUP
-            config.tags.contains(UseTag.CLEAN) -> UseStage.CLEAN
-            config.tags.contains(UseTag.COMBO_CORE) -> UseStage.COMBO
-            config.tags.contains(UseTag.COMBO_DEP) -> UseStage.COMBO
+            config.purposeTags.contains(PurposeTag.CLEAN) || config.tags.contains(UseTag.CLEAN) -> UseStage.CLEAN
+            config.tags.contains(UseTag.COMBO_CORE) || config.tags.contains(UseTag.COMBO_DEP) -> UseStage.COMBO
+            config.purposeTags.contains(PurposeTag.FINISH) -> UseStage.FINISH
             else -> UseStage.VALUE
         }
         return UseIntent(
