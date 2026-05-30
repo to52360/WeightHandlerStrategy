@@ -5,8 +5,21 @@ data class ComboPlanDefinition(
     val coreGroupIds: Set<String>,
     val depGroupIds: Set<String>,
     val score: Double = 0.0,
+    /**
+     * 硬互斥：同一个 combo 下多个核心候选绝对不能同时进入本轮组合时才开启。
+     *
+     * 如果只是“不希望同时出，但特殊情况下可以接受”，不要用 coreMutex；
+     * 用负 score 表达软惩罚即可，例如 coreGroupIds 和 depGroupIds 指向同一类组。
+     */
     val coreMutex: Boolean = true,
+    /**
+     * 只表达组级使用顺序，不直接绑定具体两张牌。
+     */
     val relation: ComboRelation = ComboRelation.SCORE_ONLY,
+    /**
+     * 暂保留配置字段，当前排序器不消费强相邻语义。
+     * 强相邻需要后续单独设计“组块/窗口/重规划”模型。
+     */
     val mustAdjacent: Boolean = false
 )
 
@@ -26,9 +39,10 @@ fun interface ComboPlanDefinitionProvider {
 
 object TodoComboPlanDefinitionProvider : ComboPlanDefinitionProvider {
     /**
-     * 占位实现，后续再决定从 DB、配置文件还是 UI 配置读取。
+     * 空实现用于没有加载 configUi provider 的环境。
+     * 正常运行时由 configUi 的 SqliteComboPlanDefinitionProvider 提供配置。
      */
     override fun findAll(): List<ComboPlanDefinition> {
-        TODO("从新 combo 配置源加载 ComboPlanDefinition")
+        return emptyList()
     }
 }

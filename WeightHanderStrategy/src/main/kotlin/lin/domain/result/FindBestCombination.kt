@@ -1,10 +1,8 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
-import lin.bean.usePlan.ComboPlanDefinition
-import lin.bean.usePlan.TodoComboPlanDefinitionProvider
+import lin.bean.usePlan.ComboRole
 import lin.domain.context.CostWeight
-import lin.domain.context.NotWeight
 
 interface FindBestCombination {
     fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard>
@@ -12,13 +10,6 @@ interface FindBestCombination {
 
 object DefaultFindBestCombination : FindBestCombination {
     override fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard> {
-        // 安全读取动态 Combo 定义以防 TODO 抛出 NotImplementedError
-        val definitions = try {
-            TodoComboPlanDefinitionProvider.findAll()
-        } catch (e: NotImplementedError) {
-            emptyList()
-        }
-
         // 2. 初始化用于寻找最佳组合的变量
         var bestCombination: List<ComboCard> = emptyList()
         // *** 核心改动 ***: 我们追踪的不再是最大权重，而是最大“有效分”
@@ -37,9 +28,7 @@ object DefaultFindBestCombination : FindBestCombination {
             val remainingCost = ableCost - currentCost
 
             val penalty = remainingCost * CostWeight
-            // 加上动态全局 Combo 的加分
-            val dynamicComboBonus = calculateComboBonus(currentCombination, definitions)
-            val effectiveScore = currentWeight + dynamicComboBonus - penalty
+            val effectiveScore = currentWeight - penalty
 
             // 如果当前组合的有效分超过了已知的最高分，则更新最佳组合
             if (effectiveScore > maxEffectiveScore) {
@@ -51,29 +40,16 @@ object DefaultFindBestCombination : FindBestCombination {
             for (i in startIndex until targetList.size) {
                 val newCard = targetList[i]
                 if (newCard.cost() <= remainingCost) {
-                    // 👈 核心排斥剪枝：如果触发了 coreMutex 互斥限制，则直接跳过
-                    if (violatesCoreMutex(currentCombination, newCard, definitions)) {
+                    val newComboBonus = evaluateNewComboBonus(currentCombination, newCard)
+                    if (newComboBonus.isNaN()) {
                         continue
                     }
 
-                    // 同组加权 (legacy 逻辑)
-                    var comboBonus = NotWeight
-                    //todo-future  默认无环形结构,无法处理环形结构
-                    newCard.combo?.also {
-                        currentCombination.forEach {
-                            comboBonus += newCard.comboAddWeight(it)
-                        }
-                    } ?: run {
-                        currentCombination.forEach { existingCard ->
-                            // combo加权
-                            comboBonus += existingCard.comboAddWeight(newCard)
-                        }
-                    }
 
                     findBestCombination(
                         startIndex = i + 1,
                         currentCost = currentCost + newCard.cost(),
-                        currentWeight = currentWeight + newCard.powerWeight + comboBonus,
+                        currentWeight = currentWeight + newCard.powerWeight + newComboBonus,
                         currentCombination = currentCombination + newCard
                     )
                 }
@@ -87,54 +63,45 @@ object DefaultFindBestCombination : FindBestCombination {
     }
 
     /**
-     * 判断当前组合加入新卡牌后是否违反任何动态 Combo 的 coreMutex 规则
+     * 只评估“把 newCard 加入 current”这一次增量带来的 combo 影响。
+     *
+     * - 返回 NaN 表示 coreMutex 硬剪枝：同一 combo 下不同 core 组不能同时进入组合。
+     * - 返回普通 Double 表示本次新增的软加权/软惩罚分。
+     *
+     * 这样避免每个回溯节点重新扫描整个 currentCombination 计算全局 combo 分。
+     * 使用 Double 而不是结果对象，是为了减少递归热路径上的短命对象分配。
      */
-    private fun violatesCoreMutex(
-        current: List<ComboCard>,
-        newCard: ComboCard,
-        definitions: List<ComboPlanDefinition>
-    ): Boolean {
-        val newGroups = newCard.groupIds()
-        for (def in definitions) {
-            if (!def.coreMutex) continue
+    private fun evaluateNewComboBonus(current: List<ComboCard>, newCard: ComboCard): Double {
+        val newBindings = newCard.comboBindings()
+        if (newBindings.isEmpty()) return 0.0
 
-            // 直接判断 newCard 是否属于该 combo 的核心组之一，避免 filter 创建新 List
-            if (!newGroups.any { it in def.coreGroupIds }) continue
+        var scoreBonus = 0.0
+        val scoredComboIds = hashSetOf<String>()
+        val newMutexCoreBindings = newBindings.filter { it.role == ComboRole.CORE && it.coreMutex }
+        val existingCoreBindings = if (newMutexCoreBindings.isEmpty()) {
+            emptyList()
+        } else {
+            current.flatMap { card ->
+                card.comboBindings()
+                    .filter { it.role == ComboRole.CORE && it.coreMutex }
+            }
+        }
 
-            // 遍历已选卡牌，直接用短路布尔匹配，完全避免 flatMap、filter 和 Set 的内存开销
-            for (existingCard in current) {
-                val existingGroups = existingCard.groupIds()
-                // 判断已选卡牌是否属于该 combo 核心组
-                val existingHitsCore = existingGroups.any { it in def.coreGroupIds }
-                if (existingHitsCore) {
-                    // 如果已选卡牌和 newCard 在核心组上没有共同的核心组 ID，代表横跨了不同的核心组，冲突！
-                    val sharesCoreGroup = newGroups.any { it in def.coreGroupIds && it in existingGroups }
-                    if (!sharesCoreGroup) {
-                        return true
-                    }
+        for (newBinding in newBindings) {
+            if (newBinding in newMutexCoreBindings) {
+                val violatesCoreMutex = existingCoreBindings.any { existingBinding ->
+                    existingBinding.comboId == newBinding.comboId &&
+                            existingBinding.ownGroupId != newBinding.ownGroupId
                 }
+                if (violatesCoreMutex) return Double.NaN
             }
-        }
-        return false
-    }
 
-    /**
-     * 计算当前组合触发的动态 Combo 加分
-     */
-    private fun calculateComboBonus(
-        combination: List<ComboCard>,
-        definitions: List<ComboPlanDefinition>
-    ): Double {
-        var totalBonus = 0.0
-        val allCardGroups = combination.flatMap { it.groupIds() }.toSet()
-        for (def in definitions) {
-            // 判定条件：核心组有命中，且依赖组有命中
-            val hasCore = def.coreGroupIds.any { it in allCardGroups }
-            val hasDep = def.depGroupIds.any { it in allCardGroups }
-            if (hasCore && hasDep) {
-                totalBonus += def.score
+            if (newBinding.score != 0.0 && scoredComboIds.add(newBinding.comboId)) {
+                val hasCounterpart = current.any { it.hasAnyGroup(newBinding.counterpartGroupIds) }
+                if (hasCounterpart) scoreBonus += newBinding.score
             }
         }
-        return totalBonus
+
+        return scoreBonus
     }
 }

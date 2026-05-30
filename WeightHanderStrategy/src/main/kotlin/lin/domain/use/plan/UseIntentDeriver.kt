@@ -2,15 +2,19 @@ package lin.domain.use.plan
 
 import lin.bean.usePlan.*
 
-/**
- * 卡牌的使用意图配置（可与 DB/JSON 配置或 UI 直接绑定）。
- */
-
 
 /**
- * 意图推导核心器（约定优于配置，简化 UI 输入）。
+ * 意图推导核心器。
+ *
+ * PurposeTag 只提供规则/评估侧的宏观用途信号，UseTag 只提供编排/执行侧的行为信号。
+ * 这里是两类标签进入 UseStage 的唯一收口点，避免 rule 和排序器各自解释标签。
  */
 object UseIntentDeriver {
+    /**
+     * 根据配置推导运行时意图。
+     *
+     * stageOverride 优先级最高；没有显式指定时，才按用途和执行标签推导默认阶段。
+     */
     fun derive(config: CardUseConfig, orderWeight: Double = 0.0): UseIntent {
         val derivedStage = config.stageOverride ?: when {
             config.purposeTags.contains(PurposeTag.SAVE_LIFE) -> UseStage.SAVE_LIFE
@@ -32,16 +36,7 @@ object UseIntentDeriver {
 fun interface UseIntentProvider {
     /**
      * 根据卡牌所属的 CardGroupBinding.id 集合，生成新编排体系里的使用意图。
-     * 第一版只声明边界，具体来源可以是 UI 配置、规则输出或手写配置。
+     * 当前 configUi 通过 SqliteUseIntentProvider 从 card_use_config 读取配置。
      */
     fun intentOf(cardGroupIds: Set<String>): UseIntent
-}
-
-object TodoUseIntentProvider : UseIntentProvider {
-    /**
-     * 占位实现，防止新编排骨架提前绑定 DB、Koin 或旧 useGroupId 体系。
-     */
-    override fun intentOf(cardGroupIds: Set<String>): UseIntent {
-        TODO("从 CardGroupBinding.id 或规则配置生成 UseIntent")
-    }
 }

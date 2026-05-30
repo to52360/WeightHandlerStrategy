@@ -1,8 +1,7 @@
 package lin.domain.use.plan
 
 import lin.bean.ComboCard
-import lin.bean.usePlan.MustUseBefore
-import lin.bean.usePlan.MustUseTogether
+import lin.bean.usePlan.MustUseGroupBefore
 import lin.bean.usePlan.UseIntent
 import lin.bean.usePlan.UseStage
 import lin.myLog
@@ -14,15 +13,15 @@ object UsePlanOrderer {
      *
      * 排序规则：
      * 1. 先按 UseStage / orderWeight / powerWeight 得到稳定基础顺序。
-     * 2. 再应用 MustUseBefore 和 MustUseTogether 这类顺序约束。
+     * 2. 再应用 MustUseGroupBefore 这类组级顺序约束。
      * 3. 如果约束成环，回退基础顺序，不阻断执行链路。
      */
     fun order(plan: UsePlan): List<ComboCard> {
         val baseOrdered = plan.cards.sortedWith(baseComparator(plan.intents))
-        val beforePairs = plan.useConstraints.filterIsInstance<MustUseBefore>().map { it.before to it.after }
-        val togetherPairs = plan.useConstraints.filterIsInstance<MustUseTogether>().map { it.first to it.second }
+        val beforePairs = resolveBeforePairs(baseOrdered, plan.useConstraints.filterIsInstance<MustUseGroupBefore>())
+        val togetherPairs = emptyList<Pair<ComboCard, ComboCard>>()
 
-        if (beforePairs.isEmpty() && togetherPairs.isEmpty()) return baseOrdered
+        if (beforePairs.isEmpty()) return baseOrdered
 
         return stableSortWithConstraints(baseOrdered, beforePairs, togetherPairs) ?: run {
             myLog.warn { "UsePlan 存在循环使用约束，回退默认阶段排序: $baseOrdered" }
@@ -38,6 +37,39 @@ object UsePlanOrderer {
         return compareBy<ComboCard> { intents[it]?.stage?.ordinal ?: UseStage.VALUE.ordinal }
             .thenByDescending { intents[it]?.orderWeight ?: 0.0 }
             .thenByDescending { it.powerWeight }
+    }
+
+    /**
+     * 将“组 A 必须先于组 B”解析成本轮已选卡牌之间的拓扑排序边。
+     *
+     * 这里不能用 Comparator 表达，因为 combo 约束通常只是局部顺序：
+     * 例如 A、B 都要先于 C，但 A 和 B 之间没有大小关系，应继续保持基础排序。
+     *
+     * 返回的 Pair 语义固定为：
+     * - first：必须更早使用的卡牌
+     * - second：必须更晚使用的卡牌
+     *
+     * 后续 stableSortWithConstraints 会把这些 Pair 当作有向边 first -> second，
+     * 在保留 baseOrdered 稳定顺序的前提下做拓扑排序，并负责检测循环约束。
+     */
+    private fun resolveBeforePairs(
+        cards: List<ComboCard>,
+        constraints: List<MustUseGroupBefore>
+    ): List<Pair<ComboCard, ComboCard>> {
+        return constraints.flatMap { constraint ->
+            val beforeCards = cards.filter {
+                it.hasAnyGroup(constraint.beforeGroupIds) && !it.hasAnyGroup(constraint.afterGroupIds)
+            }
+            val afterCards = cards.filter {
+                it.hasAnyGroup(constraint.afterGroupIds) && !it.hasAnyGroup(constraint.beforeGroupIds)
+            }
+
+            beforeCards.flatMap { before ->
+                afterCards.mapNotNull { after ->
+                    if (before == after) null else before to after
+                }
+            }
+        }
     }
 
     /**

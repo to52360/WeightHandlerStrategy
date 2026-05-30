@@ -12,12 +12,15 @@ data class ComboPlanDefinitionEntity(
     val relation: String,
     val mustAdjacent: Boolean
 ) {
+    fun coreGroupIdSet(): Set<String> = coreGroupIds.toGroupIdSet()
+
+    fun depGroupIdSet(): Set<String> = depGroupIds.toGroupIdSet()
+
     fun toDomain(): ComboPlanDefinition {
         return ComboPlanDefinition(
             id = id,
-            coreGroupIds = if (coreGroupIds.isEmpty()) emptySet() else coreGroupIds.split(",").map { it.trim() }
-                .toSet(),
-            depGroupIds = if (depGroupIds.isEmpty()) emptySet() else depGroupIds.split(",").map { it.trim() }.toSet(),
+            coreGroupIds = coreGroupIdSet(),
+            depGroupIds = depGroupIdSet(),
             score = score,
             coreMutex = coreMutex,
             relation = try {
@@ -27,5 +30,12 @@ data class ComboPlanDefinitionEntity(
             },
             mustAdjacent = mustAdjacent
         )
+    }
+
+    private fun String.toGroupIdSet(): Set<String> {
+        if (isEmpty()) return emptySet()
+        return split(",").mapNotNull { raw ->
+            raw.trim().takeIf { it.isNotEmpty() }
+        }.toSet()
     }
 }

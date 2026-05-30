@@ -13,7 +13,7 @@ import lin.myLog
  * ```
  */
 inline fun <T> runCatchingLog(message: String? = null, block: () -> T): Result<T> {
-    return kotlin.runCatching(block).onFailure { e ->
+    return runCatching(block).onFailure { e ->
         myLog.error(e) { message ?: "异常: ${e.message}" }
     }
 }

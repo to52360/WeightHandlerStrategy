@@ -14,7 +14,7 @@ typealias ComboRule = (ComboCard) -> Double
 
 /**
  *
- * todo-future 1.为了快速实现,弄了个上帝类出来,有空再重构 2.为了方面使用弄了很多方法(应该用扩展方法去扩展)
+ * todo-future 1.为了快速实现,弄了个上帝类出来,有空再重构 2.为了方便使用弄了很多方法(应该用扩展方法去扩展)
  *
  */
 class ComboCard(
@@ -25,6 +25,14 @@ class ComboCard(
     val cardWeightInfo = combinedConfig?.weightInfo
 
     fun groupIds(): Set<String> = combinedConfig?.groupIds ?: emptySet()
+
+    fun useConfig() = combinedConfig?.useConfig ?: lin.bean.usePlan.CardUseConfig()
+
+    fun useIntent() = combinedConfig?.useIntent
+
+    fun comboBindings() = combinedConfig?.comboBindings ?: emptyList()
+
+    fun comboUseBindings() = combinedConfig?.comboUseBindings ?: emptyList()
 
     val combo = cardWeightInfo?.combos
     //指定目标
@@ -92,7 +100,7 @@ class ComboCard(
     fun comboAddWeight(comboCard: ComboCard): Double {
         var weight = NotWeight
         combo?.forEach {
-            weight = weight + it.comboProcess(this, comboCard)
+            weight += it.comboProcess(this, comboCard)
         }
         return weight
     }
