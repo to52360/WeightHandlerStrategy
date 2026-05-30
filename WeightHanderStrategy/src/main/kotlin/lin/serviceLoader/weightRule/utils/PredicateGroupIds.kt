@@ -1,5 +1,7 @@
 package lin.serviceLoader.weightRule.utils
 
+import lin.bean.groupId
+
 /**
  * 委托存在指定组判断函数
  * 存在指定分组卡牌

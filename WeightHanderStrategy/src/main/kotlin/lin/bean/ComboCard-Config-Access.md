@@ -1,0 +1,14 @@
+# ComboCard 配置访问边界
+
+`ComboCard` 是运行时状态容器，负责保存当前对局里会变化的瞬时状态，例如目标、临时权重、使用顺序权重等。
+
+`CardCombinedConfig` 是启动期预合并出来的只读配置快照。运行期只在 `MyWarManage.parseComboCard` 里按 `cardId` 做一次查找，然后挂到
+`ComboCard.combinedConfig` 上。
+
+因此新增配置时不要继续给 `ComboCard` 本体加镜像字段或镜像方法。优先按下面规则放置访问入口：
+
+1. 跨领域高频使用的简单读取，放在 `ComboCardConfigAccess.kt` 作为 `ComboCard` 扩展函数。
+2. 只被某个领域使用的配置，放在对应领域目录作为内部扩展函数，例如 `use.plan/ComboCardUsePlanAccess.kt` 自己读取 use 编排配置。
+3. 运行时会变化的状态，才允许放回 `ComboCard` 本体。
+
+这样保留了热路径的一次配置查找，同时避免每新增一个配置维度都修改运行时容器。

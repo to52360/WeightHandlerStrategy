@@ -1,6 +1,7 @@
 package lin.weightHandler.warHandler
 
 import lin.bean.ComboCard
+import lin.bean.toDie
 import lin.domain.MyWarManage
 import lin.domain.war.SimpleCleanWar
 import lin.utils.serviceLoader.ServiceLoaderUtils
