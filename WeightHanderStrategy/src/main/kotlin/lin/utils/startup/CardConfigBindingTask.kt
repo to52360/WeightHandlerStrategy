@@ -34,16 +34,27 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         // 3. 启动期一次性读取使用配置和 combo 编排定义，避免运行时每次出牌再查询 provider。
         val useIntentByGroupId = loadUseIntentByGroupId(groupMap.values.flatten().toSet())
         val comboDefinitions = loadComboDefinitions()
-        val comboBindingByGroupId = comboDefinitions.toComboBindingByGroupId()
+        val comboDefByGroupId = comboDefinitions.indexComboDefByGroupId()
         val comboUseBindingByGroupId = comboDefinitions.toComboUseBindingByGroupId()
 
         // 4. 统一赋值组装只读 finalMap (扁平化，直接传入 groupIds)
         val finalMap: Map<String, CardCombinedConfig> = baseInfos.mapValues { (cardId, weightInfo) ->
             val groupsSet = groupMap[cardId] ?: emptySet()
             val useIntent = groupsSet.firstNotNullOfOrNull { useIntentByGroupId[it] }
-            val comboBindings = groupsSet
-                .flatMap { comboBindingByGroupId[it] ?: emptyList() }
-                .distinctBy { "${it.comboId}:${it.role}:${it.ownGroupId}" }
+            // 直接从定义归并生成 CardComboEntry，不再经过 CardComboBinding 中间层
+            val comboEntries = groupsSet
+                .flatMap { comboDefByGroupId[it] ?: emptyList() }
+                .distinctBy { it.id }
+                .map { def ->
+                    CardComboEntry(
+                        comboId = def.id,
+                        score = def.score,
+                        coreMutexOwnGroupIds = if (def.coreMutex)
+                            def.coreGroupIds.filter { it in groupsSet }
+                        else emptyList(),
+                        counterpartGroupIds = def.depGroupIds + def.coreGroupIds
+                    )
+                }
             val comboUseBindings = groupsSet
                 .flatMap { comboUseBindingByGroupId[it] ?: emptyList() }
                 .distinctBy { "${it.comboId}:${it.beforeGroupIds}:${it.afterGroupIds}" }
@@ -53,7 +64,7 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
                 groupIds = groupsSet,
                 useConfig = CardUseConfig(),
                 useIntent = useIntent,
-                comboBindings = comboBindings,
+                comboEntries = comboEntries,
                 comboUseBindings = comboUseBindings
             )
         }
@@ -82,32 +93,15 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         return provider.findAll()
     }
 
-    private fun List<ComboPlanDefinition>.toComboBindingByGroupId(): Map<String, List<CardComboBinding>> {
-        val index = linkedMapOf<String, MutableList<CardComboBinding>>()
+    /**
+     * 按 groupId 直接索引 ComboPlanDefinition，省去中间 CardComboBinding 层。
+     * 一张定义归入其所有 core/dep group，供后续 per-card 归并。
+     */
+    private fun List<ComboPlanDefinition>.indexComboDefByGroupId(): Map<String, List<ComboPlanDefinition>> {
+        val index = linkedMapOf<String, MutableList<ComboPlanDefinition>>()
         forEach { definition ->
-            definition.coreGroupIds.forEach { groupId ->
-                index.getOrPut(groupId) { mutableListOf() }.add(
-                    CardComboBinding(
-                        comboId = definition.id,
-                        role = ComboRole.CORE,
-                        ownGroupId = groupId,
-                        counterpartGroupIds = definition.depGroupIds,
-                        score = definition.score,
-                        coreMutex = definition.coreMutex
-                    )
-                )
-            }
-            definition.depGroupIds.forEach { groupId ->
-                index.getOrPut(groupId) { mutableListOf() }.add(
-                    CardComboBinding(
-                        comboId = definition.id,
-                        role = ComboRole.DEP,
-                        ownGroupId = groupId,
-                        counterpartGroupIds = definition.coreGroupIds,
-                        score = definition.score,
-                        coreMutex = definition.coreMutex
-                    )
-                )
+            (definition.coreGroupIds + definition.depGroupIds).forEach { groupId ->
+                index.getOrPut(groupId) { mutableListOf() }.add(definition)
             }
         }
         return index

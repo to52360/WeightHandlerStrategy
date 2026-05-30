@@ -30,7 +30,7 @@ class ComboCard(
 
     fun useIntent() = combinedConfig?.useIntent
 
-    fun comboBindings() = combinedConfig?.comboBindings ?: emptyList()
+    fun comboEntries() = combinedConfig?.comboEntries ?: emptyList()
 
     fun comboUseBindings() = combinedConfig?.comboUseBindings ?: emptyList()
 

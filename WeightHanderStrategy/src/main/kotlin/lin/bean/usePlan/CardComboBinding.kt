@@ -1,18 +1,19 @@
 package lin.bean.usePlan
 
 /**
- * 卡牌视角的 combo 绑定。
+ * 启动期按 comboId 归并后的只读条目。
  *
- * 这是启动期从 ComboPlanDefinition 预解析出来的只读结构，用额外内存换运行期少做
- * definition/group 解析。它只服务选牌阶段的评分和硬互斥，不表达出牌顺序。
+ * 一张卡对同一个 combo 可能涉及多个 group（CORE / DEP），在启动组装阶段
+ * 直接由 ComboPlanDefinition 归并成一条。运行时 findBestCombination 不再需要
+ * scoredComboIds 去重和 coreMutex 二次过滤。
  */
-data class CardComboBinding(
+data class CardComboEntry(
     val comboId: String,
-    val role: ComboRole,
-    val ownGroupId: String,
-    val counterpartGroupIds: Set<String>,
-    val score: Double = 0.0,
-    val coreMutex: Boolean = true
+    val score: Double,
+    /** 不为空表示该卡在此 combo 中有 coreMutex 限制，需做互斥检查 */
+    val coreMutexOwnGroupIds: List<String> = emptyList(),
+    /** counterpart 组集合（CORE 与 DEP 的 counterpart 取并集） */
+    val counterpartGroupIds: Set<String> = emptySet()
 )
 
 /**
@@ -26,8 +27,3 @@ data class CardComboUseBinding(
     val beforeGroupIds: Set<String>,
     val afterGroupIds: Set<String>
 )
-
-enum class ComboRole {
-    CORE,
-    DEP
-}

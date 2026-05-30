@@ -1,7 +1,7 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
-import lin.bean.usePlan.ComboRole
+import lin.bean.usePlan.CardComboEntry
 import lin.domain.context.CostWeight
 
 interface FindBestCombination {
@@ -10,98 +10,133 @@ interface FindBestCombination {
 
 object DefaultFindBestCombination : FindBestCombination {
     override fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard> {
-        // 2. 初始化用于寻找最佳组合的变量
         var bestCombination: List<ComboCard> = emptyList()
-        // *** 核心改动 ***: 我们追踪的不再是最大权重，而是最大“有效分”
-        // 初始化为一个非常小的值，确保任何合法地出牌都比它好
         var maxEffectiveScore = Double.NEGATIVE_INFINITY
 
-        // 3. 定义一个递归函数（回溯）来查找所有可能的组合
-        fun findBestCombination(
-            startIndex: Int,
-            currentCost: Int,
-            currentWeight: Double,
-            currentCombination: List<ComboCard>
-        ) {
-            // *** 核心改动 ***
-            // 在每次形成一个有效组合时（包括空组合），都计算其“有效分”
-            val remainingCost = ableCost - currentCost
+        // ===== 预计算：启动期已按 comboId 归并，直接取用即可 =====
+        data class CardBindings(
+            val entries: List<CardComboEntry>,
+            val groupIds: Set<String>
+        )
 
+        val cardsBindings: List<CardBindings> = targetList.map { card ->
+            CardBindings(
+                entries = card.comboEntries(),
+                groupIds = card.groupIds()
+            )
+        }
+
+        // ===== 增量回溯状态 =====
+        val currentCombination = mutableListOf<ComboCard>()
+
+        // comboId -> (ownGroupId -> refCount)，用于 O(1) 级别的 coreMutex 检查
+        val coreMutexState = mutableMapOf<String, MutableMap<String, Int>>()
+
+        // groupId -> refCount，用于 O(1) 级别的 counterpart 存在性检查
+        val groupIdRefCounts = mutableMapOf<String, Int>()
+
+        /**
+         * 检查将一张新卡加入当前组合时的 combo 加分，返回 NaN 表示 coreMutex 剪枝。
+         *
+         * 启动期已按 comboId 归并，无需要 scoredComboIds 去重，单次遍历即可完成
+         * coreMutex 检查和 counterpart 计分。
+         */
+        fun evaluateNewComboBonus(entries: List<CardComboEntry>): Double {
+            if (entries.isEmpty()) return 0.0
+            var scoreBonus = 0.0
+
+            for (entry in entries) {
+                // coreMutex 硬剪枝
+                for (ownGroupId in entry.coreMutexOwnGroupIds) {
+                    val inner = coreMutexState[entry.comboId]
+                    if (inner != null && inner.keys.any { it != ownGroupId }) {
+                        return Double.NaN
+                    }
+                }
+
+                // 计分（已归并无需去重）
+                if (entry.score != 0.0) {
+                    if (entry.counterpartGroupIds.any { it in groupIdRefCounts }) {
+                        scoreBonus += entry.score
+                    }
+                }
+            }
+
+            return scoreBonus
+        }
+
+        /** 将一张卡的状态合并到增量追踪结构中 */
+        fun applyCardState(entries: List<CardComboEntry>, groupIds: Set<String>) {
+            for (entry in entries) {
+                for (ownGroupId in entry.coreMutexOwnGroupIds) {
+                    val inner = coreMutexState.getOrPut(entry.comboId) { mutableMapOf() }
+                    inner[ownGroupId] = (inner[ownGroupId] ?: 0) + 1
+                }
+            }
+            for (gid in groupIds) {
+                groupIdRefCounts[gid] = (groupIdRefCounts[gid] ?: 0) + 1
+            }
+        }
+
+        /** 回溯：移除一张卡的状态 */
+        fun revertCardState(entries: List<CardComboEntry>, groupIds: Set<String>) {
+            for (entry in entries) {
+                for (ownGroupId in entry.coreMutexOwnGroupIds) {
+                    val inner = coreMutexState[entry.comboId]!!
+                    val newCount = inner[ownGroupId]!! - 1
+                    if (newCount == 0) {
+                        inner.remove(ownGroupId)
+                        if (inner.isEmpty()) coreMutexState.remove(entry.comboId)
+                    } else {
+                        inner[ownGroupId] = newCount
+                    }
+                }
+            }
+            for (gid in groupIds) {
+                val newCount = groupIdRefCounts[gid]!! - 1
+                if (newCount == 0) {
+                    groupIdRefCounts.remove(gid)
+                } else {
+                    groupIdRefCounts[gid] = newCount
+                }
+            }
+        }
+
+        fun backtrack(startIndex: Int, currentCost: Int, currentWeight: Double) {
+            val remainingCost = ableCost - currentCost
             val penalty = remainingCost * CostWeight
             val effectiveScore = currentWeight - penalty
 
-            // 如果当前组合的有效分超过了已知的最高分，则更新最佳组合
             if (effectiveScore > maxEffectiveScore) {
                 maxEffectiveScore = effectiveScore
-                bestCombination = currentCombination
+                bestCombination = currentCombination.toList()
             }
 
-            // 从 startIndex 开始遍历，继续添加新的牌来探索更深的组合
             for (i in startIndex until targetList.size) {
-                val newCard = targetList[i]
-                if (newCard.cost() <= remainingCost) {
-                    val newComboBonus = evaluateNewComboBonus(currentCombination, newCard)
-                    if (newComboBonus.isNaN()) {
-                        continue
-                    }
+                val card = targetList[i]
+                if (card.cost() <= remainingCost) {
+                    val bindings = cardsBindings[i]
+                    val comboBonus = evaluateNewComboBonus(bindings.entries)
+                    if (comboBonus.isNaN()) continue
 
+                    // 前进
+                    currentCombination.add(card)
+                    applyCardState(bindings.entries, bindings.groupIds)
 
-                    findBestCombination(
+                    backtrack(
                         startIndex = i + 1,
-                        currentCost = currentCost + newCard.cost(),
-                        currentWeight = currentWeight + newCard.powerWeight + newComboBonus,
-                        currentCombination = currentCombination + newCard
+                        currentCost = currentCost + card.cost(),
+                        currentWeight = currentWeight + card.powerWeight + comboBonus
                     )
+
+                    // 回溯
+                    currentCombination.removeAt(currentCombination.size - 1)
+                    revertCardState(bindings.entries, bindings.groupIds)
                 }
             }
         }
 
-        // 4. 启动回溯搜索
-        // 初始状态是空组合，从索引0开始
-        findBestCombination(0, 0, 0.0, emptyList())
+        backtrack(0, 0, 0.0)
         return bestCombination
-    }
-
-    /**
-     * 只评估“把 newCard 加入 current”这一次增量带来的 combo 影响。
-     *
-     * - 返回 NaN 表示 coreMutex 硬剪枝：同一 combo 下不同 core 组不能同时进入组合。
-     * - 返回普通 Double 表示本次新增的软加权/软惩罚分。
-     *
-     * 这样避免每个回溯节点重新扫描整个 currentCombination 计算全局 combo 分。
-     * 使用 Double 而不是结果对象，是为了减少递归热路径上的短命对象分配。
-     */
-    private fun evaluateNewComboBonus(current: List<ComboCard>, newCard: ComboCard): Double {
-        val newBindings = newCard.comboBindings()
-        if (newBindings.isEmpty()) return 0.0
-
-        var scoreBonus = 0.0
-        val scoredComboIds = hashSetOf<String>()
-        val newMutexCoreBindings = newBindings.filter { it.role == ComboRole.CORE && it.coreMutex }
-        val existingCoreBindings = if (newMutexCoreBindings.isEmpty()) {
-            emptyList()
-        } else {
-            current.flatMap { card ->
-                card.comboBindings()
-                    .filter { it.role == ComboRole.CORE && it.coreMutex }
-            }
-        }
-
-        for (newBinding in newBindings) {
-            if (newBinding in newMutexCoreBindings) {
-                val violatesCoreMutex = existingCoreBindings.any { existingBinding ->
-                    existingBinding.comboId == newBinding.comboId &&
-                            existingBinding.ownGroupId != newBinding.ownGroupId
-                }
-                if (violatesCoreMutex) return Double.NaN
-            }
-
-            if (newBinding.score != 0.0 && scoredComboIds.add(newBinding.comboId)) {
-                val hasCounterpart = current.any { it.hasAnyGroup(newBinding.counterpartGroupIds) }
-                if (hasCounterpart) scoreBonus += newBinding.score
-            }
-        }
-
-        return scoreBonus
     }
 }
