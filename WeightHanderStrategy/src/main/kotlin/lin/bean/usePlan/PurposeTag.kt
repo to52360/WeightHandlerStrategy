@@ -4,7 +4,7 @@ package lin.bean.usePlan
  * 战略用途标签，用于规则和评估树进行宏观决策评估。
  *
  * 这里的标签只描述“为什么这张牌值得被选中”，不描述真实出牌顺序。
- * 出牌执行相关语义应放到 [UseTag]，避免规则层依赖编排层细节。
+ * 出牌默认顺序由 UseIntentDeriver 映射到 UseStage，特例直接配置 stageOverride。
  */
 enum class PurposeTag {
     /**

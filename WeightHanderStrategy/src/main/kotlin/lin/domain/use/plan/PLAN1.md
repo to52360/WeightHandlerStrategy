@@ -11,8 +11,7 @@
 - 新增核心数据模型：
     - `UseStage`：默认阶段，如资源、准备、清场、combo、普通价值、收尾。
   - `PurposeTag`：规则/评估侧的宏观用途标签，例如保命、解场、贪婪、斩杀。
-  - `UseTag`：出牌编排/执行侧标签，例如资源、过牌、combo 核心、使用后重规划。
-    - `UseIntent`：一张牌的使用意图，包含 `stage/tags/orderWeight`。
+      - `UseIntent`：一张牌的使用意图，包含 `stage/replanAfterUse/orderWeight`。
     - `ComboPlanDefinition`：新 combo 定义，包含 `coreGroupIds/depGroupIds/coreMutex/relation`。
   - `ComboRelation`：区分只加权、核心组先于依赖组、依赖组先于核心组。
   - `UseConstraint`：使用顺序约束，例如某组牌必须先于另一组牌。
@@ -26,9 +25,9 @@
 ## Implementation Notes
 
 - 不写旧体系适配层；`useGroupId/useGroupOrder/FirstUseGroupId/CleanWarId` 不进入新模型。
-- `PurposeTag` 和 `UseTag` 保持双命名空间：前者给规则/评估理解“为什么选”，后者给编排/执行理解“怎么用”。
-- `UseIntentDeriver` 是两类标签推导 `UseStage` 的唯一收口点；rule 不直接依赖 `UseTag`，排序器也不直接解释标签分支。
-- `UseTag` 不参与排序裁决，只用于标记、调试、执行器和后续策略识别。
+- `PurposeTag` 只描述规则/评估侧的“为什么选”，默认出牌阶段由 `UseIntentDeriver` 映射到 `UseStage`。
+- 特例直接配置 `stageOverride`，不要再通过额外标签间接影响排序。
+- 使用后重规划用 `replanAfterUse` 显式表达，不再放在标签集合里。
 - `CardComboBinding` 只服务选牌评分/硬互斥；`CardComboUseBinding` 只服务出牌顺序，避免负分软惩罚影响编排关系。
 - `UseConstraint` 保持组级关系，由 UsePlanOrderer 在本轮 UsePlan 中解析成具体卡牌先后；不要在定义阶段用 zip 把 core/dep
   打包成两张牌。
@@ -47,7 +46,7 @@
 ## Assumptions
 
 - 第一版只看结构，不追求接入真实出牌；选牌和分数仍由 FindBestCombination / FindComboStrategy 负责。
-- `COMBO_CORE` / `COMBO_DEP` 暂时属于编排标签，不对规则层开放；如果后续 `ComboPlanDefinition` 足够承载核心/依赖关系，再考虑移除这两个标签。
+- combo 核心/依赖关系由 `ComboPlanDefinition` 和启动期预解析的 combo 绑定承载，不再用出牌标签表达。
 - combo 定义未来以 `CardGroupBinding.id` 为组身份。
 - DB、UI、旧配置迁移、真实执行接入都放到后续步骤。
 

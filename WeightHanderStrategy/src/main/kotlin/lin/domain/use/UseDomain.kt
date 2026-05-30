@@ -8,58 +8,47 @@ import lin.domain.context.UseAnimationTime
 import lin.myLog
 import lin.warExt.my.base.getCost
 import lin.warExt.my.base.getHandCards
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * 直接阻塞实现就好了,用来控制并发
  */
 class UseDomain(val warManage: MyWarManage) {
-    var countDownLatch: CountDownLatch? = null
-    private val useSync: UseSync = UseSync()
-    var reFindCombo = false
-    var isChange = false
-        private set
-    var extAwait: Long = 0
+    private val discoverSync = DiscoverSync()
 
-
-    fun reset() {
-        //todo-future 临时方案 切换为使用上下文,跟线程协作写在一起不好分开,还没想好怎么处理
-        extAwait = 0
-        reFindCombo = false
-        isChange = false
-        useResult = false
-    }
-
-    fun useCard(card: ComboCard) {
-        reset()
-        isChange = warManage.isChangeByUseSuccess {
-            card.useBeforeStrategy?.executeAction(card, this)
-            if (reFindCombo) {
-                null
+    fun useCard(card: ComboCard): UseCardResult {
+        val context = UseContext(card)
+        try {
+            context.stateChanged = warManage.isChangeByUseSuccess {
+                card.useBeforeStrategy?.executeAction(context, this)
+                if (context.replanRequested) {
+                    return@isChangeByUseSuccess null
+                }
+                context.useSucceeded = warManage.tryUseCard(card)
+                myLog.info { "打出$card,使用结果:${context.useSucceeded}" }
+                card.useAfterStrategy?.executeAfterAction(context, this)
+                if (context.replanRequested) {
+                    return@isChangeByUseSuccess null
+                }
+                if (context.useSucceeded) {
+                    //超过指定测试应该不要等待时间了
+                    myLog.info { "打出等待动画" }
+                    //todo 增加等待时间看看效果
+                    Thread.sleep(UseAnimationTime + context.extraAwaitMillis)
+                    //select 暂时这样处理发现,看一下有没有问题
+                    discoverSync.waitFallbackIfNeeded()
+                    card
+                } else null
             }
-            useResult = warManage.tryUseCard(card)
-            myLog.info { "打出$card,使用结果:$useResult" }
-            card.useAfterStrategy?.executeAfterAction(card, this)
-            if (reFindCombo) {
-                null
-            }
-            if (useResult) {
-                //超过指定测试应该不要等待时间了
-                myLog.info { "打出等待动画" }
-                //todo 增加等待时间看看效果
-                Thread.sleep(UseAnimationTime + extAwait)
-                //select 暂时这样处理发现,看一下有没有问题
-                tryAwait()
-                card
-            } else null
+        } finally {
+            context.discoverTicket?.close()
+            context.discoverTicket = null
         }
         //todo-future 临时方案 重新查暂定也用change的方案
-        if (reFindCombo) {
-            isChange = true
+        if (context.replanRequested) {
+            context.stateChanged = true
         }
-        if (isChange) {
-            if (!reFindCombo) {
+        if (context.stateChanged) {
+            if (!context.replanRequested) {
                 myLog.info { "有变化,重新查询combo,等待变化动画" }
                 Thread.sleep(ChangeAnimationTime)
             }
@@ -67,61 +56,33 @@ class UseDomain(val warManage: MyWarManage) {
             //没有可用牌就不再查了
             if (!existAbleUse) {
                 myLog.info { "无可用牌不执行重新查找combo" }
-                isChange = false
+                context.stateChanged = false
             }
         }
+        context.shouldReplan = context.stateChanged
+        return context.toResult()
     }
 
 
-    var useResult: Boolean = false
-    fun register() {
-        myLog.info { "注册发现" }
-        countDownLatch = CountDownLatch(1)
+    fun registerExpectedDiscover(context: UseContext) {
+        context.discoverTicket = discoverSync.registerExpectedDiscover()
     }
 
-    fun await() {
-        if (useResult) {
-            countDownLatch?.run {
-                if (count != 0L) {
-                    myLog.info { "进入同步,等待发现" }
-                    await(FourAnimationTime, TimeUnit.MILLISECONDS)
-                }
-                myLog.info { "阻塞等待发现操作" }
-                //等待发现动画
-                Thread.sleep(ChangeAnimationTime)
-                clean()
-                return
-            }
-            return
-        }
+    fun awaitExpectedDiscover(context: UseContext) {
+        if (!context.useSucceeded) return
 
+        val ticket = context.discoverTicket ?: return
+        myLog.info { "进入同步,等待发现" }
+        ticket.await(FourAnimationTime)
+        myLog.info { "阻塞等待发现操作" }
+        //等待发现动画
+        Thread.sleep(ChangeAnimationTime)
+        ticket.close()
+        context.discoverTicket = null
     }
 
-    /**
-     * 暂时不做额外处理,
-     * 发现动作代码comboCard.card.action.chooseOne(0)
-     */
-    fun tryAwait() {
-        countDownLatch ?: useSync.tryWait()
-
-    }
-
-    /**
-     * 没有定义的时候处理
-     */
-    fun tryRegister() {
-        countDownLatch ?: useSync.tryRegister()
-    }
-
-    fun down() {
-        countDownLatch?.run {
-            myLog.info { "唤醒等待发现" }
-            countDown()
-        }
-    }
-
-    fun clean() {
-        countDownLatch = null
+    fun onSdkChooseCompleted() {
+        discoverSync.onSdkChooseCompleted()
     }
 
 }

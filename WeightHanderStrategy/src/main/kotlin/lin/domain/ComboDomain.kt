@@ -241,14 +241,13 @@ class ComboDomain : KoinComponent {
      * 权重有变化重新匹配
      */
     fun useCardAndIsReload(card: ComboCard): Boolean {
-        useDomain.useCard(card)
-        val changeResult = useDomain.isChange
-        if (changeResult) {
-
+        val result = useDomain.useCard(card)
+        val shouldReplan = !result.succeeded || result.shouldReplan
+        if (shouldReplan) {
             warManage.reLoad()
             findAndUse()
         }
-        return changeResult
+        return shouldReplan
     }
 
 
@@ -267,17 +266,15 @@ class ComboDomain : KoinComponent {
     }
 
     fun executeDiscoverChooseCard(vararg cards: Card): Int {
+        var index = 0
         try {
-            useDomain.tryRegister()
-            var index = 0
             threadContext {
                 index = weightHandlerDomain.executeDiscoverChooseCard(*cards)
             }
             return index
         } finally {
-            useDomain.down()
+            useDomain.onSdkChooseCompleted()
         }
-
     }
 
 }

@@ -121,14 +121,14 @@ fun useCard(comboCard: ComboCard): Boolean {
 
 }
 
-fun List<UseBeforeStrategy>.executeAction(card: ComboCard, useDomain: UseDomain) {
+fun List<UseBeforeStrategy>.executeAction(context: UseContext, useDomain: UseDomain) {
     this.forEach {
-        it.extAction(card, useDomain)
+        it.extAction(context, useDomain)
     }
 }
 
-fun List<UseAfterStrategy>.executeAfterAction(card: ComboCard, useDomain: UseDomain) {
+fun List<UseAfterStrategy>.executeAfterAction(context: UseContext, useDomain: UseDomain) {
     this.forEach {
-        it.afterExtAction(card, useDomain)
+        it.afterExtAction(context, useDomain)
     }
 }

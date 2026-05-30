@@ -8,10 +8,7 @@ import lin.domain.context.UseSkillWeight
 import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy.Companion.SKILL_PRIORITY
 import lin.domain.strategy.FindPlanner
-import lin.domain.use.UseAfterStrategy
-import lin.domain.use.UseDomain
-import lin.domain.use.tryUseCard
-import lin.domain.use.useCard
+import lin.domain.use.*
 import lin.myLog
 import lin.warExt.my.base.getCost
 import lin.warExt.my.base.getPower
@@ -127,7 +124,7 @@ class SkillFindStrategy : AbsFindStrategy(findRule = { false }), UseAfterStrateg
     }
 
     override fun afterExtAction(
-        comboCard: ComboCard,
+        context: UseContext,
         useDomain: UseDomain
     ) {
         isUsedSkill = true

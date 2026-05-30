@@ -1,6 +1,5 @@
 package lin.domain.use
 
-import lin.bean.ComboCard
 import lin.domain.context.AwaitAnimationTime
 import lin.myLog
 
@@ -8,20 +7,21 @@ import lin.myLog
 sealed interface UseStrategy
 
 interface UseAfterStrategy : UseStrategy {
-    fun afterExtAction(comboCard: ComboCard, useDomain: UseDomain)
+    fun afterExtAction(context: UseContext, useDomain: UseDomain)
 }
 
 interface UseBeforeStrategy : UseStrategy {
-    fun extAction(comboCard: ComboCard, useDomain: UseDomain)
+    fun extAction(context: UseContext, useDomain: UseDomain)
 }
 
 object UseAfterLClick : UseAfterStrategy {
-    override fun afterExtAction(comboCard: ComboCard, useDomain: UseDomain) {
+    override fun afterExtAction(context: UseContext, useDomain: UseDomain) {
         myLog.info { "等待地标动画" }
         Thread.sleep(AwaitAnimationTime)
+        val comboCard = context.card
         comboCard.card.action.lClick()
-        useDomain.register()
-        useDomain.await()
+        useDomain.registerExpectedDiscover(context)
+        useDomain.awaitExpectedDiscover(context)
         //避免没点到
         myLog.info { "再点一下" }
         Thread.sleep(AwaitAnimationTime)
@@ -33,21 +33,21 @@ object UseAfterLClick : UseAfterStrategy {
  *发现处理策略
  */
 object DiscoverUseStrategy : UseAfterStrategy, UseBeforeStrategy {
-    override fun extAction(comboCard: ComboCard, useDomain: UseDomain) {
-        useDomain.register()
+    override fun extAction(context: UseContext, useDomain: UseDomain) {
+        useDomain.registerExpectedDiscover(context)
     }
 
-    override fun afterExtAction(comboCard: ComboCard, useDomain: UseDomain) {
-        useDomain.await()
+    override fun afterExtAction(context: UseContext, useDomain: UseDomain) {
+        useDomain.awaitExpectedDiscover(context)
     }
 
 }
 object AwaitAnimationStrategy : UseAfterStrategy {
     override fun afterExtAction(
-        comboCard: ComboCard,
+        context: UseContext,
         useDomain: UseDomain
     ) {
-        useDomain.extAwait = AwaitAnimationTime
+        context.extraAwaitMillis = AwaitAnimationTime
     }
 
 }

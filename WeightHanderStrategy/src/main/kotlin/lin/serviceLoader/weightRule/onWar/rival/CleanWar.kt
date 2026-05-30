@@ -10,6 +10,7 @@ import lin.domain.context.ChangeAnimationTime
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
 import lin.domain.use.UseAfterStrategy
+import lin.domain.use.UseContext
 import lin.domain.use.UseDomain
 import lin.serviceLoader.weightRule.ExtConfig
 import lin.serviceLoader.weightRule.onWar.rival.utils.DamageCache
@@ -42,11 +43,9 @@ abstract class CleanWar(val useGroupId: Int) : AbsWeightCondition(), KoinCompone
     }
 
 
-
-
-    override fun afterExtAction(comboCard: ComboCard, useDomain: UseDomain) {
-        useDomain.extAwait = ChangeAnimationTime
-        useDomain.reFindCombo = true
+    override fun afterExtAction(context: UseContext, useDomain: UseDomain) {
+        context.extraAwaitMillis = ChangeAnimationTime
+        context.replanRequested = true
     }
 
     abstract fun calWeight(callCard: ComboCard): Double
