@@ -3,7 +3,8 @@ package lin.utils.startup
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
 import lin.bean.usePlan.*
-import lin.domain.use.plan.UseIntentProvider
+import lin.domain.use.plan.CardPurposeProvider
+import lin.domain.use.plan.GroupUseOverrideProvider
 import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
 import lin.serviceLoader.provider.CardGroupIndexProvider
 import lin.utils.runCatchingLog
@@ -32,7 +33,10 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         }
 
         // 3. 启动期一次性读取使用配置和 combo 编排定义，避免运行时每次出牌再查询 provider。
-        val useIntentByGroupId = loadUseIntentByGroupId(groupMap.values.flatten().toSet())
+        val allCardIds = baseInfos.keys
+        val allGroupIds = groupMap.values.flatten().toSet()
+        val cardPurposes = loadCardPurposes(allCardIds)
+        val groupOverrides = loadGroupUseOverrides(allGroupIds)
         val comboDefinitions = loadComboDefinitions()
         val comboDefByGroupId = comboDefinitions.indexComboDefByGroupId()
         val comboUseBindingByGroupId = comboDefinitions.toComboUseBindingByGroupId()
@@ -40,7 +44,16 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         // 4. 统一赋值组装只读 finalMap (扁平化，直接传入 groupIds)
         val finalMap: Map<String, CardCombinedConfig> = baseInfos.mapValues { (cardId, weightInfo) ->
             val groupsSet = groupMap[cardId] ?: emptySet()
-            val useIntent = groupsSet.firstNotNullOfOrNull { useIntentByGroupId[it] }
+            // 合并 CardPurpose + GroupUseOverride → CardUseConfig（优先级：GroupUseOverride > CardPurpose > 默认值）
+            val cardPurpose = cardPurposes[cardId] ?: CardPurpose()
+            val groupOverride = groupsSet.firstNotNullOfOrNull { groupOverrides[it] }
+            val useConfig = CardUseConfig(
+                purposeTags = cardPurpose.purposeTags,
+                stageOverride = groupOverride?.stageOverride,              // null = 不覆盖，走标签推导
+                replanAfterUse = groupOverride?.replanAfterUse
+                    ?: cardPurpose.replanAfterUse,                         // 分组覆盖优先
+                orderWeight = groupOverride?.orderWeight ?: 0.0
+            )
             // 直接从定义归并生成 CardComboEntry，不再经过 CardComboBinding 中间层
             val comboEntries = groupsSet
                 .flatMap { comboDefByGroupId[it] ?: emptyList() }
@@ -62,8 +75,7 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
             CardCombinedConfig(
                 weightInfo = weightInfo,
                 groupIds = groupsSet,
-                useConfig = CardUseConfig(),
-                useIntent = useIntent,
+                useConfig = useConfig,
                 comboEntries = comboEntries,
                 comboUseBindings = comboUseBindings
             )
@@ -75,14 +87,20 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         })
     }
 
-    private fun loadUseIntentByGroupId(groupIds: Set<String>): Map<String, UseIntent> {
-        if (groupIds.isEmpty()) return emptyMap()
-
-        val provider = runCatchingLog("加载 UseIntentProvider 失败，使用空使用配置") {
-            get<UseIntentProvider>()
+    private fun loadCardPurposes(cardIds: Set<String>): Map<String, CardPurpose> {
+        if (cardIds.isEmpty()) return emptyMap()
+        val provider = runCatchingLog("加载 CardPurposeProvider 失败，使用空用途配置") {
+            get<CardPurposeProvider>()
         }.getOrNull() ?: return emptyMap()
+        return provider.purposeOf(cardIds)
+    }
 
-        return groupIds.associateWith { groupId -> provider.intentOf(setOf(groupId)) }
+    private fun loadGroupUseOverrides(groupIds: Set<String>): Map<String, GroupUseOverride> {
+        if (groupIds.isEmpty()) return emptyMap()
+        val provider = runCatchingLog("加载 GroupUseOverrideProvider 失败，使用空分组覆盖") {
+            get<GroupUseOverrideProvider>()
+        }.getOrNull() ?: return emptyMap()
+        return provider.overridesOf(groupIds)
     }
 
     private fun loadComboDefinitions(): List<ComboPlanDefinition> {

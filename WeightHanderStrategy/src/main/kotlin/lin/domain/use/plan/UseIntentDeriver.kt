@@ -1,9 +1,6 @@
 package lin.domain.use.plan
 
-import lin.bean.usePlan.CardUseConfig
-import lin.bean.usePlan.PurposeTag
-import lin.bean.usePlan.UseIntent
-import lin.bean.usePlan.UseStage
+import lin.bean.usePlan.*
 
 
 /**
@@ -34,10 +31,22 @@ object UseIntentDeriver {
     }
 }
 
-fun interface UseIntentProvider {
-    /**
-     * 根据卡牌所属的 CardGroupBinding.id 集合，生成新编排体系里的使用意图。
-     * 当前 configUi 通过 SqliteUseIntentProvider 从 card_use_config 读取配置。
-     */
-    fun intentOf(cardGroupIds: Set<String>): UseIntent
+/**
+ * 卡牌用途标签提供者（per cardId）。
+ *
+ * SPI 入口，configUi 通过此接口读取 card_purpose 表。
+ * 引擎端提供默认实现返回空 CardPurpose。
+ */
+fun interface CardPurposeProvider {
+    fun purposeOf(cardIds: Set<String>): Map<String, CardPurpose>
+}
+
+/**
+ * 分组使用覆盖提供者（per groupId）。
+ *
+ * SPI 入口，configUi 通过此接口读取 group_use_override 表。
+ * 引擎端提供默认实现返回空 Map。
+ */
+fun interface GroupUseOverrideProvider {
+    fun overridesOf(groupIds: Set<String>): Map<String, GroupUseOverride>
 }

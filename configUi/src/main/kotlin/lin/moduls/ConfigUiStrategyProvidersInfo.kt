@@ -3,16 +3,15 @@ package lin.moduls
 import lin.bean.usePlan.ComboPlanDefinitionProvider
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
-import lin.card_use.db.CardUseConfigRepository
+import lin.card_purpose.db.CardPurposeRepository
 import lin.combo_plan.db.ComboPlanDefinitionRepository
 import lin.condition_tree.db.ConditionTreeConfigRepository
 import lin.condition_tree.db.ConditionTreeConfigService
 import lin.condition_tree.db.createConditionTreeConfigMapper
-import lin.domain.use.plan.UseIntentProvider
-import lin.provider.SqliteComboPlanDefinitionProvider
-import lin.provider.SqliteConditionTreeConfigProvider
-import lin.provider.SqliteTreeConfigProvider
-import lin.provider.SqliteUseIntentProvider
+import lin.domain.use.plan.CardPurposeProvider
+import lin.domain.use.plan.GroupUseOverrideProvider
+import lin.group_use_override.db.GroupUseOverrideRepository
+import lin.provider.*
 import lin.rule.condition.ConditionTreeConfigProvider
 import lin.rule.tree.TreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
@@ -33,15 +32,23 @@ val strategyProviderModule = module {
     }
 
     single {
-        CardUseConfigRepository(get())
+        CardPurposeRepository(get())
+    }
+
+    single {
+        GroupUseOverrideRepository(get())
     }
 
     single<ComboPlanDefinitionProvider> {
         SqliteComboPlanDefinitionProvider(get())
     }
 
-    single<UseIntentProvider> {
-        SqliteUseIntentProvider(get())
+    single<CardPurposeProvider> {
+        SqliteCardPurposeProvider(get())
+    }
+
+    single<GroupUseOverrideProvider> {
+        SqliteGroupUseOverrideProvider(get())
     }
 
     single<TreeConfigProvider> {
