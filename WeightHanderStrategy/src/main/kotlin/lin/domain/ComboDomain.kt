@@ -195,8 +195,6 @@ class ComboDomain : KoinComponent {
         if (realLessCost > extLessCost) //说明有些牌没打出去,进行补偿
             processLessCost(weightResult)
 
-
-
     }
 
     /**

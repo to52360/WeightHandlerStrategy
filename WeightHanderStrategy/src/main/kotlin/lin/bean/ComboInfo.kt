@@ -22,7 +22,9 @@ class ComboInfo(
 /**
  *@param comboId todo-future  comboId 不知道有没有用了
  * @param comboType todo-future 感觉可以删除了
+ *
  */
+@Deprecated("combo已重构这里准备删除,迁移到ComboEntries")
 open class Combo(val comboId: Int, val comboRule: ComboRule, val comboType: String) {
     open fun comboProcess(callComboCard: ComboCard, comboCard: ComboCard): Double {
         return comboRule.let {
