@@ -2,7 +2,7 @@ package lin.bean
 
 import lin.bean.usePlan.CardComboEntry
 import lin.bean.usePlan.CardComboUseBinding
-import lin.bean.usePlan.CardUseConfig
+import lin.bean.usePlan.UseIntent
 
 
 /**
@@ -11,7 +11,7 @@ import lin.bean.usePlan.CardUseConfig
 class CardCombinedConfig(
     val weightInfo: CardWeightInfo,
     val groupIds: Set<String> = emptySet(),
-    val useConfig: CardUseConfig = CardUseConfig(),
+    val useIntent: UseIntent = UseIntent(),
     val comboEntries: List<CardComboEntry> = emptyList(),
     val comboUseBindings: List<CardComboUseBinding> = emptyList()
 )

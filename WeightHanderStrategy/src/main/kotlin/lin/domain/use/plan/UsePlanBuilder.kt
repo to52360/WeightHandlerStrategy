@@ -15,7 +15,7 @@ class UsePlanBuilder {
      */
     fun build(cards: List<ComboCard>): UsePlan {
         val intents = cards.associateWith { card ->
-            UseIntentDeriver.derive(card.useConfig())
+            card.useIntent()
         }
         val constraints = if (cards.none { it.comboUseBindings().isNotEmpty() }) {
             ComboUseConstraints(emptyList())
