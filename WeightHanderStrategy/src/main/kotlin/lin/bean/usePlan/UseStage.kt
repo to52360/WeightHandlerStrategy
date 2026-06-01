@@ -7,9 +7,9 @@ package lin.bean.usePlan
 enum class UseStage {
     RESOURCE,
     SETUP,
-    CLEAN,
-    SAVE_LIFE,
+    CLEAR,
+    DEFEND,
     COMBO,
-    VALUE,
-    FINISH
+    GENERAL,
+    END
 }

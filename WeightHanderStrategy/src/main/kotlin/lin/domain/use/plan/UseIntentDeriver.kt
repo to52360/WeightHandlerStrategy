@@ -17,11 +17,11 @@ object UseIntentDeriver {
      */
     fun derive(config: CardUseConfig): UseIntent {
         val derivedStage = config.stageOverride ?: when {
-            config.purposeTags.contains(PurposeTag.SAVE_LIFE) -> UseStage.SAVE_LIFE
-            config.purposeTags.contains(PurposeTag.CLEAN) -> UseStage.CLEAN
-            config.purposeTags.contains(PurposeTag.FINISH) -> UseStage.FINISH
+            config.purposeTags.contains(PurposeTag.SAVE_LIFE) -> UseStage.DEFEND
+            config.purposeTags.contains(PurposeTag.CLEAN) -> UseStage.CLEAR
+            config.purposeTags.contains(PurposeTag.FINISH) -> UseStage.END
             config.purposeTags.contains(PurposeTag.GREED) -> UseStage.SETUP
-            else -> UseStage.VALUE
+            else -> UseStage.GENERAL
         }
         return UseIntent(
             stage = derivedStage,

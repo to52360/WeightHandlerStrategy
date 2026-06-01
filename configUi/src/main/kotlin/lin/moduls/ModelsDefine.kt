@@ -14,6 +14,8 @@ import lin.condition_tree.ui.action.CreateConditionTreeAction
 import lin.condition_tree.ui.action.DeleteConditionTreeAction
 import lin.condition_tree.ui.action.SaveConditionTreeAction
 import lin.config.AppConfig
+import lin.group_use_override.db.GroupUseOverrideRepository
+import lin.group_use_override.ui.GroupUseOverrideExtension
 import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.serviceLoader.provider.ConditionRegistrationProvider
@@ -54,6 +56,7 @@ val uiModule = module {
     single { CardGroupExtension() } bind UiExtension::class
     single { EvaluatorTreeExtension() } bind UiExtension::class
     single { ConditionTreeExtension() } bind UiExtension::class
+    single { GroupUseOverrideExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
@@ -99,6 +102,7 @@ val uiDBModule = module {
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupRepository(get()) }
     single { CardGroupService(get()) }
+    single { GroupUseOverrideRepository(get()) }
 }
 
 

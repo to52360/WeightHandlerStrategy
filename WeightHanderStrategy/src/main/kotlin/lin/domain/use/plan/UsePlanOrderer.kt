@@ -1,7 +1,6 @@
 package lin.domain.use.plan
 
 import lin.bean.ComboCard
-import lin.bean.hasAnyGroup
 import lin.bean.usePlan.MustUseGroupBefore
 import lin.bean.usePlan.UseIntent
 import lin.bean.usePlan.UseStage
@@ -35,7 +34,7 @@ object UsePlanOrderer {
      * UseStage 是粗阶段，orderWeight 是同阶段内的人工偏好，powerWeight 是最后兜底。
      */
     private fun baseComparator(intents: Map<ComboCard, UseIntent>): Comparator<ComboCard> {
-        return compareBy<ComboCard> { intents[it]?.stage?.ordinal ?: UseStage.VALUE.ordinal }
+        return compareBy<ComboCard> { intents[it]?.stage?.ordinal ?: UseStage.GENERAL.ordinal }
             .thenByDescending { intents[it]?.orderWeight ?: 0.0 }
             .thenByDescending { it.powerWeight }
     }

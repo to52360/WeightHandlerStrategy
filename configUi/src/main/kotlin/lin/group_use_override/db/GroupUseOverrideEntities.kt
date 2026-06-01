@@ -23,6 +23,16 @@ data class GroupUseOverrideEntity(
             runCatchingLog("解析 UseStage 失败: $it") {
                 UseStage.valueOf(it.trim())
             }.getOrNull()
-        }
+        } ?: value?.takeIf { it.isNotBlank() }?.let { legacyMap[it.trim()] }
+    }
+
+    companion object {
+        /** 旧枚举值对应关系：兼容存量 DB 数据 */
+        private val legacyMap = mapOf(
+            "CLEAN" to UseStage.CLEAR,
+            "SAVE_LIFE" to UseStage.DEFEND,
+            "VALUE" to UseStage.GENERAL,
+            "FINISH" to UseStage.END,
+        )
     }
 }

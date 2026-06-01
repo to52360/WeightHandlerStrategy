@@ -1,7 +1,6 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
-import lin.bean.groupIds
 import lin.bean.usePlan.CardComboEntry
 import lin.domain.context.CostWeight
 
@@ -19,7 +18,6 @@ object DefaultFindBestCombination : FindBestCombination {
             val entries: List<CardComboEntry>,
             val groupIds: Set<String>
         )
-
         val cardsBindings: List<CardBindings> = targetList.map { card ->
             CardBindings(
                 entries = card.comboEntries(),
@@ -141,5 +139,3 @@ object DefaultFindBestCombination : FindBestCombination {
         return bestCombination
     }
 }
-
-private fun ComboCard.comboEntries(): List<CardComboEntry> = combinedConfig?.comboEntries ?: emptyList()

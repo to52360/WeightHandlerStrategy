@@ -14,7 +14,7 @@ data class CardUseConfig(
  * 执行后重规划这类行为用显式字段表达，不再通过标签间接解释。
  */
 data class UseIntent(
-    val stage: UseStage = UseStage.VALUE,
+    val stage: UseStage = UseStage.GENERAL,
     val replanAfterUse: Boolean = false,
     val orderWeight: Double = 0.0
 )

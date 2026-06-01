@@ -2,10 +2,7 @@ package lin.utils.startup
 
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
-import lin.bean.usePlan.CardPurpose
-import lin.bean.usePlan.ComboPlanDefinition
-import lin.bean.usePlan.ComboPlanDefinitionProvider
-import lin.bean.usePlan.GroupUseOverride
+import lin.bean.usePlan.*
 import lin.domain.use.plan.CardPurposeProvider
 import lin.domain.use.plan.ComboAssembler
 import lin.domain.use.plan.GroupUseOverrideProvider
@@ -58,8 +55,7 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         // 5. Koin 注册
         loadKoinModules(module {
             single<Map<String, CardCombinedConfig>>(named("weightInfo")) { finalMap }
-            //todo 初始化解析才对,不做运行时解析
-            // single { PurposeTagStore(tags = cardPurposes.mapValues { it.value.purposeTags }) }
+            single { PurposeTagStore(tags = cardPurposes.mapValues { it.value.purposeTags }) }
         })
     }
 

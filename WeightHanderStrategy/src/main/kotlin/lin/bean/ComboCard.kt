@@ -24,16 +24,29 @@ class ComboCard(
 
     val cardWeightInfo = combinedConfig?.weightInfo
 
+    fun groupIds(): Set<String> = combinedConfig?.groupIds ?: emptySet()
+
+    fun useConfig() = combinedConfig?.useConfig ?: lin.bean.usePlan.CardUseConfig()
+
+    fun useIntent() = combinedConfig?.useIntent
+
+    fun comboEntries() = combinedConfig?.comboEntries ?: emptyList()
+
+    fun comboUseBindings() = combinedConfig?.comboUseBindings ?: emptyList()
+
     val combo = cardWeightInfo?.combos
     //指定目标
     var pointCard: Card? = null
 
 
+    fun groupId() = cardWeightInfo?.groupId
     //换牌策略
     val changeComboRule
         get() = cardWeightInfo?.changeComboRule
 
     //基础信息
+    fun hasGroup(groupId: String): Boolean = groupId in groupIds()
+    fun hasAnyGroup(groupIds: Collection<String>): Boolean = groupIds.any { it in this.groupIds() }
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
@@ -74,6 +87,14 @@ class ComboCard(
     fun isBaseWeight(): Boolean {
         return powerWeight == BaseWeight
     }
+
+    /**
+     * 战场相关
+     */
+    fun toDie() = cardWeightInfo?.toDie ?: false
+
+
+
 
     //在同一组会增加权重
     fun comboAddWeight(comboCard: ComboCard): Double {
