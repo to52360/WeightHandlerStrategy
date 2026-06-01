@@ -26,8 +26,6 @@ class ComboCard(
 
     fun groupIds(): Set<String> = combinedConfig?.groupIds ?: emptySet()
 
-    fun useConfig() = combinedConfig?.useConfig ?: lin.bean.usePlan.CardUseConfig()
-
     fun useIntent() = combinedConfig?.useIntent
 
     fun comboEntries() = combinedConfig?.comboEntries ?: emptyList()
