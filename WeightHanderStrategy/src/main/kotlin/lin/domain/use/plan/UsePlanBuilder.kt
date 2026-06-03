@@ -14,9 +14,9 @@ class UsePlanBuilder {
      * - 不做真实执行，也不接旧 useGroupId。
      */
     fun build(cards: List<ComboCard>): UsePlan {
-        val intents = cards.associateWith { card ->
-            card.useIntent()
-        }
+        val intents = cards.mapNotNull { card ->
+            card.useIntent()?.let { card to it }
+        }.toMap()
         val constraints = if (cards.none { it.comboUseBindings().isNotEmpty() }) {
             ComboUseConstraints(emptyList())
         } else {

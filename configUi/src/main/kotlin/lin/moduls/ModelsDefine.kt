@@ -5,6 +5,8 @@ import com.zaxxer.hikari.HikariDataSource
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
 import lin.card_group.ui.CardGroupExtension
+import lin.card_purpose.db.CardPurposeRepository
+import lin.card_purpose.ui.CardPurposeExtension
 import lin.condition_tree.db.ConditionTreeConfigRepository
 import lin.condition_tree.db.ConditionTreeConfigService
 import lin.condition_tree.db.createConditionTreeConfigMapper
@@ -57,6 +59,8 @@ val uiModule = module {
     single { EvaluatorTreeExtension() } bind UiExtension::class
     single { ConditionTreeExtension() } bind UiExtension::class
     single { GroupUseOverrideExtension() } bind UiExtension::class
+    single { CardPurposeExtension() } bind UiExtension::class
+    single { lin.combo_plan.ui.ComboPlanExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
@@ -103,6 +107,8 @@ val uiDBModule = module {
     single { CardGroupRepository(get()) }
     single { CardGroupService(get()) }
     single { GroupUseOverrideRepository(get()) }
+    single { CardPurposeRepository(get()) }
+    single { lin.combo_plan.db.ComboPlanDefinitionRepository(get()) }
 }
 
 

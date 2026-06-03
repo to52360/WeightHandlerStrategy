@@ -58,6 +58,11 @@ class MainShellView : BorderPane(), KoinComponent {
         workbenchArea.children.clear()
         workbenchArea.children.add(node)
 
+        // 如果视图支持激活生命周期，显式触发其数据或副作用加载
+        if (node is ActiveAware) {
+            node.onActive()
+        }
+
         // 更新按钮选中状态
         currentActiveBtn?.styleClass?.remove("nav-button-selected")
         activeBtn?.styleClass?.add("nav-button-selected")

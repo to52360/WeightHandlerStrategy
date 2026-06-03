@@ -6,6 +6,7 @@ import lin.utils.runCatchingLog
 
 data class CardPurposeEntity(
     val cardId: String,
+    val name: String?,
     val purposeTags: String, // 逗号分隔
     val replanAfterUse: Boolean = false
 ) {

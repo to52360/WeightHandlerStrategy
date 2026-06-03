@@ -31,5 +31,10 @@ enum class PurposeTag {
     /**
      * 普通价值牌。
      */
-    VALUE
+    VALUE,
+
+    /**
+     * 额外费用牌。
+     */
+    EXTRA_COST
 }
