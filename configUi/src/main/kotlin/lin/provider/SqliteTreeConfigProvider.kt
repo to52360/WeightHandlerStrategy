@@ -1,6 +1,10 @@
 package lin.provider
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import lin.card_group.db.CardGroupRepository
+import lin.card_purpose.PurposeTagTreeBindingPolicy
+import lin.myLog
+import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.rule.tree.TreeConfigProvider
 import lin.tree_config.db.TreeConfigRepository
@@ -8,23 +12,59 @@ import lin.utils.runCatchingLog
 
 /**
  * [TreeConfigProvider] 的 SQLite 实现，供策略层通过 SPI 加载评估树配置。
+ *
+ * 在 SPI 边界完成绑定过滤：GROUP 绑定参考 [CardManagerEntity.enabled]，
+ * PURPOSE_TAG 绑定参考 [PurposeTagTreeBindingPolicy]。
+ * 引擎层收到的 [EvaluatorTreeConfig] 只包含有效的绑定目标。
  */
 class SqliteTreeConfigProvider(
     private val repository: TreeConfigRepository,
-    private val mapper: ObjectMapper
+    private val mapper: ObjectMapper,
+    private val groupRepository: CardGroupRepository,
+    private val tagPolicy: PurposeTagTreeBindingPolicy
 ) : TreeConfigProvider {
     override fun findById(id: String): EvaluatorTreeConfig? {
         val entity = repository.findById(id) ?: return null
+        if (!entity.enabled) return null
+
+        val currentEnabledGroupIds = groupRepository.findManagers(onlyEnabled = true).map { it.id }.toSet()
         return runCatchingLog("反序列化评估树配置失败: id=$id") {
-            mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+            val config = mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+            filterBindings(config, currentEnabledGroupIds)
         }.getOrNull()
     }
 
     override fun findAll(): List<EvaluatorTreeConfig> {
-        return repository.findAll().mapNotNull { entity ->
+        val currentEnabledGroupIds = groupRepository.findManagers(onlyEnabled = true).map { it.id }.toSet()
+        return repository.findAll().filter { it.enabled }.mapNotNull { entity ->
             runCatchingLog("反序列化评估树配置失败: id=${entity.id}") {
-                mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+                val config = mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+                filterBindings(config, currentEnabledGroupIds)
             }.getOrNull()
         }
+    }
+
+    // @defect D-001: GROUP 绑定跟随分组管理 enabled 状态，已修复缓存缺陷，现为动态查询。
+    private fun filterBindings(config: EvaluatorTreeConfig, currentEnabledGroupIds: Set<String>): EvaluatorTreeConfig {
+        val filtered = config.bindings.filter { binding ->
+            when (binding.type) {
+                EvaluatorTreeBindingType.GROUP -> {
+                    val enabled = binding.id in currentEnabledGroupIds
+                    if (!enabled) {
+                        myLog.debug { "跳过已禁用分组的绑定: groupId=${binding.id}" }
+                    }
+                    enabled
+                }
+
+                EvaluatorTreeBindingType.PURPOSE_TAG -> {
+                    val enabled = binding.id in tagPolicy.enabledTags.map { it.value }
+                    if (!enabled) {
+                        myLog.debug { "跳过已禁用用途标签的绑定: tagId=${binding.id}" }
+                    }
+                    enabled
+                }
+            }
+        }
+        return config.copy(bindings = filtered)
     }
 }

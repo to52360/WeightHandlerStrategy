@@ -20,5 +20,5 @@ package lin.bean.usePlan
  * - 写入点分散时是否需要封装为接口约束
  */
 class PurposeTagStore(
-    var tags: Map<String, Set<PurposeTag>> = emptyMap()
+    var tags: Map<String, Set<PurposeTagId>> = emptyMap()
 )

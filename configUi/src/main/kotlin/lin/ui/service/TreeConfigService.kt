@@ -30,14 +30,25 @@ class TreeConfigService(
 ) {
 
 
-    fun saveConfig(name: String, config: EvaluatorTreeConfig, existingId: String? = null): String {
+    fun saveConfig(
+        name: String,
+        config: EvaluatorTreeConfig,
+        existingId: String? = null,
+        enabled: Boolean = true
+    ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
         val json = mapper.writeValueAsString(config)
+        val bindingType = config.bindings.firstOrNull()?.type?.name ?: "UNKNOWN"
+        val bindingsSummary = config.bindings.joinToString(",") {
+            "${it.type.name}:${it.id}"
+        }
         val entity = TreeConfigEntity(
             id = id,
-            groupIds = config.bindGroupIds.joinToString(","),
+            bindingType = bindingType,
+            bindingsSummary = bindingsSummary,
             name = name,
-            configData = json
+            configData = json,
+            enabled = enabled
         )
         repository.save(entity)
         return id
@@ -45,13 +56,35 @@ class TreeConfigService(
 
     fun loadAll(): List<Pair<TreeConfigEntity, EvaluatorTreeConfig?>> {
         return repository.findAll().map { entity ->
-            val config = try {
-                mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
-            entity to config
+            entity to parseConfig(entity)
+        }
+    }
+
+    fun countConfigs(bindingType: String? = null): Int {
+        return repository.countAll(bindingType)
+    }
+
+    fun loadPage(
+        offset: Int,
+        limit: Int,
+        bindingType: String? = null
+    ): List<Pair<TreeConfigEntity, EvaluatorTreeConfig?>> {
+        return repository.findPage(offset, limit, bindingType).map { entity ->
+            entity to parseConfig(entity)
+        }
+    }
+
+    fun findById(id: String): Pair<TreeConfigEntity, EvaluatorTreeConfig?>? {
+        val entity = repository.findById(id) ?: return null
+        return entity to parseConfig(entity)
+    }
+
+    private fun parseConfig(entity: TreeConfigEntity): EvaluatorTreeConfig? {
+        return try {
+            mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

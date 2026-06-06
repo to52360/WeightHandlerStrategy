@@ -2,7 +2,7 @@ package lin.card_purpose.ui
 
 import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
-import lin.bean.usePlan.PurposeTag
+import lin.bean.usePlan.PurposeTagId
 import lin.card_purpose.db.CardPurposeEntity
 import lin.card_purpose.db.CardPurposeRepository
 import lin.dao.CardGroupJsonParser
@@ -76,7 +76,7 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
     /**
      * 更新搜索和过滤条件
      */
-    fun updateFilters(searchText: String, groupFilter: String?, tagFilter: PurposeTag?) {
+    fun updateFilters(searchText: String, groupFilter: String?, tagFilter: PurposeTagId?) {
         val filtered = state.allCards.filter { card ->
             // 模糊搜索 ID 或名称
             val matchSearch = searchText.isEmpty() ||
@@ -122,7 +122,7 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
      */
     fun saveCardPurpose(
         cardIds: List<String>,
-        tagsToApply: Map<PurposeTag, Boolean?>,
+        tagsToApply: Map<PurposeTagId, Boolean?>,
         replanAfterUse: Boolean?
     ) {
         if (cardIds.isEmpty()) return
@@ -148,7 +148,7 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
             val entity = CardPurposeEntity(
                 cardId = cardId,
                 name = currentItem.name,
-                purposeTags = mergedTags.joinToString(",") { it.name },
+                purposeTags = mergedTags.joinToString(",") { it.value },
                 replanAfterUse = mergedReplan
             )
             repository.save(entity)
@@ -171,7 +171,7 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
         if (cleanId.isBlank()) return
 
         val existing = state.allCards.find { it.cardId == cleanId }
-        val tagsString = existing?.purposeTags?.joinToString(",") { it.name } ?: ""
+        val tagsString = existing?.purposeTags?.joinToString(",") { it.value } ?: ""
         val replan = existing?.replanAfterUse ?: false
 
         val entity = CardPurposeEntity(

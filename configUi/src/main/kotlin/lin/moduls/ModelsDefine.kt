@@ -64,6 +64,7 @@ val uiModule = module {
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
+    single { lin.tree_config.ui.action.EditTreePropertiesAction() } bind TreeWorkbenchAction::class
     single { SaveTreeAction() } bind TreeWorkbenchAction::class
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
 

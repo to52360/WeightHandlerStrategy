@@ -16,6 +16,7 @@ class UseIntentAssembler(
     private val groupMap: Map<String, Set<String>>,
     private val groupOverrides: Map<String, GroupUseOverride>
 ) {
+    private val deriver = UseIntentDeriver()
 
     fun assemble(cardId: String): UseIntent {
         val cardPurpose = cardPurposes[cardId] ?: CardPurpose()
@@ -29,6 +30,6 @@ class UseIntentAssembler(
                 ?: cardPurpose.replanAfterUse,
             orderWeight = groupOverride?.orderWeight ?: 0.0
         )
-        return UseIntentDeriver.derive(config)
+        return deriver.derive(config)
     }
 }

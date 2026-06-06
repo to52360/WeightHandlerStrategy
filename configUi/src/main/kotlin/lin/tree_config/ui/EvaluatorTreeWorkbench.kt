@@ -1,11 +1,15 @@
 package lin.tree_config.ui
 
 
+import javafx.geometry.Pos
+import javafx.scene.control.Button
+import javafx.scene.control.Label
 import javafx.scene.control.SplitPane
+import javafx.scene.layout.HBox
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
+import lin.rule.tree.EvaluatorTreeBinding
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
-import lin.tree_config.ui.components.BindGroupSelector
 import lin.tree_config.ui.components.ConfigListPanel
 import lin.tree_config.ui.menu.TreeContextMenuFactory
 import lin.tree_config.ui.strategy.EvaluatorPayloadFactory
@@ -34,10 +38,17 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
     val propertyPanel = PropertyPanel(EvaluatorPropertyEditorStrategy(leafSourceCatalog, leafConfigs))
 
-    private val bindGroupSelector = BindGroupSelector()
     private val configListPanel = ConfigListPanel(this, treeConfigService)
 
     val configListView get() = configListPanel.configListView
+
+    private var currentBindings: List<EvaluatorTreeBinding> = emptyList()
+    private var currentEnabled: Boolean = true
+
+    private val statusLabel = Label("未选择评估树")
+    private val editPropsBtn = Button("修改属性").apply {
+        isDisable = true
+    }
 
     init {
         // 1. 左侧：配置列表区
@@ -53,7 +64,17 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         this.setDividerPositions(0.2, 0.6) // 初始化分隔条比例
 
         //  绑定 LogicTreeEditor 的扩展区域与事件
-        logicTreeEditor.customHeaderArea.children.add(bindGroupSelector)
+        val headerBox = HBox(10.0).apply {
+            alignment = Pos.CENTER_LEFT
+            style = "-fx-padding: 5;"
+        }
+        editPropsBtn.setOnAction {
+            val action = getKoin().getAll<lin.tree_config.ui.action.TreeWorkbenchAction>()
+                .find { it.title == "属性" || it.title == "修改" || it.title == "修改属性" }
+            action?.execute(this@EvaluatorTreeWorkbench)
+        }
+        headerBox.children.addAll(statusLabel, editPropsBtn)
+        logicTreeEditor.customHeaderArea.children.add(headerBox)
 
         // 注册选中节点的 Behavior —— 驱动右侧属性面板
         logicTreeEditor.addBehavior(object : TreeEditorBehavior<LogicNodeWrapper<EvaluatorPayload>> {
@@ -85,9 +106,33 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     }
 
     fun refreshList() = configListPanel.refreshList()
-    fun addDraftItem(name: String) = configListPanel.addDraftItem(name)
-    fun getSelectedGroupIds() = bindGroupSelector.getSelectedGroupIds()
-    fun setSelectedGroupIds(ids: List<String>) = bindGroupSelector.setSelectedGroupIds(ids)
+    fun addDraftItem(name: String, enabled: Boolean, bindings: List<EvaluatorTreeBinding>) =
+        configListPanel.addDraftItem(name, enabled, bindings)
+
+    fun getSelectedBindings(): List<EvaluatorTreeBinding> = currentBindings
+    fun setSelectedBindings(bindings: List<EvaluatorTreeBinding>) {
+        currentBindings = bindings
+        updateHeader()
+    }
+
+    fun getCurrentEnabled() = currentEnabled
+    fun setCurrentEnabled(enabled: Boolean) {
+        currentEnabled = enabled
+        updateHeader()
+    }
+
+    fun updateHeader() {
+        val selectedItem = configListView.selectionModel.selectedItem
+        if (selectedItem == null) {
+            statusLabel.text = "未选择评估树"
+            editPropsBtn.isDisable = true
+        } else {
+            val statusStr = if (currentEnabled) "启用" else "禁用"
+            val bindingsStr = currentBindings.joinToString(", ") { it.id }.ifEmpty { "无绑定" }
+            statusLabel.text = "当前: ${selectedItem.name} | 状态: $statusStr | 绑定: $bindingsStr"
+            editPropsBtn.isDisable = false
+        }
+    }
 
     private fun buildTreePanel(): LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>> {
         return logicTreeEditor

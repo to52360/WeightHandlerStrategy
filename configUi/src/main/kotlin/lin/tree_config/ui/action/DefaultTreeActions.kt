@@ -3,7 +3,6 @@ package lin.tree_config.ui.action
 import javafx.scene.control.Alert
 import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.ButtonType
-import javafx.scene.control.TextInputDialog
 import javafx.scene.control.TreeItem
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
@@ -17,26 +16,81 @@ class CreateNewTreeAction : TreeWorkbenchAction {
     override val order: Int = 10
 
     override fun execute(workbench: EvaluatorTreeWorkbench) {
-        val dialog = TextInputDialog("新配置名称")
-        dialog.title = "新建评估树"
-        dialog.headerText = "请输入新评估树的名称:"
-        dialog.showAndWait().ifPresent { name ->
-            if (name.isBlank()) {
+        val dialog = lin.tree_config.ui.components.TreePropertiesDialog()
+        dialog.showAndWait().ifPresent { result ->
+            if (result.name.isBlank()) {
                 showError("名称不能为空")
                 return@ifPresent
             }
-            // 仅在内存中创建草稿，不写入数据库
-            val draftItem = workbench.addDraftItem(name)
+            if (result.bindings.isEmpty()) {
+                showError("必须选择至少一个绑定目标")
+                return@ifPresent
+            }
 
-            // 初始化编辑区
+            val draftItem = workbench.addDraftItem(result.name, result.enabled, result.bindings)
+
             val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
-            workbench.setSelectedGroupIds(emptyList())
+            workbench.setSelectedBindings(result.bindings)
+            workbench.setCurrentEnabled(result.enabled)
             workbench.leafConfigs.clear()
             workbench.propertyPanel.showPlaceholder()
 
-            // 自动选中新草稿
             workbench.configListView.selectionModel.select(draftItem)
+        }
+    }
+}
+
+class EditTreePropertiesAction : TreeWorkbenchAction {
+    override val title: String = "修改属性"
+    override val order: Int = 15
+
+    override fun execute(workbench: EvaluatorTreeWorkbench) {
+        val selectedItem = workbench.configListView.selectionModel.selectedItem
+        if (selectedItem == null) {
+            showError("请先在左侧列表中选择或新建一个评估树配置")
+            return
+        }
+
+        val currentBindings = workbench.getSelectedBindings()
+        val currentEnabled = workbench.getCurrentEnabled()
+
+        val dialog = lin.tree_config.ui.components.TreePropertiesDialog(
+            initialName = selectedItem.name,
+            initialEnabled = currentEnabled,
+            initialBindings = currentBindings
+        )
+
+        dialog.showAndWait().ifPresent { result ->
+            if (result.name.isBlank()) {
+                showError("名称不能为空")
+                return@ifPresent
+            }
+            if (result.bindings.isEmpty()) {
+                showError("必须选择至少一个绑定目标")
+                return@ifPresent
+            }
+
+            // Only update current workbench state, and list item display if it's draft.
+            // For saved ones, just changing the model won't save to DB until "保存" is clicked,
+            // or we could save it immediately. For simplicity, we just update the model and wait for save.
+
+            // Actually, wait, modifying the ConfigListItem's properties directly is tricky since it's a data class.
+            // Let's replace the item in the list or just let the user save it.
+            // A better way is to update the Draft / selected item
+            val newItem = selectedItem.copy(
+                name = result.name,
+                enabled = result.enabled,
+                bindingsSummary = result.bindings.joinToString(",") { "${it.type.name}:${it.id}" }
+            )
+            val idx = workbench.configListView.items.indexOf(selectedItem)
+            if (idx >= 0) {
+                workbench.configListView.items[idx] = newItem
+                workbench.configListView.selectionModel.select(newItem)
+            }
+
+            workbench.setSelectedBindings(result.bindings)
+            workbench.setCurrentEnabled(result.enabled)
         }
     }
 }
@@ -58,14 +112,14 @@ class SaveTreeAction : TreeWorkbenchAction {
         }
 
         try {
-            val bindGroupIds = workbench.getSelectedGroupIds()
-            if (bindGroupIds.isEmpty()) {
-                showError("请选择至少一个绑定卡组分组")
+            val bindings = workbench.getSelectedBindings()
+            if (bindings.isEmpty()) {
+                showError("请选择至少一个绑定目标（分组或用途标签）")
                 return
             }
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
             val config = EvaluatorTreeConfig(
-                bindGroupIds = bindGroupIds,
+                bindings = bindings,
 
                 root = evaluatorNode,
                 leafConfigs = workbench.leafConfigs.toMap()
@@ -73,9 +127,14 @@ class SaveTreeAction : TreeWorkbenchAction {
             // 草稿条目：不传入 existingId，直接新建数据库记录
             // 已保存条目：传入 existingId，执行 UPSERT
             val savedId = if (selectedItem.isDraft) {
-                workbench.treeConfigService.saveConfig(selectedItem.name, config)
+                workbench.treeConfigService.saveConfig(selectedItem.name, config, null, workbench.getCurrentEnabled())
             } else {
-                workbench.treeConfigService.saveConfig(selectedItem.name, config, selectedItem.id)
+                workbench.treeConfigService.saveConfig(
+                    selectedItem.name,
+                    config,
+                    selectedItem.id,
+                    workbench.getCurrentEnabled()
+                )
             }
 
             // 将草稿从列表移除，刷新并选中已保存的正式条目
@@ -111,9 +170,12 @@ class DeleteTreeAction : TreeWorkbenchAction {
 
         if (confirm.orElse(ButtonType.CANCEL) == ButtonType.OK) {
             try {
-                workbench.treeConfigService.delete(selectedItem.id)
+                if (!selectedItem.isDraft) {
+                    workbench.treeConfigService.delete(selectedItem.id)
+                }
                 workbench.nodeTreeView.root = null
                 workbench.propertyPanel.showPlaceholder()
+                workbench.configListView.items.remove(selectedItem)
                 workbench.refreshList()
             } catch (e: Exception) {
                 showError("删除失败: ${e.message}")

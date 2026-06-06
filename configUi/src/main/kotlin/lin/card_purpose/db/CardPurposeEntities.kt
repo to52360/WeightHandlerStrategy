@@ -1,13 +1,12 @@
 package lin.card_purpose.db
 
 import lin.bean.usePlan.CardPurpose
-import lin.bean.usePlan.PurposeTag
-import lin.utils.runCatchingLog
+import lin.bean.usePlan.PurposeTagId
 
 data class CardPurposeEntity(
     val cardId: String,
     val name: String?,
-    val purposeTags: String, // 逗号分隔
+    val purposeTags: String, // 逗号分隔的 tagId
     val replanAfterUse: Boolean = false
 ) {
     fun toDomain(): CardPurpose {
@@ -17,13 +16,10 @@ data class CardPurposeEntity(
         )
     }
 
-    private fun parsePurposeTags(value: String): Set<PurposeTag> {
+    private fun parsePurposeTags(value: String): Set<PurposeTagId> {
         if (value.isEmpty()) return emptySet()
-        return value.split(",").mapNotNull {
-            runCatchingLog("解析 PurposeTag 失败: $it") {
-                PurposeTag.valueOf(it.trim())
-            }
-                .getOrNull()
-        }.toSet()
+        return value.split(",")
+            .map { PurposeTagId(it.trim()) }
+            .toSet()
     }
 }

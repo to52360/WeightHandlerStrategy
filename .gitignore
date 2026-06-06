@@ -53,3 +53,6 @@ build/
 /.agents/草稿/openspec/
 /.codex/
 /AGENTS.md
+/.codegraph/
+/.codemoss/
+/architecture-context/

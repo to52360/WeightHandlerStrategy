@@ -3,6 +3,7 @@ package lin.moduls
 import lin.bean.usePlan.ComboPlanDefinitionProvider
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
+import lin.card_purpose.PurposeTagTreeBindingPolicy
 import lin.card_purpose.db.CardPurposeRepository
 import lin.combo_plan.db.ComboPlanDefinitionRepository
 import lin.condition_tree.db.ConditionTreeConfigRepository
@@ -51,10 +52,14 @@ val strategyProviderModule = module {
         SqliteGroupUseOverrideProvider(get())
     }
 
+    single { PurposeTagTreeBindingPolicy() }
+
     single<TreeConfigProvider> {
         SqliteTreeConfigProvider(
             repository = TreeConfigRepository(get()),
-            mapper = createTreeConfigMapper()
+            mapper = createTreeConfigMapper(),
+            groupRepository = CardGroupRepository(get()),
+            tagPolicy = get()
         )
     }
 

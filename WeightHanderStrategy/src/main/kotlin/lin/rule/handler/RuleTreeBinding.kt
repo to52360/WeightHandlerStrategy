@@ -36,10 +36,21 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                 val instance = config.instantiate { leafConfig ->
                     buildEvaluatorLeafLogic(leafConfig, ruleRegistry, conditionRegistry, conditionTreeProviders)
                 }
-                configDispatcher.processByType(
-                    instance.bindGroupIds.map { BindingGroupId(it) },
-                    listOf(EvaluatorTreeRoot(instance.root))
-                )
+                // 按 binding.type 分发给对应的 Finder
+                val groupBindings = instance.bindings.filter { it.type == EvaluatorTreeBindingType.GROUP }
+                if (groupBindings.isNotEmpty()) {
+                    configDispatcher.processByType(
+                        groupBindings.map { BindingGroupId(it.id) },
+                        listOf(EvaluatorTreeRoot(instance.root))
+                    )
+                }
+                val tagBindings = instance.bindings.filter { it.type == EvaluatorTreeBindingType.PURPOSE_TAG }
+                if (tagBindings.isNotEmpty()) {
+                    configDispatcher.processByType(
+                        tagBindings.map { PurposeTagBindingId(it.id) },
+                        listOf(EvaluatorTreeRoot(instance.root))
+                    )
+                }
             }
         }
     }

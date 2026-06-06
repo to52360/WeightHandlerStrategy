@@ -12,7 +12,7 @@ interface TreeConfigStrategy<L> {
      * @param name 配置名称
      * @param root 逻辑树根节点
      * @param existingId 已存在配置的 id（null 表示新建）
-     * @param extras 额外状态（如评估树的 bindGroupIds、leafConfigs）
+     * @param extras 额外状态（如评估树的 bindings、leafConfigs）
      * @return 保存后的配置 id
      */
     fun save(

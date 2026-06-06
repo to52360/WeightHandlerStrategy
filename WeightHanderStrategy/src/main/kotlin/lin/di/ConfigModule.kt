@@ -3,12 +3,14 @@ package lin.di
 import lin.bean.CardCombinedConfig
 import lin.config.ConfigDispatcher
 import lin.config.find.BindingGroupFinder
+import lin.config.find.PurposeTagFinder
 import lin.config.find.def.WeightInfoFinder
 import lin.config.find.findBy
 import lin.config.handler.ConfigHandler
 import lin.config.handler.RuleConfigHandler
 import lin.config.handler.UseConfigHandler
 import lin.rule.tree.BindingGroupId
+import lin.rule.tree.PurposeTagBindingId
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
@@ -32,6 +34,9 @@ val configModule = module {
     }
     single<WeightInfoFinder<BindingGroupId>> {
         BindingGroupFinder(get(named("finderByTypeString")))
+    }
+    single<WeightInfoFinder<PurposeTagBindingId>> {
+        PurposeTagFinder(get(named("finderByTypeString")))
     }
 
     single<ConfigDispatcher> { ConfigDispatcher(getAll(), getAll()) }

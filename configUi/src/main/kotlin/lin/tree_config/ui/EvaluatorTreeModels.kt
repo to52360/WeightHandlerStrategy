@@ -87,9 +87,10 @@ object TreeModelConverter {
 data class ConfigListItem(
     val id: String,
     val name: String,
-    val groupIds: List<String>,
+    val bindingsSummary: String,
     val config: EvaluatorTreeConfig?,
-    val isDraft: Boolean = false
+    val isDraft: Boolean = false,
+    val enabled: Boolean = true
 ) {
     override fun toString(): String = if (isDraft) "* $name (未保存)" else name
 }

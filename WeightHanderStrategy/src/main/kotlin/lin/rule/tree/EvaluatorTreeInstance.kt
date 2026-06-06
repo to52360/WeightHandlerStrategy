@@ -3,7 +3,7 @@ package lin.rule.tree
 import lin.rule.build.RuleLogic
 
 data class EvaluatorTreeInstance(
-    val bindGroupIds: List<String>,
+    val bindings: List<EvaluatorTreeBinding>,
     val root: EvaluatorInstanceNode
 )
 
@@ -69,7 +69,7 @@ fun EvaluatorTreeConfig.instantiate(
     }
 
     return EvaluatorTreeInstance(
-        bindGroupIds = this.bindGroupIds,
+        bindings = this.bindings,
         root = instantiateNode(this.root)
     )
 }
