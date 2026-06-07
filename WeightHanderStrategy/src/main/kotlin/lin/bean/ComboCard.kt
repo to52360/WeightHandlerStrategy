@@ -48,7 +48,6 @@ class ComboCard(
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
-
     val basePowerWeight = cardWeightInfo?.powerWeight ?: BaseWeight
 
 

@@ -10,12 +10,3 @@ fun interface ComboPlanDefinitionProvider {
     fun findAll(): List<ComboPlanDefinition>
 }
 
-object TodoComboPlanDefinitionProvider : ComboPlanDefinitionProvider {
-    /**
-     * 空实现用于没有加载 configUi provider 的环境。
-     * 正常运行时由 configUi 的 SqliteComboPlanDefinitionProvider 提供配置。
-     */
-    override fun findAll(): List<ComboPlanDefinition> {
-        return emptyList()
-    }
-}
