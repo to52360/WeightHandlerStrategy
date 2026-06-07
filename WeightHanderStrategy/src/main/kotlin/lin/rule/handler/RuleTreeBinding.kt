@@ -37,7 +37,7 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                 val instance = config.instantiate { leafConfig ->
                     buildEvaluatorLeafLogic(leafConfig, ruleRegistry, conditionRegistry, conditionTreeProviders)
                 }
-            }
+
                 // 按 binding.type 分发给对应的 Finder
                 val groupBindings = instance.bindings.filter { it.type == EvaluatorTreeBindingType.GROUP }
                 if (groupBindings.isNotEmpty()) {
