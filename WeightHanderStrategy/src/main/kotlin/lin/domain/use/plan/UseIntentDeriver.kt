@@ -12,10 +12,10 @@ import lin.bean.usePlan.*
  * 默认出牌阶段由此统一推导；特例直接使用 stageOverride 指定。
  */
 class UseIntentDeriver(
-    private val rules: List<PurposeTagIntentRule> = PurposeTagIntentRule.DEFAULTS
+    private val ruleProvider: PurposeTagIntentRuleProvider = DefaultPurposeTagIntentRuleProvider()
 ) {
     private val ruleIndex: Map<PurposeTagId, PurposeTagIntentRule> =
-        rules.associateBy { it.tagId }
+        ruleProvider.rules().associateBy { it.tagId }
 
     /**
      * 根据配置推导运行时意图。
@@ -52,22 +52,4 @@ class UseIntentDeriver(
     }
 }
 
-/**
- * 卡牌用途标签提供者（per cardId）。
- *
- * SPI 入口，configUi 通过此接口读取 card_purpose 表。
- * 引擎端提供默认实现返回空 CardPurpose。
- */
-fun interface CardPurposeProvider {
-    fun purposeOf(cardIds: Set<String>): Map<String, CardPurpose>
-}
 
-/**
- * 分组使用覆盖提供者（per groupId）。
- *
- * SPI 入口，configUi 通过此接口读取 group_use_override 表。
- * 引擎端提供默认实现返回空 Map。
- */
-fun interface GroupUseOverrideProvider {
-    fun overridesOf(groupIds: Set<String>): Map<String, GroupUseOverride>
-}

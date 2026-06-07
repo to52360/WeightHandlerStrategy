@@ -1,8 +1,8 @@
 package lin.provider
 
 import lin.bean.usePlan.ComboPlanDefinition
-import lin.bean.usePlan.ComboPlanDefinitionProvider
 import lin.combo_plan.db.ComboPlanDefinitionRepository
+import lin.serviceLoader.provider.config.ComboPlanDefinitionProvider
 
 class SqliteComboPlanDefinitionProvider(
     private val repository: ComboPlanDefinitionRepository

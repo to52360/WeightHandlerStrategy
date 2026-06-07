@@ -2,13 +2,17 @@ package lin.utils.startup
 
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
-import lin.bean.usePlan.*
-import lin.domain.use.plan.CardPurposeProvider
+import lin.bean.usePlan.CardPurpose
+import lin.bean.usePlan.ComboPlanDefinition
+import lin.bean.usePlan.GroupUseOverride
+import lin.bean.usePlan.PurposeTagStore
 import lin.domain.use.plan.ComboAssembler
-import lin.domain.use.plan.GroupUseOverrideProvider
 import lin.domain.use.plan.UseIntentAssembler
 import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
 import lin.serviceLoader.provider.CardGroupIndexProvider
+import lin.serviceLoader.provider.config.CardPurposeProvider
+import lin.serviceLoader.provider.config.ComboPlanDefinitionProvider
+import lin.serviceLoader.provider.config.GroupUseOverrideProvider
 import lin.utils.runCatchingLog
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.component.KoinComponent
@@ -34,11 +38,11 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
             }
         }
 
-        // 3. 启动期一次性读取 + 组装：Assembler 自解析 cardId，此处只接线
-        val cardPurposes = loadCardPurposes(baseInfos.keys)
+        // 3. 启动期一次性读取 + 组装：Provider 自主决定数据范围
+        val cardPurposes = loadCardPurposes()
         val useIntentAsm = UseIntentAssembler(
             cardPurposes, groupMap,
-            loadGroupUseOverrides(groupMap.values.flatten().toSet())
+            loadGroupUseOverrides()
         )
         val comboAsm = ComboAssembler(groupMap, loadComboDefinitions())
 
@@ -59,20 +63,18 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
         })
     }
 
-    private fun loadCardPurposes(cardIds: Set<String>): Map<String, CardPurpose> {
-        if (cardIds.isEmpty()) return emptyMap()
+    private fun loadCardPurposes(): Map<String, CardPurpose> {
         val provider = runCatchingLog("加载 CardPurposeProvider 失败，使用空用途配置") {
             get<CardPurposeProvider>()
         }.getOrNull() ?: return emptyMap()
-        return provider.purposeOf(cardIds)
+        return provider.findAllEnabled()
     }
 
-    private fun loadGroupUseOverrides(groupIds: Set<String>): Map<String, GroupUseOverride> {
-        if (groupIds.isEmpty()) return emptyMap()
+    private fun loadGroupUseOverrides(): Map<String, GroupUseOverride> {
         val provider = runCatchingLog("加载 GroupUseOverrideProvider 失败，使用空分组覆盖") {
             get<GroupUseOverrideProvider>()
         }.getOrNull() ?: return emptyMap()
-        return provider.overridesOf(groupIds)
+        return provider.findAllEnabled()
     }
 
     private fun loadComboDefinitions(): List<ComboPlanDefinition> {

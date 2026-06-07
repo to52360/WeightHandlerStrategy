@@ -5,6 +5,9 @@ import com.zaxxer.hikari.HikariDataSource
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
 import lin.card_group.ui.CardGroupExtension
+import lin.card_purpose.DefaultPurposeTagProvider
+import lin.card_purpose.PurposeTagProvider
+import lin.card_purpose.PurposeTagTreeBindingPolicy
 import lin.card_purpose.db.CardPurposeRepository
 import lin.card_purpose.ui.CardPurposeExtension
 import lin.condition_tree.db.ConditionTreeConfigRepository
@@ -72,6 +75,10 @@ val uiModule = module {
     single { CreateConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
     single { SaveConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
     single { DeleteConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+
+    // 用途标签目录与显示
+    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    single { PurposeTagTreeBindingPolicy(get()) }
 
 }
 

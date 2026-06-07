@@ -12,7 +12,7 @@ package lin.bean.usePlan
  * ## 写入策略（TODO - 后续评估）
  *
  * 当前采用 `var + 不可变 Map`：运行时更新通过替换整个引用完成。
- * 写入方式：`store.tags = store.tags + ("cardId" to setOf(PurposeTag.CLEAN))`
+ * 写入方式：`store.tags = store.tags + ("cardId" to setOf(PurposeTagId.CLEAN))`
  *
  * 后续需评估：
  * - 是否需要提供便捷的增删方法（put / remove / putAll）

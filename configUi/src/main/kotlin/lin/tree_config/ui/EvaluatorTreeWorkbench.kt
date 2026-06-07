@@ -6,9 +6,11 @@ import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.SplitPane
 import javafx.scene.layout.HBox
+import lin.card_purpose.PurposeTagProvider
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeBinding
+import lin.rule.tree.EvaluatorTreeBindingType
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.ui.components.ConfigListPanel
 import lin.tree_config.ui.menu.TreeContextMenuFactory
@@ -27,6 +29,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
 
     // 依赖注入
     val treeConfigService: TreeConfigService by inject()
+    private val tagProvider: PurposeTagProvider by inject()
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
 
     // 选中的叶子配置 (目前先只在内存中修改)
@@ -128,7 +131,12 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
             editPropsBtn.isDisable = true
         } else {
             val statusStr = if (currentEnabled) "启用" else "禁用"
-            val bindingsStr = currentBindings.joinToString(", ") { it.id }.ifEmpty { "无绑定" }
+            val bindingsStr = currentBindings.joinToString(", ") { binding ->
+                when (binding.type) {
+                    EvaluatorTreeBindingType.PURPOSE_TAG -> tagProvider.displayName(binding.id)
+                    else -> binding.id
+                }
+            }.ifEmpty { "无绑定" }
             statusLabel.text = "当前: ${selectedItem.name} | 状态: $statusStr | 绑定: $bindingsStr"
             editPropsBtn.isDisable = false
         }

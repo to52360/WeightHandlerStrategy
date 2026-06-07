@@ -6,7 +6,7 @@ import lin.card_purpose.PurposeTagTreeBindingPolicy
 import lin.myLog
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
-import lin.rule.tree.TreeConfigProvider
+import lin.serviceLoader.provider.config.TreeConfigProvider
 import lin.tree_config.db.TreeConfigRepository
 import lin.utils.runCatchingLog
 

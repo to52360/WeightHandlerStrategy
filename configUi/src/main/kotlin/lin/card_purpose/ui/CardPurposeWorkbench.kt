@@ -10,6 +10,7 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.PurposeTagId
+import lin.card_purpose.PurposeTagProvider
 import lin.card_purpose.db.CardPurposeRepository
 import lin.ui.ActiveAware
 import lin.utils.addColumn
@@ -19,6 +20,10 @@ import org.koin.core.component.inject
 class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
     private val repository: CardPurposeRepository by inject()
+    private val tagProvider: PurposeTagProvider by inject()
+    private var tagDefs = tagProvider.tags()
+    private var displayNameToTagId = tagDefs.associate { it.displayName to it.id }
+    private var tagIdToDisplayName = tagDefs.associate { it.id to it.displayName }
     private val store = CardPurposeStore(repository)
 
     private val tableView = TableView<CardUiItem>()
@@ -33,15 +38,12 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
     private val detailTitle = Label("没有选中卡牌")
     private val editorBox = VBox(15.0)
 
-    // Tag CheckBoxes - 基于默认常量集合渲染
-    private val tagCheckBoxes = linkedMapOf(
-        PurposeTagId.SAVE_LIFE to CheckBox("保命 (SAVE_LIFE)").apply { isAllowIndeterminate = false },
-        PurposeTagId.CLEAN to CheckBox("解场/清场 (CLEAN)").apply { isAllowIndeterminate = false },
-        PurposeTagId.GREED to CheckBox("成长/贪婪 (GREED)").apply { isAllowIndeterminate = false },
-        PurposeTagId.FINISH to CheckBox("斩杀/收尾 (FINISH)").apply { isAllowIndeterminate = false },
-        PurposeTagId.VALUE to CheckBox("普通价值 (VALUE)").apply { isAllowIndeterminate = false },
-        PurposeTagId.EXTRA_COST to CheckBox("额外费用 (EXTRA_COST)").apply { isAllowIndeterminate = false }
-    )
+    // Tag CheckBoxes - 基于 Provider 动态生成
+    private val tagCheckBoxes = linkedMapOf<PurposeTagId, CheckBox>().also { map ->
+        tagDefs.forEach { tagDef ->
+            map[tagDef.id] = CheckBox(tagDef.displayName).apply { isAllowIndeterminate = false }
+        }
+    }
 
     private val replanCheck = CheckBox("使用后需要重新规划").apply { isAllowIndeterminate = false }
 
@@ -72,7 +74,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
             tagCombo.apply {
                 promptText = "全部用途"
                 prefWidth = 110.0
-                items.addAll(listOf("全部用途") + PurposeTagId.DEFAULTS.map { it.value })
+                items.addAll(listOf("全部用途") + tagDefs.map { it.displayName })
                 value = "全部用途"
             }
 
@@ -89,7 +91,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
             addColumn("卡牌 ID", 120.0) { it.cardId }
             addColumn("卡牌名称", 160.0) { it.name }
-            addColumn("用途标签", 220.0) { it.purposeTags.joinToString(", ") { t -> t.value } }
+            addColumn("用途标签", 220.0) { it.purposeTags.joinToString(", ") { t -> tagIdToDisplayName[t] ?: t.value } }
             addColumn("重规划", 70.0) { if (it.replanAfterUse) "是" else "否" }
 
             items = obsCards
@@ -169,7 +171,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
         val onFilterChange = {
             val sGroup = if (groupCombo.value == "全部卡组" || groupCombo.value == null) null else groupCombo.value
             val sTag =
-                if (tagCombo.value == "全部用途" || tagCombo.value == null) null else PurposeTagId(tagCombo.value)
+                if (tagCombo.value == "全部用途" || tagCombo.value == null) null else displayNameToTagId[tagCombo.value]
             store.updateFilters(searchField.text, sGroup, sTag)
         }
 

@@ -4,16 +4,18 @@ import javafx.geometry.Insets
 import javafx.scene.control.*
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.VBox
-import lin.bean.usePlan.PurposeTagId
+import lin.card_purpose.PurposeTagProvider
 import lin.dao.CardSelectOptionProvider
 import lin.rule.tree.EvaluatorTreeBinding
 import lin.rule.tree.EvaluatorTreeBindingType
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 class TreePropertiesDialog(
     initialName: String = "",
     initialEnabled: Boolean = true,
     initialBindings: List<EvaluatorTreeBinding> = emptyList()
-) : Dialog<TreePropertiesDialog.Result>() {
+) : Dialog<TreePropertiesDialog.Result>(), KoinComponent {
 
     data class Result(
         val name: String,
@@ -60,9 +62,10 @@ class TreePropertiesDialog(
 
         val tagCheckItems = mutableMapOf<String, CheckBox>()
         val tagVBox = VBox(5.0)
-        PurposeTagId.DEFAULTS.forEach { tag ->
-            val cb = CheckBox(tag.value)
-            tagCheckItems[tag.value] = cb
+        val tagProvider: PurposeTagProvider by inject()
+        tagProvider.tags().forEach { tagDef ->
+            val cb = CheckBox(tagDef.displayName)
+            tagCheckItems[tagDef.id.value] = cb
             tagVBox.children.add(cb)
         }
         val tagScrollPane = ScrollPane(tagVBox).apply {

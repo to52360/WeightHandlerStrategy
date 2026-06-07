@@ -1,9 +1,9 @@
 package lin.card_purpose
 
-import lin.bean.usePlan.PurposeTag
+import lin.bean.usePlan.PurposeTagId
 
 /**
- * 基于卡牌元数据（cardId / 名称 / 类型等）智能推导 [PurposeTag]。
+ * 基于卡牌元数据（cardId / 名称 / 类型等）智能推导 [PurposeTagId]。
  *
  * 当前为占位实现，后续评估后接入真实识别逻辑。
  * 识别失败应静默降级返回空集合，不抛异常。
@@ -21,5 +21,5 @@ object PurposeTagRecognizer {
      *
      * @return 推导出的标签集合，无法识别时返回空集合
      */
-    fun recognize(cardId: String): Set<PurposeTag> = emptySet()
+    fun recognize(cardId: String): Set<PurposeTagId> = emptySet()
 }

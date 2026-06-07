@@ -1,23 +1,21 @@
 package lin.moduls
 
-import lin.bean.usePlan.ComboPlanDefinitionProvider
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
+import lin.card_purpose.DefaultPurposeTagProvider
+import lin.card_purpose.PurposeTagProvider
 import lin.card_purpose.PurposeTagTreeBindingPolicy
 import lin.card_purpose.db.CardPurposeRepository
 import lin.combo_plan.db.ComboPlanDefinitionRepository
 import lin.condition_tree.db.ConditionTreeConfigRepository
 import lin.condition_tree.db.ConditionTreeConfigService
 import lin.condition_tree.db.createConditionTreeConfigMapper
-import lin.domain.use.plan.CardPurposeProvider
-import lin.domain.use.plan.GroupUseOverrideProvider
 import lin.group_use_override.db.GroupUseOverrideRepository
 import lin.provider.*
-import lin.rule.condition.ConditionTreeConfigProvider
-import lin.rule.tree.TreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.BindingCardIdProvider
 import lin.serviceLoader.provider.CardGroupIndexProvider
+import lin.serviceLoader.provider.config.*
 import lin.tree_config.db.TreeConfigRepository
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module
@@ -52,7 +50,8 @@ val strategyProviderModule = module {
         SqliteGroupUseOverrideProvider(get())
     }
 
-    single { PurposeTagTreeBindingPolicy() }
+    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    single { PurposeTagTreeBindingPolicy(get()) }
 
     single<TreeConfigProvider> {
         SqliteTreeConfigProvider(

@@ -8,13 +8,14 @@ import lin.domain.MyWarManage
 import lin.rule.build.RuleLogic
 import lin.rule.condition.ConditionLogic
 import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.ConditionTreeConfigProvider
 import lin.rule.condition.compile
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.parse.extractPrefixedArgs
 import lin.rule.registry.RuleRegistry
 import lin.rule.tree.*
+import lin.serviceLoader.provider.config.ConditionTreeConfigProvider
+import lin.serviceLoader.provider.config.TreeConfigProvider
 import lin.utils.startup.StartupTask
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -36,6 +37,7 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                 val instance = config.instantiate { leafConfig ->
                     buildEvaluatorLeafLogic(leafConfig, ruleRegistry, conditionRegistry, conditionTreeProviders)
                 }
+            }
                 // 按 binding.type 分发给对应的 Finder
                 val groupBindings = instance.bindings.filter { it.type == EvaluatorTreeBindingType.GROUP }
                 if (groupBindings.isNotEmpty()) {

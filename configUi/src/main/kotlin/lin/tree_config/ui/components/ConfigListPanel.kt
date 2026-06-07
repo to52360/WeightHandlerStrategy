@@ -4,6 +4,7 @@ import javafx.geometry.Insets
 import javafx.scene.control.*
 import javafx.scene.layout.FlowPane
 import javafx.scene.layout.VBox
+import lin.card_purpose.PurposeTagProvider
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.tree_config.ui.ConfigListItem
 import lin.tree_config.ui.EvaluatorTreeWorkbench
@@ -11,11 +12,14 @@ import lin.tree_config.ui.action.TreeWorkbenchAction
 import lin.ui.components.PaginationBar
 import lin.ui.service.TreeConfigService
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 class ConfigListPanel(
     private val workbench: EvaluatorTreeWorkbench,
     private val treeConfigService: TreeConfigService
 ) : VBox(5.0), KoinComponent {
+
+    private val tagProvider: PurposeTagProvider by inject()
 
     val configListView = ListView<ConfigListItem>()
     private val filterComboBox = ComboBox<String>().apply {
@@ -145,7 +149,12 @@ class ConfigListPanel(
         val draftItem = ConfigListItem(
             id = "draft_${System.currentTimeMillis()}",
             name = name,
-            bindingsSummary = bindings.joinToString(",") { "${it.type.name}:${it.id}" },
+            bindingsSummary = bindings.joinToString(",") { binding ->
+                when (binding.type) {
+                    EvaluatorTreeBindingType.PURPOSE_TAG -> tagProvider.displayName(binding.id)
+                    else -> binding.id
+                }
+            },
             config = lin.rule.tree.EvaluatorTreeConfig(
                 bindings = bindings,
                 root = lin.rule.tree.LogicNode.And(emptyList()),

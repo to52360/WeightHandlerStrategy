@@ -6,7 +6,3 @@ data class ConditionTreeConfig(
     val root: ConditionNode
 )
 
-interface ConditionTreeConfigProvider {
-    fun findById(id: String): ConditionTreeConfig?
-    fun findAll(): List<ConditionTreeConfig>
-}
