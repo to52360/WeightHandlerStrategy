@@ -1,6 +1,3 @@
-
-import kotlin.test.Test
-
 class 扩展方法Test {
 
 

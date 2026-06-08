@@ -28,10 +28,13 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
         jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_binding (
-                id          TEXT    PRIMARY KEY,
-                manger_id   TEXT    NOT NULL,
-                name        TEXT    NOT NULL,
-                card_ids    TEXT    NOT NULL
+                id              TEXT    PRIMARY KEY,
+                manager_id      TEXT    NOT NULL,
+                name            TEXT    NOT NULL,
+                card_ids        TEXT    NOT NULL,
+                stage_override  TEXT,
+                replan_after_use INTEGER,
+                order_weight    REAL    NOT NULL DEFAULT 0
             );
             """.trimIndent()
         )
@@ -75,44 +78,54 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
 
     fun deleteManager(id: String) {
         // 同时清理该 Manager 下的所有 Binding
-        jdbcTemplate.update("DELETE FROM card_group_binding WHERE manger_id = ?", id)
+        jdbcTemplate.update("DELETE FROM card_group_binding WHERE manager_id = ?", id)
         jdbcTemplate.update("DELETE FROM card_group_manager WHERE id = ?", id)
     }
 
     // ─────────────────────── Binding CRUD ──────────────────────────────────
 
     private val bindingRowMapper = RowMapper { rs, _ ->
+        val replanRaw = rs.getObject("replan_after_use") as? Int
         CardBindingEntity(
             id = rs.getString("id"),
-            mangerId = rs.getString("manger_id"),
+            managerId = rs.getString("manager_id"),
             name = rs.getString("name"),
-            cardIds = rs.getString("card_ids")
+            cardIds = rs.getString("card_ids"),
+            stageOverride = rs.getString("stage_override"),
+            replanAfterUse = if (replanRaw == null) null else replanRaw != 0,
+            orderWeight = rs.getDouble("order_weight")
         )
     }
 
     fun saveBinding(entity: CardBindingEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_binding (id, manger_id, name, card_ids)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO card_group_binding (id, manager_id, name, card_ids, stage_override, replan_after_use, order_weight)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                name        = excluded.name,
-                card_ids    = excluded.card_ids
+                name            = excluded.name,
+                card_ids        = excluded.card_ids,
+                stage_override  = excluded.stage_override,
+                replan_after_use = excluded.replan_after_use,
+                order_weight    = excluded.order_weight
             """.trimIndent(),
-            entity.id, entity.mangerId, entity.name, entity.cardIds
+            entity.id, entity.managerId, entity.name, entity.cardIds,
+            entity.stageOverride,
+            entity.replanAfterUse?.let { if (it) 1 else 0 },
+            entity.orderWeight
         )
     }
 
     /** 替换某 Manager 下所有 Binding（先删后批量插） */
-    fun replaceBindings(mangerId: String, entities: List<CardBindingEntity>) {
-        jdbcTemplate.update("DELETE FROM card_group_binding WHERE manger_id = ?", mangerId)
+    fun replaceBindings(managerId: String, entities: List<CardBindingEntity>) {
+        jdbcTemplate.update("DELETE FROM card_group_binding WHERE manager_id = ?", managerId)
         entities.forEach { saveBinding(it) }
     }
 
-    fun findBindingsByManager(mangerId: String): List<CardBindingEntity> =
+    fun findBindingsByManager(managerId: String): List<CardBindingEntity> =
         jdbcTemplate.query(
-            "SELECT * FROM card_group_binding WHERE manger_id = ?",
-            bindingRowMapper, mangerId
+            "SELECT * FROM card_group_binding WHERE manager_id = ?",
+            bindingRowMapper, managerId
         )
 
     fun deleteBinding(id: String) {

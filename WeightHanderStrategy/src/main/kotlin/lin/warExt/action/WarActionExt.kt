@@ -7,7 +7,6 @@ import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
 import lin.domain.MyWarManage
 import lin.domain.WarInfo
 import lin.myLog
-import lin.warExt.my.base.getPlayCards
 import lin.warExt.my.twoLambda.hasCanAttack
 
 /**

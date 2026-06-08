@@ -5,13 +5,15 @@ import javafx.beans.property.SimpleObjectProperty
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.ComboRelation
 import lin.card_group.db.CardGroupService
+import lin.card_group.ui.ActiveManagerHolder
 import lin.combo_plan.db.ComboPlanDefinitionEntity
 import lin.combo_plan.db.ComboPlanDefinitionRepository
 import lin.utils.nextShortId
 
 class ComboPlanStore(
     private val repository: ComboPlanDefinitionRepository,
-    private val cardGroupService: CardGroupService
+    private val cardGroupService: CardGroupService,
+    private val activeManagerHolder: ActiveManagerHolder
 ) {
 
     private val stateProperty = SimpleObjectProperty(ComboPlanState())
@@ -21,7 +23,7 @@ class ComboPlanStore(
 
     /**
      * 加载初始数据
-     * 加载全部卡组配置与 Combo 编排记录，建立全量绑定检索索引
+     * 根据当前选中卡组筛选 Combo 编排记录；未选中时加载全部
      */
     fun loadInitialData() {
         val managers = cardGroupService.loadAll(onlyEnabled = false).sortedBy { it.name }
@@ -29,7 +31,12 @@ class ComboPlanStore(
         // 建立全局无前缀的绑定 ID 到分组实体的快速索引
         val bindingMap = managers.flatMap { it.bindings }.associateBy { it.id }
 
-        val allPlans = repository.findAll().map { it.toDomain() }
+        val activeId = activeManagerHolder.activeManagerId
+        val allPlans = if (activeId != null) {
+            repository.findByManagerId(activeId).map { it.toDomain() }
+        } else {
+            repository.findAll().map { it.toDomain() }
+        }
 
         val prevSearchText = state.searchText
         val prevSelectedId = state.selectedPlan?.id
@@ -85,6 +92,7 @@ class ComboPlanStore(
      * 保存或新建 Combo 编排配置
      */
     fun savePlan(
+        managerId: String,
         id: String?,
         coreGroupIds: Set<String>,
         depGroupIds: Set<String>,
@@ -96,6 +104,7 @@ class ComboPlanStore(
         val finalId = id?.trim()?.takeIf { it.isNotEmpty() } ?: nextShortId()
 
         val entity = ComboPlanDefinitionEntity(
+            managerId = managerId,
             id = finalId,
             coreGroupIds = coreGroupIds.joinToString(","),
             depGroupIds = depGroupIds.joinToString(","),

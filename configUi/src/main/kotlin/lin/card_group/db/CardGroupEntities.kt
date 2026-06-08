@@ -17,19 +17,26 @@ data class CardManagerEntity(
 /**
  * 对应 DB 表 card_group_binding 的行记录。
  * 使用 id 作为主键。
+ * stageOverride / replanAfterUse / orderWeight 由原 GroupUseOverride 合并而来。
  */
 data class CardBindingEntity(
     val id: String,
-    val mangerId: String,
+    val managerId: String,
     val name: String,
-    val cardIds: String // JSON 数组字符串
+    val cardIds: String, // JSON 数组字符串
+    val stageOverride: String? = null,
+    val replanAfterUse: Boolean? = null,
+    val orderWeight: Double = 0.0
 ) {
     fun toDomain(): CardGroupBinding {
         return CardGroupBinding(
             id = id,
-            mangerId = mangerId,
+            managerId = managerId,
             name = name,
-            cardIds = mapper.readValue(cardIds)
+            cardIds = mapper.readValue(cardIds),
+            stageOverride = stageOverride,
+            replanAfterUse = replanAfterUse,
+            orderWeight = orderWeight
         )
     }
 }

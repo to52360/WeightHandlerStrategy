@@ -9,7 +9,7 @@ import lin.warExt.my.base.hero
 //两/三层函数嵌套
 
 inline fun WarInfo.findMeByPlayArea(predicate: (Card) -> Boolean): List<Card> {
-    return getPlayCards().filter { it -> predicate(it) }
+    return getPlayCards().filter { predicate(it) }
 }
 
 fun WarInfo.findMeTauntByPlayArea(): List<Card> {

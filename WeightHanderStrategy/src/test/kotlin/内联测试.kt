@@ -9,10 +9,10 @@ class 内联测试 {
 
  fun parse(key: String): CardRaceEnum {
     CardDBUtil.queryCardById(key).let {
-        if (it.isNotEmpty()) {
-            return CardRaceEnum.fromString(it.first().type)
+        return if (it.isNotEmpty()) {
+            CardRaceEnum.fromString(it.first().type)
         } else {
-            return CardRaceEnum.UNKNOWN
+            CardRaceEnum.UNKNOWN
         }
 
     }

@@ -27,7 +27,10 @@ class CreateNewTreeAction : TreeWorkbenchAction {
                 return@ifPresent
             }
 
-            val draftItem = workbench.addDraftItem(result.name, result.enabled, result.bindings)
+            val draftItem = workbench.addDraftItem(
+                result.name, result.enabled, result.bindings,
+                managerId = result.managerId, isTemplate = result.isTemplate
+            )
 
             val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
@@ -58,7 +61,9 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
         val dialog = lin.tree_config.ui.components.TreePropertiesDialog(
             initialName = selectedItem.name,
             initialEnabled = currentEnabled,
-            initialBindings = currentBindings
+            initialBindings = currentBindings,
+            initialManagerId = selectedItem.managerId,
+            initialIsTemplate = selectedItem.isTemplate
         )
 
         dialog.showAndWait().ifPresent { result ->
@@ -71,17 +76,12 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
                 return@ifPresent
             }
 
-            // Only update current workbench state, and list item display if it's draft.
-            // For saved ones, just changing the model won't save to DB until "保存" is clicked,
-            // or we could save it immediately. For simplicity, we just update the model and wait for save.
-
-            // Actually, wait, modifying the ConfigListItem's properties directly is tricky since it's a data class.
-            // Let's replace the item in the list or just let the user save it.
-            // A better way is to update the Draft / selected item
             val newItem = selectedItem.copy(
                 name = result.name,
                 enabled = result.enabled,
-                bindingsSummary = result.bindings.joinToString(",") { "${it.type.name}:${it.id}" }
+                bindingsSummary = result.bindings.joinToString(",") { "${it.type.name}:${it.id}" },
+                managerId = result.managerId,
+                isTemplate = result.isTemplate
             )
             val idx = workbench.configListView.items.indexOf(selectedItem)
             if (idx >= 0) {
@@ -127,13 +127,14 @@ class SaveTreeAction : TreeWorkbenchAction {
             // 草稿条目：不传入 existingId，直接新建数据库记录
             // 已保存条目：传入 existingId，执行 UPSERT
             val savedId = if (selectedItem.isDraft) {
-                workbench.treeConfigService.saveConfig(selectedItem.name, config, null, workbench.getCurrentEnabled())
+                workbench.treeConfigService.saveConfig(
+                    selectedItem.name, config, null, workbench.getCurrentEnabled(),
+                    managerId = selectedItem.managerId, isTemplate = selectedItem.isTemplate
+                )
             } else {
                 workbench.treeConfigService.saveConfig(
-                    selectedItem.name,
-                    config,
-                    selectedItem.id,
-                    workbench.getCurrentEnabled()
+                    selectedItem.name, config, selectedItem.id, workbench.getCurrentEnabled(),
+                    managerId = selectedItem.managerId, isTemplate = selectedItem.isTemplate
                 )
             }
 
@@ -180,6 +181,61 @@ class DeleteTreeAction : TreeWorkbenchAction {
             } catch (e: Exception) {
                 showError("删除失败: ${e.message}")
             }
+        }
+    }
+}
+
+/**
+ * 从模板新建评估树：选择一个已有模板，复制其树结构和叶子配置为新草稿。
+ */
+class CreateFromTemplateAction : TreeWorkbenchAction {
+    override val title: String = "从模板新建"
+    override val order: Int = 12
+
+    override fun execute(workbench: EvaluatorTreeWorkbench) {
+        val managerIdSnapshot = workbench.activeManagerHolder.activeManagerId
+        val templates = workbench.treeConfigService.loadTemplates()
+        if (templates.isEmpty()) {
+            showError("暂无可用模板，请先创建并勾选 设为模板 的评估树")
+            return
+        }
+
+        // 弹出选择对话框
+        val choices = templates.map { it.first.name to it }.toMap()
+        val dialog = javafx.scene.control.ChoiceDialog(
+            choices.keys.first(),
+            choices.keys
+        ).apply {
+            title = "从模板新建"
+            headerText = "选择一个模板作为基础创建新评估树"
+            contentText = "模板:"
+        }
+
+        dialog.showAndWait().ifPresent { templateName ->
+            val templatePair = choices[templateName] ?: return@ifPresent
+            val (entity, config) = templatePair
+            if (config == null) {
+                showError("模板解析失败")
+                return@ifPresent
+            }
+
+            // 复制模板结构为新草稿（名称加后缀）
+            val newName = "${entity.name} 副本"
+            val draftItem = workbench.addDraftItem(
+                newName, entity.enabled, config.bindings,
+                managerId = managerIdSnapshot,
+                isTemplate = false // 从模板创建的不是模板
+            )
+
+            // 加载模板的树结构
+            workbench.nodeTreeView.root = TreeModelConverter.toTreeItem(config.root)
+            workbench.setSelectedBindings(config.bindings)
+            workbench.setCurrentEnabled(entity.enabled)
+            workbench.leafConfigs.clear()
+            workbench.leafConfigs.putAll(config.leafConfigs)
+            workbench.propertyPanel.showPlaceholder()
+
+            workbench.configListView.selectionModel.select(draftItem)
         }
     }
 }

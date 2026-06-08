@@ -76,13 +76,16 @@ class ConfigListPanel(
                         style = ""
                     } else {
                         val statusStr = if (item.enabled) "" else " [已禁用]"
-                        text = if (item.isDraft) "* ${item.name}$statusStr (未保存)" else "${item.name}$statusStr"
-                        style = if (!item.enabled) {
-                            "-fx-text-fill: #999999;"
-                        } else if (item.isDraft) {
-                            "-fx-text-fill: gray; -fx-font-style: italic;"
-                        } else {
-                            ""
+                        val templateStr = if (item.isTemplate) " [模板]" else ""
+                        text = when {
+                            item.isDraft -> "* ${item.name}$statusStr (未保存)"
+                            else -> "${item.name}$templateStr$statusStr"
+                        }
+                        style = when {
+                            !item.enabled -> "-fx-text-fill: #999999;"
+                            item.isDraft -> "-fx-text-fill: gray; -fx-font-style: italic;"
+                            item.isTemplate -> "-fx-text-fill: #2196F3;"
+                            else -> ""
                         }
                     }
                 }
@@ -107,6 +110,11 @@ class ConfigListPanel(
         val currentDrafts = configListView.items.filter { it.isDraft }
         configListView.items.clear()
 
+        val activeManagerId = workbench.activeManagerHolder?.activeManagerId
+
+        // 加载当前 manager + 全局共享的配置（含模板或仅非模板取决于 isTemplate 过滤）
+        val configs = treeConfigService.loadByManagerId(activeManagerId)
+
         val filterType = filterComboBox.selectionModel.selectedItem ?: "全部"
         val bindingTypeStr = when (filterType) {
             "按卡组绑定" -> EvaluatorTreeBindingType.GROUP.name
@@ -114,20 +122,25 @@ class ConfigListPanel(
             else -> null
         }
 
-        val totalConfigs = treeConfigService.countConfigs(bindingTypeStr)
+        // 简化分页：当用 manager 过滤时直接全量展示（数据量不大）
+        val totalConfigs = configs.size
         paginationBar.update(totalConfigs, page)
 
         val offset = (paginationBar.currentPage - 1) * paginationBar.pageSize
-        val configs = treeConfigService.loadPage(offset, paginationBar.pageSize, bindingTypeStr)
-        
-        configs.forEach { (entity, config) ->
+        val pagedConfigs = configs.drop(offset).take(paginationBar.pageSize)
+
+        pagedConfigs.filter { entity ->
+            bindingTypeStr == null || entity.first.bindingType == bindingTypeStr
+        }.forEach { (entity, config) ->
             configListView.items.add(
                 ConfigListItem(
                     entity.id,
                     entity.name,
                     entity.bindingsSummary,
                     config,
-                    enabled = entity.enabled
+                    enabled = entity.enabled,
+                    managerId = entity.managerId,
+                    isTemplate = entity.isTemplate
                 )
             )
         }
@@ -144,7 +157,9 @@ class ConfigListPanel(
     fun addDraftItem(
         name: String,
         enabled: Boolean = true,
-        bindings: List<lin.rule.tree.EvaluatorTreeBinding> = emptyList()
+        bindings: List<lin.rule.tree.EvaluatorTreeBinding> = emptyList(),
+        managerId: String? = null,
+        isTemplate: Boolean = false
     ): ConfigListItem {
         val draftItem = ConfigListItem(
             id = "draft_${System.currentTimeMillis()}",
@@ -161,7 +176,9 @@ class ConfigListPanel(
                 leafConfigs = emptyMap()
             ),
             isDraft = true,
-            enabled = enabled
+            enabled = enabled,
+            managerId = managerId,
+            isTemplate = isTemplate
         )
         configListView.items.add(0, draftItem)
         return draftItem

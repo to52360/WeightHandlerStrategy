@@ -6,6 +6,7 @@ import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.SplitPane
 import javafx.scene.layout.HBox
+import lin.card_group.ui.ActiveManagerHolder
 import lin.card_purpose.PurposeTagProvider
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
@@ -31,6 +32,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     val treeConfigService: TreeConfigService by inject()
     private val tagProvider: PurposeTagProvider by inject()
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
+    val activeManagerHolder: ActiveManagerHolder by inject()
 
     // 选中的叶子配置 (目前先只在内存中修改)
     val leafConfigs = mutableMapOf<String, EvaluatorLeafConfig>()
@@ -106,11 +108,22 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         })
 
         configListPanel.refreshList()
+
+        // 监听当前 manager 切换，自动刷新列表
+        activeManagerHolder.activeManagerProperty.addListener { _, _, _ ->
+            refreshList()
+        }
     }
 
     fun refreshList() = configListPanel.refreshList()
-    fun addDraftItem(name: String, enabled: Boolean, bindings: List<EvaluatorTreeBinding>) =
-        configListPanel.addDraftItem(name, enabled, bindings)
+    fun addDraftItem(
+        name: String,
+        enabled: Boolean,
+        bindings: List<EvaluatorTreeBinding>,
+        managerId: String? = null,
+        isTemplate: Boolean = false
+    ) =
+        configListPanel.addDraftItem(name, enabled, bindings, managerId, isTemplate)
 
     fun getSelectedBindings(): List<EvaluatorTreeBinding> = currentBindings
     fun setSelectedBindings(bindings: List<EvaluatorTreeBinding>) {

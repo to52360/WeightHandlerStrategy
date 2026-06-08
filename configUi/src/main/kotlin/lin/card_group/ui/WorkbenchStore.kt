@@ -100,7 +100,7 @@ class WorkbenchStore(private val service: CardGroupService) {
         val nextNum = state.currentBindings.size + 1
         val binding = CardGroupBinding(
             id = UUID.randomUUID().toString().substring(0, 8),
-            mangerId = state.selectedManagerItem?.entity?.id ?: "",
+            managerId = state.selectedManagerItem?.entity?.id ?: "",
             name = "分组 $nextNum",
             cardIds = emptyList()
         )
@@ -110,5 +110,20 @@ class WorkbenchStore(private val service: CardGroupService) {
     fun updateBindingName(newName: String) {
         val idx = state.selectedBindingIndex ?: return
         dispatch(WorkbenchActions.updateBindingName(idx, newName))
+    }
+
+    fun updateBindingStageOverride(stage: String?) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingStageOverride(idx, stage))
+    }
+
+    fun updateBindingReplanAfterUse(replan: Boolean?) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingReplanAfterUse(idx, replan))
+    }
+
+    fun updateBindingOrderWeight(weight: Double) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingOrderWeight(idx, weight))
     }
 }

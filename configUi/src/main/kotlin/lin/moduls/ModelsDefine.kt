@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
+import lin.card_group.ui.ActiveManagerHolder
 import lin.card_group.ui.CardGroupExtension
 import lin.card_purpose.DefaultPurposeTagProvider
 import lin.card_purpose.PurposeTagProvider
@@ -19,8 +20,6 @@ import lin.condition_tree.ui.action.CreateConditionTreeAction
 import lin.condition_tree.ui.action.DeleteConditionTreeAction
 import lin.condition_tree.ui.action.SaveConditionTreeAction
 import lin.config.AppConfig
-import lin.group_use_override.db.GroupUseOverrideRepository
-import lin.group_use_override.ui.GroupUseOverrideExtension
 import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.serviceLoader.provider.ConditionRegistrationProvider
@@ -61,12 +60,12 @@ val uiModule = module {
     single { CardGroupExtension() } bind UiExtension::class
     single { EvaluatorTreeExtension() } bind UiExtension::class
     single { ConditionTreeExtension() } bind UiExtension::class
-    single { GroupUseOverrideExtension() } bind UiExtension::class
     single { CardPurposeExtension() } bind UiExtension::class
     single { lin.combo_plan.ui.ComboPlanExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
+    single { lin.tree_config.ui.action.CreateFromTemplateAction() } bind TreeWorkbenchAction::class
     single { lin.tree_config.ui.action.EditTreePropertiesAction() } bind TreeWorkbenchAction::class
     single { SaveTreeAction() } bind TreeWorkbenchAction::class
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
@@ -79,6 +78,9 @@ val uiModule = module {
     // 用途标签目录与显示
     single<PurposeTagProvider> { DefaultPurposeTagProvider() }
     single { PurposeTagTreeBindingPolicy(get()) }
+
+    // 全局卡组选择状态
+    single { ActiveManagerHolder() }
 
 }
 
@@ -114,7 +116,6 @@ val uiDBModule = module {
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupRepository(get()) }
     single { CardGroupService(get()) }
-    single { GroupUseOverrideRepository(get()) }
     single { CardPurposeRepository(get()) }
     single { lin.combo_plan.db.ComboPlanDefinitionRepository(get()) }
 }

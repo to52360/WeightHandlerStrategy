@@ -12,7 +12,6 @@ import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
 import lin.serviceLoader.provider.CardGroupIndexProvider
 import lin.serviceLoader.provider.config.CardPurposeProvider
 import lin.serviceLoader.provider.config.ComboPlanDefinitionProvider
-import lin.serviceLoader.provider.config.GroupUseOverrideProvider
 import lin.utils.runCatchingLog
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.component.KoinComponent
@@ -30,20 +29,19 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
             baseInfos.putAll(provider.getInfos())
         }
 
-        // 2. SPI 拉取卡牌分组 Map
+        // 2. SPI 拉取卡牌分组 Map + 从 Binding 行为属性构建分组覆盖
         val groupMap = HashMap<String, MutableSet<String>>()
+        val groupOverrides = HashMap<String, GroupUseOverride>()
         ServiceLoaderUtils.loadServices(CardGroupIndexProvider::class.java).forEach { provider ->
             provider.provide().forEach { (cardId, groupIds) ->
                 groupMap.getOrPut(cardId) { linkedSetOf() }.addAll(groupIds)
             }
+            groupOverrides.putAll(provider.provideBindingOverrides())
         }
 
         // 3. 启动期一次性读取 + 组装：Provider 自主决定数据范围
         val cardPurposes = loadCardPurposes()
-        val useIntentAsm = UseIntentAssembler(
-            cardPurposes, groupMap,
-            loadGroupUseOverrides()
-        )
+        val useIntentAsm = UseIntentAssembler(cardPurposes, groupMap, groupOverrides)
         val comboAsm = ComboAssembler(groupMap, loadComboDefinitions())
 
         val finalMap: Map<String, CardCombinedConfig> = baseInfos.mapValues { (cardId, weightInfo) ->
@@ -66,13 +64,6 @@ class CardConfigBindingTask : StartupTask, KoinComponent {
     private fun loadCardPurposes(): Map<String, CardPurpose> {
         val provider = runCatchingLog("加载 CardPurposeProvider 失败，使用空用途配置") {
             get<CardPurposeProvider>()
-        }.getOrNull() ?: return emptyMap()
-        return provider.findAllEnabled()
-    }
-
-    private fun loadGroupUseOverrides(): Map<String, GroupUseOverride> {
-        val provider = runCatchingLog("加载 GroupUseOverrideProvider 失败，使用空分组覆盖") {
-            get<GroupUseOverrideProvider>()
         }.getOrNull() ?: return emptyMap()
         return provider.findAllEnabled()
     }

@@ -36,9 +36,12 @@ class CardGroupService(private val repository: CardGroupRepository) {
         val entities = bindings.map { binding ->
             CardBindingEntity(
                 id = binding.id,
-                mangerId = id,
+                managerId = id,
                 name = binding.name,
-                cardIds = mapper.writeValueAsString(binding.cardIds)
+                cardIds = mapper.writeValueAsString(binding.cardIds),
+                stageOverride = binding.stageOverride,
+                replanAfterUse = binding.replanAfterUse,
+                orderWeight = binding.orderWeight
             )
         }
         repository.replaceBindings(id, entities)
@@ -61,9 +64,12 @@ class CardGroupService(private val repository: CardGroupRepository) {
         repository.saveBinding(
             CardBindingEntity(
                 id = binding.id,
-                mangerId = binding.mangerId,
+                managerId = binding.managerId,
                 name = binding.name,
-                cardIds = mapper.writeValueAsString(binding.cardIds)
+                cardIds = mapper.writeValueAsString(binding.cardIds),
+                stageOverride = binding.stageOverride,
+                replanAfterUse = binding.replanAfterUse,
+                orderWeight = binding.orderWeight
             )
         )
 
@@ -74,7 +80,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
 
     private fun CardManagerEntity.toDomain(bindings: List<CardGroupBinding>) =
         CardGroupManagerConfig(
-            cardGroupMangerId = id,
+            cardGroupManagerId = id,
             name = name,
             bindings = bindings,
             enabled = enabled

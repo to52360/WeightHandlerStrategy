@@ -10,6 +10,7 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.card_group.db.CardGroupService
+import lin.card_group.ui.ActiveManagerHolder
 import lin.combo_plan.db.ComboPlanDefinitionRepository
 import lin.ui.ActiveAware
 import lin.utils.addColumn
@@ -18,9 +19,12 @@ import org.koin.core.component.inject
 
 class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
+    private var managerListener: javafx.beans.value.ChangeListener<in lin.card_group.db.CardManagerEntity?>? = null
+
     private val repository: ComboPlanDefinitionRepository by inject()
     private val cardGroupService: CardGroupService by inject()
-    private val store = ComboPlanStore(repository, cardGroupService)
+    private val activeManagerHolder: ActiveManagerHolder by inject()
+    private val store = ComboPlanStore(repository, cardGroupService, activeManagerHolder)
 
     // 左侧工作台组件
     private val tableView = TableView<ComboPlanDefinition>()
@@ -76,8 +80,9 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
         // =====================================================================
         // 2. 右侧编辑器交互回调绑定
         // =====================================================================
-        editor.onSave = { id, coreSelected, depSelected, score, relation, coreMutex, mustAdjacent ->
+        editor.onSave = { managerId, id, coreSelected, depSelected, score, relation, coreMutex, mustAdjacent ->
             store.savePlan(
+                managerId = managerId,
                 id = id,
                 coreGroupIds = coreSelected,
                 depGroupIds = depSelected,
@@ -163,6 +168,14 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
     override fun onActive() {
         // 当视图被主容器激活展示时，安全、按需触发初次数据读取
         store.loadInitialData()
+        // 监听卡组切换，自动刷新数据
+        if (managerListener == null) {
+            val listener = javafx.beans.value.ChangeListener<lin.card_group.db.CardManagerEntity?> { _, _, _ ->
+                store.loadInitialData()
+            }
+            activeManagerHolder.activeManagerProperty.addListener(listener)
+            managerListener = listener
+        }
     }
 
     /**
@@ -172,7 +185,8 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
         isCreatingMode = true
         tableView.selectionModel.clearSelection()
         store.selectPlan(null)
-        editor.enterCreatingMode(store.state.allManagers)
+        val managerIdSnapshot = activeManagerHolder.activeManagerId
+        editor.enterCreatingMode(store.state.allManagers, managerIdSnapshot)
     }
 
     /**

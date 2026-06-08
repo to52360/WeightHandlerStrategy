@@ -4,6 +4,7 @@ import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.ComboRelation
 
 data class ComboPlanDefinitionEntity(
+    val managerId: String,
     val id: String,
     val coreGroupIds: String, // 逗号分隔
     val depGroupIds: String,  // 逗号分隔

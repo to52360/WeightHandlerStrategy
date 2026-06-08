@@ -116,4 +116,15 @@ class CardSelectOptionProvider : SelectOptionProvider, KoinComponent {
             }
         }
     }
+
+    /** 按 managerId 过滤，仅返回指定方案下的分组 */
+    fun getOptionsByManager(managerId: String): List<DynamicFieldOption> {
+        val bindings = service.loadBindings(managerId)
+        return bindings.map { binding ->
+            DynamicFieldOption(
+                value = binding.id,
+                label = binding.name
+            )
+        }
+    }
 }

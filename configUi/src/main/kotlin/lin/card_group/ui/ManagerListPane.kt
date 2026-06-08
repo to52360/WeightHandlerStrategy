@@ -48,7 +48,7 @@ class ManagerListPane(private val store: WorkbenchStore) : VBox(10.0) {
             }
         }
 
-        VBox.setVgrow(managerListView, javafx.scene.layout.Priority.ALWAYS)
+        setVgrow(managerListView, javafx.scene.layout.Priority.ALWAYS)
         children.addAll(toolBar, managerListView)
     }
 

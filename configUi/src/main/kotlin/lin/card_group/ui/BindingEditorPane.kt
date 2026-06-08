@@ -4,10 +4,12 @@ import javafx.beans.property.ReadOnlyIntegerWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
+import javafx.geometry.Pos
 import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.bean.usePlan.UseStage
 import lin.dao.CardWeightConfig
 import lin.rule.tree.CardGroupBinding
 
@@ -35,7 +37,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         val nameField = TextField().apply { promptText = "分组方案名称" }
         val enabledCheck = CheckBox("启用")
         val infoBox = HBox(10.0).apply {
-            alignment = javafx.geometry.Pos.CENTER_LEFT
+            alignment = Pos.CENTER_LEFT
             children.addAll(Label("方案名称:"), nameField, enabledCheck)
         }
 
@@ -61,7 +63,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
 
         val tableBox = VBox(5.0).apply {
             val toolBar = HBox(5.0).apply {
-                alignment = javafx.geometry.Pos.CENTER_LEFT
+                alignment = Pos.CENTER_LEFT
 
                 val btnAdd = Button("添加分组").apply {
                     setOnAction { store.addBinding() }
@@ -75,14 +77,101 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 children.addAll(btnAdd, btnRemove)
             }
 
-            val bindingInfoBox = HBox(10.0).apply {
-                alignment = javafx.geometry.Pos.CENTER_LEFT
-                children.addAll(Label("当前选中分组名称:"), bindingNameField)
-            }
+            val bindingInfoBox = VBox(5.0).apply {
+                // 第一行：分组名称
+                val nameRow = HBox(10.0).apply {
+                    alignment = Pos.CENTER_LEFT
+                    children.addAll(Label("分组名称:"), bindingNameField)
+                }
 
-            bindingNameField.textProperty().addListener { _, _, newValue ->
-                if (!isUpdatingFromState && newValue != null) {
-                    store.updateBindingName(newValue)
+                // 第二行：行为属性编辑
+                val stageCombo = ComboBox<String>().apply {
+                    items.setAll(
+                        listOf("(不覆盖)") + UseStage.entries.map { it.name }
+                    )
+                    promptText = "出牌阶段覆盖"
+                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
+                }
+                val replanCombo = ComboBox<String>().apply {
+                    items.setAll("(不覆盖)", "是", "否")
+                    promptText = "出牌后重规划"
+                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
+                }
+                val weightField = TextField().apply {
+                    promptText = "排序权重"
+                    prefWidth = 80.0
+                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
+                }
+
+                val behaviorRow = HBox(10.0).apply {
+                    alignment = Pos.CENTER_LEFT
+                    children.addAll(
+                        Label("阶段覆盖:"), stageCombo,
+                        Label("重规划:"), replanCombo,
+                        Label("排序权重:"), weightField
+                    )
+                }
+
+                children.addAll(nameRow, behaviorRow)
+
+                // ── 行为属性事件绑定 ──
+                bindingNameField.textProperty().addListener { _, _, newValue ->
+                    if (!isUpdatingFromState && newValue != null) {
+                        store.updateBindingName(newValue)
+                    }
+                }
+
+                stageCombo.valueProperty().addListener { _, _, newValue ->
+                    if (!isUpdatingFromState && newValue != null) {
+                        val stage = if (newValue == "(不覆盖)") null else newValue
+                        store.updateBindingStageOverride(stage)
+                    }
+                }
+
+                replanCombo.valueProperty().addListener { _, _, newValue ->
+                    if (!isUpdatingFromState && newValue != null) {
+                        val replan = when (newValue) {
+                            "是" -> true
+                            "否" -> false
+                            else -> null
+                        }
+                        store.updateBindingReplanAfterUse(replan)
+                    }
+                }
+
+                weightField.textProperty().addListener { _, _, newValue ->
+                    if (!isUpdatingFromState && newValue != null) {
+                        newValue.toDoubleOrNull()?.let { store.updateBindingOrderWeight(it) }
+                    }
+                }
+
+                // ── 从 State 同步到编辑控件 ──
+                store.stateProperty.addListener { _, oldState, newState ->
+                    if (oldState.currentBindings != newState.currentBindings || oldState.selectedBindingIndex != newState.selectedBindingIndex) {
+                        val idx = newState.selectedBindingIndex
+                        if (idx != null && idx in newState.currentBindings.indices) {
+                            val binding = newState.currentBindings[idx]
+                            if (stageCombo.value != (binding.stageOverride ?: "(不覆盖)")) {
+                                stageCombo.value = binding.stageOverride ?: "(不覆盖)"
+                            }
+                            val replanDisplay = when (binding.replanAfterUse) {
+                                true -> "是"
+                                false -> "否"
+                                null -> "(不覆盖)"
+                            }
+                            if (replanCombo.value != replanDisplay) {
+                                replanCombo.value = replanDisplay
+                            }
+                            val weightStr = binding.orderWeight.toString()
+                            if (weightField.text != weightStr) {
+                                weightField.text = weightStr
+                            }
+                        } else {
+                            stageCombo.value = null
+                            replanCombo.value = null
+                            weightField.clear()
+                        }
+                    }
                 }
             }
 
@@ -99,7 +188,15 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 setCellValueFactory { ReadOnlyIntegerWrapper(it.value.cardIds.size) }
                 prefWidth = 80.0
             }
-            bindingTableView.columns.addAll(colNo, colName, colCardCount)
+            val colStage = TableColumn<CardGroupBinding, String>("阶段覆盖").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.stageOverride ?: "-") }
+                prefWidth = 80.0
+            }
+            val colWeight = TableColumn<CardGroupBinding, String>("排序权重").apply {
+                setCellValueFactory { ReadOnlyStringWrapper(if (it.value.orderWeight == 0.0) "-" else it.value.orderWeight.toString()) }
+                prefWidth = 70.0
+            }
+            bindingTableView.columns.addAll(colNo, colName, colCardCount, colStage, colWeight)
 
             bindingTableView.items = obsBindings
             bindingTableView.selectionModel.selectedIndexProperty().addListener { _, _, newValue ->
@@ -141,15 +238,15 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
 
             items.addAll(
                 VBox(Label("卡池 (点击添加)"), cardPoolListView).apply {
-                    VBox.setVgrow(
+                    setVgrow(
                         cardPoolListView,
-                        javafx.scene.layout.Priority.ALWAYS
+                        Priority.ALWAYS
                     )
                 },
                 VBox(Label("已选卡牌 (点击移除)"), selectedCardListView).apply {
-                    VBox.setVgrow(
+                    setVgrow(
                         selectedCardListView,
-                        javafx.scene.layout.Priority.ALWAYS
+                        Priority.ALWAYS
                     )
                 }
             )

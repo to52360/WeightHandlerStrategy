@@ -76,4 +76,131 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
         val sql = "DELETE FROM card_purpose WHERE card_id = ?"
         jdbcTemplate.update(sql, cardId)
     }
+
+    fun syncCards(cards: List<CardPurposeEntity>) {
+        if (cards.isEmpty()) return
+        val sql = """
+            INSERT INTO card_purpose (card_id, name, purpose_tags, replan_after_use)
+            VALUES (?, ?, '', 0)
+            ON CONFLICT(card_id) DO UPDATE SET
+                name = excluded.name
+        """.trimIndent()
+
+        jdbcTemplate.execute("BEGIN TRANSACTION;")
+        try {
+            jdbcTemplate.batchUpdate(
+                sql,
+                object : org.springframework.jdbc.core.BatchPreparedStatementSetter {
+                    override fun setValues(ps: java.sql.PreparedStatement, i: Int) {
+                        val card = cards[i]
+                        ps.setString(1, card.cardId)
+                        ps.setString(2, card.name ?: "")
+                    }
+
+                    override fun getBatchSize() = cards.size
+                }
+            )
+            jdbcTemplate.execute("COMMIT;")
+        } catch (e: Exception) {
+            jdbcTemplate.execute("ROLLBACK;")
+            throw e
+        }
+    }
+
+    fun saveAll(entities: List<CardPurposeEntity>) {
+        if (entities.isEmpty()) return
+        val sql = """
+            INSERT INTO card_purpose (card_id, name, purpose_tags, replan_after_use)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(card_id) DO UPDATE SET
+                name             = excluded.name,
+                purpose_tags     = excluded.purpose_tags,
+                replan_after_use = excluded.replan_after_use
+        """.trimIndent()
+
+        jdbcTemplate.execute("BEGIN TRANSACTION;")
+        try {
+            jdbcTemplate.batchUpdate(
+                sql,
+                object : org.springframework.jdbc.core.BatchPreparedStatementSetter {
+                    override fun setValues(ps: java.sql.PreparedStatement, i: Int) {
+                        val entity = entities[i]
+                        ps.setString(1, entity.cardId)
+                        ps.setString(2, entity.name)
+                        ps.setString(3, entity.purposeTags)
+                        ps.setInt(4, if (entity.replanAfterUse) 1 else 0)
+                    }
+
+                    override fun getBatchSize() = entities.size
+                }
+            )
+            jdbcTemplate.execute("COMMIT;")
+        } catch (e: Exception) {
+            jdbcTemplate.execute("ROLLBACK;")
+            throw e
+        }
+    }
+
+    fun count(cardIds: Set<String>?, searchText: String, tagFilter: String?): Int {
+        val conditions = mutableListOf<String>()
+        val params = mutableListOf<Any>()
+
+        if (cardIds != null) {
+            if (cardIds.isEmpty()) return 0
+            val placeholders = cardIds.joinToString(",") { "?" }
+            conditions.add("card_id IN ($placeholders)")
+            params.addAll(cardIds)
+        }
+
+        if (searchText.isNotBlank()) {
+            conditions.add("(card_id LIKE ? OR name LIKE ?)")
+            params.add("%$searchText%")
+            params.add("%$searchText%")
+        }
+
+        if (tagFilter != null) {
+            conditions.add("purpose_tags LIKE ?")
+            params.add("%$tagFilter%")
+        }
+
+        val whereClause = if (conditions.isNotEmpty()) "WHERE ${conditions.joinToString(" AND ")}" else ""
+        val sql = "SELECT COUNT(*) FROM card_purpose $whereClause"
+        return jdbcTemplate.queryForObject(sql, Int::class.java, *params.toTypedArray()) ?: 0
+    }
+
+    fun findPaginated(
+        cardIds: Set<String>?,
+        searchText: String,
+        tagFilter: String?,
+        limit: Int,
+        offset: Int
+    ): List<CardPurposeEntity> {
+        val conditions = mutableListOf<String>()
+        val params = mutableListOf<Any>()
+
+        if (cardIds != null) {
+            if (cardIds.isEmpty()) return emptyList()
+            val placeholders = cardIds.joinToString(",") { "?" }
+            conditions.add("card_id IN ($placeholders)")
+            params.addAll(cardIds)
+        }
+
+        if (searchText.isNotBlank()) {
+            conditions.add("(card_id LIKE ? OR name LIKE ?)")
+            params.add("%$searchText%")
+            params.add("%$searchText%")
+        }
+
+        if (tagFilter != null) {
+            conditions.add("purpose_tags LIKE ?")
+            params.add("%$tagFilter%")
+        }
+
+        val whereClause = if (conditions.isNotEmpty()) "WHERE ${conditions.joinToString(" AND ")}" else ""
+        val sql = "SELECT * FROM card_purpose $whereClause ORDER BY card_id LIMIT ? OFFSET ?"
+        params.add(limit)
+        params.add(offset)
+
+        return jdbcTemplate.query(sql, rowMapper, *params.toTypedArray())
+    }
 }

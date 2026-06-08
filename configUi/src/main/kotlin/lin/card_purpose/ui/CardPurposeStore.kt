@@ -15,93 +15,118 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
     // 只读属性暴露给 UI 订阅
     fun stateProperty(): ReadOnlyObjectProperty<CardPurposeState> = stateProperty
 
-    // 内存存储卡组和卡牌ID集合的映射关系
-    private var cardGroupToIds: Map<String, Set<String>> = emptyMap()
+    // 缓存启用的卡牌名映射，避免翻页时重复全量扫描 JSON 文件
+    private var fileCardsMap: Map<String, String> = emptyMap()
 
     /**
      * 初始化加载数据
-     * 合并本地 .cardgroup 文件和本地 SQLite 数据库中的配置与名称
+     * 合并本地已启用的 .cardgroup 文件并同步到数据库
      */
     fun loadInitialData() {
         val cardGroups = CardGroupJsonParser.loadAllCardGroups()
         val fileNames = CardGroupJsonParser.listAvailableFiles()
 
-        val fileCardsMap = mutableMapOf<String, String>()
-        val groupToIdsMap = mutableMapOf<String, Set<String>>()
+        // 仅筛选出启用的卡组卡牌进行同步
+        val enabledCards = cardGroups.filter { it.second.enabled }
+            .flatMap { (_, config) -> config.cards }
+            .map { CardPurposeEntity(cardId = it.cardId, name = it.name, purposeTags = "") }
+            .distinctBy { it.cardId }
 
-        cardGroups.forEach { (fileName, config) ->
-            val cardIds = config.cards.map { it.cardId }.toSet()
-            groupToIdsMap[fileName] = cardIds
-            config.cards.forEach { card ->
-                fileCardsMap[card.cardId] = card.name
-            }
-        }
-        cardGroupToIds = groupToIdsMap
-
-        val dbEntities = repository.findAll()
-        val dbMap = dbEntities.associateBy { it.cardId }
-
-        val allCardIds = (fileCardsMap.keys + dbMap.keys).sorted()
-        val allCards = allCardIds.map { cardId ->
-            val name = fileCardsMap[cardId] ?: dbMap[cardId]?.name ?: "未知卡牌"
-            val dbEntity = dbMap[cardId]
-            val purposeTags = dbEntity?.toDomain()?.purposeTags ?: emptySet()
-            val replanAfterUse = dbEntity?.replanAfterUse ?: false
-            val isDbOnly = cardId !in fileCardsMap
-            CardUiItem(cardId, name, purposeTags, replanAfterUse, isDbOnly)
+        if (enabledCards.isNotEmpty()) {
+            repository.syncCards(enabledCards)
         }
 
-        // 保存原有的过滤参数并刷新过滤列表
-        val prevSearch = state.searchText
-        val prevGroup = state.selectedGroupFilter
-        val prevTag = state.selectedTagFilter
-        val prevSelectedIds = state.selectedCards.map { it.cardId }.toSet()
+        // 更新缓存以供翻页渲染显示名时使用
+        fileCardsMap = cardGroups.filter { it.second.enabled }
+            .flatMap { it.second.cards }
+            .associate { it.cardId to it.name }
 
+        // 重置状态
         stateProperty.set(
             CardPurposeState(
-                allCards = allCards,
                 cardGroupFiles = fileNames,
-                searchText = prevSearch,
-                selectedGroupFilter = prevGroup,
-                selectedTagFilter = prevTag
+                currentPage = 1,
+                pageSize = state.pageSize,
+                searchText = "",
+                selectedGroupFilter = null,
+                selectedTagFilter = null
             )
         )
 
-        // 重新过滤并应用选中状态
-        updateFilters(prevSearch, prevGroup, prevTag)
-        val newSelected = state.allCards.filter { it.cardId in prevSelectedIds }
-        stateProperty.set(state.copy(selectedCards = newSelected))
+        // 加载第一页
+        loadPage(1)
+    }
+
+    private fun getCardIdsForGroup(groupName: String?): Set<String>? {
+        if (groupName == null) return null
+        val config = CardGroupJsonParser.loadByFileName(groupName) ?: return emptySet()
+        return config.cards.map { it.cardId }.toSet()
     }
 
     /**
-     * 更新搜索和过滤条件
+     * 加载特定页面的数据
      */
-    fun updateFilters(searchText: String, groupFilter: String?, tagFilter: PurposeTagId?) {
-        val filtered = state.allCards.filter { card ->
-            // 模糊搜索 ID 或名称
-            val matchSearch = searchText.isEmpty() ||
-                    card.cardId.contains(searchText, true) ||
-                    card.name.contains(searchText, true)
+    fun loadPage(
+        page: Int = state.currentPage,
+        searchText: String = state.searchText,
+        groupFilter: String? = state.selectedGroupFilter,
+        tagFilter: PurposeTagId? = state.selectedTagFilter
+    ) {
+        val resolvedCardIds = getCardIdsForGroup(groupFilter)
 
-            // 卡组过滤
-            val matchGroup = groupFilter == null ||
-                    cardGroupToIds[groupFilter]?.contains(card.cardId) == true
+        // 统计当前过滤条件下的数据总数
+        val total = repository.count(
+            cardIds = resolvedCardIds,
+            searchText = searchText,
+            tagFilter = tagFilter?.value
+        )
 
-            // 用途标签过滤
-            val matchTag = tagFilter == null ||
-                    card.purposeTags.contains(tagFilter)
+        // 修正目标页码范围
+        val limit = state.pageSize
+        val totalPages = (total + limit - 1) / limit
+        val targetPage = if (page > totalPages) {
+            if (totalPages > 0) totalPages else 1
+        } else if (page < 1) {
+            1
+        } else {
+            page
+        }
 
-            matchSearch && matchGroup && matchTag
+        val offset = (targetPage - 1) * limit
+        val dbEntities = repository.findPaginated(
+            cardIds = resolvedCardIds,
+            searchText = searchText,
+            tagFilter = tagFilter?.value,
+            limit = limit,
+            offset = offset
+        )
+
+        // 结合缓存将实体映射为 UI 数据项
+        val currentPageCards = dbEntities.map { entity ->
+            val name = fileCardsMap[entity.cardId] ?: entity.name ?: "未知卡牌"
+            val purposeTags = entity.toDomain().purposeTags
+            val replanAfterUse = entity.replanAfterUse
+            val isDbOnly = entity.cardId !in fileCardsMap
+            CardUiItem(entity.cardId, name, purposeTags, replanAfterUse, isDbOnly)
         }
 
         stateProperty.set(
             state.copy(
-                filteredCards = filtered,
+                currentPageCards = currentPageCards,
+                totalCount = total,
+                currentPage = targetPage,
                 searchText = searchText,
                 selectedGroupFilter = groupFilter,
                 selectedTagFilter = tagFilter
             )
         )
+    }
+
+    /**
+     * 更新搜索和过滤条件（重置到第一页）
+     */
+    fun updateFilters(searchText: String, groupFilter: String?, tagFilter: PurposeTagId?) {
+        loadPage(page = 1, searchText = searchText, groupFilter = groupFilter, tagFilter = tagFilter)
     }
 
     /**
@@ -113,12 +138,6 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
 
     /**
      * 批量或单卡保存卡牌战略用途配置
-     * @param cardIds 需要被修改的卡牌 ID 列表
-     * @param tagsToApply 用途标签的修改映射。值意义为：
-     *                    - true: 全员强制添加该 Tag
-     *                    - false: 全员强制移除该 Tag
-     *                    - null: 保持各自原来的状态（即处于半选三态时的默认状态）
-     * @param replanAfterUse 使用后重规划设置。若为 null，则保持原本状态
      */
     fun saveCardPurpose(
         cardIds: List<String>,
@@ -127,8 +146,10 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
     ) {
         if (cardIds.isEmpty()) return
 
+        val entitiesToSave = mutableListOf<CardPurposeEntity>()
+
         cardIds.forEach { cardId ->
-            val currentItem = state.allCards.find { it.cardId == cardId } ?: return@forEach
+            val currentItem = state.currentPageCards.find { it.cardId == cardId } ?: return@forEach
 
             // 合并 Tag
             val mergedTags = currentItem.purposeTags.toMutableSet()
@@ -144,21 +165,24 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
             // 合并重规划
             val mergedReplan = replanAfterUse ?: currentItem.replanAfterUse
 
-            // 保存到 SQLite
             val entity = CardPurposeEntity(
                 cardId = cardId,
                 name = currentItem.name,
                 purposeTags = mergedTags.joinToString(",") { it.value },
                 replanAfterUse = mergedReplan
             )
-            repository.save(entity)
+            entitiesToSave.add(entity)
         }
 
-        // 重新加载数据刷新状态
-        val prevSelectedIds = cardIds.toSet()
-        loadInitialData()
+        if (entitiesToSave.isNotEmpty()) {
+            repository.saveAll(entitiesToSave)
+        }
+
+        // 重新拉取当前分页的数据以同步最新状态
+        loadPage(state.currentPage)
+
         // 恢复选中状态
-        val newSelected = state.allCards.filter { it.cardId in prevSelectedIds }
+        val newSelected = state.currentPageCards.filter { it.cardId in cardIds }
         stateProperty.set(state.copy(selectedCards = newSelected))
     }
 
@@ -170,9 +194,9 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
         val cleanName = name.trim().ifBlank { "自定义卡牌" }
         if (cleanId.isBlank()) return
 
-        val existing = state.allCards.find { it.cardId == cleanId }
-        val tagsString = existing?.purposeTags?.joinToString(",") { it.value } ?: ""
-        val replan = existing?.replanAfterUse ?: false
+        val dbEntity = repository.findByCardId(cleanId)
+        val tagsString = dbEntity?.purposeTags ?: ""
+        val replan = dbEntity?.replanAfterUse ?: false
 
         val entity = CardPurposeEntity(
             cardId = cleanId,
@@ -182,9 +206,11 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
         )
         repository.save(entity)
 
-        // 重新加载并自动选中刚录入的卡牌
-        loadInitialData()
-        val newSelected = state.allCards.filter { it.cardId == cleanId }
+        // 刷新列表
+        loadPage(state.currentPage)
+
+        // 高亮选中新卡牌
+        val newSelected = state.currentPageCards.filter { it.cardId == cleanId }
         stateProperty.set(state.copy(selectedCards = newSelected))
     }
 }

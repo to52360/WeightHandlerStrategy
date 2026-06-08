@@ -108,6 +108,30 @@ object WorkbenchActions {
         state.copy(currentBindings = newList)
     }
 
+    fun updateBindingStageOverride(index: Int, stage: String?): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            newList[index] = newList[index].copy(stageOverride = stage)
+        }
+        state.copy(currentBindings = newList)
+    }
+
+    fun updateBindingReplanAfterUse(index: Int, replan: Boolean?): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            newList[index] = newList[index].copy(replanAfterUse = replan)
+        }
+        state.copy(currentBindings = newList)
+    }
+
+    fun updateBindingOrderWeight(index: Int, weight: Double): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            newList[index] = newList[index].copy(orderWeight = weight)
+        }
+        state.copy(currentBindings = newList)
+    }
+
     fun toggleCard(cardId: String, isSelected: Boolean): Action = { state ->
         val newCards = if (isSelected) {
             state.selectedCards + cardId

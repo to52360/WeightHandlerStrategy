@@ -12,7 +12,7 @@ import lin.bean.usePlan.*
  * 默认出牌阶段由此统一推导；特例直接使用 stageOverride 指定。
  */
 class UseIntentDeriver(
-    private val ruleProvider: PurposeTagIntentRuleProvider = DefaultPurposeTagIntentRuleProvider()
+    ruleProvider: PurposeTagIntentRuleProvider = DefaultPurposeTagIntentRuleProvider()
 ) {
     private val ruleIndex: Map<PurposeTagId, PurposeTagIntentRule> =
         ruleProvider.rules().associateBy { it.tagId }

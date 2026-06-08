@@ -1,11 +1,5 @@
 package lin.serviceLoader.weightRule
 
-import club.xiaojiawei.hsscriptcardsdk.bean.Card
-import lin.bean.ComboCard
-
-import lin.domain.WarInfo
-import lin.warExt.my.attack.getGraveyardCards
-
 
 //减轻开发者所需知识 ,属于未分类区域,暂时放这
 

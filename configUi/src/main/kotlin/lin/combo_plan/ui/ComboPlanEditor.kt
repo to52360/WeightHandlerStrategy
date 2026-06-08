@@ -40,7 +40,7 @@ class ComboPlanEditor : VBox(12.0) {
     private var selectedPlan: ComboPlanDefinition? = null
 
     // 暴露给外部组件的回调函数
-    var onSave: ((id: String?, coreSelected: Set<String>, depSelected: Set<String>, score: Double, relation: ComboRelation, coreMutex: Boolean, mustAdjacent: Boolean) -> Unit)? =
+    var onSave: ((managerId: String, id: String?, coreSelected: Set<String>, depSelected: Set<String>, score: Double, relation: ComboRelation, coreMutex: Boolean, mustAdjacent: Boolean) -> Unit)? =
         null
     var onDelete: ((id: String) -> Unit)? = null
 
@@ -217,9 +217,9 @@ class ComboPlanEditor : VBox(12.0) {
     }
 
     /**
-     * 新建 Combo 模式，激活编辑器表单并载入激活卡组为默认上下文
+     * 新建 Combo 模式，激活编辑器表单并载入当前上下文快照为默认卡组。
      */
-    fun enterCreatingMode(allManagers: List<CardGroupManagerConfig>) {
+    fun enterCreatingMode(allManagers: List<CardGroupManagerConfig>, defaultManagerId: String?) {
         isCreatingMode = true
         selectedPlan = null
 
@@ -228,8 +228,9 @@ class ComboPlanEditor : VBox(12.0) {
         editorBox.isDisable = false
         btnDelete.isVisible = false
 
-        // 新建默认将上下文定位到当前的激活（enabled == true）卡组
-        val activeManager = allManagers.find { it.enabled } ?: allManagers.firstOrNull()
+        val activeManager = allManagers.find { it.cardGroupManagerId == defaultManagerId }
+            ?: allManagers.find { it.enabled }
+            ?: allManagers.firstOrNull()
         isUpdatingFromState = true
         try {
             cardGroupSelector.value = activeManager
@@ -267,8 +268,8 @@ class ComboPlanEditor : VBox(12.0) {
         // 核心高阶 UX：自动回溯推导当前的 Combo 究竟属于哪个卡组配置 (Deck)
         val firstGroupId = plan.coreGroupIds.firstOrNull() ?: plan.depGroupIds.firstOrNull()
         val targetManager = if (firstGroupId != null) {
-            val targetMangerId = bindingMap[firstGroupId]?.mangerId
-            allManagers.find { it.cardGroupMangerId == targetMangerId }
+            val targetManagerId = bindingMap[firstGroupId]?.managerId
+            allManagers.find { it.cardGroupManagerId == targetManagerId }
         } else null
 
         // 定位卡组切换下拉框，默认到首个激活卡组
@@ -335,7 +336,12 @@ class ComboPlanEditor : VBox(12.0) {
         val mustAdjacent = mustAdjacentCheck.isSelected
 
         val id = if (isCreatingMode) null else selectedPlan?.id
-        onSave?.invoke(id, coreSelected, depSelected, score, relation, coreMutex, mustAdjacent)
+        val managerId = cardGroupSelector.value?.cardGroupManagerId
+        if (managerId.isNullOrBlank()) {
+            Alert(Alert.AlertType.WARNING, "请选择目标卡组方案！").showAndWait()
+            return
+        }
+        onSave?.invoke(managerId, id, coreSelected, depSelected, score, relation, coreMutex, mustAdjacent)
 
         isCreatingMode = false
     }

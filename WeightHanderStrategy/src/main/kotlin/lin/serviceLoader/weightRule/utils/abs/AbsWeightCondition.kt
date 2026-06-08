@@ -1,7 +1,6 @@
 package lin.serviceLoader.weightRule.utils.abs
 
 import lin.bean.CardWeightInfo
-import lin.bean.groupId
 import lin.domain.context.CostWeight
 import lin.domain.context.NotWeight
 import lin.serviceLoader.weightRule.DepByWeightGroupId

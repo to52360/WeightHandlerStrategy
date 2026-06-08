@@ -4,6 +4,7 @@ import javafx.geometry.Insets
 import javafx.scene.control.*
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.VBox
+import lin.card_group.ui.ActiveManagerHolder
 import lin.card_purpose.PurposeTagProvider
 import lin.dao.CardSelectOptionProvider
 import lin.rule.tree.EvaluatorTreeBinding
@@ -14,13 +15,17 @@ import org.koin.core.component.inject
 class TreePropertiesDialog(
     initialName: String = "",
     initialEnabled: Boolean = true,
-    initialBindings: List<EvaluatorTreeBinding> = emptyList()
+    initialBindings: List<EvaluatorTreeBinding> = emptyList(),
+    initialManagerId: String? = null,
+    initialIsTemplate: Boolean = false
 ) : Dialog<TreePropertiesDialog.Result>(), KoinComponent {
 
     data class Result(
         val name: String,
         val enabled: Boolean,
-        val bindings: List<EvaluatorTreeBinding>
+        val bindings: List<EvaluatorTreeBinding>,
+        val managerId: String?,
+        val isTemplate: Boolean
     )
 
     init {
@@ -38,6 +43,13 @@ class TreePropertiesDialog(
             isSelected = initialEnabled
         }
 
+        val templateCheckBox = CheckBox("设为模板（可被其他配置复用）").apply {
+            isSelected = initialIsTemplate
+        }
+
+        val managerIdSnapshot = initialManagerId
+            ?: getKoin().get<ActiveManagerHolder>().activeManagerId
+
         val typeComboBox = ComboBox<String>().apply {
             items.addAll("绑定到卡组", "绑定到用途标签")
             selectionModel.selectFirst()
@@ -46,7 +58,11 @@ class TreePropertiesDialog(
         val groupCheckItems = mutableMapOf<String, CheckBox>()
         val groupVBox = VBox(5.0)
         try {
-            val options = CardSelectOptionProvider().getOptions()
+            // 按当前 manager 过滤分组列表（仅 GROUP 绑定时有意义）
+            val options = if (managerIdSnapshot != null)
+                CardSelectOptionProvider().getOptionsByManager(managerIdSnapshot)
+            else
+                CardSelectOptionProvider().getOptions()
             options.forEach { option ->
                 val cb = CheckBox(option.label)
                 groupCheckItems[option.value] = cb
@@ -114,8 +130,11 @@ class TreePropertiesDialog(
         grid.add(Label("状态:"), 0, 1)
         grid.add(enabledCheckBox, 1, 1)
 
-        grid.add(Label("绑定目标:"), 0, 2)
-        grid.add(bindingBox, 1, 2)
+        grid.add(Label("模板:"), 0, 2)
+        grid.add(templateCheckBox, 1, 2)
+
+        grid.add(Label("绑定目标:"), 0, 3)
+        grid.add(bindingBox, 1, 3)
 
         dialogPane.content = grid
 
@@ -131,7 +150,14 @@ class TreePropertiesDialog(
                         bindings.add(EvaluatorTreeBinding(EvaluatorTreeBindingType.PURPOSE_TAG, it.key))
                     }
                 }
-                Result(nameField.text, enabledCheckBox.isSelected, bindings)
+                Result(
+                    nameField.text, enabledCheckBox.isSelected, bindings,
+                    // GROUP 绑定使用打开弹窗时的 manager 快照；PURPOSE_TAG 为全局共享。
+                    if (typeComboBox.selectionModel.selectedItem == "绑定到卡组")
+                        managerIdSnapshot
+                    else null,
+                    templateCheckBox.isSelected
+                )
             } else {
                 null
             }

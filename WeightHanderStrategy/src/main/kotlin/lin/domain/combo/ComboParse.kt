@@ -3,7 +3,6 @@ package lin.domain.combo
 import lin.bean.CardWeightInfo
 import lin.bean.ComboInfo
 import lin.bean.ComboRule
-import lin.bean.groupId
 import lin.domain.context.NotWeight
 import lin.myLog
 

@@ -3,10 +3,15 @@ package lin.ui
 import javafx.geometry.Insets
 import javafx.scene.Node
 import javafx.scene.control.Button
+import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
 import javafx.scene.layout.BorderPane
+import javafx.scene.layout.HBox
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
+import lin.card_group.db.CardGroupRepository
+import lin.card_group.db.CardManagerEntity
+import lin.card_group.ui.ActiveManagerHolder
 import org.koin.core.component.KoinComponent
 
 /**
@@ -41,8 +46,52 @@ class MainShellView : BorderPane(), KoinComponent {
             style = "-fx-font-size: 18px; -fx-text-fill: #666;"
         }, null)
 
+        // 顶部卡组选择器
+        this.top = createManagerSelector()
+
         this.left = navBar
         this.center = workbenchArea
+    }
+
+    private fun createManagerSelector(): HBox {
+        val holder = getKoin().get<ActiveManagerHolder>()
+        val repo = getKoin().get<CardGroupRepository>()
+
+        val comboBox = ComboBox<CardManagerEntity>().apply {
+            promptText = "选择卡组方案"
+            buttonCell = object : javafx.scene.control.ListCell<CardManagerEntity>() {
+                override fun updateItem(item: CardManagerEntity?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    text = if (empty || item == null) "" else item.name
+                }
+            }
+            cellFactory = javafx.util.Callback {
+                object : javafx.scene.control.ListCell<CardManagerEntity>() {
+                    override fun updateItem(item: CardManagerEntity?, empty: Boolean) {
+                        super.updateItem(item, empty)
+                        text = if (empty || item == null) "" else "${item.name}${if (item.enabled) "" else " (已禁用)"}"
+                    }
+                }
+            }
+        }
+
+        // 加载所有 Manager
+        val managers = repo.findAllManagers()
+        comboBox.items.setAll(managers)
+
+        // 选中时同步到 ActiveManagerHolder
+        comboBox.valueProperty().addListener { _, _, newValue ->
+            holder.activeManager = newValue
+        }
+
+        return HBox(10.0).apply {
+            padding = Insets(8.0, 10.0, 8.0, 10.0)
+            style = "-fx-background-color: #e8e8e8; -fx-border-color: #ccc; -fx-border-width: 0 0 1 0;"
+            children.addAll(
+                Label("当前卡组方案:").apply { style = "-fx-font-size: 13px; -fx-padding: 3 0 0 0;" },
+                comboBox
+            )
+        }
     }
 
     private fun createNavButton(text: String, action: (Button) -> Unit): Button {

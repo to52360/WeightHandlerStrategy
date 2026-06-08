@@ -97,7 +97,7 @@ class EndWeightResult(
 
     fun addUseCard(comboCard: ComboCard) {
         //myLog.info { "中途添加卡牌,卡牌为:${comboCard}" }
-        if (comboCard.canUse()) this.bestCombination = this.bestCombination + comboCard
+        if (comboCard.canUse()) this.bestCombination += comboCard
         else _canUseCardsByHandler.add(comboCard)
     }
 

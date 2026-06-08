@@ -5,10 +5,10 @@ import lin.bean.usePlan.GroupUseOverride
 /**
  * 分组使用覆盖提供者。
  *
- * SPI 入口，configUi 通过此接口读取 group_use_override 表。
- * Provider 自主决定数据范围。
- * 引擎端提供默认实现返回空 Map。
+ * @deprecated 行为属性已合并到 CardGroupBinding，由 CardGroupIndexProvider.provideBindingOverrides() 提供。
+ * 保留此接口仅为 SPI 兼容，新代码不应使用。
  */
+@Deprecated("行为属性已合并到 CardGroupBinding，使用 CardGroupIndexProvider.provideBindingOverrides() 替代")
 fun interface GroupUseOverrideProvider {
     fun findAllEnabled(): Map<String, GroupUseOverride>
 }

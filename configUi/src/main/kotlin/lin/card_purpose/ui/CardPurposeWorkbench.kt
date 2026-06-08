@@ -13,6 +13,7 @@ import lin.bean.usePlan.PurposeTagId
 import lin.card_purpose.PurposeTagProvider
 import lin.card_purpose.db.CardPurposeRepository
 import lin.ui.ActiveAware
+import lin.ui.components.PaginationBar
 import lin.utils.addColumn
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -28,6 +29,11 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
     private val tableView = TableView<CardUiItem>()
     private val obsCards = FXCollections.observableArrayList<CardUiItem>()
+
+    // 分页器
+    private val paginationBar = PaginationBar { page ->
+        store.loadPage(page = page)
+    }
 
     // 左侧顶部工具栏组件
     private val searchField = TextField()
@@ -98,7 +104,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
         }
 
         VBox.setVgrow(tableView, Priority.ALWAYS)
-        leftPanel.children.addAll(toolBar, tableView)
+        leftPanel.children.addAll(toolBar, tableView, paginationBar)
 
         // ==========================================
         // 2. 右侧编辑器区布局
@@ -184,9 +190,12 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
             isUpdatingFromState = true
             try {
                 // 1. 同步卡牌列表数据
-                if (oldState.filteredCards != newState.filteredCards) {
-                    obsCards.setAll(newState.filteredCards)
+                if (oldState.currentPageCards != newState.currentPageCards) {
+                    obsCards.setAll(newState.currentPageCards)
                 }
+
+                // 同步更新分页栏
+                paginationBar.update(newState.totalCount, newState.currentPage, newState.pageSize)
 
                 // 2. 同步卡组下拉框选项
                 if (oldState.cardGroupFiles != newState.cardGroupFiles) {

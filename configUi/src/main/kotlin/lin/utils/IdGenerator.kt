@@ -9,7 +9,7 @@ import java.util.*
  */
 fun nextShortId(): String {
     val seconds = System.currentTimeMillis() / 1000
-    val timePart = java.lang.Long.toString(seconds, 36).padStart(6, '0')
+    val timePart = seconds.toString(36).padStart(6, '0')
     val randPart = UUID.randomUUID().toString().replace("-", "").take(2)
     return "$timePart$randPart"
 }
