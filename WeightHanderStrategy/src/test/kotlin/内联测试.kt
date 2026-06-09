@@ -3,11 +3,8 @@ import club.xiaojiawei.hsscriptcardsdk.util.CardDBUtil
 import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
 
-class 内联测试 {
-}
 
-
- fun parse(key: String): CardRaceEnum {
+fun parse(key: String): CardRaceEnum {
     CardDBUtil.queryCardById(key).let {
         return if (it.isNotEmpty()) {
             CardRaceEnum.fromString(it.first().type)

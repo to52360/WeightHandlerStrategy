@@ -39,9 +39,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
                 managerId = id,
                 name = binding.name,
                 cardIds = mapper.writeValueAsString(binding.cardIds),
-                stageOverride = binding.stageOverride,
-                replanAfterUse = binding.replanAfterUse,
-                orderWeight = binding.orderWeight
+                overrides = binding.overrides?.let { mapper.writeValueAsString(it) }
             )
         }
         repository.replaceBindings(id, entities)
@@ -67,9 +65,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
                 managerId = binding.managerId,
                 name = binding.name,
                 cardIds = mapper.writeValueAsString(binding.cardIds),
-                stageOverride = binding.stageOverride,
-                replanAfterUse = binding.replanAfterUse,
-                orderWeight = binding.orderWeight
+                overrides = binding.overrides?.let { mapper.writeValueAsString(it) }
             )
         )
 

@@ -1,7 +1,6 @@
 package lin.moduls
 
 import lin.bean.usePlan.GroupUseOverride
-import lin.bean.usePlan.UseStage
 import lin.card_group.db.CardGroupRepository
 import lin.card_group.db.CardGroupService
 import lin.card_purpose.DefaultPurposeTagProvider
@@ -117,12 +116,9 @@ private fun CardGroupService.loadBindingOverrides(): Map<String, GroupUseOverrid
     return loadAll(onlyEnabled = true)
         .asSequence()
         .flatMap { it.bindings.asSequence() }
-        .filter { it.stageOverride != null || it.replanAfterUse != null || it.orderWeight != 0.0 }
-        .associate { binding ->
-            binding.id to GroupUseOverride(
-                stageOverride = binding.stageOverride?.let { runCatching { UseStage.valueOf(it) }.getOrNull() },
-                replanAfterUse = binding.replanAfterUse,
-                orderWeight = binding.orderWeight
-            )
+        .mapNotNull { binding ->
+            val override = binding.overrides ?: return@mapNotNull null
+            if (override.isDefault()) null else binding.id to override
         }
+        .toMap()
 }

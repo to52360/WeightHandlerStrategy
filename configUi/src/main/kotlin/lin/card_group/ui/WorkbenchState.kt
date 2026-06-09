@@ -1,5 +1,6 @@
 package lin.card_group.ui
 
+import lin.bean.usePlan.GroupUseOverride
 import lin.card_group.db.CardManagerEntity
 import lin.dao.CardWeightConfig
 import lin.rule.tree.CardGroupBinding
@@ -111,7 +112,10 @@ object WorkbenchActions {
     fun updateBindingStageOverride(index: Int, stage: String?): Action = { state ->
         val newList = state.currentBindings.toMutableList()
         if (index in newList.indices) {
-            newList[index] = newList[index].copy(stageOverride = stage)
+            val oldBinding = newList[index]
+            val useStage = stage?.let { runCatching { lin.bean.usePlan.UseStage.valueOf(it) }.getOrNull() }
+            val newOverrides = (oldBinding.overrides ?: GroupUseOverride()).copy(stageOverride = useStage)
+            newList[index] = oldBinding.copy(overrides = if (newOverrides.isDefault()) null else newOverrides)
         }
         state.copy(currentBindings = newList)
     }
@@ -119,7 +123,9 @@ object WorkbenchActions {
     fun updateBindingReplanAfterUse(index: Int, replan: Boolean?): Action = { state ->
         val newList = state.currentBindings.toMutableList()
         if (index in newList.indices) {
-            newList[index] = newList[index].copy(replanAfterUse = replan)
+            val oldBinding = newList[index]
+            val newOverrides = (oldBinding.overrides ?: GroupUseOverride()).copy(replanAfterUse = replan)
+            newList[index] = oldBinding.copy(overrides = if (newOverrides.isDefault()) null else newOverrides)
         }
         state.copy(currentBindings = newList)
     }
@@ -127,7 +133,10 @@ object WorkbenchActions {
     fun updateBindingOrderWeight(index: Int, weight: Double): Action = { state ->
         val newList = state.currentBindings.toMutableList()
         if (index in newList.indices) {
-            newList[index] = newList[index].copy(orderWeight = weight)
+            val oldBinding = newList[index]
+            val weightVal = if (weight != 0.0) weight else null
+            val newOverrides = (oldBinding.overrides ?: GroupUseOverride()).copy(orderWeight = weightVal)
+            newList[index] = oldBinding.copy(overrides = if (newOverrides.isDefault()) null else newOverrides)
         }
         state.copy(currentBindings = newList)
     }

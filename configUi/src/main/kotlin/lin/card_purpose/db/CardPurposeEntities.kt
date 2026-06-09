@@ -6,8 +6,9 @@ import lin.bean.usePlan.PurposeTagId
 data class CardPurposeEntity(
     val cardId: String,
     val name: String?,
-    val purposeTags: String, // 逗号分隔的 tagId
-    val replanAfterUse: Boolean = false
+    val purposeTags: String, // 逗号分隔的 tagId,todo 默认值空字符,不知道对引擎层有没有影响
+    val replanAfterUse: Boolean = false,
+    val createdDate: String? = null
 ) {
     fun toDomain(): CardPurpose {
         return CardPurpose(

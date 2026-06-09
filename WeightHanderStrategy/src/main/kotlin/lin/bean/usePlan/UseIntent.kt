@@ -28,7 +28,13 @@ data class UseIntent(
 data class CardPurpose(
     val purposeTags: Set<PurposeTagId> = emptySet(),
     val replanAfterUse: Boolean = false
-)
+) {
+    fun isDefault(): Boolean = this == EMPTY
+
+    companion object {
+        val EMPTY = CardPurpose()
+    }
+}
 
 /**
  * 分组级使用配置重载（per groupId）。
@@ -40,4 +46,10 @@ data class GroupUseOverride(
     val stageOverride: UseStage? = null,
     val replanAfterUse: Boolean? = null,
     val orderWeight: Double? = null
-)
+) {
+    fun isDefault(): Boolean = this == EMPTY
+
+    companion object {
+        val EMPTY = GroupUseOverride()
+    }
+}

@@ -39,6 +39,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
     private val searchField = TextField()
     private val groupCombo = ComboBox<String>()
     private val tagCombo = ComboBox<String>()
+    private val dateCombo = ComboBox<String>()
 
     // 右侧编辑器组件
     private val detailTitle = Label("没有选中卡牌")
@@ -80,15 +81,26 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
             tagCombo.apply {
                 promptText = "全部用途"
                 prefWidth = 110.0
-                items.addAll(listOf("全部用途") + tagDefs.map { it.displayName })
+                items.addAll(listOf("全部用途", "未配置用途") + tagDefs.map { it.displayName })
                 value = "全部用途"
             }
 
-            val btnAdd = Button("➕ 录入新卡").apply {
+            dateCombo.apply {
+                promptText = "全部日期"
+                prefWidth = 110.0
+                items.add("全部日期")
+                value = "全部日期"
+            }
+
+            val btnImport = Button("📥 导入卡牌").apply {
+                setOnAction { showImportCardGroupDialog() }
+            }
+
+            val btnAdd = Button("➕ 手动录入").apply {
                 setOnAction { showAddCustomCardDialog() }
             }
 
-            children.addAll(searchField, groupCombo, tagCombo, btnAdd)
+            children.addAll(searchField, groupCombo, tagCombo, dateCombo, btnImport, btnAdd)
         }
 
         // 配置 TableView
@@ -99,6 +111,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
             addColumn("卡牌名称", 160.0) { it.name }
             addColumn("用途标签", 220.0) { it.purposeTags.joinToString(", ") { t -> tagIdToDisplayName[t] ?: t.value } }
             addColumn("重规划", 70.0) { if (it.replanAfterUse) "是" else "否" }
+            addColumn("录入日期", 100.0) { it.createdDate ?: "-" }
 
             items = obsCards
         }
@@ -176,14 +189,19 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
         // 过滤器组件属性改变监听
         val onFilterChange = {
             val sGroup = if (groupCombo.value == "全部卡组" || groupCombo.value == null) null else groupCombo.value
-            val sTag =
-                if (tagCombo.value == "全部用途" || tagCombo.value == null) null else displayNameToTagId[tagCombo.value]
-            store.updateFilters(searchField.text, sGroup, sTag)
+            val sTag = when (tagCombo.value) {
+                "全部用途", null -> null
+                "未配置用途" -> PurposeTagId("未配置用途")
+                else -> displayNameToTagId[tagCombo.value]
+            }
+            val sDate = if (dateCombo.value == "全部日期" || dateCombo.value == null) null else dateCombo.value
+            store.updateFilters(searchField.text, sGroup, sTag, sDate)
         }
 
         searchField.textProperty().addListener { _, _, _ -> onFilterChange() }
         groupCombo.valueProperty().addListener { _, _, _ -> onFilterChange() }
         tagCombo.valueProperty().addListener { _, _, _ -> onFilterChange() }
+        dateCombo.valueProperty().addListener { _, _, _ -> onFilterChange() }
 
         // Store State -> UI 响应式订阅
         store.stateProperty().addListener { _, oldState, newState ->
@@ -203,6 +221,17 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                     groupCombo.items.setAll(comboItems)
                     if (groupCombo.value == null) {
                         groupCombo.value = "全部卡组"
+                    }
+                }
+
+                // 同步更新日期下拉框选项
+                if (oldState.availableDates != newState.availableDates) {
+                    val currentVal = dateCombo.value
+                    dateCombo.items.setAll(listOf("全部日期") + newState.availableDates)
+                    if (currentVal in dateCombo.items) {
+                        dateCombo.value = currentVal
+                    } else {
+                        dateCombo.value = "全部日期"
                     }
                 }
 
@@ -350,6 +379,25 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
         dialog.showAndWait().ifPresent { (id, name) ->
             store.addCustomCard(id, name)
+        }
+    }
+
+    /**
+     * 弹出导入卡组文件窗口
+     */
+    private fun showImportCardGroupDialog() {
+        val files = store.state.cardGroupFiles
+        if (files.isEmpty()) {
+            Alert(Alert.AlertType.WARNING, "没有检测到任何本地卡组配置文件 (.cardgroup)。").showAndWait()
+            return
+        }
+        val dialog = ChoiceDialog(files.first(), files).apply {
+            title = "从本地卡组导入卡牌"
+            headerText = "请选择需要导入的 .cardgroup 配置文件"
+            contentText = "卡组名称:"
+        }
+        dialog.showAndWait().ifPresent { selectedFile ->
+            store.importCardGroup(selectedFile)
         }
     }
 }

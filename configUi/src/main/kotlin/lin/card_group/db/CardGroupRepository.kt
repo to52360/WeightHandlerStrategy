@@ -32,9 +32,7 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
                 manager_id      TEXT    NOT NULL,
                 name            TEXT    NOT NULL,
                 card_ids        TEXT    NOT NULL,
-                stage_override  TEXT,
-                replan_after_use INTEGER,
-                order_weight    REAL    NOT NULL DEFAULT 0
+                overrides       TEXT
             );
             """.trimIndent()
         )
@@ -85,34 +83,27 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
     // ─────────────────────── Binding CRUD ──────────────────────────────────
 
     private val bindingRowMapper = RowMapper { rs, _ ->
-        val replanRaw = rs.getObject("replan_after_use") as? Int
         CardBindingEntity(
             id = rs.getString("id"),
             managerId = rs.getString("manager_id"),
             name = rs.getString("name"),
             cardIds = rs.getString("card_ids"),
-            stageOverride = rs.getString("stage_override"),
-            replanAfterUse = if (replanRaw == null) null else replanRaw != 0,
-            orderWeight = rs.getDouble("order_weight")
+            overrides = rs.getString("overrides")
         )
     }
 
     fun saveBinding(entity: CardBindingEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_binding (id, manager_id, name, card_ids, stage_override, replan_after_use, order_weight)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO card_group_binding (id, manager_id, name, card_ids, overrides)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name            = excluded.name,
                 card_ids        = excluded.card_ids,
-                stage_override  = excluded.stage_override,
-                replan_after_use = excluded.replan_after_use,
-                order_weight    = excluded.order_weight
+                overrides       = excluded.overrides
             """.trimIndent(),
             entity.id, entity.managerId, entity.name, entity.cardIds,
-            entity.stageOverride,
-            entity.replanAfterUse?.let { if (it) 1 else 0 },
-            entity.orderWeight
+            entity.overrides
         )
     }
 

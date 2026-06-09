@@ -151,10 +151,11 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                         val idx = newState.selectedBindingIndex
                         if (idx != null && idx in newState.currentBindings.indices) {
                             val binding = newState.currentBindings[idx]
-                            if (stageCombo.value != (binding.stageOverride ?: "(不覆盖)")) {
-                                stageCombo.value = binding.stageOverride ?: "(不覆盖)"
+                            val stageVal = binding.overrides?.stageOverride?.name
+                            if (stageCombo.value != (stageVal ?: "(不覆盖)")) {
+                                stageCombo.value = stageVal ?: "(不覆盖)"
                             }
-                            val replanDisplay = when (binding.replanAfterUse) {
+                            val replanDisplay = when (binding.overrides?.replanAfterUse) {
                                 true -> "是"
                                 false -> "否"
                                 null -> "(不覆盖)"
@@ -162,7 +163,8 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                             if (replanCombo.value != replanDisplay) {
                                 replanCombo.value = replanDisplay
                             }
-                            val weightStr = binding.orderWeight.toString()
+                            val weightVal = binding.overrides?.orderWeight
+                            val weightStr = weightVal?.toString() ?: ""
                             if (weightField.text != weightStr) {
                                 weightField.text = weightStr
                             }
@@ -189,11 +191,11 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 prefWidth = 80.0
             }
             val colStage = TableColumn<CardGroupBinding, String>("阶段覆盖").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.stageOverride ?: "-") }
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.overrides?.stageOverride?.name ?: "-") }
                 prefWidth = 80.0
             }
             val colWeight = TableColumn<CardGroupBinding, String>("排序权重").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(if (it.value.orderWeight == 0.0) "-" else it.value.orderWeight.toString()) }
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.overrides?.orderWeight?.toString() ?: "-") }
                 prefWidth = 70.0
             }
             bindingTableView.columns.addAll(colNo, colName, colCardCount, colStage, colWeight)
