@@ -42,7 +42,6 @@ build/
 /WeightHanderStrategy/dependency-reduced-pom.xml
 /absolute/
 /WeightHanderStrategy/src/test/
-/WeightHanderStrategy/.agents
 /.agents
 /implementation
 /.claude/
@@ -55,4 +54,4 @@ build/
 /AGENTS.md
 /.codegraph/
 /.codemoss/
-/architecture-context/
+/architecture-context

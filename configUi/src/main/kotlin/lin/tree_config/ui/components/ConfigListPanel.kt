@@ -110,7 +110,7 @@ class ConfigListPanel(
         val currentDrafts = configListView.items.filter { it.isDraft }
         configListView.items.clear()
 
-        val activeManagerId = workbench.activeManagerHolder?.activeManagerId
+        val activeManagerId = workbench.activeManagerHolder.activeManagerId
 
         // 加载当前 manager + 全局共享的配置（含模板或仅非模板取决于 isTemplate 过滤）
         val configs = treeConfigService.loadByManagerId(activeManagerId)

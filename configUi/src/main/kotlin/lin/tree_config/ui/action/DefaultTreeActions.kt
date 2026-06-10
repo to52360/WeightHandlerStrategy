@@ -201,7 +201,7 @@ class CreateFromTemplateAction : TreeWorkbenchAction {
         }
 
         // 弹出选择对话框
-        val choices = templates.map { it.first.name to it }.toMap()
+        val choices = templates.associateBy { it.first.name }
         val dialog = javafx.scene.control.ChoiceDialog(
             choices.keys.first(),
             choices.keys
