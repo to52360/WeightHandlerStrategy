@@ -92,11 +92,11 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 value = "全部日期"
             }
 
-            val btnImport = Button("📥 导入卡牌").apply {
+            val btnImport = Button("导入卡牌").apply {
                 setOnAction { showImportCardGroupDialog() }
             }
 
-            val btnAdd = Button("➕ 手动录入").apply {
+            val btnAdd = Button("手动录入").apply {
                 setOnAction { showAddCustomCardDialog() }
             }
 
@@ -157,7 +157,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
         }
 
         // 按钮栏
-        val btnSave = Button("💾 保存更改").apply {
+        val btnSave = Button("保存更改").apply {
             maxWidth = Double.MAX_VALUE
             style =
                 "-fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #2ecc71; -fx-text-fill: white; -fx-padding: 10;"

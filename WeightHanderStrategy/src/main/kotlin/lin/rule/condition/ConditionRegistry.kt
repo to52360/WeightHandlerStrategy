@@ -1,6 +1,7 @@
 package lin.rule.condition
 
 import lin.myLog
+import lin.rule.condition.orthogonal.ConditionAssembler
 import lin.rule.parse.RuleFieldSpec
 import lin.rule.tree.EvaluatorLeafSourceType
 import lin.rule.tree.EvaluatorLeafUiItem
@@ -21,7 +22,8 @@ data class ConditionFieldUiItem(
 )
 
 class ConditionRegistry(
-    providers: Collection<ConditionRegistrationProvider>
+    providers: Collection<ConditionRegistrationProvider>,
+    private val conditionAssembler: ConditionAssembler? = null
 ) {
     private val registrationsById: Map<String, ConditionRegistration<*>>
 
@@ -85,6 +87,11 @@ class ConditionRegistry(
     }
 
     fun build(conditionRef: ConditionPayload.ConditionRef): ConditionLogic {
+        // ARCH-PLACEHOLDER(orthogonal-condition, P-004): 拦截 dynamic_ 前缀的动态组合条件 | replace-with: 完善动态组合条件在 Registry 的动态反序列化/元数据注册集成
+        if (conditionRef.conditionId.startsWith("dynamic_")) {
+            val assembler = conditionAssembler ?: error("ConditionAssembler is not configured in this context")
+            return assembler.assemble(conditionRef)
+        }
         return build(conditionRef.conditionId, conditionRef.args)
     }
 }
