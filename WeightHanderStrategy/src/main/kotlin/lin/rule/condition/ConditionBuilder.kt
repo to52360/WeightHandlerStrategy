@@ -4,8 +4,8 @@ import lin.rule.build.RuleMetadata
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.parse.FieldConstraint
+import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.parse.RuleFieldSpec
 
 typealias ConditionLogic = context(RuleEnv) RuleContext.() -> Boolean
 
@@ -61,8 +61,8 @@ data class ConditionFieldDef<T>(
 ) {
     fun select(dataSourceId: String): ConditionFieldDef<T> = copy(selectDataSourceId = dataSourceId)
 
-    fun toRuleFieldSpec(): RuleFieldSpec {
-        return RuleFieldSpec(
+    fun toFieldSpec(): FieldSpec {
+        return FieldSpec(
             propertyName = propertyName,
             name = name,
             description = description,

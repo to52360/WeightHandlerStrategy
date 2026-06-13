@@ -6,10 +6,20 @@ import lin.rule.tree.LogicNode
  * 条件树的业务层负载（Payload）
  */
 sealed interface ConditionPayload {
+    val refId: String
+    val args: Map<String, Any>
+
     data class ConditionRef(
         val conditionId: String,
-        val refId: String = conditionId,
-        val args: Map<String, Any> = emptyMap()
+        override val refId: String = conditionId,
+        override val args: Map<String, Any> = emptyMap()
+    ) : ConditionPayload
+
+    data class OrthogonalRef(
+        val sourceId: String,
+        val operatorId: String,
+        override val refId: String = "${sourceId}_${operatorId}",
+        override val args: Map<String, Any> = emptyMap()
     ) : ConditionPayload
 }
 
@@ -19,22 +29,17 @@ sealed interface ConditionPayload {
 typealias ConditionNode = LogicNode<ConditionPayload>
 
 /**
- * 递归收集条件树中所有叶子/分支节点引用的 ConditionRef，按 refId 去重。
+ * 递归收集条件树中所有叶子/分支节点引用的 ConditionPayload，按 refId 去重（调用端去重）。
  */
-fun ConditionNode.collectConditionRefs(): List<ConditionPayload.ConditionRef> {
+fun ConditionNode.collectConditionRefs(): List<ConditionPayload> {
     return when (this) {
-        is LogicNode.Leaf -> {
-            val ref = payload as? ConditionPayload.ConditionRef
-            if (ref != null) listOf(ref) else emptyList()
-        }
+        is LogicNode.Leaf -> listOf(payload)
 
         is LogicNode.And -> children.flatMap { it.collectConditionRefs() }
         is LogicNode.Or -> children.flatMap { it.collectConditionRefs() }
         is LogicNode.Not -> child.collectConditionRefs()
         is LogicNode.Branch -> {
-            val ref = payload as? ConditionPayload.ConditionRef
-            val list = if (ref != null) listOf(ref) else emptyList()
-            list + onTrue.collectConditionRefs() + onFalse.collectConditionRefs()
+            listOf(payload) + onTrue.collectConditionRefs() + onFalse.collectConditionRefs()
         }
     }
 }

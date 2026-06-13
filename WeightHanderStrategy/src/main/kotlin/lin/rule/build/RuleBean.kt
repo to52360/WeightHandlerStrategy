@@ -1,6 +1,6 @@
 package lin.rule.build
 
-import lin.rule.parse.RuleFieldSpec
+import lin.rule.parse.FieldSpec
 import kotlin.reflect.KClass
 
 data class RuleRegistration<T : Any>(
@@ -8,7 +8,7 @@ data class RuleRegistration<T : Any>(
     val metadata: RuleMetadata?,
     // 动态可验证元数据能力（输入外貌描述）
     val parameterType: KClass<T>,
-    val lazyFieldsResolver: () -> List<RuleFieldSpec>,
+    val lazyFieldsResolver: () -> List<FieldSpec>,
     // 真正的逻辑规则创造工厂
     val ruleFactory: RuleFactory<T>
 )

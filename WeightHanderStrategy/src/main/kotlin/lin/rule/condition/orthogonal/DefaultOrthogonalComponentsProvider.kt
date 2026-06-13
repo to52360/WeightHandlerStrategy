@@ -1,6 +1,7 @@
-package lin.rule.condition.orthogonal.spi
+package lin.rule.condition.orthogonal
 
-import lin.rule.condition.orthogonal.*
+import lin.serviceLoader.provider.DataSourceProvider
+import lin.serviceLoader.provider.OperatorProvider
 
 /**
  * 内置数据源的 SPI 提供者。

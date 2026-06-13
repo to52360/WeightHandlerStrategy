@@ -1,4 +1,4 @@
-package lin.rule.condition.orthogonal.spi
+package lin.serviceLoader.provider
 
 import lin.rule.condition.orthogonal.Operator
 

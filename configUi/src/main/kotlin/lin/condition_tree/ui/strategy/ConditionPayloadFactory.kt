@@ -18,7 +18,7 @@ class ConditionPayloadFactory : PayloadFactory<ConditionPayload> {
         )
     }
 
-    override fun extractNodeId(payload: ConditionPayload): String? {
-        return (payload as? ConditionPayload.ConditionRef)?.refId
+    override fun extractNodeId(payload: ConditionPayload): String {
+        return payload.refId
     }
 }

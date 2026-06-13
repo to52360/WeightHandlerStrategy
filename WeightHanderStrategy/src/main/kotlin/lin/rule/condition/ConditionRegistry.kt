@@ -2,28 +2,28 @@ package lin.rule.condition
 
 import lin.myLog
 import lin.rule.condition.orthogonal.ConditionAssembler
-import lin.rule.parse.RuleFieldSpec
+import lin.rule.parse.FieldSpec
+import lin.rule.tree.EvaluatorLeafMeta
 import lin.rule.tree.EvaluatorLeafSourceType
-import lin.rule.tree.EvaluatorLeafUiItem
 import lin.serviceLoader.provider.ConditionRegistrationProvider
 
-data class ConditionUiItem(
+data class ConditionMeta(
     val conditionId: String,
     val name: String?,
     val desc: String?,
-    val fields: List<ConditionFieldUiItem>
+    val fields: List<ConditionFieldMeta>
 )
 
-data class ConditionFieldUiItem(
+data class ConditionFieldMeta(
     val propertyName: String,
     val name: String,
     val description: String,
-    val ruleFieldSpec: RuleFieldSpec
+    val fieldSpec: FieldSpec
 )
 
 class ConditionRegistry(
     providers: Collection<ConditionRegistrationProvider>,
-    private val conditionAssembler: ConditionAssembler? = null
+    val conditionAssembler: ConditionAssembler? = null
 ) {
     private val registrationsById: Map<String, ConditionRegistration<*>>
 
@@ -50,32 +50,32 @@ class ConditionRegistry(
             ?: throw ConditionBuildException("ConditionRegistration not found: conditionId=$conditionId")
     }
 
-    fun uiItems(): List<ConditionUiItem> {
+    fun metadataList(): List<ConditionMeta> {
         return registrationsById.values.map { registration ->
-            ConditionUiItem(
+            ConditionMeta(
                 conditionId = registration.conditionId,
                 name = registration.metadata?.name,
                 desc = registration.metadata?.desc,
                 fields = listOf(
-                    ConditionFieldUiItem(
+                    ConditionFieldMeta(
                         propertyName = registration.field.propertyName,
                         name = registration.field.name,
                         description = registration.field.description,
-                        ruleFieldSpec = registration.field.toRuleFieldSpec()
+                        fieldSpec = registration.field.toFieldSpec()
                     )
                 )
             )
         }
     }
 
-    fun leafUiItems(): List<EvaluatorLeafUiItem> {
+    fun leafMetas(): List<EvaluatorLeafMeta> {
         return registrationsById.values.map { registration ->
-            EvaluatorLeafUiItem(
+            EvaluatorLeafMeta(
                 sourceType = EvaluatorLeafSourceType.CONDITION,
                 sourceId = registration.conditionId,
                 name = registration.metadata?.name,
                 desc = registration.metadata?.desc,
-                fields = listOf(registration.field.toRuleFieldSpec())
+                fields = listOf(registration.field.toFieldSpec())
             )
         }
     }
@@ -86,12 +86,15 @@ class ConditionRegistry(
         return (registration as ConditionRegistration<Any>).build(args)
     }
 
-    fun build(conditionRef: ConditionPayload.ConditionRef): ConditionLogic {
-        // ARCH-PLACEHOLDER(orthogonal-condition, P-004): 拦截 dynamic_ 前缀的动态组合条件 | replace-with: 完善动态组合条件在 Registry 的动态反序列化/元数据注册集成
-        if (conditionRef.conditionId.startsWith("dynamic_")) {
-            val assembler = conditionAssembler ?: error("ConditionAssembler is not configured in this context")
-            return assembler.assemble(conditionRef)
+    fun build(payload: ConditionPayload): ConditionLogic {
+        return when (payload) {
+            is ConditionPayload.ConditionRef ->
+                build(payload.conditionId, payload.args)
+
+            is ConditionPayload.OrthogonalRef -> {
+                val assembler = conditionAssembler ?: error("ConditionAssembler is not configured in this context")
+                assembler.assemble(payload)
+            }
         }
-        return build(conditionRef.conditionId, conditionRef.args)
     }
 }

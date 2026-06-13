@@ -1,6 +1,10 @@
 package lin.rule.condition.orthogonal
 
 import club.xiaojiawei.hsscriptcardsdk.enums.CardRaceEnum
+import lin.rule.parse.FieldConstraint
+import lin.rule.parse.FieldParser
+import lin.rule.parse.FieldSpec
+import lin.rule.parse.FieldType
 import kotlin.reflect.KClass
 
 /**
@@ -8,12 +12,14 @@ import kotlin.reflect.KClass
  * 算子定义了所需的参数类型 [P]，由装配引擎在编译期进行统一校验与解析。
  */
 interface Operator<I : Any, P : Any> {
+    // ARCH-UNSETTLED(orthogonal-condition, U-002): Jackson参数在反序列化时的类型安全匹配规范，特别是类型擦除情况 | next: 在集成测试中全面校验复杂参数类型的反序列化
     val id: String
     val name: String
     val description: String
     val categories: Set<String>       // 用于 UI 过滤推荐，如 {"数值", "比较"}
     val inputType: KClass<out I>      // 输入数据类型
     val parameterType: KClass<out P>  // 参数数据类型
+    val paramSpecs: List<FieldSpec>   // 🌟 算子参数的元数据约束描述
 
     fun evaluate(input: I, parameter: P): Boolean
 }
@@ -26,17 +32,24 @@ inline fun <reified I : Any, reified P : Any> operator(
     name: String,
     description: String = "",
     categories: Set<String> = emptySet(),
+    paramSpecs: List<FieldSpec>? = null, // 允许显式传入以覆盖反射解析
     crossinline evaluator: (I, P) -> Boolean
-): Operator<I, P> = object : Operator<I, P> {
-    override val id = id
-    override val name = name
-    override val description = description
-    override val categories = categories
-    override val inputType = I::class
-    override val parameterType = P::class
+): Operator<I, P> {
+    val resolvedSpecs = paramSpecs ?: FieldParser.parse(P::class)
+    val inputKClass = I::class
+    val parameterKClass = P::class
+    return object : Operator<I, P> {
+        override val id = id
+        override val name = name
+        override val description = description
+        override val categories = categories
+        override val inputType = inputKClass
+        override val parameterType = parameterKClass
+        override val paramSpecs = resolvedSpecs
 
-    override fun evaluate(input: I, parameter: P): Boolean {
-        return evaluator(input, parameter)
+        override fun evaluate(input: I, parameter: P): Boolean {
+            return evaluator(input, parameter)
+        }
     }
 }
 
@@ -49,7 +62,16 @@ val GreaterThanOrEqualOp = operator<Int, GteParams>(
     id = "gte",
     name = "大于等于",
     description = "判断输入数值是否大于等于指定的阈值",
-    categories = setOf("数值", "比较")
+    categories = setOf("数值", "比较"),
+    paramSpecs = listOf(
+        FieldSpec(
+            propertyName = "threshold",
+            name = "阈值",
+            description = "比较的阈值",
+            typeStruct = FieldType.IntType,
+            constraints = listOf(FieldConstraint.Required, FieldConstraint.IntRange(0, 100))
+        )
+    )
 ) { input, params ->
     input >= params.threshold
 }

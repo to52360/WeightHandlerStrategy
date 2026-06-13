@@ -3,12 +3,10 @@ package lin.rule.condition
 import lin.rule.tree.LogicNode
 
 fun ConditionNode.compile(
-    leafBuilder: (ConditionPayload.ConditionRef) -> ConditionLogic
+    leafBuilder: (ConditionPayload) -> ConditionLogic
 ): ConditionLogic {
     return when (this) {
         is LogicNode.Leaf -> {
-            val payload = payload as? ConditionPayload.ConditionRef
-                ?: error("Condition leaf payload must be ConditionRef")
             leafBuilder(payload)
         }
 
@@ -37,8 +35,6 @@ fun ConditionNode.compile(
         }
 
         is LogicNode.Branch -> {
-            val payload = payload as? ConditionPayload.ConditionRef
-                ?: error("Condition branch payload must be ConditionRef")
             val conditionLogic = leafBuilder(payload)
             val trueLogic = onTrue.compile(leafBuilder)
             val falseLogic = onFalse.compile(leafBuilder)

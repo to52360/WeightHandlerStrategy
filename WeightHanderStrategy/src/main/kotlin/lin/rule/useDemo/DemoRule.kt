@@ -61,12 +61,13 @@ val listSimpleRule = RuleBuilder(IntsValueArg::class)
 fun printUiDataDemo() {
     // 我们假设这俩都被注册进了 RuleRegistry
     // 对于 dynamicSimpleRule：
-    //   它的 fields 会被 extraField 闭包解析为： [RuleFieldSpec(propertyName=limitCount, type=IntType)]
+    // 对于 dynamicSimpleRule：
+    //   它的 fields 会被 extraField 闭包解析为： [FieldSpec(propertyName=limitCount, type=IntType)]
 
     // 对于 typedSimpleRule：
-    //   它的 fields 会被解析器根据注解扫描为：[RuleFieldSpec(propertyName=limit, type=IntType)]
+    //   它的 fields 会被解析器根据注解扫描为：[FieldSpec(propertyName=limit, type=IntType)]
 
-    // 前端画界面的同学，拿到的始终是同样的 RuleFieldSpec 数组结构，他们完全不关心你是用 Map 还是实体类写的。
+    // 前端画界面的同学，拿到的始终是同样的 FieldSpec 数组结构，他们完全不关心你是用 Map 还是实体类写的。
 }
 
 /**

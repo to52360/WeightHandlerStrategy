@@ -9,15 +9,15 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.rule.build.DynamicFieldOption
 import lin.rule.parse.FieldConstraint
+import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.parse.RuleFieldSpec
 import lin.serviceLoader.provider.SelectOptionProvider
 
 class DynamicFieldForm(
     private val optionProviders: Map<String, SelectOptionProvider>
 ) {
     fun build(
-        specs: List<RuleFieldSpec>,
+        specs: List<FieldSpec>,
         existingValues: FieldValueReader,
         onFieldChanged: (propertyName: String, value: Any) -> Unit
     ): GridPane {
@@ -49,12 +49,12 @@ class DynamicFieldForm(
         return grid
     }
 
-    private fun buildLabel(spec: RuleFieldSpec): String {
+    private fun buildLabel(spec: FieldSpec): String {
         val required = if (spec.constraints.contains(FieldConstraint.Required)) " *" else ""
         return "${spec.name}$required:"
     }
 
-    private fun buildControl(spec: RuleFieldSpec, currentValue: Any?): Node {
+    private fun buildControl(spec: FieldSpec, currentValue: Any?): Node {
         return when (val type = spec.typeStruct) {
             is FieldType.DoubleType -> TextField(currentValue?.toString() ?: "").apply {
                 maxWidth = Double.MAX_VALUE
@@ -135,7 +135,7 @@ class DynamicFieldForm(
 
     private fun attachChangeListener(
         control: Node,
-        spec: RuleFieldSpec,
+        spec: FieldSpec,
         onChanged: (Any) -> Unit
     ) {
         when (control) {
@@ -161,7 +161,7 @@ class DynamicFieldForm(
         }
     }
 
-    private fun parseTextValue(spec: RuleFieldSpec, value: String): Any {
+    private fun parseTextValue(spec: FieldSpec, value: String): Any {
         return when (spec.typeStruct) {
             FieldType.DoubleType -> value.toDoubleOrNull() ?: 0.0
             FieldType.IntType -> value.toIntOrNull() ?: 0
@@ -169,7 +169,7 @@ class DynamicFieldForm(
         }
     }
 
-    private fun parseListTextValue(spec: RuleFieldSpec, value: String): List<Any> {
+    private fun parseListTextValue(spec: FieldSpec, value: String): List<Any> {
         val lines = value.lines().filter { it.isNotBlank() }
         val elementType = (spec.typeStruct as? FieldType.ListType)?.elementType
         return when (elementType) {
@@ -181,7 +181,7 @@ class DynamicFieldForm(
 
     private fun attachMultiSelectListener(
         menu: MenuButton,
-        spec: RuleFieldSpec,
+        spec: FieldSpec,
         onChanged: (Any) -> Unit
     ) {
         val customItem = menu.items.firstOrNull() as? CustomMenuItem

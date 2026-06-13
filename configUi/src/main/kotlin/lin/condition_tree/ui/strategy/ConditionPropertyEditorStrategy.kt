@@ -8,9 +8,9 @@ import javafx.scene.control.Separator
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.rule.condition.ConditionMeta
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.ConditionUiItem
 import lin.tree_config.ui.LogicNodeType
 import lin.tree_config.ui.LogicNodeWrapper
 import lin.ui.components.PropertyEditorStrategy
@@ -26,22 +26,22 @@ class ConditionPropertyEditorStrategy(
     override fun render(panel: VBox, wrapper: LogicNodeWrapper<ConditionPayload>, onChanged: () -> Unit) {
         panel.children.clear()
 
-        val payload = wrapper.payload as? ConditionPayload.ConditionRef
-        val conditionId = payload?.conditionId
+        val payload = wrapper.payload
+        val conditionId = (payload as? ConditionPayload.ConditionRef)?.conditionId
         val refId = payload?.refId
         val isBranch = wrapper.type == LogicNodeType.BRANCH
 
         panel.children.addAll(buildHeader(conditionId, refId, isBranch))
         panel.children.add(Separator())
 
-        val allConditions = conditionRegistry.uiItems()
+        val allConditions = conditionRegistry.metadataList()
         val conditionCombo = createConditionCombo(allConditions, conditionId)
 
         conditionCombo.selectionModel.selectedItemProperty().addListener { _, _, selectedCondition ->
             if (selectedCondition != null) {
                 // 选择条件时自动生成唯一 refId：conditionId_序号
-                val newRefId = if (payload?.conditionId == selectedCondition.conditionId) {
-                    payload.refId // 同条件不换 refId
+                val newRefId = if (conditionId == selectedCondition.conditionId) {
+                    refId ?: selectedCondition.conditionId
                 } else {
                     generateUniqueRefId(selectedCondition.conditionId)
                 }
@@ -84,10 +84,10 @@ class ConditionPropertyEditorStrategy(
     }
 
     private fun createConditionCombo(
-        allConditions: List<ConditionUiItem>,
+        allConditions: List<ConditionMeta>,
         selectedId: String?
-    ): ComboBox<ConditionUiItem> {
-        return ComboBox<ConditionUiItem>().apply {
+    ): ComboBox<ConditionMeta> {
+        return ComboBox<ConditionMeta>().apply {
             maxWidth = Double.MAX_VALUE
             items.addAll(allConditions)
             setCellFactory { createConditionCell() }
@@ -97,9 +97,9 @@ class ConditionPropertyEditorStrategy(
         }
     }
 
-    private fun createConditionCell(): ListCell<ConditionUiItem> {
-        return object : ListCell<ConditionUiItem>() {
-            override fun updateItem(item: ConditionUiItem?, empty: Boolean) {
+    private fun createConditionCell(): ListCell<ConditionMeta> {
+        return object : ListCell<ConditionMeta>() {
+            override fun updateItem(item: ConditionMeta?, empty: Boolean) {
                 super.updateItem(item, empty)
                 text = if (empty || item == null) null
                 else item.name?.takeIf { it.isNotBlank() } ?: item.conditionId

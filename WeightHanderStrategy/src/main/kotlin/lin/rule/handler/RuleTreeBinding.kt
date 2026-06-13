@@ -6,9 +6,8 @@ import lin.config.ConfigDispatcher
 import lin.config.EvaluatorTreeRoot
 import lin.domain.MyWarManage
 import lin.rule.build.RuleLogic
-import lin.rule.condition.ConditionLogic
-import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.compile
+import lin.rule.condition.*
+import lin.rule.condition.orthogonal.ConditionAssembler
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.parse.extractPrefixedArgs
@@ -63,36 +62,145 @@ internal fun buildEvaluatorLeafLogic(
     ruleRegistry: RuleRegistry,
     conditionRegistry: ConditionRegistry,
     conditionTreeProviders: List<ConditionTreeConfigProvider>
-): RuleLogic = when (leafConfig.sourceType) {
-    EvaluatorLeafSourceType.RULE -> ruleRegistry.build(leafConfig)
-    EvaluatorLeafSourceType.CONDITION -> {
-        val conditionLogic = conditionRegistry.build(leafConfig.sourceId, leafConfig.args)
-        conditionLogic.toWeightedRuleLogic(leafConfig)
-    }
-
-    EvaluatorLeafSourceType.CONDITION_TREE -> {
-        val conditionTree = conditionTreeProviders
-            .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
-            ?: error("Condition tree config not found: sourceId=${leafConfig.sourceId}")
-        val args = leafConfig.args
-        val conditionLogic = conditionTree.root.compile { conditionRef ->
-            val conditionArgs = args.extractPrefixedArgs(conditionRef.refId)
-            conditionRegistry.build(conditionRef.conditionId, conditionArgs)
+): RuleLogic {
+    val assembler = conditionRegistry.conditionAssembler
+        ?: error("ConditionAssembler is not configured in this context")
+    // ARCH-UNSETTLED(validation, U-002): 绑定时做前置校验，是否存在防御过度 | next: 评估叶子节点参数是否可仅在配置端做单点校验
+    return when (leafConfig.sourceType) {
+        EvaluatorLeafSourceType.RULE -> {
+            val registration = ruleRegistry.require(leafConfig.sourceId)
+            validateAndThrow("规则", leafConfig.sourceId, leafConfig.args, registration.lazyFieldsResolver())
+            val originalLogic = ruleRegistry.build(leafConfig)
+            originalLogic.wrapWithDynamicWeight(leafConfig, assembler)
         }
-        conditionLogic.toWeightedRuleLogic(leafConfig)
+
+        EvaluatorLeafSourceType.CONDITION -> {
+            val registration = conditionRegistry.require(leafConfig.sourceId)
+            validateAndThrow("条件", leafConfig.sourceId, leafConfig.args, listOf(registration.field.toFieldSpec()))
+            val conditionLogic = conditionRegistry.build(leafConfig.sourceId, leafConfig.args)
+            conditionLogic.toWeightedRuleLogic(leafConfig, assembler)
+        }
+
+        EvaluatorLeafSourceType.CONDITION_TREE -> {
+            val conditionTree = conditionTreeProviders
+                .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
+                ?: error("Condition tree config not found: sourceId=${leafConfig.sourceId}")
+            val args = leafConfig.args
+            val conditionRefs = conditionTree.root.collectConditionRefs().distinctBy { it.refId }
+            for (ref in conditionRefs) {
+                val conditionArgs = args.extractPrefixedArgs(ref.refId)
+                when (ref) {
+                    is ConditionPayload.ConditionRef -> {
+                        val registration = conditionRegistry.require(ref.conditionId)
+                        validateAndThrow(
+                            contextName = "条件树 [${leafConfig.sourceId}] 嵌套条件",
+                            id = ref.refId,
+                            args = conditionArgs,
+                            fields = listOf(registration.field.toFieldSpec())
+                        )
+                    }
+
+                    is ConditionPayload.OrthogonalRef -> {
+                        val operator = assembler.findOperator(ref.operatorId)
+                            ?: error("Operator not found: ${ref.operatorId}")
+                        validateAndThrow(
+                            contextName = "条件树 [${leafConfig.sourceId}] 嵌套正交条件",
+                            id = ref.refId,
+                            args = conditionArgs,
+                            fields = operator.paramSpecs
+                        )
+                    }
+                }
+            }
+            val conditionLogic = conditionTree.root.compile { ref ->
+                val conditionArgs = args.extractPrefixedArgs(ref.refId)
+                val newPayload = when (ref) {
+                    is ConditionPayload.ConditionRef -> ref.copy(args = conditionArgs)
+                    is ConditionPayload.OrthogonalRef -> ref.copy(args = conditionArgs)
+                }
+                conditionRegistry.build(newPayload)
+            }
+            conditionLogic.toWeightedRuleLogic(leafConfig, assembler)
+        }
+    }
+}
+
+private fun validateAndThrow(
+    contextName: String,
+    id: String,
+    args: Map<String, Any?>,
+    fields: List<lin.rule.parse.FieldSpec>
+) {
+    val validation = lin.rule.parse.SpecValidator.validate(args, fields)
+    if (!validation.isValid) {
+        val detail = validation.errors.joinToString { it.message }
+        lin.myLog.error { "$contextName [$id] 绑定校验失败: $detail" }
+        throw IllegalArgumentException("$contextName [$id] 绑定校验失败: $detail")
+    }
+}
+
+private fun RuleLogic.wrapWithDynamicWeight(
+    leafConfig: EvaluatorLeafConfig,
+    assembler: ConditionAssembler
+): RuleLogic {
+    val originalLogic = this
+    val weightSource = leafConfig.weightSourceId?.let { id ->
+        assembler.findDataSource(id) ?: error("Weight multiplier DataSource not found: $id")
+    }
+    weightSource?.let {
+        val type = it.outputType.javaObjectType
+        require(Number::class.java.isAssignableFrom(type)) {
+            "Weight multiplier DataSource [${it.id}] must output a numeric type, but got [${it.outputType}]"
+        }
+    }
+    if (weightSource == null) return originalLogic
+
+    return {
+        val result = originalLogic(this)
+        if (result is RuleResult.Continue) {
+            val multiplier = weightSource.resolve(this) as Number
+            result.copy(score = result.score * multiplier.toDouble())
+        } else {
+            result
+        }
     }
 }
 
 private fun ConditionLogic.toWeightedRuleLogic(
-    leafConfig: EvaluatorLeafConfig
+    leafConfig: EvaluatorLeafConfig,
+    assembler: ConditionAssembler
 ): RuleLogic {
     val conditionLogic = this
-    val logic: RuleLogic = {
-        if (conditionLogic(this)) {
-            RuleResult.Continue(score = leafConfig.weight)
-        } else {
-            RuleResult.Continue(score = leafConfig.mismatchedWeight)
+    val weightSource = leafConfig.weightSourceId?.let { id ->
+        assembler.findDataSource(id) ?: error("Weight multiplier DataSource not found: $id")
+    }
+    val mismatchedWeightSource = leafConfig.mismatchedWeightSourceId?.let { id ->
+        assembler.findDataSource(id) ?: error("Mismatched weight multiplier DataSource not found: $id")
+    }
+
+    weightSource?.let {
+        val type = it.outputType.javaObjectType
+        require(Number::class.java.isAssignableFrom(type)) {
+            "Weight multiplier DataSource [${it.id}] must output a numeric type, but got [${it.outputType}]"
         }
+    }
+    mismatchedWeightSource?.let {
+        val type = it.outputType.javaObjectType
+        require(Number::class.java.isAssignableFrom(type)) {
+            "Mismatched weight multiplier DataSource [${it.id}] must output a numeric type, but got [${it.outputType}]"
+        }
+    }
+
+    val logic: RuleLogic = {
+        val matched = conditionLogic(this)
+        val score = if (matched) {
+            val base = leafConfig.weight
+            if (weightSource != null) base * (weightSource.resolve(this) as Number).toDouble() else base
+        } else {
+            val base = leafConfig.mismatchedWeight
+            if (mismatchedWeightSource != null) base * (mismatchedWeightSource.resolve(this) as Number).toDouble() else base
+        }
+        RuleResult.Continue(score = score)
     }
     return logic
 }

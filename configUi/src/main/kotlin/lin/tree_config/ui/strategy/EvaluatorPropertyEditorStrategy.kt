@@ -99,10 +99,10 @@ class EvaluatorPropertyEditorStrategy(
     }
 
     private fun createLeafSourceCombo(
-        allLeafItems: List<EvaluatorLeafUiItem>,
+        allLeafItems: List<EvaluatorLeafMeta>,
         existing: EvaluatorLeafConfig?
-    ): ComboBox<EvaluatorLeafUiItem> {
-        return ComboBox<EvaluatorLeafUiItem>().apply {
+    ): ComboBox<EvaluatorLeafMeta> {
+        return ComboBox<EvaluatorLeafMeta>().apply {
             maxWidth = Double.MAX_VALUE
             items.addAll(allLeafItems)
             setCellFactory { createLeafItemCell() }
@@ -117,9 +117,9 @@ class EvaluatorPropertyEditorStrategy(
 
     private fun buildDynamicForm(
         container: VBox,
-        uiItem: EvaluatorLeafUiItem,
+        uiItem: EvaluatorLeafMeta,
         nodeId: String,
-        leafSourceCombo: ComboBox<EvaluatorLeafUiItem>,
+        leafSourceCombo: ComboBox<EvaluatorLeafMeta>,
         existing: EvaluatorLeafConfig?,
         args: MutableMap<String, Any>
     ) {
@@ -136,13 +136,13 @@ class EvaluatorPropertyEditorStrategy(
         container.children.add(form)
     }
 
-    private fun loadLeafUiItems(): List<EvaluatorLeafUiItem> {
+    private fun loadLeafUiItems(): List<EvaluatorLeafMeta> {
         return leafSourceCatalog.loadAll()
     }
 
-    private fun createLeafItemCell(): ListCell<EvaluatorLeafUiItem> {
-        return object : ListCell<EvaluatorLeafUiItem>() {
-            override fun updateItem(item: EvaluatorLeafUiItem?, empty: Boolean) {
+    private fun createLeafItemCell(): ListCell<EvaluatorLeafMeta> {
+        return object : ListCell<EvaluatorLeafMeta>() {
+            override fun updateItem(item: EvaluatorLeafMeta?, empty: Boolean) {
                 super.updateItem(item, empty)
                 text = if (empty || item == null) null
                 else item.name?.takeIf { it.isNotBlank() } ?: item.sourceId
@@ -156,7 +156,7 @@ class EvaluatorPropertyEditorStrategy(
 
     private fun updateLeafConfig(
         nodeId: String,
-        selectedLeaf: EvaluatorLeafUiItem?,
+        selectedLeaf: EvaluatorLeafMeta?,
         existing: EvaluatorLeafConfig?,
         args: MutableMap<String, Any>
     ) {

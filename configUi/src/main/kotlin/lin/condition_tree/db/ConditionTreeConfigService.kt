@@ -17,7 +17,8 @@ fun createConditionTreeConfigMapper(): ObjectMapper {
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 @JsonSubTypes(
-    JsonSubTypes.Type(value = ConditionPayload.ConditionRef::class, name = "ConditionRef")
+    JsonSubTypes.Type(value = ConditionPayload.ConditionRef::class, name = "ConditionRef"),
+    JsonSubTypes.Type(value = ConditionPayload.OrthogonalRef::class, name = "OrthogonalRef")
 )
 abstract class ConditionPayloadMixin
 

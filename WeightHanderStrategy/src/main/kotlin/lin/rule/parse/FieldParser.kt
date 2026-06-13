@@ -6,22 +6,22 @@ import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.memberProperties
 
-object RuleFieldParser {
+object FieldParser {
 
     /**
      * 解析传入的配置数据类，生成对应的字段规范（AST AST）集合
      */
-    fun <T : Any> parse(parameterType: KClass<T>): List<RuleFieldSpec> {
-        val specs = mutableListOf<RuleFieldSpec>()
+    fun <T : Any> parse(parameterType: KClass<T>): List<FieldSpec> {
+        val specs = mutableListOf<FieldSpec>()
 
         // 遍历类的所有的成员属性
         // 注意：这里需要项目依赖 implementation("org.jetbrains.kotlin:kotlin-reflect")
         for (prop in parameterType.memberProperties) {
             val ruleFieldAnno = prop.findAnnotation<RuleField>()
 
-            // 组装约束能力 (由于我们在前面解耦了，以后随时可以在这里追加新约束，比如检查是否有 @Pattern 注解等)
+            // 组装约束能力
             val constraints = mutableListOf<FieldConstraint>()
-            val isRequired = ruleFieldAnno?.required ?: true // 如果没打注解，默认我们也认为是必填。具体可以按你的业务调整
+            val isRequired = ruleFieldAnno?.required ?: true
             if (isRequired) {
                 constraints.add(FieldConstraint.Required)
             }
@@ -37,7 +37,7 @@ object RuleFieldParser {
             val typeStruct = resolveTypeStruct(prop.returnType, dataSource)
 
             specs.add(
-                RuleFieldSpec(
+                FieldSpec(
                     propertyName = propName,
                     name = displayName,
                     description = description,

@@ -1,8 +1,8 @@
 package lin.ai.config
 
 import lin.rule.parse.FieldConstraint
+import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.parse.RuleFieldSpec
 import lin.rule.tree.EvaluatorLeafSourceType
 import lin.rule.tree.EvaluatorTreeConfig
 
@@ -59,7 +59,7 @@ data class ConfigDiagnostic(
     val path: String? = null
 )
 
-fun RuleFieldSpec.toAiFieldSpec(): AiFieldSpec {
+fun FieldSpec.toAiFieldSpec(): AiFieldSpec {
     return AiFieldSpec(
         propertyName = propertyName,
         name = name,

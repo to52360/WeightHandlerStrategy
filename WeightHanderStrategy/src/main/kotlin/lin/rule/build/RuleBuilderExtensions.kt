@@ -1,12 +1,12 @@
 package lin.rule.build
 
 import lin.rule.parse.FieldConstraint
-import lin.rule.parse.RuleFieldParser
-import lin.rule.parse.RuleFieldSpec
+import lin.rule.parse.FieldParser
+import lin.rule.parse.FieldSpec
 import kotlin.reflect.typeOf
 
 /**
- * 提取的通用内联辅助方法：生成 RuleFieldSpec 并追加到 RuleBuilder 中
+ * 提取的通用内联辅助方法：生成 FieldSpec 并追加到 RuleBuilder 中
  * 使用 reified T 捕获真正的扩展字段类型。
  */
 inline fun <reified V, T : Any> RuleBuilder<T>.extraField(
@@ -27,9 +27,9 @@ inline fun <reified V, T : Any> RuleBuilder<T>.extraField(
 
     // 丢到闭包里，只有在前端拉取表单时才执行真正的反射结构推导
     this.extraFieldLazy {
-        val typeStruct = RuleFieldParser.resolveTypeStruct(kType, dataSource)
+        val typeStruct = FieldParser.resolveTypeStruct(kType, dataSource)
 
-        RuleFieldSpec(
+        FieldSpec(
             propertyName = propertyName,
             name = name,
             description = description,
@@ -57,5 +57,5 @@ inline fun <reified V, T : Any> RuleBuilder<T>.extraField(
 inline fun <reified C : Any, T : Any> RuleBuilder<T>.parseFields(): RuleBuilder<T> = apply {
     val kClass = C::class
     // 将整批字段的解析注册为一个惰性任务，真正执行时才触发反射
-    this.extraFieldsLazy { RuleFieldParser.parse(kClass) }
+    this.extraFieldsLazy { FieldParser.parse(kClass) }
 }

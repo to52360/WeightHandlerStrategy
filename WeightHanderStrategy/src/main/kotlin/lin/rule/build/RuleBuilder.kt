@@ -3,8 +3,8 @@ package lin.rule.build
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.handler.RuleResult
-import lin.rule.parse.RuleFieldParser
-import lin.rule.parse.RuleFieldSpec
+import lin.rule.parse.FieldParser
+import lin.rule.parse.FieldSpec
 import lin.rule.tree.EvaluatorLeafConfig
 import kotlin.reflect.KClass
 
@@ -26,23 +26,23 @@ class RuleBuilder<T : Any>(
             return field!!
         }
 
-    // 统一存放字段提供者：单条/批量都视为 () -> List<RuleFieldSpec>，build 时 flatMap 展开
-    private val extraFields = mutableListOf<() -> List<RuleFieldSpec>>()
+    // 统一存放字段提供者：单条/批量都视为 () -> List<FieldSpec>，build 时 flatMap 展开
+    private val extraFields = mutableListOf<() -> List<FieldSpec>>()
 
     fun id(id: String) = apply { this.id = id }
     fun factory(factory: RuleFactory<T>) = apply { this.factory = factory }
     fun metadata(metadata: RuleMetadata) = apply { this.metadata = metadata }
     fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc) }
 
-    fun extraField(spec: RuleFieldSpec) = apply {
+    fun extraField(spec: FieldSpec) = apply {
         extraFields.add { listOf(spec) }
     }
 
-    fun extraFieldLazy(specProvider: () -> RuleFieldSpec) = apply {
+    fun extraFieldLazy(specProvider: () -> FieldSpec) = apply {
         extraFields.add { listOf(specProvider()) }
     }
 
-    fun extraFieldsLazy(specsProvider: () -> List<RuleFieldSpec>) = apply {
+    fun extraFieldsLazy(specsProvider: () -> List<FieldSpec>) = apply {
         extraFields.add(specsProvider)
     }
 
@@ -55,7 +55,7 @@ class RuleBuilder<T : Any>(
             ruleFactory = factory,
             // [完全延迟解析]：所有字段的反射在前端拉取表单时才真正执行
             lazyFieldsResolver = {
-                RuleFieldParser.parse(parameterType) + snapshot.flatMap { it() }
+                FieldParser.parse(parameterType) + snapshot.flatMap { it() }
             }
         )
     }

@@ -1,26 +1,42 @@
 package lin.rule.tree
 
 import lin.rule.parse.FieldConstraint
+import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.parse.RuleFieldSpec
 
 const val EVALUATOR_LEAF_WEIGHT_FIELD = "weight"
 const val EVALUATOR_LEAF_MISMATCHED_WEIGHT_FIELD = "mismatchedWeight"
+const val EVALUATOR_LEAF_WEIGHT_SOURCE_FIELD = "weightSourceId"
+const val EVALUATOR_LEAF_MISMATCHED_WEIGHT_SOURCE_FIELD = "mismatchedWeightSourceId"
 
-val EVALUATOR_LEAF_BUILT_IN_FIELDS: List<RuleFieldSpec> = listOf(
-    RuleFieldSpec(
+val EVALUATOR_LEAF_BUILT_IN_FIELDS: List<FieldSpec> = listOf(
+    FieldSpec(
         propertyName = EVALUATOR_LEAF_WEIGHT_FIELD,
         name = "命中权重",
         description = "叶子逻辑匹配成功时的基础权重",
         typeStruct = FieldType.DoubleType,
         constraints = listOf(FieldConstraint.Required)
     ),
-    RuleFieldSpec(
+    FieldSpec(
         propertyName = EVALUATOR_LEAF_MISMATCHED_WEIGHT_FIELD,
         name = "未命中权重",
         description = "叶子逻辑匹配失败时的基础权重",
         typeStruct = FieldType.DoubleType,
         constraints = listOf(FieldConstraint.Required)
+    ),
+    FieldSpec(
+        propertyName = EVALUATOR_LEAF_WEIGHT_SOURCE_FIELD,
+        name = "命中权重乘数数据源",
+        description = "命中时，权重乘以该数据源提取的数值（可选）",
+        typeStruct = FieldType.SelectType("data_sources", FieldType.StringType),
+        constraints = emptyList()
+    ),
+    FieldSpec(
+        propertyName = EVALUATOR_LEAF_MISMATCHED_WEIGHT_SOURCE_FIELD,
+        name = "未命中权重乘数数据源",
+        description = "未命中时，权重乘以该数据源提取 of 的数值（可选）",
+        typeStruct = FieldType.SelectType("data_sources", FieldType.StringType),
+        constraints = emptyList()
     )
 )
 
@@ -30,13 +46,13 @@ enum class EvaluatorLeafSourceType {
     CONDITION_TREE
 }
 
-data class EvaluatorLeafUiItem(
+data class EvaluatorLeafMeta(
     val sourceType: EvaluatorLeafSourceType,
     val sourceId: String,
     val name: String?,
     val desc: String?,
-    val builtInFields: List<RuleFieldSpec> = EVALUATOR_LEAF_BUILT_IN_FIELDS,
-    val fields: List<RuleFieldSpec>
+    val builtInFields: List<FieldSpec> = EVALUATOR_LEAF_BUILT_IN_FIELDS,
+    val fields: List<FieldSpec>
 )
 
 data class EvaluatorLeafConfig(
@@ -45,7 +61,9 @@ data class EvaluatorLeafConfig(
     val sourceId: String,
     val weight: Double,
     val mismatchedWeight: Double,
-    val args: Map<String, Any> = emptyMap()
+    val args: Map<String, Any> = emptyMap(),
+    val weightSourceId: String? = null,
+    val mismatchedWeightSourceId: String? = null
 )
 
 private val EVALUATOR_LEAF_BUILT_IN_FIELD_NAMES: Set<String> =
@@ -53,7 +71,7 @@ private val EVALUATOR_LEAF_BUILT_IN_FIELD_NAMES: Set<String> =
 
 fun buildEvaluatorLeafConfig(
     nodeId: String,
-    selectedLeaf: EvaluatorLeafUiItem,
+    selectedLeaf: EvaluatorLeafMeta,
     existing: EvaluatorLeafConfig?,
     formValues: Map<String, Any>
 ): EvaluatorLeafConfig {
@@ -65,6 +83,9 @@ fun buildEvaluatorLeafConfig(
         mismatchedWeight = formValues.doubleValue(EVALUATOR_LEAF_MISMATCHED_WEIGHT_FIELD)
             ?: existing?.mismatchedWeight
             ?: 0.0,
+        weightSourceId = formValues[EVALUATOR_LEAF_WEIGHT_SOURCE_FIELD] as? String ?: existing?.weightSourceId,
+        mismatchedWeightSourceId = formValues[EVALUATOR_LEAF_MISMATCHED_WEIGHT_SOURCE_FIELD] as? String
+            ?: existing?.mismatchedWeightSourceId,
         args = formValues.filterKeys { it !in EVALUATOR_LEAF_BUILT_IN_FIELD_NAMES }
     )
 }
@@ -73,6 +94,8 @@ fun EvaluatorLeafConfig.valueOfField(propertyName: String): Any? {
     return when (propertyName) {
         EVALUATOR_LEAF_WEIGHT_FIELD -> weight
         EVALUATOR_LEAF_MISMATCHED_WEIGHT_FIELD -> mismatchedWeight
+        EVALUATOR_LEAF_WEIGHT_SOURCE_FIELD -> weightSourceId
+        EVALUATOR_LEAF_MISMATCHED_WEIGHT_SOURCE_FIELD -> mismatchedWeightSourceId
         else -> args[propertyName]
     }
 }

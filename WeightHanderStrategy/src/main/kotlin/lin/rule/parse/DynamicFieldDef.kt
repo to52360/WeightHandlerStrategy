@@ -17,22 +17,29 @@ sealed interface FieldType {
 /** 对数据结构的约束 */
 sealed interface FieldConstraint {
     object Required : FieldConstraint
+
+    // 数值范围约束
+    data class IntRange(val min: Int, val max: Int) : FieldConstraint
+    data class DoubleRange(val min: Double, val max: Double) : FieldConstraint
+
+    // 正则匹配约束
+    data class RegexPattern(val pattern: String) : FieldConstraint
 }
 
 /** 最终承载每个配置属性的完整模型 */
-data class RuleFieldSpec(
+data class FieldSpec(
     val propertyName: String,
     val name: String,
     val description: String,
     val typeStruct: FieldType, // 这里是 SICP 结构的体现
-    val constraints: List<FieldConstraint>
+    val constraints: List<FieldConstraint> = emptyList()
 )
 
 /**
  * 为字段添加 refId 前缀，用于条件树作为评估树叶子时避免同名字段冲突。
  * propertyName 变为 "refId.propertyName"，name 附加条件显示名。
  */
-fun RuleFieldSpec.withConditionPrefix(refId: String, conditionDisplayName: String): RuleFieldSpec {
+fun FieldSpec.withConditionPrefix(refId: String, conditionDisplayName: String): FieldSpec {
     return copy(
         propertyName = "$refId.$propertyName",
         name = "$name ($conditionDisplayName)"
