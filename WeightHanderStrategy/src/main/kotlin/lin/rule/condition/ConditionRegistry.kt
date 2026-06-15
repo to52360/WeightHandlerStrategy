@@ -3,6 +3,7 @@ package lin.rule.condition
 import lin.myLog
 import lin.rule.condition.orthogonal.ConditionAssembler
 import lin.rule.parse.FieldSpec
+import lin.rule.tree.CONDITION_BUILT_IN_FIELDS
 import lin.rule.tree.EvaluatorLeafMeta
 import lin.rule.tree.EvaluatorLeafSourceType
 import lin.serviceLoader.provider.ConditionRegistrationProvider
@@ -75,6 +76,7 @@ class ConditionRegistry(
                 sourceId = registration.conditionId,
                 name = registration.metadata?.name,
                 desc = registration.metadata?.desc,
+                builtInFields = CONDITION_BUILT_IN_FIELDS,
                 fields = listOf(registration.field.toFieldSpec())
             )
         }

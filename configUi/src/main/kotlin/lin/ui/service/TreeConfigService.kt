@@ -1,9 +1,10 @@
 package lin.ui.service
 
-import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import lin.rule.score.ScoreEffect
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.tree_config.db.TreeConfigEntity
@@ -15,14 +16,22 @@ fun createTreeConfigMapper(): ObjectMapper {
     return jacksonObjectMapper()
         .registerLogicNodeMixin()
         .addMixIn(EvaluatorPayload::class.java, EvaluatorPayloadMixin::class.java)
+        .addMixIn(ScoreEffect::class.java, ScoreEffectMixin::class.java)
+        .apply {
+            registerSubtypes(
+                NamedType(EvaluatorPayload.Rule::class.java, "Rule"),
+                NamedType(EvaluatorPayload.BranchCondition::class.java, "BranchCondition"),
+                NamedType(ScoreEffect.ConstantScore::class.java, "ConstantScore"),
+                NamedType(ScoreEffect.SourceScore::class.java, "SourceScore")
+            )
+        }
 }
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = EvaluatorPayload.Rule::class, name = "Rule"),
-    JsonSubTypes.Type(value = EvaluatorPayload.BranchCondition::class, name = "BranchCondition")
-)
 abstract class EvaluatorPayloadMixin
+
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+abstract class ScoreEffectMixin
 
 class TreeConfigService(
     private val repository: TreeConfigRepository,

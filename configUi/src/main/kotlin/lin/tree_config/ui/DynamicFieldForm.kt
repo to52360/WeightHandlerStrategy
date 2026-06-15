@@ -119,6 +119,15 @@ class DynamicFieldForm(
     }
 
     private fun loadOptions(dataSourceId: String): List<DynamicFieldOption> {
+        val builtIn = when (dataSourceId) {
+            "score_effect_types" -> listOf(
+                DynamicFieldOption(label = "固定分", value = "constant"),
+                DynamicFieldOption(label = "数据源评分", value = "source")
+            )
+
+            else -> null
+        }
+        if (builtIn != null) return builtIn
         return try {
             optionProviders[dataSourceId]?.getOptions() ?: emptyList()
         } catch (_: Exception) {

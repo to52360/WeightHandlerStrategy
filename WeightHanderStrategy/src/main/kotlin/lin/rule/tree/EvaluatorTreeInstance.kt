@@ -1,6 +1,7 @@
 package lin.rule.tree
 
 import lin.rule.build.RuleLogic
+import lin.rule.condition.ConditionLogic
 
 data class EvaluatorTreeInstance(
     val bindings: List<EvaluatorTreeBinding>,
@@ -18,7 +19,7 @@ sealed interface EvaluatorInstanceNode {
     data class NotNode(val child: EvaluatorInstanceNode) : EvaluatorInstanceNode
     data class BranchNode(
         val nodeId: String,
-        val condition: RuleLogic,
+        val condition: ConditionLogic,
         val onTrue: EvaluatorInstanceNode,
         val onFalse: EvaluatorInstanceNode
     ) : EvaluatorInstanceNode
@@ -31,7 +32,8 @@ sealed interface EvaluatorInstanceNode {
  * @param leafBuilder 高阶函数，表示如何将一个具体的叶子配置转为真正的可执行 RuleLogic 闭包
  */
 fun EvaluatorTreeConfig.instantiate(
-    leafBuilder: (EvaluatorLeafConfig) -> RuleLogic
+    leafBuilder: (EvaluatorLeafConfig) -> RuleLogic,
+    branchConditionBuilder: (EvaluatorLeafConfig) -> ConditionLogic
 ): EvaluatorTreeInstance {
     fun instantiateNode(node: EvaluatorNode): EvaluatorInstanceNode {
         return when (node) {
@@ -60,7 +62,7 @@ fun EvaluatorTreeConfig.instantiate(
                     ?: error("EvaluatorLeafConfig not found for nodeId=${payload.nodeId}")
                 EvaluatorInstanceNode.BranchNode(
                     nodeId = payload.nodeId,
-                    condition = leafBuilder(leafConfig),
+                    condition = branchConditionBuilder(leafConfig),
                     onTrue = instantiateNode(node.onTrue),
                     onFalse = instantiateNode(node.onFalse)
                 )

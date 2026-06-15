@@ -5,23 +5,17 @@ import lin.rule.build.RuleLogic
 import lin.rule.build.RuleRegistration
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.mapToRuleArgs
-import lin.rule.tree.EVALUATOR_LEAF_BUILT_IN_FIELDS
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorLeafMeta
 import lin.rule.tree.EvaluatorLeafSourceType
+import lin.rule.tree.scoreEffectFieldsFor
 import lin.serviceLoader.provider.RuleRegistrationProvider
-
-// 提取为全局不变量，避免每次实例化 RuleMeta 时产生重复的对象分配与 GC 开销
-val BUILT_IN_WEIGHT_PROPS: List<FieldSpec> = EVALUATOR_LEAF_BUILT_IN_FIELDS
 
 // 配置元数据 DTO
 data class RuleMeta(
     val ruleId: String,
     val name: String?,
     val desc: String?,
-    // 树节点的自带 structure 属性，前端按照完全相同的强类型 AST 结构进行渲染
-    // 并且他们是分配给 EvaluatorLeafConfig 根属性，而非 args 的
-    val builtInWeightProps: List<FieldSpec> = BUILT_IN_WEIGHT_PROPS,
     // 泛型参数里解析出来的动态扩展验证属性 (归属于 EvaluatorLeafConfig.args)
     val fields: List<FieldSpec>
 )
@@ -76,6 +70,7 @@ class RuleRegistry(
                 sourceId = reg.ruleId,
                 name = reg.metadata?.name,
                 desc = reg.metadata?.desc,
+                builtInFields = scoreEffectFieldsFor(reg.scoreEffectType),
                 fields = reg.lazyFieldsResolver()
             )
         }

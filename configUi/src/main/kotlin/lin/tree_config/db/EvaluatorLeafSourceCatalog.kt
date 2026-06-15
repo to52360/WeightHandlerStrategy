@@ -6,6 +6,7 @@ import lin.rule.condition.ConditionRegistry
 import lin.rule.condition.collectConditionRefs
 import lin.rule.parse.withConditionPrefix
 import lin.rule.registry.RuleRegistry
+import lin.rule.tree.CONDITION_BUILT_IN_FIELDS
 import lin.rule.tree.EvaluatorLeafMeta
 import lin.rule.tree.EvaluatorLeafSourceType
 import lin.utils.runCatchingLog
@@ -59,6 +60,7 @@ class EvaluatorLeafSourceCatalog(
                     sourceId = id,
                     name = name,
                     desc = null,
+                    builtInFields = CONDITION_BUILT_IN_FIELDS,
                     fields = fields
                 )
             }

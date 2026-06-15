@@ -8,6 +8,9 @@ import javafx.scene.control.Separator
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.rule.parse.FieldSpec
+import lin.rule.score.DefaultScoreOperators
+import lin.rule.score.ScoreEffect
 import lin.rule.tree.*
 import lin.serviceLoader.provider.SelectOptionProvider
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
@@ -55,7 +58,15 @@ class EvaluatorPropertyEditorStrategy(
             dynamicFormArea.children.clear()
             if (selectedLeaf != null) {
                 val currentArgs = existing?.args?.toMutableMap() ?: mutableMapOf()
-                buildDynamicForm(dynamicFormArea, selectedLeaf, nodeId, leafSourceCombo, existing, currentArgs)
+                buildDynamicForm(
+                    dynamicFormArea,
+                    selectedLeaf,
+                    nodeId,
+                    leafSourceCombo,
+                    existing,
+                    currentArgs,
+                    isBranch
+                )
                 updateLeafConfig(nodeId, selectedLeaf, existing, currentArgs)
                 onChanged()
             }
@@ -76,7 +87,7 @@ class EvaluatorPropertyEditorStrategy(
             }
             if (leafItem != null) {
                 val currentArgs = existing.args.toMutableMap()
-                buildDynamicForm(dynamicFormArea, leafItem, nodeId, leafSourceCombo, existing, currentArgs)
+                buildDynamicForm(dynamicFormArea, leafItem, nodeId, leafSourceCombo, existing, currentArgs, isBranch)
             }
         }
     }
@@ -121,19 +132,68 @@ class EvaluatorPropertyEditorStrategy(
         nodeId: String,
         leafSourceCombo: ComboBox<EvaluatorLeafMeta>,
         existing: EvaluatorLeafConfig?,
-        args: MutableMap<String, Any>
+        args: MutableMap<String, Any>,
+        isBranch: Boolean = false
     ) {
         container.children.clear()
 
+        val specs = computeFieldSpecs(uiItem, args, existing, isBranch)
+
         val form = dynamicFieldForm.build(
-            specs = uiItem.builtInFields + uiItem.fields,
+            specs = specs,
             existingValues = { propertyName -> fieldValueOf(propertyName, existing) },
         ) { propertyName, value ->
             args[propertyName] = value
             updateLeafConfig(nodeId, leafSourceCombo.value, existing, args)
+
+            if (propertyName == EVALUATOR_LEAF_SCORE_OPERATOR_FIELD ||
+                propertyName == EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD
+            ) {
+                val updatedExisting = leafConfigs[nodeId]
+                buildDynamicForm(
+                    container, uiItem, nodeId, leafSourceCombo,
+                    updatedExisting, mutableMapOf(), isBranch
+                )
+            }
         }
 
         container.children.add(form)
+    }
+
+    /**
+     * 根据当前表单状态动态计算字段列表：
+     * - Branch 节点只渲染条件字段（fields），不渲染评分效应相关字段
+     * - 选中 source 评分效应 + 有效算子时，追加算子 paramSpecs
+     * - 其它情况仅渲染基础的 builtInFields + fields
+     */
+    private fun computeFieldSpecs(
+        uiItem: EvaluatorLeafMeta,
+        args: Map<String, Any>,
+        existing: EvaluatorLeafConfig?,
+        isBranch: Boolean
+    ): List<FieldSpec> {
+        if (isBranch) return uiItem.fields
+
+        val builtIn = uiItem.builtInFields.toMutableList()
+
+        val effectType = args[EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD] as? String
+            ?: when (existing?.scoreEffect) {
+                is ScoreEffect.SourceScore -> SCORE_EFFECT_TYPE_SOURCE
+                else -> null
+            }
+
+        if (effectType == SCORE_EFFECT_TYPE_SOURCE) {
+            val operatorId = args[EVALUATOR_LEAF_SCORE_OPERATOR_FIELD] as? String
+                ?: (existing?.scoreEffect as? ScoreEffect.SourceScore)?.operatorId
+
+            val operator = operatorId?.let { DefaultScoreOperators.all[it] }
+            if (operator != null) {
+                builtIn.addAll(operator.paramSpecs)
+            }
+        }
+
+        builtIn.addAll(uiItem.fields)
+        return builtIn
     }
 
     private fun loadLeafUiItems(): List<EvaluatorLeafMeta> {

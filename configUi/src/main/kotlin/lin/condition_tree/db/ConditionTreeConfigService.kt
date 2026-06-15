@@ -1,8 +1,8 @@
 package lin.condition_tree.db
 
-import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionTreeConfig
@@ -13,13 +13,15 @@ fun createConditionTreeConfigMapper(): ObjectMapper {
     return jacksonObjectMapper()
         .registerLogicNodeMixin()
         .addMixIn(ConditionPayload::class.java, ConditionPayloadMixin::class.java)
+        .apply {
+            registerSubtypes(
+                NamedType(ConditionPayload.ConditionRef::class.java, "ConditionRef"),
+                NamedType(ConditionPayload.OrthogonalRef::class.java, "OrthogonalRef")
+            )
+        }
 }
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = ConditionPayload.ConditionRef::class, name = "ConditionRef"),
-    JsonSubTypes.Type(value = ConditionPayload.OrthogonalRef::class, name = "OrthogonalRef")
-)
 abstract class ConditionPayloadMixin
 
 class ConditionTreeConfigService(

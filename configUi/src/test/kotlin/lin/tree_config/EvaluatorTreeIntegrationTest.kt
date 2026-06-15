@@ -12,7 +12,7 @@ class EvaluatorTreeIntegrationTest {
     val testJson = """
         {"bindings":[{"type":"GROUP","id":"19fd1490"},{"type":"GROUP","id":"29b7b85a"}],
         "root":{"Leaf":{"payload":{"Rule":{"nodeId":"rule_1778405395362"}}}},
-        "leafConfigs":{"rule_1778405395362":{"nodeId":"rule_1778405395362","sourceType":"RULE","sourceId":"typed_simple_rule","weight":1.0,"mismatchedWeight":2.0,"args":{"limit":3}}}}
+        "leafConfigs":{"rule_1778405395362":{"nodeId":"rule_1778405395362","sourceType":"RULE","sourceId":"typed_simple_rule","scoreEffect":{"ConstantScore":{"value":1.0}},"args":{"limit":3}}}}
         }
     """.trimIndent()
 
@@ -29,10 +29,15 @@ class EvaluatorTreeIntegrationTest {
         // 2. 实例化为 Tree Instance
         // 【函数式魔法】：完全告别 MockK 和庞大的注册表！
         // 直接传一个符合 (EvaluatorLeafConfig) -> RuleLogic 签名的 Lambda 进去。
-        val instance = config.instantiate { leafConfig ->
-            // 直接返回一个假的规则执行闭包
-            { RuleResult.Continue(1.0) }
-        }
+        val instance = config.instantiate(
+            leafBuilder = {
+                // 直接返回一个假的规则执行闭包
+                { RuleResult.Continue(1.0) }
+            },
+            branchConditionBuilder = {
+                { true }
+            }
+        )
 
         // 3. 验证结果
         assertNotNull(instance)
