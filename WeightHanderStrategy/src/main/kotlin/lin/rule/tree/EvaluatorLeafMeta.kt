@@ -4,8 +4,14 @@ import lin.rule.build.ScoreEffectType
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.score.DefaultScoreOperators
 import lin.rule.score.ScoreEffect
+import lin.rule.score.ScoreOperatorRegistry
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+internal object EvaluatorLeafMetaHelper : KoinComponent {
+    val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
+}
 
 const val EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD = "scoreEffectType"
 const val EVALUATOR_LEAF_CONSTANT_SCORE_FIELD = "constantScore"
@@ -152,7 +158,7 @@ private fun buildScoreEffect(
             val operatorId = formValues[EVALUATOR_LEAF_SCORE_OPERATOR_FIELD] as? String
                 ?: (existing as? ScoreEffect.SourceScore)?.operatorId
                 ?: return null
-            val operator = DefaultScoreOperators.all[operatorId]
+            val operator = EvaluatorLeafMetaHelper.scoreOperatorRegistry.find(operatorId)
             val paramKeys = operator?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
             val oldArgs = (existing as? ScoreEffect.SourceScore)?.args ?: emptyMap()
             val scoreArgs = formValues.filterKeys { it in paramKeys }
@@ -192,7 +198,8 @@ private fun operatorParamKeys(
         ?: (existing as? ScoreEffect.SourceScore)?.operatorId
         ?: return emptySet()
 
-    return DefaultScoreOperators.all[operatorId]?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
+    return EvaluatorLeafMetaHelper.scoreOperatorRegistry.find(operatorId)?.paramSpecs?.map { it.propertyName }?.toSet()
+        ?: emptySet()
 }
 
 private fun Map<String, Any>.doubleValue(propertyName: String): Double? {

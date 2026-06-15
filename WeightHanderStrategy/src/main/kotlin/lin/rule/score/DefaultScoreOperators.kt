@@ -3,6 +3,7 @@ package lin.rule.score
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
+import lin.serviceLoader.provider.ScoreOperatorProvider
 
 object NoScoreParams
 
@@ -80,11 +81,12 @@ val ReverseLinearScoreOperator = scoreOperator<Number, ReverseLinearScoreParams>
     (params.pivot - input.toDouble()) * params.factor + params.offset
 }
 
-// ARCH-UNSETTLED(score-effect, U-001): 评分算子暂以内置注册表提供，后续是否升级为 SPI Provider 仍待评估 | next: 当出现外部插件评分算子需求时抽取 ScoreOperatorProvider
-object DefaultScoreOperators {
-    val all: Map<String, ScoreOperator<*, *>> = listOf(
-        IdentityScoreOperator,
-        LinearScoreOperator,
-        ReverseLinearScoreOperator
-    ).associateBy { it.id }
+class DefaultScoreOperatorsProvider : ScoreOperatorProvider {
+    override fun getScoreOperators(): Collection<ScoreOperator<*, *>> {
+        return listOf(
+            IdentityScoreOperator,
+            LinearScoreOperator,
+            ReverseLinearScoreOperator
+        )
+    }
 }

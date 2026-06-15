@@ -9,10 +9,8 @@ import lin.rule.condition.ConditionRegistry
 import lin.rule.condition.orthogonal.ConditionAssembler
 import lin.rule.handler.RuleTreeBindingTask
 import lin.rule.registry.RuleRegistry
-import lin.serviceLoader.provider.ConditionRegistrationProvider
-import lin.serviceLoader.provider.DataSourceProvider
-import lin.serviceLoader.provider.OperatorProvider
-import lin.serviceLoader.provider.RuleRegistrationProvider
+import lin.rule.score.ScoreOperatorRegistry
+import lin.serviceLoader.provider.*
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import lin.utils.startup.CardConfigBindingTask
 import lin.utils.startup.StartupTask
@@ -23,6 +21,10 @@ val ruleModule = module {
     single<RuleRegistry> {
         val providers = ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
         RuleRegistry(providers)
+    }
+    single<ScoreOperatorRegistry> {
+        val providers = ServiceLoaderUtils.loadServices(ScoreOperatorProvider::class.java)
+        ScoreOperatorRegistry(providers)
     }
     single {
         val dataSources = ServiceLoaderUtils.loadServices(DataSourceProvider::class.java)

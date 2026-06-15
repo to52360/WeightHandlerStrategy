@@ -22,8 +22,10 @@ import lin.condition_tree.ui.action.SaveConditionTreeAction
 import lin.config.AppConfig
 import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
+import lin.rule.score.ScoreOperatorRegistry
 import lin.serviceLoader.provider.ConditionRegistrationProvider
 import lin.serviceLoader.provider.RuleRegistrationProvider
+import lin.serviceLoader.provider.ScoreOperatorProvider
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.db.TreeConfigRepository
 import lin.tree_config.ui.EvaluatorTreeExtension
@@ -54,6 +56,11 @@ val uiModule = module {
         val providers =
             ServiceLoaderUtils.loadServices(ConditionRegistrationProvider::class.java)
         ConditionRegistry(providers)
+    }
+    single {
+        val providers =
+            ServiceLoaderUtils.loadServices(ScoreOperatorProvider::class.java)
+        ScoreOperatorRegistry(providers)
     }
 
     // UI 扩展注册

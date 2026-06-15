@@ -12,15 +12,20 @@ import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.parse.extractPrefixedArgs
 import lin.rule.registry.RuleRegistry
-import lin.rule.score.DefaultScoreOperators
 import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperator
+import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
 import lin.serviceLoader.provider.config.ConditionTreeConfigProvider
 import lin.serviceLoader.provider.config.TreeConfigProvider
 import lin.utils.startup.StartupTask
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import org.koin.core.component.inject
+
+internal object RuleTreeBindingHelper : KoinComponent {
+    val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
+}
 
 /**
  * 启动任务：将 TreeConfigProvider 中的评估树绑定到 ConfigDispatcher。
@@ -222,7 +227,7 @@ private fun compileSourceScore(
         ?: error("Score DataSource not found: ${effect.sourceId}")
 
     @Suppress("UNCHECKED_CAST")
-    val operator = DefaultScoreOperators.all[effect.operatorId] as? ScoreOperator<Any, Any>
+    val operator = RuleTreeBindingHelper.scoreOperatorRegistry.find(effect.operatorId) as? ScoreOperator<Any, Any>
         ?: error("ScoreOperator not found: ${effect.operatorId}")
     val compatible = operator.inputType == source.outputType ||
             (operator.inputType == Number::class && Number::class.java.isAssignableFrom(source.outputType.javaObjectType))
@@ -236,7 +241,7 @@ private fun compileSourceScore(
         throw IllegalArgumentException("评分效应 [${effect.operatorId}] 校验失败: ${validation.errors.joinToString { it.message }}")
     }
 
-    // ARCH-UNSETTLED(score-effect, U-002): SourceScore 参数暂复用规则参数 ObjectMapper，ScoreOperator 参数反序列化边界待独立测试覆盖 | next: 为 ScoreEffect 增加专门序列化/反序列化单测
+    // SourceScore 参数复用规则参数 ObjectMapper 进行转换，由单元测试覆盖验证
     val parameter = lin.rule.parse.mapToRuleArgs(effect.args, operator.parameterType)
     return {
         val input = source.resolve(this)

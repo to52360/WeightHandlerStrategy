@@ -8,6 +8,7 @@ import javafx.scene.control.SplitPane
 import javafx.scene.layout.HBox
 import lin.card_group.ui.ActiveManagerHolder
 import lin.card_purpose.PurposeTagProvider
+import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeBinding
@@ -33,6 +34,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     private val tagProvider: PurposeTagProvider by inject()
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
     val activeManagerHolder: ActiveManagerHolder by inject()
+    private val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
 
     // 选中的叶子配置 (目前先只在内存中修改)
     val leafConfigs = mutableMapOf<String, EvaluatorLeafConfig>()
@@ -41,7 +43,8 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     val logicTreeEditor = LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>>()
     val nodeTreeView get() = logicTreeEditor.treeView
 
-    val propertyPanel = PropertyPanel(EvaluatorPropertyEditorStrategy(leafSourceCatalog, leafConfigs))
+    val propertyPanel =
+        PropertyPanel(EvaluatorPropertyEditorStrategy(leafSourceCatalog, scoreOperatorRegistry, leafConfigs))
 
     private val configListPanel = ConfigListPanel(this, treeConfigService)
 

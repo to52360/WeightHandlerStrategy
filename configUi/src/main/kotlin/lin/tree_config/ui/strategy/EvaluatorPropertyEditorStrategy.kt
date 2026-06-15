@@ -9,8 +9,8 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.rule.parse.FieldSpec
-import lin.rule.score.DefaultScoreOperators
 import lin.rule.score.ScoreEffect
+import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
 import lin.serviceLoader.provider.SelectOptionProvider
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
@@ -22,6 +22,7 @@ import lin.utils.serviceLoader.ServiceLoaderUtils
 
 class EvaluatorPropertyEditorStrategy(
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
+    private val scoreOperatorRegistry: ScoreOperatorRegistry,
     private val leafConfigs: MutableMap<String, EvaluatorLeafConfig>
 ) : PropertyEditorStrategy<EvaluatorPayload> {
 
@@ -186,7 +187,7 @@ class EvaluatorPropertyEditorStrategy(
             val operatorId = args[EVALUATOR_LEAF_SCORE_OPERATOR_FIELD] as? String
                 ?: (existing?.scoreEffect as? ScoreEffect.SourceScore)?.operatorId
 
-            val operator = operatorId?.let { DefaultScoreOperators.all[it] }
+            val operator = operatorId?.let { scoreOperatorRegistry.find(it) }
             if (operator != null) {
                 builtIn.addAll(operator.paramSpecs)
             }
