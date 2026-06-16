@@ -7,6 +7,14 @@ import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
 import kotlin.reflect.KClass
 
+object OperatorCategories {
+    const val NUMBER = "数值"
+    const val COMPARE = "比较"
+    const val COLLECTION = "集合"
+    const val EXISTENCE = "存在性"
+    const val STATE = "状态"
+}
+
 /**
  * 比较算子：纯逻辑运算逻辑，与特定的业务数据提取完全无关。
  * 算子定义了所需的参数类型 [P]，由装配引擎在编译期进行统一校验与解析。
@@ -62,7 +70,7 @@ val GreaterThanOrEqualOp = operator<Int, GteParams>(
     id = "gte",
     name = "大于等于",
     description = "判断输入数值是否大于等于指定的阈值",
-    categories = setOf("数值", "比较"),
+    categories = setOf(OperatorCategories.NUMBER, OperatorCategories.COMPARE),
     paramSpecs = listOf(
         FieldSpec(
             propertyName = "threshold",
@@ -85,7 +93,7 @@ val ContainsRaceOp = operator<Set<CardRaceEnum>, ContainsRaceParams>(
     id = "contains_race",
     name = "包含种族",
     description = "判断输入种族集合中是否包含指定的种族",
-    categories = setOf("集合", "存在性")
+    categories = setOf(OperatorCategories.COLLECTION, OperatorCategories.EXISTENCE)
 ) { input, params ->
     input.contains(params.targetRace)
 }

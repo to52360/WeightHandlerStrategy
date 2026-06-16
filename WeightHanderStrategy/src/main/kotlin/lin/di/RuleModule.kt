@@ -10,8 +10,9 @@ import lin.rule.condition.orthogonal.ConditionAssembler
 import lin.rule.handler.RuleTreeBindingTask
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
-import lin.serviceLoader.provider.*
-import lin.utils.serviceLoader.ServiceLoaderUtils
+import lin.serviceLoader.provider.DataSourceProvider
+import lin.serviceLoader.provider.OperatorProvider
+import lin.utils.serviceLoader.loadSpiList
 import lin.utils.startup.CardConfigBindingTask
 import lin.utils.startup.StartupTask
 import org.koin.core.qualifier.named
@@ -19,19 +20,17 @@ import org.koin.dsl.module
 
 val ruleModule = module {
     single<RuleRegistry> {
-        val providers = ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
-        RuleRegistry(providers)
+        RuleRegistry(loadSpiList())
     }
     single<ScoreOperatorRegistry> {
-        val providers = ServiceLoaderUtils.loadServices(ScoreOperatorProvider::class.java)
-        ScoreOperatorRegistry(providers)
+        ScoreOperatorRegistry(loadSpiList())
     }
     single {
-        val dataSources = ServiceLoaderUtils.loadServices(DataSourceProvider::class.java)
+        val dataSources = loadSpiList<DataSourceProvider>()
             .flatMap { it.get() }
             .associateBy { it.id }
 
-        val operators = ServiceLoaderUtils.loadServices(OperatorProvider::class.java)
+        val operators = loadSpiList<OperatorProvider>()
             .flatMap { it.get() }
             .associateBy { it.id }
 
@@ -44,8 +43,7 @@ val ruleModule = module {
         )
     }
     single<ConditionRegistry> {
-        val providers = ServiceLoaderUtils.loadServices(ConditionRegistrationProvider::class.java)
-        ConditionRegistry(providers, get())
+        ConditionRegistry(loadSpiList(), get())
     }
     single<RuleInfoRegister> {
         val infos = get<Map<String, CardCombinedConfig>>(named("weightInfo")).values.map { it.weightInfo }

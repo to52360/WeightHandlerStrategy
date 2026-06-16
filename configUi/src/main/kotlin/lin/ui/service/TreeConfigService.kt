@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import lin.rule.condition.ConditionPayload
 import lin.rule.score.ScoreEffect
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
@@ -17,15 +18,22 @@ fun createTreeConfigMapper(): ObjectMapper {
         .registerLogicNodeMixin()
         .addMixIn(EvaluatorPayload::class.java, EvaluatorPayloadMixin::class.java)
         .addMixIn(ScoreEffect::class.java, ScoreEffectMixin::class.java)
+        .addMixIn(ConditionPayload::class.java, ConditionPayloadMixin::class.java)
+        .addMixIn(lin.rule.tree.RulePayload::class.java, RulePayloadMixin::class.java)
         .apply {
             registerSubtypes(
                 NamedType(EvaluatorPayload.Rule::class.java, "Rule"),
                 NamedType(EvaluatorPayload.BranchCondition::class.java, "BranchCondition"),
                 NamedType(ScoreEffect.ConstantScore::class.java, "ConstantScore"),
-                NamedType(ScoreEffect.SourceScore::class.java, "SourceScore")
+                NamedType(ScoreEffect.SourceScore::class.java, "SourceScore"),
+                NamedType(ConditionPayload.ConditionRef::class.java, "ConditionRef"),
+                NamedType(ConditionPayload.OrthogonalRef::class.java, "OrthogonalRef"),
+                NamedType(lin.rule.tree.RulePayload.RuleRef::class.java, "RuleRef"),
+                NamedType(lin.rule.tree.RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef")
             )
         }
 }
+
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 abstract class EvaluatorPayloadMixin
@@ -119,3 +127,11 @@ class TreeConfigService(
         }
     }
 }
+
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+abstract class ConditionPayloadMixin
+
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+abstract class RulePayloadMixin
+
+

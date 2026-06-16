@@ -77,27 +77,78 @@ internal fun buildEvaluatorLeafLogic(
 ): RuleLogic {
     val assembler = conditionRegistry.conditionAssembler
         ?: error("ConditionAssembler is not configured in this context")
-    // ARCH-UNSETTLED(validation, U-002): 绑定时做前置校验，是否存在防御过度 | next: 评估叶子节点参数是否可仅在配置端做单点校验
-    return when (leafConfig.sourceType) {
-        EvaluatorLeafSourceType.RULE -> {
-            val registration = ruleRegistry.require(leafConfig.sourceId)
-            validateAndThrow("规则", leafConfig.sourceId, leafConfig.args, registration.lazyFieldsResolver())
-            // RULE factory 通过 leafConfig.scoreEffect 获取解析好的评分效应，线已接上
-            ruleRegistry.build(leafConfig)
-        }
 
+    // 1. 获取守卫条件逻辑 (GuardLogic)
+    val guardLogic: ConditionLogic? = when (leafConfig.sourceType) {
         EvaluatorLeafSourceType.CONDITION -> {
-            val registration = conditionRegistry.require(leafConfig.sourceId)
-            validateAndThrow("条件", leafConfig.sourceId, leafConfig.args, listOf(registration.field.toFieldSpec()))
-            val conditionLogic = conditionRegistry.build(leafConfig.sourceId, leafConfig.args)
-            conditionLogic.toGuardScoreRule(leafConfig, assembler)
+            val payload = leafConfig.resolveConditionPayload()
+            if (payload is ConditionPayload.ConditionRef) {
+                val registration = conditionRegistry.require(payload.conditionId)
+                validateAndThrow("条件", payload.conditionId, payload.args, listOf(registration.field.toFieldSpec()))
+            } else if (payload is ConditionPayload.OrthogonalRef) {
+                val operator = assembler.findOperator(payload.operatorId)
+                    ?: error("Operator not found: ${payload.operatorId}")
+                validateAndThrow("正交条件", payload.refId, payload.args, operator.paramSpecs)
+            }
+            conditionRegistry.build(payload) as ConditionLogic?
         }
 
         EvaluatorLeafSourceType.CONDITION_TREE -> {
-            val conditionLogic = buildConditionTreeLogic(leafConfig, conditionRegistry, conditionTreeProviders)
-            conditionLogic.toGuardScoreRule(leafConfig, assembler)
+            buildConditionTreeLogic(leafConfig, conditionRegistry, conditionTreeProviders) as ConditionLogic?
+        }
+
+        EvaluatorLeafSourceType.RULE, EvaluatorLeafSourceType.ORTHOGONAL_RULE -> {
+            val guard = (leafConfig.effectiveRulePayload as? RulePayload.OrthogonalRuleRef)?.guardCondition
+                ?: leafConfig.guardCondition
+            if (guard != null) {
+                conditionRegistry.build(guard) as ConditionLogic?
+            } else {
+                null
+            }
         }
     }
+
+    // 2. 获取核心得分逻辑 (ScoreLogic)
+    val scoreLogic: RuleLogic = when (leafConfig.sourceType) {
+        EvaluatorLeafSourceType.RULE -> {
+            val registration = ruleRegistry.require(leafConfig.sourceId)
+            validateAndThrow("规则", leafConfig.sourceId, leafConfig.args, registration.lazyFieldsResolver())
+            ruleRegistry.build(leafConfig)
+        }
+
+        else -> {
+            val scoreEffectLogic = compileScoreEffect(leafConfig, assembler)
+            val logicClosure: RuleLogic = {
+                RuleResult.Continue(score = scoreEffectLogic(this))
+            }
+            logicClosure
+        }
+    }
+
+    // 3. 获取未命中分值 (MissValue)
+    val effect =
+        (leafConfig.effectiveRulePayload as? RulePayload.OrthogonalRuleRef)?.scoreEffect ?: leafConfig.scoreEffect
+    val missValue = when (effect) {
+        is ScoreEffect.ConstantScore -> effect.missValue
+        is ScoreEffect.SourceScore -> effect.missValue
+        null -> 0.0
+    }
+
+
+    // 4. 归一化执行闭包，通过命名函数绕开 Lambda 内部 Context Receiver 的匹配漏洞
+    val finalLogic: RuleLogic = {
+        val matched = if (guardLogic != null) {
+            invokeCondition(guardLogic, this)
+        } else {
+            true
+        }
+        if (matched) {
+            invokeRule(scoreLogic, this)
+        } else {
+            RuleResult.Continue(score = missValue)
+        }
+    }
+    return finalLogic
 }
 
 internal fun buildBranchConditionLogic(
@@ -105,20 +156,38 @@ internal fun buildBranchConditionLogic(
     conditionRegistry: ConditionRegistry,
     conditionTreeProviders: List<ConditionTreeConfigProvider>
 ): ConditionLogic {
+    val assembler = conditionRegistry.conditionAssembler
+        ?: error("ConditionAssembler is not configured in this context")
     return when (leafConfig.sourceType) {
         EvaluatorLeafSourceType.CONDITION -> {
-            val registration = conditionRegistry.require(leafConfig.sourceId)
-            validateAndThrow("分支条件", leafConfig.sourceId, leafConfig.args, listOf(registration.field.toFieldSpec()))
-            conditionRegistry.build(leafConfig.sourceId, leafConfig.args)
+            val payload = leafConfig.resolveConditionPayload()
+            if (payload is ConditionPayload.ConditionRef) {
+                val registration = conditionRegistry.require(payload.conditionId)
+                validateAndThrow(
+                    "分支条件",
+                    payload.conditionId,
+                    payload.args,
+                    listOf(registration.field.toFieldSpec())
+                )
+            } else if (payload is ConditionPayload.OrthogonalRef) {
+                val operator = assembler.findOperator(payload.operatorId)
+                    ?: error("Operator not found: ${payload.operatorId}")
+                validateAndThrow("分支正交条件", payload.refId, payload.args, operator.paramSpecs)
+            }
+            conditionRegistry.build(payload) as ConditionLogic
         }
 
-        EvaluatorLeafSourceType.CONDITION_TREE -> buildConditionTreeLogic(
-            leafConfig,
-            conditionRegistry,
-            conditionTreeProviders
-        )
+        EvaluatorLeafSourceType.CONDITION_TREE -> {
+            buildConditionTreeLogic(
+                leafConfig,
+                conditionRegistry,
+                conditionTreeProviders
+            ) as ConditionLogic
+        }
 
-        EvaluatorLeafSourceType.RULE -> error("Branch control node cannot bind RULE: nodeId=${leafConfig.nodeId}, sourceId=${leafConfig.sourceId}")
+        EvaluatorLeafSourceType.RULE, EvaluatorLeafSourceType.ORTHOGONAL_RULE -> {
+            error("Branch control node cannot bind RULE: nodeId=${leafConfig.nodeId}")
+        }
     }
 }
 
@@ -183,26 +252,6 @@ private fun validateAndThrow(
     }
 }
 
-private fun ConditionLogic.toGuardScoreRule(
-    leafConfig: EvaluatorLeafConfig,
-    assembler: ConditionAssembler
-): RuleLogic {
-    val conditionLogic = this
-    val scoreLogic = compileScoreEffect(leafConfig, assembler)
-    // ARCH-UNSETTLED(score-effect, U-006): toGuardScoreRule 只应处理 ConstantScore（CONDITION 叶子固定 ConstantScore）；SourceScore 分支不该在此，条件类 rule 边界尚未清晰 | next: 限制分支为仅 ConstantScore，移除非本层职责的 SourceScore 处理
-    val missValue = when (val effect = leafConfig.scoreEffect) {
-        is ScoreEffect.ConstantScore -> effect.missValue
-        is ScoreEffect.SourceScore -> effect.missValue
-        null -> 0.0
-    }
-
-    val logic: RuleLogic = {
-        val matched = conditionLogic(this)
-        val score = if (matched) scoreLogic(this) else missValue
-        RuleResult.Continue(score = score)
-    }
-    return logic
-}
 
 private typealias ScoreLogic = context(RuleEnv) RuleContext.() -> Double
 
@@ -210,7 +259,10 @@ private fun compileScoreEffect(
     leafConfig: EvaluatorLeafConfig,
     assembler: ConditionAssembler
 ): ScoreLogic {
-    return when (val effect = leafConfig.scoreEffect ?: ScoreEffect.ConstantScore(0.0)) {
+    val effect = (leafConfig.rulePayload as? RulePayload.OrthogonalRuleRef)?.scoreEffect
+        ?: leafConfig.scoreEffect
+        ?: ScoreEffect.ConstantScore(0.0)
+    return when (effect) {
         is ScoreEffect.ConstantScore -> {
             { effect.value }
         }
@@ -235,19 +287,32 @@ private fun compileSourceScore(
         "Type mismatch: DataSource [${source.id}] output type [${source.outputType}] is not compatible with ScoreOperator [${operator.id}] input type [${operator.inputType}]"
     }
 
-    val validation = lin.rule.parse.SpecValidator.validate(effect.args, operator.paramSpecs)
+    // 分拣参数：属于数据源的，和属于评分算子的
+    val sourceFieldNames = source.fields.map { it.propertyName }.toSet()
+    val sourceArgs = effect.args.filterKeys { it in sourceFieldNames }
+    val operatorArgs = effect.args.filterKeys { it !in sourceFieldNames }
+
+    // 校验数据源参数
+    val sourceValidation = lin.rule.parse.SpecValidator.validate(sourceArgs, source.fields)
+    if (!sourceValidation.isValid) {
+        throw IllegalArgumentException("评分数据源 [${source.id}] 参数校验失败: ${sourceValidation.errors.joinToString { it.message }}")
+    }
+
+    // 校验算子参数
+    val validation = lin.rule.parse.SpecValidator.validate(operatorArgs, operator.paramSpecs)
     if (!validation.isValid) {
-        lin.myLog.error { "评分效应 [${effect.operatorId}] 参数校验失败: ${validation.errors.joinToString { it.message }}" }
+        lin.myLog.error { "评分效应 [${effect.operatorId}] 算子参数校验失败: ${validation.errors.joinToString { it.message }}" }
         throw IllegalArgumentException("评分效应 [${effect.operatorId}] 校验失败: ${validation.errors.joinToString { it.message }}")
     }
 
     // SourceScore 参数复用规则参数 ObjectMapper 进行转换，由单元测试覆盖验证
-    val parameter = lin.rule.parse.mapToRuleArgs(effect.args, operator.parameterType)
+    val parameter = lin.rule.parse.mapToRuleArgs(operatorArgs, operator.parameterType)
     return {
-        val input = source.resolve(this)
+        val input = source.resolve(this, sourceArgs)
         operator.score(input, parameter)
     }
 }
+
 
 // ────────────────────────────────────────────────────────────
 // 顶层函数：供编排函数调用
@@ -367,3 +432,14 @@ fun ComboCard.updateIntent(actions: List<ComboCardAction>) {
         }
     }
 }
+
+context(env: RuleEnv)
+private fun invokeCondition(logic: ConditionLogic, context: RuleContext): Boolean {
+    return logic(env, context)
+}
+
+context(env: RuleEnv)
+private fun invokeRule(logic: RuleLogic, context: RuleContext): RuleResult {
+    return logic(env, context)
+}
+

@@ -33,13 +33,17 @@
 - [ ] **T-009**: ScoreOperator Provider 化 (将内置评分算子注册表抽取为 `ScoreOperatorProvider` SPI)
 - [ ] **T-013**: 完善 `SourceScore` 参数反序列化 (解决 U-002: 独立 ObjectMapper / 测试矩阵，保障运行时安全)
 
-### 阶段三：硬编码迁移与 AI 配置适配 (待开始)
+### 阶段三：硬编码迁移与 AI 配置适配 (进行中)
 
 - [ ] **T-003**: 接入配置端 UI (configUi) 动态渲染 (在条件属性面板中复用 DynamicFieldForm)
 - [ ] **T-004**: 迁移已有硬编码条件到正交体系 (将已有的 max_cost、race_whitelist 等迁移为正交组件)
 - [ ] **T-005**: AI 生成 MCP Schema 支持 (暴露正交组件元数据，用于 MCP 精确校验)
-- [ ] **T-016**: 规则 (Rule) 行为正交化 (在评估树引入正交 Rule配置弹窗，只由 Guard + Score 两个维度组成，UI
+- [x] **T-016**: 规则 (Rule) 行为正交化 (在评估树引入正交 Rule配置弹窗，只由 Guard + Score 两个维度组成，UI
   进行强类型关联匹配)
+- [ ] **T-018**: 实现真实参数化过滤数据源 (如我方战场随从数量 `FriendlyMinionsCountSource`，支持传入种族 CardRaceEnum
+  参数以实现战场精确判定)
+- [ ] **T-019**: 深入验证 `sourceType` 简化的 UI 与解析边界限制 (评估将 `sourceType` 物理合并为 RULE/CONDITION 后的 UI
+  联动复杂度与 Jackson 物理层防污染限制)
 
 ---
 
@@ -49,13 +53,20 @@
   直接算分，代码暂不做改动，维持支持)
 - [ ] **T-015** (U-005): 验证 `RuleBuilder.scoreEffectType` 是否支持对象传入 (评估工厂模式下预设 ScoreEffect
   的需求场景，暂时不抉择，代码保持仅接受类型声明)
+- [ ] **T-017**: 深入评估与设计守卫（Guard）与规则多态架构 (由用户 2026-06-16 确认挂起：在未来演进中评估是否将 `RULE` 与
+  `ORTHOGONAL_RULE` 统一为多态具体的 `RulePayload` 子类，并简化 `EvaluatorLeafSourceType` 为 `RULE` 和 `CONDITION`
+  两种核心概念，避免 rule 体系细节扩散，将其锁在各自的边界内部处理)
 
 ---
 
 ## 待评估问题 (Unloaded Context)
 
-- [ ] **Q-001**: `Operator` 的 `categories` 类型为无限制的 `Set<String>`，是否需要通过 Enum/Sealed Class 限制分类，或在校验期强制校验？
-- [ ] **Q-002**: 参数数据类（如 `GteParams`）是否应该使用 `value class` 以减少运行期内存分配与包装开销？
-- [ ] **Q-003**: 类似单字段的包装类是否真的有必要，还是可以直接使用基础类型？是否需要用密封类/接口限制所有 Parameter 类型？
-- [ ] **Q-007**: `ScoreOperator` 是否需要 SPI 化？ (对应 T-009，即将完成)。
-- [ ] **Q-010**: `SourceScore` 参数反序列化是否需要独立 ObjectMapper / 测试矩阵？ (对应 T-013，即将完成)。
+- [x] **Q-001**: `Operator` 的 `categories` 类型为无限制的 `Set<String>`，是否需要通过 Enum/Sealed Class 限制分类，或在校验期强制校验？
+  *(已在 D-012.1 中规范为 OperatorCategories 常量，自由扩展)*
+- [x] **Q-002**: 参数数据类（如 `GteParams`）是否应该使用 `value class` 以减少运行期内存分配与包装开销？ *(已在 D-012.2
+  中明确禁用，因 value class 对泛型反射反序列化存在映射和类型签名隐患)*
+- [x] **Q-003**: 类似单字段的包装类是否真的有必要，还是可以直接使用基础类型？是否需要用密封类/接口限制所有 Parameter 类型？
+  *(已在 D-012.3 中明确单字段包装类对 UI 表单解析和向前兼容是必需的，禁止密封类过度限制)*
+- [x] **Q-007**: `ScoreOperator` 是否需要 SPI 化？ *(已在 T-009 中完成)*
+- [x] **Q-010**: `SourceScore` 参数反序列化是否需要独立 ObjectMapper / 测试矩阵？ *(已在 T-013 中通过单测验证)*
+

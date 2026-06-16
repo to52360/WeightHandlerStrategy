@@ -60,4 +60,11 @@ object ServiceLoaderUtils {
     }
 }
 
+/**
+ * 全局封装的 SPI 集合加载，隐藏 ServiceLoader 细节，以便在 Koin 模块或普通类中零成本调用。
+ */
+inline fun <reified T : Any> loadSpiList(): List<T> {
+    return ServiceLoaderUtils.loadServices(T::class.java)
+}
+
 

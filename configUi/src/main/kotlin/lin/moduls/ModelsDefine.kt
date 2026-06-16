@@ -23,9 +23,6 @@ import lin.config.AppConfig
 import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
-import lin.serviceLoader.provider.ConditionRegistrationProvider
-import lin.serviceLoader.provider.RuleRegistrationProvider
-import lin.serviceLoader.provider.ScoreOperatorProvider
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.db.TreeConfigRepository
 import lin.tree_config.ui.EvaluatorTreeExtension
@@ -36,7 +33,7 @@ import lin.tree_config.ui.action.TreeWorkbenchAction
 import lin.ui.UiExtension
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
-import lin.utils.serviceLoader.ServiceLoaderUtils
+import lin.utils.serviceLoader.loadSpiList
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -47,21 +44,26 @@ import java.nio.file.Files
 val uiModule = module {
 
 
+    single { RuleRegistry(loadSpiList()) }
     single {
-        val providers =
-            ServiceLoaderUtils.loadServices(RuleRegistrationProvider::class.java)
-        RuleRegistry(providers)
+        val dataSources = loadSpiList<lin.serviceLoader.provider.DataSourceProvider>()
+            .flatMap { it.get() }
+            .associateBy { it.id }
+
+        val operators = loadSpiList<lin.serviceLoader.provider.OperatorProvider>()
+            .flatMap { it.get() }
+            .associateBy { it.id }
+
+        lin.rule.condition.orthogonal.ConditionAssembler(
+            dataSources = dataSources,
+            operators = operators,
+            objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper().apply {
+                configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            }
+        )
     }
-    single {
-        val providers =
-            ServiceLoaderUtils.loadServices(ConditionRegistrationProvider::class.java)
-        ConditionRegistry(providers)
-    }
-    single {
-        val providers =
-            ServiceLoaderUtils.loadServices(ScoreOperatorProvider::class.java)
-        ScoreOperatorRegistry(providers)
-    }
+    single { ConditionRegistry(loadSpiList(), get()) }
+    single { ScoreOperatorRegistry(loadSpiList()) }
 
     // UI 扩展注册
     single { CardGroupExtension() } bind UiExtension::class
@@ -125,6 +127,7 @@ val uiDBModule = module {
     single { CardGroupService(get()) }
     single { CardPurposeRepository(get()) }
     single { lin.combo_plan.db.ComboPlanDefinitionRepository(get()) }
+    single { lin.orthogonal_template.db.OrthogonalTemplateRepository(get()) }
 }
 
 

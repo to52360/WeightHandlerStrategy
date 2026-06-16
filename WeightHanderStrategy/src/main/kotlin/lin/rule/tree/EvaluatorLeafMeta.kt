@@ -1,6 +1,7 @@
 package lin.rule.tree
 
 import lin.rule.build.ScoreEffectType
+import lin.rule.condition.ConditionPayload
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
@@ -82,7 +83,22 @@ fun scoreEffectFieldsFor(type: ScoreEffectType): List<FieldSpec> = when (type) {
 enum class EvaluatorLeafSourceType {
     RULE,
     CONDITION,
-    CONDITION_TREE
+    CONDITION_TREE,
+    ORTHOGONAL_RULE
+}
+
+sealed interface RulePayload {
+    val args: Map<String, Any> get() = emptyMap()
+
+    data class RuleRef(
+        override val args: Map<String, Any> = emptyMap()
+    ) : RulePayload
+
+    data class OrthogonalRuleRef(
+        val guardCondition: ConditionPayload? = null,
+        val scoreEffect: ScoreEffect? = null,
+        override val args: Map<String, Any> = emptyMap()
+    ) : RulePayload
 }
 
 data class EvaluatorLeafMeta(
@@ -99,8 +115,28 @@ data class EvaluatorLeafConfig(
     val sourceType: EvaluatorLeafSourceType,
     val sourceId: String,
     val scoreEffect: ScoreEffect? = null,
-    val args: Map<String, Any> = emptyMap()
-)
+    val args: Map<String, Any> = emptyMap(),
+    val guardCondition: ConditionPayload? = null,
+    val rulePayload: RulePayload? = null
+) {
+    /** 聚合后的有效规则 Payload，优先使用显式 rulePayload，并在为 null 时兜底从老字段自动合成 */
+    val effectiveRulePayload: RulePayload
+        get() = rulePayload ?: when (sourceType) {
+            EvaluatorLeafSourceType.RULE -> RulePayload.RuleRef(args)
+            EvaluatorLeafSourceType.ORTHOGONAL_RULE -> RulePayload.OrthogonalRuleRef(guardCondition, scoreEffect, args)
+            else -> RulePayload.RuleRef(emptyMap())
+        }
+}
+
+/**
+ * 兼容性解析函数：
+ * 如果存在 guardCondition 则直接返回该 ConditionPayload；
+ * 否则利用 sourceId 与 args 兜底构建 ConditionRef。
+ */
+fun EvaluatorLeafConfig.resolveConditionPayload(): ConditionPayload {
+    if (guardCondition != null) return guardCondition
+    return ConditionPayload.ConditionRef(conditionId = sourceId, args = args)
+}
 
 fun buildEvaluatorLeafConfig(
     nodeId: String,
@@ -110,14 +146,33 @@ fun buildEvaluatorLeafConfig(
 ): EvaluatorLeafConfig {
     val builtInFieldNames = selectedLeaf.builtInFields.map { it.propertyName }.toSet()
     val consumedOperatorKeys = operatorParamKeys(formValues, existing?.scoreEffect)
+    val extArgs = formValues.filterKeys { it !in builtInFieldNames && it !in consumedOperatorKeys }
+    val scoreEffect = buildScoreEffect(formValues, existing?.scoreEffect)
+
+    val guardCondition = existing?.guardCondition ?: if (selectedLeaf.sourceType == EvaluatorLeafSourceType.CONDITION) {
+        ConditionPayload.ConditionRef(conditionId = selectedLeaf.sourceId, args = extArgs)
+    } else null
+
     return EvaluatorLeafConfig(
         nodeId = nodeId,
         sourceType = selectedLeaf.sourceType,
         sourceId = selectedLeaf.sourceId,
-        scoreEffect = buildScoreEffect(formValues, existing?.scoreEffect),
-        args = formValues.filterKeys { it !in builtInFieldNames && it !in consumedOperatorKeys }
+        scoreEffect = scoreEffect,
+        args = extArgs,
+        guardCondition = guardCondition,
+        rulePayload = when (selectedLeaf.sourceType) {
+            EvaluatorLeafSourceType.RULE -> RulePayload.RuleRef(extArgs)
+            EvaluatorLeafSourceType.ORTHOGONAL_RULE -> RulePayload.OrthogonalRuleRef(
+                guardCondition,
+                scoreEffect,
+                extArgs
+            )
+
+            else -> null
+        }
     )
 }
+
 
 fun EvaluatorLeafConfig.valueOfField(propertyName: String): Any? {
     return when (propertyName) {

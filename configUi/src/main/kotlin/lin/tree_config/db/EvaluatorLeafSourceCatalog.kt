@@ -17,7 +17,25 @@ class EvaluatorLeafSourceCatalog(
     private val conditionTreeConfigService: ConditionTreeConfigService
 ) {
     fun loadAll(): List<EvaluatorLeafMeta> {
-        return loadRuleMetas() + loadConditionMetas() + loadConditionTreeMetas()
+        val virtualMetas = listOf(
+            EvaluatorLeafMeta(
+                sourceType = EvaluatorLeafSourceType.CONDITION,
+                sourceId = "orthogonal_condition",
+                name = "正交条件 (配置型)",
+                desc = "使用数据源与算子灵活组合的配置型条件",
+                builtInFields = CONDITION_BUILT_IN_FIELDS,
+                fields = emptyList()
+            ),
+            EvaluatorLeafMeta(
+                sourceType = EvaluatorLeafSourceType.ORTHOGONAL_RULE,
+                sourceId = "orthogonal_rule",
+                name = "正交规则 (配置型)",
+                desc = "使用守卫条件与评分效应组合的配置型规则",
+                builtInFields = emptyList(),
+                fields = emptyList()
+            )
+        )
+        return virtualMetas + loadRuleMetas() + loadConditionMetas() + loadConditionTreeMetas()
     }
 
     private fun loadRuleMetas(): List<EvaluatorLeafMeta> {

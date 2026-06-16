@@ -16,6 +16,9 @@ class ConditionAssembler(
     fun findDataSource(id: String): DataSource<*>? = dataSources[id]
     fun findOperator(id: String): Operator<*, *>? = operators[id]
 
+    fun allDataSources(): Collection<DataSource<*>> = dataSources.values
+    fun allOperators(): Collection<Operator<*, *>> = operators.values
+
     /**
      * 将 OrthogonalRef 动态装配为可运行的 ConditionLogic 闭包。
      * 核心步骤包括：
@@ -32,28 +35,39 @@ class ConditionAssembler(
             ?: throw IllegalArgumentException("Operator not found: ${ref.operatorId}")
 
         // 强类型兼容性校验
-        // ARCH-PLACEHOLDER(orthogonal-condition, P-003): 校验逻辑待优化以支持更复杂的泛型与子类兼容 | replace-with: 优化为 assignment-compatible 校验，而仅是相等校验
         require(operator.inputType == source.outputType) {
             "Type mismatch: DataSource [${source.id}] output type [${source.outputType}] is not compatible with Operator [${operator.id}] input type [${operator.inputType}]"
         }
 
-        // ARCH-UNSETTLED(validation, U-001): 引擎在此处做参数防御性校验，是否存在与配置端的重复校验 | next: 待系统稳定后评估是否移除此处的校验以避免防御过度
-        val validation = lin.rule.parse.SpecValidator.validate(ref.args, operator.paramSpecs)
-        if (!validation.isValid) {
-            lin.myLog.error { "动态条件 [${ref.refId}] 参数校验失败: ${validation.errors.joinToString { it.message }}" }
-            throw IllegalArgumentException("动态条件 [${ref.refId}] 校验失败: ${validation.errors.joinToString { it.message }}")
+        // 分拣参数：属于数据源的，和属于算子的
+        val sourceFieldNames = source.fields.map { it.propertyName }.toSet()
+        val sourceArgs = ref.args.filterKeys { it in sourceFieldNames }
+        val operatorArgs = ref.args.filterKeys { it !in sourceFieldNames }
+
+        // 校验数据源参数
+        val sourceValidation = lin.rule.parse.SpecValidator.validate(sourceArgs, source.fields)
+        if (!sourceValidation.isValid) {
+            throw IllegalArgumentException("数据源 [${source.id}] 参数校验失败: ${sourceValidation.errors.joinToString { it.message }}")
         }
 
-        // 统一在编译装配期，将 Map 参数转换为算子声明的强类型数据类，实现早期的参数完整性与类型校验
+        // 校验算子参数
+        val operatorValidation = lin.rule.parse.SpecValidator.validate(operatorArgs, operator.paramSpecs)
+        if (!operatorValidation.isValid) {
+            lin.myLog.error { "动态条件 [${ref.refId}] 算子参数校验失败: ${operatorValidation.errors.joinToString { it.message }}" }
+            throw IllegalArgumentException("动态条件 [${ref.refId}] 校验失败: ${operatorValidation.errors.joinToString { it.message }}")
+        }
+
+        // 统一在编译装配期，将 Map 参数转换为算子声明的强类型数据类
         val parsedParameter = try {
-            objectMapper.convertValue(ref.args, operator.parameterType.java)
+            objectMapper.convertValue(operatorArgs, operator.parameterType.java)
         } catch (e: Exception) {
             throw IllegalArgumentException("Invalid arguments for Operator [${ref.operatorId}]: ${e.message}", e)
         }
 
         return { // context(RuleEnv) RuleContext.() -> Boolean
-            val input = source.resolve(this)
+            val input = source.resolve(this, sourceArgs)
             operator.evaluate(input, parsedParameter)
         }
     }
 }
+
