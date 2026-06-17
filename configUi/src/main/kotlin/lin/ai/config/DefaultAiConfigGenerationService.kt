@@ -1,5 +1,6 @@
 package lin.ai.config
 
+import lin.rule.parse.SpecValidator
 import lin.rule.tree.*
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.ui.service.TreeConfigService
@@ -28,8 +29,7 @@ class DefaultAiConfigGenerationService(
     override fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport {
         val diagnostics = mutableListOf<ConfigDiagnostic>()
         val leafConfigs = request.config.leafConfigs
-        val knownSources = listEvaluatorLeafSources()
-            .mapTo(linkedSetOf()) { it.sourceType to it.sourceId }
+        val knownSources = leafSourceCatalog.loadAll().associateBy { it.sourceType to it.sourceId }
 
         collectReferencedLeafNodeIds(request.config.root).forEach { nodeId ->
             if (leafConfigs[nodeId] == null) {
@@ -71,18 +71,31 @@ class DefaultAiConfigGenerationService(
 
     private fun validateLeafConfig(
         leafConfig: EvaluatorLeafConfig,
-        knownSources: Set<Pair<EvaluatorLeafSourceType, String>>,
+        knownSources: Map<Pair<EvaluatorLeafSourceType, String>, EvaluatorLeafMeta>,
         diagnostics: MutableList<ConfigDiagnostic>
     ) {
-        if ((leafConfig.sourceType to leafConfig.sourceId) !in knownSources) {
+        val meta = knownSources[leafConfig.sourceType to leafConfig.sourceId]
+        if (meta == null) {
             diagnostics += ConfigDiagnostic(
                 code = "unknown_leaf_source",
                 message = "未知评估树叶子来源: type=${leafConfig.sourceType}, sourceId=${leafConfig.sourceId}",
                 path = "leafConfigs.${leafConfig.nodeId}.sourceId"
             )
+            return
         }
 
-        // ARCH-PLACEHOLDER(ai-config-generator, P-001): args 与 RuleFieldSpec 的类型/必填校验暂未展开 | replace-with: 基于 EvaluatorLeafSourceCatalog.fields 校验 leafConfig.args
+        // 调用底层的 SpecValidator 校验 args
+        val allFields = meta.builtInFields + meta.fields
+        val validationResult = SpecValidator.validate(leafConfig.args, allFields)
+        if (!validationResult.isValid) {
+            validationResult.errors.forEach { error ->
+                diagnostics += ConfigDiagnostic(
+                    code = error.errorCode,
+                    message = error.message,
+                    path = "leafConfigs.${leafConfig.nodeId}.args.${error.propertyName}"
+                )
+            }
+        }
     }
 
     private fun collectReferencedLeafNodeIds(root: EvaluatorNode): Set<String> {

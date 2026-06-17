@@ -1,5 +1,6 @@
 package lin.ui.service
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
@@ -20,6 +21,7 @@ fun createTreeConfigMapper(): ObjectMapper {
         .addMixIn(ScoreEffect::class.java, ScoreEffectMixin::class.java)
         .addMixIn(ConditionPayload::class.java, ConditionPayloadMixin::class.java)
         .addMixIn(lin.rule.tree.RulePayload::class.java, RulePayloadMixin::class.java)
+        .addMixIn(lin.rule.tree.EvaluatorLeafConfig::class.java, EvaluatorLeafConfigMixin::class.java)
         .apply {
             registerSubtypes(
                 NamedType(EvaluatorPayload.Rule::class.java, "Rule"),
@@ -29,10 +31,15 @@ fun createTreeConfigMapper(): ObjectMapper {
                 NamedType(ConditionPayload.ConditionRef::class.java, "ConditionRef"),
                 NamedType(ConditionPayload.OrthogonalRef::class.java, "OrthogonalRef"),
                 NamedType(lin.rule.tree.RulePayload.RuleRef::class.java, "RuleRef"),
-                NamedType(lin.rule.tree.RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef")
+                NamedType(lin.rule.tree.RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef"),
+                NamedType(lin.rule.tree.RuleLeafConfig::class.java, "RULE"),
+                NamedType(lin.rule.tree.OrthogonalRuleLeafConfig::class.java, "ORTHOGONAL_RULE"),
+                NamedType(lin.rule.tree.ConditionLeafConfig::class.java, "CONDITION"),
+                NamedType(lin.rule.tree.ConditionTreeLeafConfig::class.java, "CONDITION_TREE")
             )
         }
 }
+
 
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
@@ -133,5 +140,15 @@ abstract class ConditionPayloadMixin
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 abstract class RulePayloadMixin
+
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.EXISTING_PROPERTY,
+    property = "sourceType",
+    visible = true
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+abstract class EvaluatorLeafConfigMixin
+
 
 

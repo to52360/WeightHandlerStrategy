@@ -43,7 +43,7 @@ import java.nio.file.Files
 
 val uiModule = module {
 
-
+    single { lin.ui.SelectOptionRegistry() }
     single { RuleRegistry(loadSpiList()) }
     single {
         val dataSources = loadSpiList<lin.serviceLoader.provider.DataSourceProvider>()

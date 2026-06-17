@@ -7,10 +7,8 @@ import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
 import lin.rule.condition.orthogonal.DataSource
 import lin.rule.condition.orthogonal.Operator
-import lin.serviceLoader.provider.SelectOptionProvider
 import lin.tree_config.ui.DynamicFieldForm
 import lin.ui.service.createTreeConfigMapper
-import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.*
@@ -22,12 +20,7 @@ class OrthogonalConditionDialog(
     private val conditionRegistry: ConditionRegistry by inject()
     private val templateRepo: lin.orthogonal_template.db.OrthogonalTemplateRepository by inject()
 
-    private val optionProviders: Map<String, SelectOptionProvider> by lazy {
-        ServiceLoaderUtils.getCacheServices(SelectOptionProvider::class.java)
-            .associateBy { it.dataSourceId }
-    }
-
-    private val dynamicFieldForm by lazy { DynamicFieldForm(optionProviders) }
+    private val dynamicFieldForm by lazy { DynamicFieldForm() }
 
     init {
         title = "配置正交条件"

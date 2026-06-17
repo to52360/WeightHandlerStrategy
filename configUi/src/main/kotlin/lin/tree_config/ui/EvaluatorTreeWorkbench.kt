@@ -32,7 +32,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     // 依赖注入
     val treeConfigService: TreeConfigService by inject()
     private val tagProvider: PurposeTagProvider by inject()
-    private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
+    val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
     val activeManagerHolder: ActiveManagerHolder by inject()
     private val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
 

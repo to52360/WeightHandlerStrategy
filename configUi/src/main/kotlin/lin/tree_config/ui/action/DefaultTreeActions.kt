@@ -4,6 +4,7 @@ import javafx.scene.control.Alert
 import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.ButtonType
 import javafx.scene.control.TreeItem
+import lin.rule.parse.SpecValidator
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.tree_config.ui.EvaluatorTreeWorkbench
@@ -117,6 +118,32 @@ class SaveTreeAction : TreeWorkbenchAction {
                 showError("请选择至少一个绑定目标（分组或用途标签）")
                 return
             }
+
+            // ====== 接入底层统一的 SpecValidator 参数约束校验 ======
+            val knownSources = workbench.leafSourceCatalog.loadAll().associateBy { it.sourceType to it.sourceId }
+            val diagnostics = mutableListOf<String>()
+
+            workbench.leafConfigs.forEach { (nodeId, leafConfig) ->
+                val meta = knownSources[leafConfig.sourceType to leafConfig.sourceId]
+                if (meta == null) {
+                    diagnostics += "节点 [$nodeId]：未知叶子来源 [${leafConfig.sourceId}]"
+                } else {
+                    val allFields = meta.builtInFields + meta.fields
+                    val validationResult = SpecValidator.validate(leafConfig.args, allFields)
+                    if (!validationResult.isValid) {
+                        validationResult.errors.forEach { error ->
+                            diagnostics += "规则/条件 [${meta.name ?: leafConfig.sourceId}] 属性 [${error.propertyName}] 校验失败 (${error.message})"
+                        }
+                    }
+                }
+            }
+
+            if (diagnostics.isNotEmpty()) {
+                showError("保存被拒绝，检测到参数配置不符合约束契约：\n\n" + diagnostics.joinToString("\n"))
+                return
+            }
+            // ================================================
+
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
             val config = EvaluatorTreeConfig(
                 bindings = bindings,

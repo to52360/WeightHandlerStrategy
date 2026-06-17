@@ -17,28 +17,21 @@ import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperator
 import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.EvaluatorLeafConfig
-import lin.rule.tree.EvaluatorLeafSourceType
-import lin.serviceLoader.provider.SelectOptionProvider
+import lin.rule.tree.OrthogonalRuleLeafConfig
 import lin.tree_config.ui.DynamicFieldForm
-import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.*
 
 class OrthogonalRuleDialog(
-    private val initialConfig: EvaluatorLeafConfig? = null
-) : Dialog<EvaluatorLeafConfig>(), KoinComponent {
+    private val initialConfig: OrthogonalRuleLeafConfig? = null
+) : Dialog<OrthogonalRuleLeafConfig>(), KoinComponent {
 
     private val conditionRegistry: ConditionRegistry by inject()
     private val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
     private val conditionTreeConfigService: ConditionTreeConfigService by inject()
 
-    private val optionProviders: Map<String, SelectOptionProvider> by lazy {
-        ServiceLoaderUtils.getCacheServices(SelectOptionProvider::class.java)
-            .associateBy { it.dataSourceId }
-    }
-
-    private val dynamicFieldForm by lazy { DynamicFieldForm(optionProviders) }
+    private val dynamicFieldForm by lazy { DynamicFieldForm() }
 
     private val templateRepo: lin.orthogonal_template.db.OrthogonalTemplateRepository by inject()
 
@@ -317,7 +310,7 @@ class OrthogonalRuleDialog(
             rebuildScoreDetail(newType)
         }
 
-        fun loadConfig(ref: EvaluatorLeafConfig) {
+        fun loadConfig(ref: OrthogonalRuleLeafConfig) {
             selectedGuardPayload = ref.guardCondition
             currentScoreEffect = ref.scoreEffect
 
@@ -387,8 +380,13 @@ class OrthogonalRuleDialog(
         templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
             if (template != null) {
                 try {
-                    val ref = mapper.readValue(template.contentJson, EvaluatorLeafConfig::class.java)
-                    loadConfig(ref)
+                    val ref = mapper.readValue(
+                        template.contentJson,
+                        EvaluatorLeafConfig::class.java
+                    ) as? OrthogonalRuleLeafConfig
+                    if (ref != null) {
+                        loadConfig(ref)
+                    }
                 } catch (e: Exception) {
                     e.printStackTrace()
                     Alert(Alert.AlertType.ERROR, "加载规则模板失败: ${e.message}").showAndWait()
@@ -396,7 +394,7 @@ class OrthogonalRuleDialog(
             }
         }
 
-        fun buildCurrentConfig(): EvaluatorLeafConfig? {
+        fun buildCurrentConfig(): OrthogonalRuleLeafConfig? {
             // 1. 获取 Guard Payload
             val finalGuardPayload = when (guardTypeCombo.value) {
                 "普通条件" -> {
@@ -458,9 +456,8 @@ class OrthogonalRuleDialog(
                 else -> ScoreEffect.ConstantScore(0.0)
             }
 
-            return EvaluatorLeafConfig(
+            return OrthogonalRuleLeafConfig(
                 nodeId = initialConfig?.nodeId ?: "rule_${System.currentTimeMillis()}",
-                sourceType = EvaluatorLeafSourceType.ORTHOGONAL_RULE,
                 sourceId = "orthogonal_rule",
                 scoreEffect = finalScoreEffect,
                 guardCondition = finalGuardPayload

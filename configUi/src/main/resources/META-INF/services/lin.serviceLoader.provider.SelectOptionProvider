@@ -1,2 +1,4 @@
 lin.dao.CardSelectOptionProvider
 lin.tree_config.ui.strategy.ScoreOperatorOptionProvider
+lin.tree_config.ui.strategy.CardRaceOptionProvider
+lin.tree_config.ui.strategy.SideOptionProvider

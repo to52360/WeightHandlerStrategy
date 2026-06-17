@@ -11,11 +11,12 @@ import lin.rule.build.DynamicFieldOption
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.serviceLoader.provider.SelectOptionProvider
+import lin.ui.SelectOptionRegistry
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
-class DynamicFieldForm(
-    private val optionProviders: Map<String, SelectOptionProvider>
-) {
+class DynamicFieldForm : KoinComponent {
+    private val selectOptionRegistry: SelectOptionRegistry by inject()
     fun build(
         specs: List<FieldSpec>,
         existingValues: FieldValueReader,
@@ -128,11 +129,7 @@ class DynamicFieldForm(
             else -> null
         }
         if (builtIn != null) return builtIn
-        return try {
-            optionProviders[dataSourceId]?.getOptions() ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
-        }
+        return selectOptionRegistry.getOptions(dataSourceId)
     }
 
     private fun updateMultiSelectText(menu: MenuButton, content: VBox) {

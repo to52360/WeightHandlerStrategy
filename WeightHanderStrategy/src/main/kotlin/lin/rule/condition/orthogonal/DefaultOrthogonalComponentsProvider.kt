@@ -9,7 +9,8 @@ import lin.serviceLoader.provider.OperatorProvider
 class DefaultDataSourceProvider : DataSourceProvider {
     override fun get(): Collection<DataSource<*>> = listOf(
         HandCardCountSource,
-        BattlefieldRacesSource
+        BattlefieldRacesSource,
+        MinionsCountSource
     )
 }
 

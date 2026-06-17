@@ -110,22 +110,52 @@ data class EvaluatorLeafMeta(
     val fields: List<FieldSpec>
 )
 
-data class EvaluatorLeafConfig(
-    val nodeId: String,
-    val sourceType: EvaluatorLeafSourceType,
-    val sourceId: String,
-    val scoreEffect: ScoreEffect? = null,
-    val args: Map<String, Any> = emptyMap(),
+sealed class EvaluatorLeafConfig {
+    abstract val nodeId: String
+    abstract val sourceType: EvaluatorLeafSourceType
+    abstract val sourceId: String
+    abstract val args: Map<String, Any>
+}
+
+data class RuleLeafConfig(
+    override val nodeId: String,
+    override val sourceId: String,
+    override val args: Map<String, Any> = emptyMap(),
     val guardCondition: ConditionPayload? = null,
-    val rulePayload: RulePayload? = null
-) {
-    /** 聚合后的有效规则 Payload，优先使用显式 rulePayload，并在为 null 时兜底从老字段自动合成 */
-    val effectiveRulePayload: RulePayload
-        get() = rulePayload ?: when (sourceType) {
-            EvaluatorLeafSourceType.RULE -> RulePayload.RuleRef(args)
-            EvaluatorLeafSourceType.ORTHOGONAL_RULE -> RulePayload.OrthogonalRuleRef(guardCondition, scoreEffect, args)
-            else -> RulePayload.RuleRef(emptyMap())
-        }
+    val missValue: Double = 0.0
+) : EvaluatorLeafConfig() {
+    override val sourceType: EvaluatorLeafSourceType = EvaluatorLeafSourceType.RULE
+    val rulePayload: RulePayload.RuleRef = RulePayload.RuleRef(args)
+}
+
+data class OrthogonalRuleLeafConfig(
+    override val nodeId: String,
+    override val sourceId: String = "orthogonal_rule",
+    val guardCondition: ConditionPayload? = null,
+    val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
+    override val args: Map<String, Any> = emptyMap()
+) : EvaluatorLeafConfig() {
+    override val sourceType: EvaluatorLeafSourceType = EvaluatorLeafSourceType.ORTHOGONAL_RULE
+    val rulePayload: RulePayload.OrthogonalRuleRef = RulePayload.OrthogonalRuleRef(guardCondition, scoreEffect, args)
+}
+
+data class ConditionLeafConfig(
+    override val nodeId: String,
+    override val sourceId: String,
+    val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
+    override val args: Map<String, Any> = emptyMap(),
+    val guardCondition: ConditionPayload? = null
+) : EvaluatorLeafConfig() {
+    override val sourceType: EvaluatorLeafSourceType = EvaluatorLeafSourceType.CONDITION
+}
+
+data class ConditionTreeLeafConfig(
+    override val nodeId: String,
+    override val sourceId: String,
+    val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
+    override val args: Map<String, Any> = emptyMap()
+) : EvaluatorLeafConfig() {
+    override val sourceType: EvaluatorLeafSourceType = EvaluatorLeafSourceType.CONDITION_TREE
 }
 
 /**
@@ -134,7 +164,13 @@ data class EvaluatorLeafConfig(
  * 否则利用 sourceId 与 args 兜底构建 ConditionRef。
  */
 fun EvaluatorLeafConfig.resolveConditionPayload(): ConditionPayload {
-    if (guardCondition != null) return guardCondition
+    val guard = when (this) {
+        is RuleLeafConfig -> guardCondition
+        is OrthogonalRuleLeafConfig -> guardCondition
+        is ConditionLeafConfig -> guardCondition
+        is ConditionTreeLeafConfig -> null
+    }
+    if (guard != null) return guard
     return ConditionPayload.ConditionRef(conditionId = sourceId, args = args)
 }
 
@@ -145,36 +181,66 @@ fun buildEvaluatorLeafConfig(
     formValues: Map<String, Any>
 ): EvaluatorLeafConfig {
     val builtInFieldNames = selectedLeaf.builtInFields.map { it.propertyName }.toSet()
-    val consumedOperatorKeys = operatorParamKeys(formValues, existing?.scoreEffect)
+    val existingScoreEffect = when (existing) {
+        is OrthogonalRuleLeafConfig -> existing.scoreEffect
+        is ConditionLeafConfig -> existing.scoreEffect
+        is ConditionTreeLeafConfig -> existing.scoreEffect
+        else -> null
+    }
+    val consumedOperatorKeys = operatorParamKeys(formValues, existingScoreEffect)
     val extArgs = formValues.filterKeys { it !in builtInFieldNames && it !in consumedOperatorKeys }
-    val scoreEffect = buildScoreEffect(formValues, existing?.scoreEffect)
+    val scoreEffect = buildScoreEffect(formValues, existingScoreEffect) ?: ScoreEffect.ConstantScore(0.0)
 
-    val guardCondition = existing?.guardCondition ?: if (selectedLeaf.sourceType == EvaluatorLeafSourceType.CONDITION) {
+    val guardCondition = when (existing) {
+        is RuleLeafConfig -> existing.guardCondition
+        is OrthogonalRuleLeafConfig -> existing.guardCondition
+        is ConditionLeafConfig -> existing.guardCondition
+        else -> null
+    } ?: if (selectedLeaf.sourceType == EvaluatorLeafSourceType.CONDITION) {
         ConditionPayload.ConditionRef(conditionId = selectedLeaf.sourceId, args = extArgs)
     } else null
 
-    return EvaluatorLeafConfig(
-        nodeId = nodeId,
-        sourceType = selectedLeaf.sourceType,
-        sourceId = selectedLeaf.sourceId,
-        scoreEffect = scoreEffect,
-        args = extArgs,
-        guardCondition = guardCondition,
-        rulePayload = when (selectedLeaf.sourceType) {
-            EvaluatorLeafSourceType.RULE -> RulePayload.RuleRef(extArgs)
-            EvaluatorLeafSourceType.ORTHOGONAL_RULE -> RulePayload.OrthogonalRuleRef(
-                guardCondition,
-                scoreEffect,
-                extArgs
-            )
+    return when (selectedLeaf.sourceType) {
+        EvaluatorLeafSourceType.RULE -> RuleLeafConfig(
+            nodeId = nodeId,
+            sourceId = selectedLeaf.sourceId,
+            args = extArgs,
+            guardCondition = when (existing) {
+                is RuleLeafConfig -> existing.guardCondition
+                is OrthogonalRuleLeafConfig -> existing.guardCondition
+                else -> null
+            },
+            missValue = formValues.doubleValue(EVALUATOR_LEAF_MISS_VALUE_FIELD)
+                ?: (existing as? RuleLeafConfig)?.missValue
+                ?: 0.0
+        )
 
-            else -> null
-        }
-    )
+        EvaluatorLeafSourceType.ORTHOGONAL_RULE -> OrthogonalRuleLeafConfig(
+            nodeId = nodeId,
+            sourceId = selectedLeaf.sourceId,
+            guardCondition = guardCondition,
+            scoreEffect = scoreEffect,
+            args = extArgs
+        )
+
+        EvaluatorLeafSourceType.CONDITION -> ConditionLeafConfig(
+            nodeId = nodeId,
+            sourceId = selectedLeaf.sourceId,
+            scoreEffect = scoreEffect,
+            args = extArgs,
+            guardCondition = guardCondition
+        )
+
+        EvaluatorLeafSourceType.CONDITION_TREE -> ConditionTreeLeafConfig(
+            nodeId = nodeId,
+            sourceId = selectedLeaf.sourceId,
+            scoreEffect = scoreEffect,
+            args = extArgs
+        )
+    }
 }
 
-
-fun EvaluatorLeafConfig.valueOfField(propertyName: String): Any? {
+private fun valueOfScoreEffectField(scoreEffect: ScoreEffect, args: Map<String, Any>, propertyName: String): Any? {
     return when (propertyName) {
         EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD -> when (scoreEffect) {
             is ScoreEffect.SourceScore -> SCORE_EFFECT_TYPE_SOURCE
@@ -182,16 +248,27 @@ fun EvaluatorLeafConfig.valueOfField(propertyName: String): Any? {
         }
 
         EVALUATOR_LEAF_CONSTANT_SCORE_FIELD -> (scoreEffect as? ScoreEffect.ConstantScore)?.value
-        EVALUATOR_LEAF_MISS_VALUE_FIELD -> scoreEffect?.let {
-            when (it) {
-                is ScoreEffect.ConstantScore -> it.missValue
-                is ScoreEffect.SourceScore -> it.missValue
-            }
+        EVALUATOR_LEAF_MISS_VALUE_FIELD -> when (scoreEffect) {
+            is ScoreEffect.ConstantScore -> scoreEffect.missValue
+            is ScoreEffect.SourceScore -> scoreEffect.missValue
         }
 
         EVALUATOR_LEAF_SCORE_SOURCE_FIELD -> (scoreEffect as? ScoreEffect.SourceScore)?.sourceId
         EVALUATOR_LEAF_SCORE_OPERATOR_FIELD -> (scoreEffect as? ScoreEffect.SourceScore)?.operatorId
         else -> args[propertyName] ?: (scoreEffect as? ScoreEffect.SourceScore)?.args?.get(propertyName)
+    }
+}
+
+fun EvaluatorLeafConfig.valueOfField(propertyName: String): Any? {
+    return when (this) {
+        is RuleLeafConfig -> {
+            if (propertyName == EVALUATOR_LEAF_MISS_VALUE_FIELD) missValue
+            else args[propertyName]
+        }
+
+        is OrthogonalRuleLeafConfig -> valueOfScoreEffectField(scoreEffect, args, propertyName)
+        is ConditionLeafConfig -> valueOfScoreEffectField(scoreEffect, args, propertyName)
+        is ConditionTreeLeafConfig -> valueOfScoreEffectField(scoreEffect, args, propertyName)
     }
 }
 
@@ -264,3 +341,4 @@ private fun Map<String, Any>.doubleValue(propertyName: String): Double? {
         else -> null
     }
 }
+

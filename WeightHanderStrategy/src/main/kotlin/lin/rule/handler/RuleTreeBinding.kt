@@ -79,8 +79,8 @@ internal fun buildEvaluatorLeafLogic(
         ?: error("ConditionAssembler is not configured in this context")
 
     // 1. 获取守卫条件逻辑 (GuardLogic)
-    val guardLogic: ConditionLogic? = when (leafConfig.sourceType) {
-        EvaluatorLeafSourceType.CONDITION -> {
+    val guardLogic: ConditionLogic? = when (leafConfig) {
+        is ConditionLeafConfig -> {
             val payload = leafConfig.resolveConditionPayload()
             if (payload is ConditionPayload.ConditionRef) {
                 val registration = conditionRegistry.require(payload.conditionId)
@@ -93,24 +93,22 @@ internal fun buildEvaluatorLeafLogic(
             conditionRegistry.build(payload) as ConditionLogic?
         }
 
-        EvaluatorLeafSourceType.CONDITION_TREE -> {
+        is ConditionTreeLeafConfig -> {
             buildConditionTreeLogic(leafConfig, conditionRegistry, conditionTreeProviders) as ConditionLogic?
         }
 
-        EvaluatorLeafSourceType.RULE, EvaluatorLeafSourceType.ORTHOGONAL_RULE -> {
-            val guard = (leafConfig.effectiveRulePayload as? RulePayload.OrthogonalRuleRef)?.guardCondition
-                ?: leafConfig.guardCondition
-            if (guard != null) {
-                conditionRegistry.build(guard) as ConditionLogic?
-            } else {
-                null
-            }
+        is RuleLeafConfig -> {
+            leafConfig.guardCondition?.let { conditionRegistry.build(it) as ConditionLogic? }
+        }
+
+        is OrthogonalRuleLeafConfig -> {
+            leafConfig.guardCondition?.let { conditionRegistry.build(it) as ConditionLogic? }
         }
     }
 
     // 2. 获取核心得分逻辑 (ScoreLogic)
-    val scoreLogic: RuleLogic = when (leafConfig.sourceType) {
-        EvaluatorLeafSourceType.RULE -> {
+    val scoreLogic: RuleLogic = when (leafConfig) {
+        is RuleLeafConfig -> {
             val registration = ruleRegistry.require(leafConfig.sourceId)
             validateAndThrow("规则", leafConfig.sourceId, leafConfig.args, registration.lazyFieldsResolver())
             ruleRegistry.build(leafConfig)
@@ -126,12 +124,22 @@ internal fun buildEvaluatorLeafLogic(
     }
 
     // 3. 获取未命中分值 (MissValue)
-    val effect =
-        (leafConfig.effectiveRulePayload as? RulePayload.OrthogonalRuleRef)?.scoreEffect ?: leafConfig.scoreEffect
-    val missValue = when (effect) {
-        is ScoreEffect.ConstantScore -> effect.missValue
-        is ScoreEffect.SourceScore -> effect.missValue
-        null -> 0.0
+    val missValue = when (leafConfig) {
+        is RuleLeafConfig -> leafConfig.missValue
+        is OrthogonalRuleLeafConfig -> when (val effect = leafConfig.scoreEffect) {
+            is ScoreEffect.ConstantScore -> effect.missValue
+            is ScoreEffect.SourceScore -> effect.missValue
+        }
+
+        is ConditionLeafConfig -> when (val effect = leafConfig.scoreEffect) {
+            is ScoreEffect.ConstantScore -> effect.missValue
+            is ScoreEffect.SourceScore -> effect.missValue
+        }
+
+        is ConditionTreeLeafConfig -> when (val effect = leafConfig.scoreEffect) {
+            is ScoreEffect.ConstantScore -> effect.missValue
+            is ScoreEffect.SourceScore -> effect.missValue
+        }
     }
 
 
@@ -158,8 +166,8 @@ internal fun buildBranchConditionLogic(
 ): ConditionLogic {
     val assembler = conditionRegistry.conditionAssembler
         ?: error("ConditionAssembler is not configured in this context")
-    return when (leafConfig.sourceType) {
-        EvaluatorLeafSourceType.CONDITION -> {
+    return when (leafConfig) {
+        is ConditionLeafConfig -> {
             val payload = leafConfig.resolveConditionPayload()
             if (payload is ConditionPayload.ConditionRef) {
                 val registration = conditionRegistry.require(payload.conditionId)
@@ -177,7 +185,7 @@ internal fun buildBranchConditionLogic(
             conditionRegistry.build(payload) as ConditionLogic
         }
 
-        EvaluatorLeafSourceType.CONDITION_TREE -> {
+        is ConditionTreeLeafConfig -> {
             buildConditionTreeLogic(
                 leafConfig,
                 conditionRegistry,
@@ -185,7 +193,7 @@ internal fun buildBranchConditionLogic(
             ) as ConditionLogic
         }
 
-        EvaluatorLeafSourceType.RULE, EvaluatorLeafSourceType.ORTHOGONAL_RULE -> {
+        is RuleLeafConfig, is OrthogonalRuleLeafConfig -> {
             error("Branch control node cannot bind RULE: nodeId=${leafConfig.nodeId}")
         }
     }
@@ -259,9 +267,12 @@ private fun compileScoreEffect(
     leafConfig: EvaluatorLeafConfig,
     assembler: ConditionAssembler
 ): ScoreLogic {
-    val effect = (leafConfig.rulePayload as? RulePayload.OrthogonalRuleRef)?.scoreEffect
-        ?: leafConfig.scoreEffect
-        ?: ScoreEffect.ConstantScore(0.0)
+    val effect = when (leafConfig) {
+        is OrthogonalRuleLeafConfig -> leafConfig.scoreEffect
+        is ConditionLeafConfig -> leafConfig.scoreEffect
+        is ConditionTreeLeafConfig -> leafConfig.scoreEffect
+        is RuleLeafConfig -> ScoreEffect.ConstantScore(0.0)
+    }
     return when (effect) {
         is ScoreEffect.ConstantScore -> {
             { effect.value }
@@ -270,6 +281,7 @@ private fun compileScoreEffect(
         is ScoreEffect.SourceScore -> compileSourceScore(effect, assembler)
     }
 }
+
 
 private fun compileSourceScore(
     effect: ScoreEffect.SourceScore,
