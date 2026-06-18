@@ -12,7 +12,7 @@ import lin.condition_tree.ui.components.OrthogonalConditionDialog
 import lin.rule.condition.ConditionMeta
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.orthogonal.DataSource
+import lin.rule.orthogonal.DataSource
 import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperator
 import lin.rule.score.ScoreOperatorRegistry
@@ -22,6 +22,8 @@ import lin.tree_config.ui.DynamicFieldForm
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.*
+import kotlin.reflect.KType
+import kotlin.reflect.full.isSubtypeOf
 
 class OrthogonalRuleDialog(
     private val initialConfig: OrthogonalRuleLeafConfig? = null
@@ -45,8 +47,8 @@ class OrthogonalRuleDialog(
         // ==========================================
         // 1. 数据准备
         // ==========================================
-        val assembler = conditionRegistry.conditionAssembler
-            ?: error("ConditionAssembler is not configured in this context")
+        val assembler = conditionRegistry.pipelineAssembler
+            ?: error("PipelineAssembler is not configured in this context")
         val dataSources = assembler.allDataSources().toList()
         val scoreOperators = scoreOperatorRegistry.all()
         val allConditions = conditionRegistry.metadataList()
@@ -149,7 +151,7 @@ class OrthogonalRuleDialog(
                     guardDetailArea.children.addAll(configBtn, summaryLabel)
 
                     // 还原正交条件初始状态
-                    var currentOrthogonal = selectedGuardPayload as? ConditionPayload.OrthogonalRef
+                    var currentOrthogonal = selectedGuardPayload as? ConditionPayload.PipelineRef
                     if (currentOrthogonal != null) {
                         summaryLabel.text = "已配置: ${currentOrthogonal.sourceId} -> ${currentOrthogonal.operatorId}"
                         summaryLabel.style = "-fx-text-fill: #333;"
@@ -263,8 +265,7 @@ class OrthogonalRuleDialog(
                         opArgsContainer.children.clear()
                         scoreArgsMap.clear()
                         if (newOp != null) {
-                            val ds = dsCombo.value
-                            val specs = (ds?.fields ?: emptyList()) + newOp.paramSpecs
+                            val specs = newOp.paramSpecs
                             val form = dynamicFieldForm.build(
                                 specs,
                                 { propertyName -> scoreArgsMap[propertyName] }) { prop, value ->
@@ -287,9 +288,9 @@ class OrthogonalRuleDialog(
                             val op = compatibleOps.firstOrNull { it.id == existing.operatorId }
                             if (op != null) {
                                 opCombo.selectionModel.select(op)
-                                scoreArgsMap.putAll(existing.args)
+                                scoreArgsMap.putAll(existing.operatorArgs)
                                 opArgsContainer.children.clear()
-                                val specs = ds.fields + op.paramSpecs
+                                val specs = op.paramSpecs
                                 val form = dynamicFieldForm.build(
                                     specs,
                                     { propertyName -> scoreArgsMap[propertyName] }) { prop, value ->
@@ -301,7 +302,6 @@ class OrthogonalRuleDialog(
                         missField.text = existing.missValue.toString()
                     }
                 }
-
             }
         }
 
@@ -317,7 +317,7 @@ class OrthogonalRuleDialog(
             // 恢复 Guard
             val guardType = selectedGuardPayload?.let { payload ->
                 when (payload) {
-                    is ConditionPayload.OrthogonalRef -> "正交条件"
+                    is ConditionPayload.PipelineRef -> "正交条件"
                     is ConditionPayload.ConditionRef -> {
                         if (allConditionTrees.any { it.first == payload.conditionId }) "条件树" else "普通条件"
                     }
@@ -446,9 +446,10 @@ class OrthogonalRuleDialog(
                     if (ds != null && op != null) {
                         ScoreEffect.SourceScore(
                             sourceId = ds.id,
+                            transforms = emptyList(),
                             operatorId = op.id,
-                            missValue = missField?.text?.toDoubleOrNull() ?: 0.0,
-                            args = HashMap(scoreArgsMap)
+                            operatorArgs = HashMap(scoreArgsMap),
+                            missValue = missField?.text?.toDoubleOrNull() ?: 0.0
                         )
                     } else ScoreEffect.ConstantScore(0.0)
                 }
@@ -584,9 +585,7 @@ class OrthogonalRuleDialog(
         }
     }
 
-    private fun isCompatible(inputType: kotlin.reflect.KClass<*>, outputType: kotlin.reflect.KClass<*>): Boolean {
-        if (inputType == outputType) return true
-        if (inputType == Number::class && Number::class.java.isAssignableFrom(outputType.javaObjectType)) return true
-        return false
+    private fun isCompatible(inputType: KType, outputType: KType): Boolean {
+        return inputType == outputType || outputType.isSubtypeOf(inputType)
     }
 }

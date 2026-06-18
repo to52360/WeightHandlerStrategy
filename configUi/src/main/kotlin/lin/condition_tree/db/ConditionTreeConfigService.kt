@@ -16,7 +16,7 @@ fun createConditionTreeConfigMapper(): ObjectMapper {
         .apply {
             registerSubtypes(
                 NamedType(ConditionPayload.ConditionRef::class.java, "ConditionRef"),
-                NamedType(ConditionPayload.OrthogonalRef::class.java, "OrthogonalRef")
+                NamedType(ConditionPayload.PipelineRef::class.java, "PipelineRef")
             )
         }
 }

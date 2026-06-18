@@ -10,8 +10,8 @@ import lin.domain.use.plan.ComboAssembler
 import lin.domain.use.plan.UseIntentAssembler
 import lin.serviceLoader.cardInfoProvide.CardWeightInfoProvide
 import lin.serviceLoader.provider.CardGroupIndexProvider
-import lin.serviceLoader.provider.config.CardPurposeProvider
-import lin.serviceLoader.provider.config.ComboPlanDefinitionProvider
+import lin.serviceLoader.provider.CardPurposeProvider
+import lin.serviceLoader.provider.ComboPlanDefinitionProvider
 import lin.utils.runCatchingLog
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.component.KoinComponent

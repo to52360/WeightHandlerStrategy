@@ -2,7 +2,7 @@ package lin.provider
 
 import lin.condition_tree.db.ConditionTreeConfigService
 import lin.rule.condition.ConditionTreeConfig
-import lin.serviceLoader.provider.config.ConditionTreeConfigProvider
+import lin.serviceLoader.provider.ConditionTreeConfigProvider
 
 class SqliteConditionTreeConfigProvider(
     private val service: ConditionTreeConfigService

@@ -50,12 +50,17 @@ val uiModule = module {
             .flatMap { it.get() }
             .associateBy { it.id }
 
+        val transforms = loadSpiList<lin.serviceLoader.provider.TransformProvider>()
+            .flatMap { it.get() }
+            .associateBy { it.id }
+
         val operators = loadSpiList<lin.serviceLoader.provider.OperatorProvider>()
             .flatMap { it.get() }
             .associateBy { it.id }
 
-        lin.rule.condition.orthogonal.ConditionAssembler(
+        lin.rule.condition.PipelineAssembler(
             dataSources = dataSources,
+            transforms = transforms,
             operators = operators,
             objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper().apply {
                 configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

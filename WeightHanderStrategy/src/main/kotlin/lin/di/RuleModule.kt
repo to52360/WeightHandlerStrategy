@@ -6,12 +6,13 @@ import lin.bean.CardCombinedConfig
 import lin.domain.use.plan.UsePlanBuilder
 import lin.rule.RuleInfoRegister
 import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.orthogonal.ConditionAssembler
+import lin.rule.condition.PipelineAssembler
 import lin.rule.handler.RuleTreeBindingTask
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
 import lin.serviceLoader.provider.DataSourceProvider
 import lin.serviceLoader.provider.OperatorProvider
+import lin.serviceLoader.provider.TransformProvider
 import lin.utils.serviceLoader.loadSpiList
 import lin.utils.startup.CardConfigBindingTask
 import lin.utils.startup.StartupTask
@@ -30,12 +31,17 @@ val ruleModule = module {
             .flatMap { it.get() }
             .associateBy { it.id }
 
+        val transforms = loadSpiList<TransformProvider>()
+            .flatMap { it.get() }
+            .associateBy { it.id }
+
         val operators = loadSpiList<OperatorProvider>()
             .flatMap { it.get() }
             .associateBy { it.id }
 
-        ConditionAssembler(
+        PipelineAssembler(
             dataSources = dataSources,
+            transforms = transforms,
             operators = operators,
             objectMapper = jacksonObjectMapper().apply {
                 configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

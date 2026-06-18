@@ -29,7 +29,7 @@ fun createTreeConfigMapper(): ObjectMapper {
                 NamedType(ScoreEffect.ConstantScore::class.java, "ConstantScore"),
                 NamedType(ScoreEffect.SourceScore::class.java, "SourceScore"),
                 NamedType(ConditionPayload.ConditionRef::class.java, "ConditionRef"),
-                NamedType(ConditionPayload.OrthogonalRef::class.java, "OrthogonalRef"),
+                NamedType(ConditionPayload.PipelineRef::class.java, "PipelineRef"),
                 NamedType(lin.rule.tree.RulePayload.RuleRef::class.java, "RuleRef"),
                 NamedType(lin.rule.tree.RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef"),
                 NamedType(lin.rule.tree.RuleLeafConfig::class.java, "RULE"),

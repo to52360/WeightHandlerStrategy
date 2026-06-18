@@ -33,7 +33,7 @@ class ConditionPropertyEditorStrategy(
         panel.children.clear()
 
         val payload = wrapper.payload
-        val isOrtho = payload is ConditionPayload.OrthogonalRef
+        val isOrtho = payload is ConditionPayload.PipelineRef
         val conditionId =
             if (isOrtho) "orthogonal_condition" else (payload as? ConditionPayload.ConditionRef)?.conditionId
         val refId = payload?.refId
@@ -60,7 +60,7 @@ class ConditionPropertyEditorStrategy(
             detailContainer.children.clear()
             if (selected.conditionId == "orthogonal_condition") {
                 val btn = Button("配置正交条件详情...")
-                val currentRef = wrapper.payload as? ConditionPayload.OrthogonalRef
+                val currentRef = wrapper.payload as? ConditionPayload.PipelineRef
                 val summaryLabel = Label(
                     currentRef?.let { "已配置: ${it.sourceId} -> ${it.operatorId}" } ?: "未配置正交条件"
                 ).apply {
@@ -69,7 +69,7 @@ class ConditionPropertyEditorStrategy(
                 }
 
                 btn.setOnAction {
-                    val dialog = OrthogonalConditionDialog(wrapper.payload as? ConditionPayload.OrthogonalRef)
+                    val dialog = OrthogonalConditionDialog(wrapper.payload as? ConditionPayload.PipelineRef)
                     val res = dialog.showAndWait()
                     if (res.isPresent) {
                         wrapper.payload = res.get()
@@ -92,12 +92,13 @@ class ConditionPropertyEditorStrategy(
             if (selectedCondition != null) {
                 if (selectedCondition.conditionId == "orthogonal_condition") {
                     val currentPayload = wrapper.payload
-                    if (currentPayload !is ConditionPayload.OrthogonalRef) {
-                        wrapper.payload = ConditionPayload.OrthogonalRef(
+                    if (currentPayload !is ConditionPayload.PipelineRef) {
+                        wrapper.payload = ConditionPayload.PipelineRef(
                             sourceId = "",
+                            transforms = emptyList(),
                             operatorId = "",
-                            refId = "orthogonal_${UUID.randomUUID().toString().substring(0, 4)}",
-                            args = emptyMap()
+                            operatorArgs = emptyMap(),
+                            refId = "orthogonal_${UUID.randomUUID().toString().substring(0, 4)}"
                         )
                     }
                 } else {

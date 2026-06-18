@@ -5,17 +5,19 @@ import javafx.scene.control.*
 import javafx.scene.layout.*
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.orthogonal.DataSource
-import lin.rule.condition.orthogonal.Operator
+import lin.rule.orthogonal.DataSource
+import lin.rule.orthogonal.Operator
 import lin.tree_config.ui.DynamicFieldForm
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.*
+import kotlin.reflect.KType
+import kotlin.reflect.full.isSubtypeOf
 
 class OrthogonalConditionDialog(
-    private val initialPayload: ConditionPayload.OrthogonalRef? = null
-) : Dialog<ConditionPayload.OrthogonalRef>(), KoinComponent {
+    private val initialPayload: ConditionPayload.PipelineRef? = null
+) : Dialog<ConditionPayload.PipelineRef>(), KoinComponent {
 
     private val conditionRegistry: ConditionRegistry by inject()
     private val templateRepo: lin.orthogonal_template.db.OrthogonalTemplateRepository by inject()
@@ -29,8 +31,8 @@ class OrthogonalConditionDialog(
         val dialogPane = this.dialogPane
         dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
 
-        val assembler = conditionRegistry.conditionAssembler
-            ?: error("ConditionAssembler is not configured in this context")
+        val assembler = conditionRegistry.pipelineAssembler
+            ?: error("PipelineAssembler is not configured in this context")
 
         val dataSources = assembler.allDataSources().toList()
         val allOperators = assembler.allOperators().toList()
@@ -57,7 +59,7 @@ class OrthogonalConditionDialog(
         val argsMap = mutableMapOf<String, Any>()
 
         // 载入 Payload 辅助函数
-        fun loadPayload(ref: ConditionPayload.OrthogonalRef) {
+        fun loadPayload(ref: ConditionPayload.PipelineRef) {
             val ds = dataSources.firstOrNull { it.id == ref.sourceId }
             if (ds != null) {
                 dataSourceCombo.selectionModel.select(ds)
@@ -70,8 +72,8 @@ class OrthogonalConditionDialog(
                 if (op != null) {
                     operatorCombo.selectionModel.select(op)
                     argsMap.clear()
-                    argsMap.putAll(ref.args)
-                    rebuildForm(paramsContainer, ds, op, argsMap)
+                    argsMap.putAll(ref.operatorArgs)
+                    rebuildForm(paramsContainer, op, argsMap)
                 }
             }
         }
@@ -99,10 +101,9 @@ class OrthogonalConditionDialog(
             paramsContainer.children.clear()
             argsMap.clear()
             if (newOp != null) {
-                rebuildForm(paramsContainer, dataSourceCombo.value, newOp, argsMap)
+                rebuildForm(paramsContainer, newOp, argsMap)
             }
         }
-
 
         // 模板选择与保存区域
         val templateCombo = ComboBox<lin.orthogonal_template.db.OrthogonalTemplateEntity>().apply {
@@ -129,7 +130,7 @@ class OrthogonalConditionDialog(
         templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
             if (template != null) {
                 try {
-                    val ref = mapper.readValue(template.contentJson, ConditionPayload.OrthogonalRef::class.java)
+                    val ref = mapper.readValue(template.contentJson, ConditionPayload.PipelineRef::class.java)
                     loadPayload(ref)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -149,7 +150,7 @@ class OrthogonalConditionDialog(
 
                 val nameDialog = Dialog<Pair<String, String>>().apply {
                     title = "保存为正交条件模板"
-                    headerText = "请输入模板的名称和描述"
+                    headerText = "请输入模板的名称 and 描述"
                     val dialogPane = this.dialogPane
                     dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
 
@@ -176,10 +177,12 @@ class OrthogonalConditionDialog(
                         return@setOnAction
                     }
 
-                    val ref = ConditionPayload.OrthogonalRef(
+                    val ref = ConditionPayload.PipelineRef(
                         sourceId = ds.id,
+                        transforms = emptyList(),
                         operatorId = op.id,
-                        args = HashMap(argsMap)
+                        operatorArgs = HashMap(argsMap),
+                        refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
                     )
 
                     val entity = lin.orthogonal_template.db.OrthogonalTemplateEntity(
@@ -229,7 +232,6 @@ class OrthogonalConditionDialog(
 
         dialogPane.content = grid
 
-        // 校验输入
         val okButton = dialogPane.lookupButton(ButtonType.OK) as Button
         okButton.addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
             val ds = dataSourceCombo.value
@@ -245,11 +247,12 @@ class OrthogonalConditionDialog(
             if (buttonType == ButtonType.OK) {
                 val ds = dataSourceCombo.value!!
                 val op = operatorCombo.value!!
-                ConditionPayload.OrthogonalRef(
+                ConditionPayload.PipelineRef(
                     sourceId = ds.id,
+                    transforms = emptyList(),
                     operatorId = op.id,
-                    refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}",
-                    args = HashMap(argsMap)
+                    operatorArgs = HashMap(argsMap),
+                    refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
                 )
             } else {
                 null
@@ -259,14 +262,13 @@ class OrthogonalConditionDialog(
 
     private fun rebuildForm(
         container: VBox,
-        dataSource: DataSource<*>?,
         operator: Operator<*, *>?,
         args: MutableMap<String, Any>
     ) {
         container.children.clear()
         if (operator == null) return
 
-        val specs = (dataSource?.fields ?: emptyList()) + operator.paramSpecs
+        val specs = operator.paramSpecs
         if (specs.isEmpty()) {
             container.children.add(Label("无需配置参数。").apply {
                 style = "-fx-text-fill: #888; -fx-font-style: italic;"
@@ -282,7 +284,6 @@ class OrthogonalConditionDialog(
         }
         container.children.add(form)
     }
-
 
     private fun createDataSourceCell(): ListCell<DataSource<*>> {
         return object : ListCell<DataSource<*>>() {
@@ -304,9 +305,7 @@ class OrthogonalConditionDialog(
         }
     }
 
-    private fun isCompatible(inputType: kotlin.reflect.KClass<*>, outputType: kotlin.reflect.KClass<*>): Boolean {
-        if (inputType == outputType) return true
-        if (inputType == Number::class && Number::class.java.isAssignableFrom(outputType.javaObjectType)) return true
-        return false
+    private fun isCompatible(inputType: KType, outputType: KType): Boolean {
+        return inputType == outputType || outputType.isSubtypeOf(inputType)
     }
 }

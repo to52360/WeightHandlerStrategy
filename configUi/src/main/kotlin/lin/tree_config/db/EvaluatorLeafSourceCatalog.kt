@@ -62,8 +62,8 @@ class EvaluatorLeafSourceCatalog(
                             if (spec != null) listOf(spec) else emptyList()
                         }
 
-                        is ConditionPayload.OrthogonalRef -> {
-                            val assembler = conditionRegistry.conditionAssembler
+                        is ConditionPayload.PipelineRef -> {
+                            val assembler = conditionRegistry.pipelineAssembler
                             val operator = assembler?.findOperator(ref.operatorId)
                             val displayName = operator?.id ?: ref.operatorId
                             operator?.paramSpecs?.map { spec ->

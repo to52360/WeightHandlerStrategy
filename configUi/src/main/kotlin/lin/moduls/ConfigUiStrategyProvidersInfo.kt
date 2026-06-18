@@ -16,12 +16,7 @@ import lin.provider.SqliteComboPlanDefinitionProvider
 import lin.provider.SqliteConditionTreeConfigProvider
 import lin.provider.SqliteTreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
-import lin.serviceLoader.provider.BindingCardIdProvider
-import lin.serviceLoader.provider.CardGroupIndexProvider
-import lin.serviceLoader.provider.config.CardPurposeProvider
-import lin.serviceLoader.provider.config.ComboPlanDefinitionProvider
-import lin.serviceLoader.provider.config.ConditionTreeConfigProvider
-import lin.serviceLoader.provider.config.TreeConfigProvider
+import lin.serviceLoader.provider.*
 import lin.tree_config.db.TreeConfigRepository
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module

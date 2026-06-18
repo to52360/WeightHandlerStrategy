@@ -129,7 +129,7 @@ class EvaluatorPropertyEditorStrategy(
                 selectedLeaf.sourceType == EvaluatorLeafSourceType.CONDITION && selectedLeaf.sourceId == "orthogonal_condition" -> {
                     val btn = Button("配置正交条件详情...").apply { maxWidth = Double.MAX_VALUE }
                     val currentOrtho =
-                        (currentConfig as? ConditionLeafConfig)?.guardCondition as? ConditionPayload.OrthogonalRef
+                        (currentConfig as? ConditionLeafConfig)?.guardCondition as? ConditionPayload.PipelineRef
                     val summaryLabel = Label(
                         currentOrtho?.let { "正交条件: ${it.sourceId} -> ${it.operatorId}" } ?: "未配置正交条件"
                     ).apply {
@@ -194,7 +194,7 @@ class EvaluatorPropertyEditorStrategy(
                             is OrthogonalRuleLeafConfig -> c.guardCondition
                             is ConditionLeafConfig -> c.guardCondition
                             else -> null
-                        } as? ConditionPayload.OrthogonalRef
+                        } as? ConditionPayload.PipelineRef
                         val guardSummary = Label(
                             currentGuard?.let { "守卫: ${it.sourceId} -> ${it.operatorId}" } ?: "无通用守卫"
                         ).apply {
@@ -379,10 +379,10 @@ class EvaluatorPropertyEditorStrategy(
                 ?: (existingScoreEffect as? ScoreEffect.SourceScore)?.operatorId
 
             val registry = org.koin.core.context.GlobalContext.get().get<lin.rule.condition.ConditionRegistry>()
-            val assembler = registry.conditionAssembler
+            val assembler = registry.pipelineAssembler
             val dataSource = sourceId?.let { assembler?.findDataSource(it) }
             if (dataSource != null) {
-                builtIn.addAll(dataSource.fields)
+                // Root DataSource has no parameter fields in the new pipeline design
             }
 
             val operator = operatorId?.let { scoreOperatorRegistry.find(it) }

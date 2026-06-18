@@ -1,5 +1,6 @@
 package lin.rule.condition
 
+import lin.rule.orthogonal.TransformCall
 import lin.rule.tree.LogicNode
 
 /**
@@ -15,12 +16,15 @@ sealed interface ConditionPayload {
         override val args: Map<String, Any> = emptyMap()
     ) : ConditionPayload
 
-    data class OrthogonalRef(
+    data class PipelineRef(
         val sourceId: String,
+        val transforms: List<TransformCall> = emptyList(),
         val operatorId: String,
-        override val refId: String = "${sourceId}_${operatorId}",
-        override val args: Map<String, Any> = emptyMap()
-    ) : ConditionPayload
+        val operatorArgs: Map<String, Any> = emptyMap(),
+        override val refId: String
+    ) : ConditionPayload {
+        override val args: Map<String, Any> get() = emptyMap()
+    }
 }
 
 /**

@@ -1,0 +1,57 @@
+package lin.serviceLoader.provider
+
+import lin.bean.usePlan.CardPurpose
+import lin.bean.usePlan.ComboPlanDefinition
+import lin.bean.usePlan.GroupUseOverride
+import lin.rule.condition.ConditionTreeConfig
+import lin.rule.tree.EvaluatorTreeConfig
+
+/**
+ * 卡牌用途标签提供者。
+ *
+ * SPI 入口，configUi 通过此接口读取 card_purpose 表。
+ * Provider 自主决定数据范围（全量/按启用状态筛选/其他数据源）。
+ * 引擎端提供默认实现返回空 Map。
+ * key 是cardId
+ */
+fun interface CardPurposeProvider {
+    fun findAllEnabled(): Map<String, CardPurpose>
+
+    // ARCH-TODO: 未来按 manager_id 管理或采用 UI 分页，当前暂用 id 集合查询
+    fun findByIds(ids: Set<String>): Map<String, CardPurpose> {
+        if (ids.isEmpty()) return emptyMap()
+        return findAllEnabled().filterKeys { it in ids }
+    }
+}
+
+// 当前数据量下 findById 逐个查询（~30 次）≈ 1.5ms。
+// 条件树是无启用概念 of 通用模板，数据量可能较大，不适合全量预加载。
+// 后续若数据量增大，Provider 内部加 ConcurrentHashMap 缓存即可防御，consumer 代码无需修改。
+interface ConditionTreeConfigProvider {
+    fun findById(id: String): ConditionTreeConfig?
+    fun findAll(): List<ConditionTreeConfig>
+}
+
+/**
+ * 分组使用覆盖提供者。
+ *
+ * @deprecated 行为属性已合并到 CardGroupBinding，由 CardGroupIndexProvider.provideBindingOverrides() 提供。
+ * 保留此接口仅为 SPI 兼容，新代码不应使用。
+ */
+@Deprecated("行为属性已合并到 CardGroupBinding，使用 CardGroupIndexProvider.provideBindingOverrides() 替代")
+fun interface GroupUseOverrideProvider {
+    fun findAllEnabled(): Map<String, GroupUseOverride>
+}
+
+interface TreeConfigProvider {
+    fun findById(id: String): EvaluatorTreeConfig?
+    fun findAll(): List<EvaluatorTreeConfig>
+}
+
+fun interface ComboPlanDefinitionProvider {
+    /**
+     * 加载新 combo 定义。
+     * 定义只描述"组关系、加权、互斥和使用关系"，不负责真实出牌。
+     */
+    fun findAll(): List<ComboPlanDefinition>
+}

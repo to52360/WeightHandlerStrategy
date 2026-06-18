@@ -255,7 +255,7 @@ private fun valueOfScoreEffectField(scoreEffect: ScoreEffect, args: Map<String, 
 
         EVALUATOR_LEAF_SCORE_SOURCE_FIELD -> (scoreEffect as? ScoreEffect.SourceScore)?.sourceId
         EVALUATOR_LEAF_SCORE_OPERATOR_FIELD -> (scoreEffect as? ScoreEffect.SourceScore)?.operatorId
-        else -> args[propertyName] ?: (scoreEffect as? ScoreEffect.SourceScore)?.args?.get(propertyName)
+        else -> args[propertyName] ?: (scoreEffect as? ScoreEffect.SourceScore)?.operatorArgs?.get(propertyName)
     }
 }
 
@@ -292,12 +292,18 @@ private fun buildScoreEffect(
                 ?: return null
             val operator = EvaluatorLeafMetaHelper.scoreOperatorRegistry.find(operatorId)
             val paramKeys = operator?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
-            val oldArgs = (existing as? ScoreEffect.SourceScore)?.args ?: emptyMap()
+            val oldArgs = (existing as? ScoreEffect.SourceScore)?.operatorArgs ?: emptyMap()
             val scoreArgs = formValues.filterKeys { it in paramKeys }
             val missValue = formValues.doubleValue(EVALUATOR_LEAF_MISS_VALUE_FIELD)
                 ?: (existing as? ScoreEffect.SourceScore)?.missValue
                 ?: 0.0
-            ScoreEffect.SourceScore(sourceId, operatorId, missValue, oldArgs + scoreArgs)
+            ScoreEffect.SourceScore(
+                sourceId = sourceId,
+                transforms = emptyList(),
+                operatorId = operatorId,
+                operatorArgs = oldArgs + scoreArgs,
+                missValue = missValue
+            )
         }
 
         else -> ScoreEffect.ConstantScore(

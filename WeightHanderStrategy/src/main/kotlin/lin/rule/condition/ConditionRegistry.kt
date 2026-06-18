@@ -1,7 +1,6 @@
 package lin.rule.condition
 
 import lin.myLog
-import lin.rule.condition.orthogonal.ConditionAssembler
 import lin.rule.parse.FieldSpec
 import lin.rule.tree.CONDITION_BUILT_IN_FIELDS
 import lin.rule.tree.EvaluatorLeafMeta
@@ -24,7 +23,7 @@ data class ConditionFieldMeta(
 
 class ConditionRegistry(
     providers: Collection<ConditionRegistrationProvider>,
-    val conditionAssembler: ConditionAssembler? = null
+    val pipelineAssembler: PipelineAssembler? = null
 ) {
     private val registrationsById: Map<String, ConditionRegistration<*>>
 
@@ -93,8 +92,8 @@ class ConditionRegistry(
             is ConditionPayload.ConditionRef ->
                 build(payload.conditionId, payload.args)
 
-            is ConditionPayload.OrthogonalRef -> {
-                val assembler = conditionAssembler ?: error("ConditionAssembler is not configured in this context")
+            is ConditionPayload.PipelineRef -> {
+                val assembler = pipelineAssembler ?: error("PipelineAssembler is not configured in this context")
                 assembler.assemble(payload)
             }
         }
