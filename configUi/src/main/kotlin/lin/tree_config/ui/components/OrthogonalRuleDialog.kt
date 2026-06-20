@@ -3,7 +3,6 @@ package lin.tree_config.ui.components
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.*
-import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
@@ -13,6 +12,7 @@ import lin.rule.condition.ConditionMeta
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
 import lin.rule.orthogonal.DataSource
+import lin.rule.orthogonal.Transform
 import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperator
 import lin.rule.score.ScoreOperatorRegistry
@@ -22,8 +22,6 @@ import lin.tree_config.ui.DynamicFieldForm
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.*
-import kotlin.reflect.KType
-import kotlin.reflect.full.isSubtypeOf
 
 class OrthogonalRuleDialog(
     private val initialConfig: OrthogonalRuleLeafConfig? = null
@@ -37,6 +35,22 @@ class OrthogonalRuleDialog(
 
     private val templateRepo: lin.orthogonal_template.db.OrthogonalTemplateRepository by inject()
 
+    private class RuleDataContext(
+        val dataSources: List<DataSource<*>>,
+        val scoreOperators: List<ScoreOperator<*, *>>,
+        val allConditions: List<ConditionMeta>,
+        val allConditionTrees: List<Pair<String, String>>,
+        val allTransforms: List<Transform<*, *>>,
+        val mapper: com.fasterxml.jackson.databind.ObjectMapper
+    )
+
+    private class RuleInteractionState(
+        var selectedGuardPayload: ConditionPayload?,
+        var currentScoreEffect: ScoreEffect?,
+        val guardArgsMap: MutableMap<String, Any> = mutableMapOf(),
+        val scoreArgsMap: MutableMap<String, Any> = mutableMapOf()
+    )
+
     init {
         title = "配置正交规则"
         headerText = "正交规则由 守卫条件 (Guard) + 评分效应 (ScoreEffect) 两个维度组合，左侧配置守卫，右侧配置算分"
@@ -45,313 +59,278 @@ class OrthogonalRuleDialog(
         dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
 
         // ==========================================
-        // 1. 数据准备
+        // 1. 数据与状态准备（高内聚封装）
         // ==========================================
         val assembler = conditionRegistry.pipelineAssembler
             ?: error("PipelineAssembler is not configured in this context")
-        val dataSources = assembler.allDataSources().toList()
-        val scoreOperators = scoreOperatorRegistry.all()
-        val allConditions = conditionRegistry.metadataList()
-        val allConditionTrees = conditionTreeConfigService.loadAllMeta()
-        val mapper = lin.ui.service.createTreeConfigMapper()
 
-        // 状态保存变量
-        var selectedGuardPayload: ConditionPayload? = initialConfig?.guardCondition
-        var currentScoreEffect: ScoreEffect? = initialConfig?.scoreEffect
-        val guardArgsMap = mutableMapOf<String, Any>()
-        val scoreArgsMap = mutableMapOf<String, Any>()
+        val dataContext = RuleDataContext(
+            dataSources = assembler.allDataSources().toList(),
+            scoreOperators = scoreOperatorRegistry.all(),
+            allConditions = conditionRegistry.metadataList(),
+            allConditionTrees = conditionTreeConfigService.loadAllMeta(),
+            allTransforms = assembler.allTransforms().toList(),
+            mapper = lin.ui.service.createTreeConfigMapper()
+        )
+
+        val uiState = RuleInteractionState(
+            selectedGuardPayload = initialConfig?.guardCondition,
+            currentScoreEffect = initialConfig?.scoreEffect
+        )
 
         // ==========================================
-        // 2. 左侧：守卫条件配置 (Guard)
+        // 2. 初始化 Panel 布局组件 (外部引入)
         // ==========================================
-        val guardPane = VBox(10.0).apply {
-            padding = Insets(10.0)
-            style = "-fx-border-color: #ddd; -fx-border-radius: 4px; -fx-background-color: #fafafa;"
+        val guardPanel = GuardPanel(dataContext.allConditions, dataContext.allConditionTrees, dynamicFieldForm)
+        val scorePanel =
+            ScorePanel(dataContext.dataSources, dataContext.allTransforms, dataContext.scoreOperators, dynamicFieldForm)
+
+        // ==========================================
+        // 3. 事件与联动监听配置
+        // ==========================================
+
+        // 3.1 左侧 Guard 联动监听
+        guardPanel.condCombo.selectionModel.selectedItemProperty().addListener { _, _, newCond ->
+            guardPanel.condArgsContainer.children.clear()
+            uiState.guardArgsMap.clear()
+            if (newCond != null) {
+                val specs = newCond.fields.map { it.fieldSpec }
+                val form = dynamicFieldForm.build(
+                    specs,
+                    { propertyName -> uiState.guardArgsMap[propertyName] }) { prop, value ->
+                    uiState.guardArgsMap[prop] = value
+                }
+                guardPanel.condArgsContainer.children.add(form)
+            }
         }
-        guardPane.children.add(Label("守卫条件 (Guard)").apply {
-            style = "-fx-font-weight: bold; -fx-font-size: 14px;"
-        })
 
-        val guardTypeCombo = ComboBox<String>().apply {
-            items.addAll("无 (Always True)", "普通条件", "条件树", "正交条件")
-            selectionModel.selectFirst()
-            maxWidth = Double.MAX_VALUE
+        guardPanel.configBtn.setOnAction {
+            val currentOrthogonal = uiState.selectedGuardPayload as? ConditionPayload.PipelineRef
+            val dialog = OrthogonalConditionDialog(currentOrthogonal)
+            val res = dialog.showAndWait()
+            if (res.isPresent) {
+                uiState.selectedGuardPayload = res.get()
+                guardPanel.summaryLabel.text = "已配置: ${res.get().sourceId} -> ${res.get().operatorId}"
+                guardPanel.summaryLabel.style = "-fx-text-fill: #333;"
+            }
         }
-        guardPane.children.add(HBox(8.0, Label("条件类型:"), guardTypeCombo).apply { alignment = Pos.CENTER_LEFT })
 
-        val guardDetailArea = VBox(8.0)
-        guardPane.children.add(guardDetailArea)
+        // 3.2 右侧 Score 联动监听
+        scorePanel.sourceDsCombo.selectionModel.selectedItemProperty().addListener { _, _, newDs ->
+            scorePanel.scorePipelineEditor.onDataSourceChanged(newDs?.outputType)
+            scorePanel.sourceOpCombo.items.clear()
+            scorePanel.sourceOpArgsContainer.children.clear()
+            uiState.scoreArgsMap.clear()
+        }
 
+        scorePanel.sourceOpCombo.selectionModel.selectedItemProperty().addListener { _, _, newOp ->
+            scorePanel.sourceOpArgsContainer.children.clear()
+            uiState.scoreArgsMap.clear()
+            if (newOp != null) {
+                val specs = newOp.paramSpecs
+                val form = dynamicFieldForm.build(
+                    specs,
+                    { propertyName -> uiState.scoreArgsMap[propertyName] }) { prop, value ->
+                    uiState.scoreArgsMap[prop] = value
+                }
+                scorePanel.sourceOpArgsContainer.children.add(form)
+            }
+        }
+
+        // ==========================================
+        // 4. 详情区域构建与还原逻辑
+        // ==========================================
         fun rebuildGuardDetail(newType: String?) {
-            guardDetailArea.children.clear()
-            guardArgsMap.clear()
+            guardPanel.showType(newType ?: "无 (Always True)")
+            uiState.guardArgsMap.clear()
             when (newType) {
                 "普通条件" -> {
-                    val condCombo = ComboBox<ConditionMeta>().apply {
-                        items.addAll(allConditions)
-                        maxWidth = Double.MAX_VALUE
-                        setCellFactory { createConditionMetaCell() }
-                        buttonCell = createConditionMetaCell()
-                    }
-                    val condArgsContainer = VBox(5.0)
-                    guardDetailArea.children.addAll(condCombo, condArgsContainer)
-
-                    condCombo.selectionModel.selectedItemProperty().addListener { _, _, newCond ->
-                        condArgsContainer.children.clear()
-                        guardArgsMap.clear()
-                        if (newCond != null) {
-                            val specs = newCond.fields.map { it.fieldSpec }
-                            val form = dynamicFieldForm.build(
-                                specs,
-                                { propertyName -> guardArgsMap[propertyName] }) { prop, value ->
-                                guardArgsMap[prop] = value
-                            }
-                            condArgsContainer.children.add(form)
-                        }
-                    }
-
-                    // 还原普通条件初始状态
-                    val currentPayload = selectedGuardPayload
-                    if (currentPayload is ConditionPayload.ConditionRef && allConditions.any { it.conditionId == currentPayload.conditionId }) {
-                        val condMeta = allConditions.first { it.conditionId == currentPayload.conditionId }
-                        condCombo.selectionModel.select(condMeta)
-                        guardArgsMap.putAll(currentPayload.args)
-                        condArgsContainer.children.clear()
+                    val currentPayload = uiState.selectedGuardPayload
+                    if (currentPayload is ConditionPayload.ConditionRef && dataContext.allConditions.any { it.conditionId == currentPayload.conditionId }) {
+                        val condMeta = dataContext.allConditions.first { it.conditionId == currentPayload.conditionId }
+                        guardPanel.condCombo.selectionModel.select(condMeta)
+                        uiState.guardArgsMap.putAll(currentPayload.args)
+                        guardPanel.condArgsContainer.children.clear()
                         val specs = condMeta.fields.map { it.fieldSpec }
                         val form = dynamicFieldForm.build(
                             specs,
-                            { propertyName -> guardArgsMap[propertyName] }) { prop, value ->
-                            guardArgsMap[prop] = value
+                            { propertyName -> uiState.guardArgsMap[propertyName] }) { prop, value ->
+                            uiState.guardArgsMap[prop] = value
                         }
-                        condArgsContainer.children.add(form)
+                        guardPanel.condArgsContainer.children.add(form)
                     }
                 }
 
                 "条件树" -> {
-                    val treeCombo = ComboBox<Pair<String, String>>().apply {
-                        items.addAll(allConditionTrees)
-                        maxWidth = Double.MAX_VALUE
-                        setCellFactory { createConditionTreeCell() }
-                        buttonCell = createConditionTreeCell()
-                    }
-                    guardDetailArea.children.add(treeCombo)
-
-                    // 还原条件树初始状态
-                    val currentPayload = selectedGuardPayload
-                    if (currentPayload is ConditionPayload.ConditionRef && allConditionTrees.any { it.first == currentPayload.conditionId }) {
-                        val treeMeta = allConditionTrees.first { it.first == currentPayload.conditionId }
-                        treeCombo.selectionModel.select(treeMeta)
+                    val currentPayload = uiState.selectedGuardPayload
+                    if (currentPayload is ConditionPayload.ConditionRef && dataContext.allConditionTrees.any { it.first == currentPayload.conditionId }) {
+                        val treeMeta = dataContext.allConditionTrees.first { it.first == currentPayload.conditionId }
+                        guardPanel.treeCombo.selectionModel.select(treeMeta)
                     }
                 }
 
                 "正交条件" -> {
-                    val configBtn = Button("编辑正交条件...")
-                    val summaryLabel =
-                        Label("未配置正交条件").apply { style = "-fx-text-fill: #888; -fx-font-style: italic;" }
-                    guardDetailArea.children.addAll(configBtn, summaryLabel)
-
-                    // 还原正交条件初始状态
-                    var currentOrthogonal = selectedGuardPayload as? ConditionPayload.PipelineRef
+                    val currentOrthogonal = uiState.selectedGuardPayload as? ConditionPayload.PipelineRef
                     if (currentOrthogonal != null) {
-                        summaryLabel.text = "已配置: ${currentOrthogonal.sourceId} -> ${currentOrthogonal.operatorId}"
-                        summaryLabel.style = "-fx-text-fill: #333;"
-                    }
-
-                    configBtn.setOnAction {
-                        val dialog = OrthogonalConditionDialog(currentOrthogonal)
-                        val res = dialog.showAndWait()
-                        if (res.isPresent) {
-                            currentOrthogonal = res.get()
-                            selectedGuardPayload = res.get()
-                            summaryLabel.text = "已配置: ${res.get().sourceId} -> ${res.get().operatorId}"
-                            summaryLabel.style = "-fx-text-fill: #333;"
-                        }
+                        guardPanel.summaryLabel.text =
+                            "已配置: ${currentOrthogonal.sourceId} -> ${currentOrthogonal.operatorId}"
+                        guardPanel.summaryLabel.style = "-fx-text-fill: #333;"
                     }
                 }
             }
         }
 
-        // 守卫类型切换监听
-        guardTypeCombo.selectionModel.selectedItemProperty().addListener { _, _, newType ->
+        guardPanel.typeCombo.selectionModel.selectedItemProperty().addListener { _, _, newType ->
             rebuildGuardDetail(newType)
         }
 
-        // ==========================================
-        // 3. 右侧：评分效应配置 (ScoreEffect)
-        // ==========================================
-        val scorePane = VBox(10.0).apply {
-            padding = Insets(10.0)
-            style = "-fx-border-color: #ddd; -fx-border-radius: 4px; -fx-background-color: #fafafa;"
-        }
-        scorePane.children.add(Label("评分效应 (ScoreEffect)").apply {
-            style = "-fx-font-weight: bold; -fx-font-size: 14px;"
-        })
-
-        val scoreTypeCombo = ComboBox<String>().apply {
-            items.addAll("固定分", "数据源评分")
-            selectionModel.selectFirst()
-            maxWidth = Double.MAX_VALUE
-        }
-        scorePane.children.add(HBox(8.0, Label("评分类型:"), scoreTypeCombo).apply { alignment = Pos.CENTER_LEFT })
-
-        val scoreDetailArea = VBox(8.0)
-        scorePane.children.add(scoreDetailArea)
-
         fun rebuildScoreDetail(newType: String?) {
-            scoreDetailArea.children.clear()
-            scoreArgsMap.clear()
+            scorePanel.showType(newType ?: "固定分")
+            uiState.scoreArgsMap.clear()
             when (newType) {
                 "固定分" -> {
-                    val valField = TextField("0.0")
-                    val missField = TextField("0.0")
-                    val grid = GridPane().apply { hgap = 8.0; vgap = 8.0 }
-                    grid.add(Label("命中分数:"), 0, 0)
-                    grid.add(valField, 1, 0)
-                    grid.add(Label("未命中分数:"), 0, 1)
-                    grid.add(missField, 1, 1)
-                    scoreDetailArea.children.add(grid)
-
-                    // 还原固定评分初始状态
-                    val existing = currentScoreEffect
+                    val existing = uiState.currentScoreEffect
                     if (existing is ScoreEffect.ConstantScore) {
-                        valField.text = existing.value.toString()
-                        missField.text = existing.missValue.toString()
+                        scorePanel.constantValField.text = existing.value.toString()
+                        scorePanel.constantMissField.text = existing.missValue.toString()
                     }
                 }
 
                 "数据源评分" -> {
-                    val dsCombo = ComboBox<DataSource<*>>().apply {
-                        items.addAll(dataSources)
-                        maxWidth = Double.MAX_VALUE
-                        setCellFactory { createDataSourceCell() }
-                        buttonCell = createDataSourceCell()
-                    }
-                    val opCombo = ComboBox<ScoreOperator<*, *>>().apply {
-                        maxWidth = Double.MAX_VALUE
-                        setCellFactory { createScoreOperatorCell() }
-                        buttonCell = createScoreOperatorCell()
-                        isDisable = true
-                    }
-                    val opArgsContainer = VBox(5.0)
-                    val missField = TextField("0.0")
-                    val grid = GridPane().apply { hgap = 8.0; vgap = 8.0 }
-                    grid.add(Label("评分数据源:"), 0, 0)
-                    grid.add(dsCombo, 1, 0)
-                    grid.add(Label("评分算子:"), 0, 1)
-                    grid.add(opCombo, 1, 1)
-                    grid.add(Label("算子参数:"), 0, 2)
-                    grid.add(opArgsContainer, 1, 2)
-                    grid.add(Label("未命中分数:"), 0, 3)
-                    grid.add(missField, 1, 3)
-
-                    scoreDetailArea.children.add(grid)
-
-                    // 数据源联动
-                    dsCombo.selectionModel.selectedItemProperty().addListener { _, _, newDs ->
-                        opCombo.items.clear()
-                        opArgsContainer.children.clear()
-                        scoreArgsMap.clear()
-                        if (newDs != null) {
-                            val compatibleOps = scoreOperators.filter { isCompatible(it.inputType, newDs.outputType) }
-                            opCombo.items.setAll(compatibleOps)
-                            opCombo.isDisable = false
-                        } else {
-                            opCombo.isDisable = true
-                        }
-                    }
-
-                    // 算子联动
-                    opCombo.selectionModel.selectedItemProperty().addListener { _, _, newOp ->
-                        opArgsContainer.children.clear()
-                        scoreArgsMap.clear()
-                        if (newOp != null) {
-                            val specs = newOp.paramSpecs
-                            val form = dynamicFieldForm.build(
-                                specs,
-                                { propertyName -> scoreArgsMap[propertyName] }) { prop, value ->
-                                scoreArgsMap[prop] = value
-                            }
-                            opArgsContainer.children.add(form)
-                        }
-                    }
-
-                    // 还原数据源评分初始状态
-                    val existing = currentScoreEffect
+                    val existing = uiState.currentScoreEffect
                     if (existing is ScoreEffect.SourceScore) {
-                        val ds = dataSources.firstOrNull { it.id == existing.sourceId }
+                        val ds = dataContext.dataSources.firstOrNull { it.id == existing.sourceId }
                         if (ds != null) {
-                            dsCombo.selectionModel.select(ds)
-                            val compatibleOps = scoreOperators.filter { isCompatible(it.inputType, ds.outputType) }
-                            opCombo.items.setAll(compatibleOps)
-                            opCombo.isDisable = false
+                            scorePanel.sourceDsCombo.selectionModel.select(ds)
+                            scorePanel.scorePipelineEditor.loadTransforms(existing.transforms)
 
-                            val op = compatibleOps.firstOrNull { it.id == existing.operatorId }
+                            val op = dataContext.scoreOperators.firstOrNull { it.id == existing.operatorId }
                             if (op != null) {
-                                opCombo.selectionModel.select(op)
-                                scoreArgsMap.putAll(existing.operatorArgs)
-                                opArgsContainer.children.clear()
+                                scorePanel.sourceOpCombo.selectionModel.select(op)
+                                uiState.scoreArgsMap.putAll(existing.operatorArgs)
+                                scorePanel.sourceOpArgsContainer.children.clear()
                                 val specs = op.paramSpecs
                                 val form = dynamicFieldForm.build(
                                     specs,
-                                    { propertyName -> scoreArgsMap[propertyName] }) { prop, value ->
-                                    scoreArgsMap[prop] = value
+                                    { propertyName -> uiState.scoreArgsMap[propertyName] }) { prop, value ->
+                                    uiState.scoreArgsMap[prop] = value
                                 }
-                                opArgsContainer.children.add(form)
+                                scorePanel.sourceOpArgsContainer.children.add(form)
                             }
                         }
-                        missField.text = existing.missValue.toString()
+                        scorePanel.sourceMissField.text = existing.missValue.toString()
                     }
                 }
             }
         }
 
-        // 评分类型切换监听
-        scoreTypeCombo.selectionModel.selectedItemProperty().addListener { _, _, newType ->
+        scorePanel.typeCombo.selectionModel.selectedItemProperty().addListener { _, _, newType ->
             rebuildScoreDetail(newType)
         }
 
+        // ==========================================
+        // 5. 配置加载逻辑
+        // ==========================================
         fun loadConfig(ref: OrthogonalRuleLeafConfig) {
-            selectedGuardPayload = ref.guardCondition
-            currentScoreEffect = ref.scoreEffect
+            uiState.selectedGuardPayload = ref.guardCondition
+            uiState.currentScoreEffect = ref.scoreEffect
 
-            // 恢复 Guard
-            val guardType = selectedGuardPayload?.let { payload ->
+            val guardType = uiState.selectedGuardPayload?.let { payload ->
                 when (payload) {
                     is ConditionPayload.PipelineRef -> "正交条件"
                     is ConditionPayload.ConditionRef -> {
-                        if (allConditionTrees.any { it.first == payload.conditionId }) "条件树" else "普通条件"
+                        if (dataContext.allConditionTrees.any { it.first == payload.conditionId }) "条件树" else "普通条件"
                     }
                 }
             } ?: "无 (Always True)"
-            guardTypeCombo.selectionModel.select(guardType)
+            guardPanel.typeCombo.selectionModel.select(guardType)
             rebuildGuardDetail(guardType)
 
-            // 恢复 Score
-            val scoreType = currentScoreEffect?.let { effect ->
+            val scoreType = uiState.currentScoreEffect?.let { effect ->
                 when (effect) {
                     is ScoreEffect.ConstantScore -> "固定分"
                     is ScoreEffect.SourceScore -> "数据源评分"
                 }
             } ?: "固定分"
-            scoreTypeCombo.selectionModel.select(scoreType)
+            scorePanel.typeCombo.selectionModel.select(scoreType)
             rebuildScoreDetail(scoreType)
         }
 
-        // ==========================================
-        // 4. 还原初始化状态
-        // ==========================================
         initialConfig?.let { loadConfig(it) } ?: run {
             rebuildGuardDetail("无 (Always True)")
             rebuildScoreDetail("固定分")
         }
 
         // ==========================================
-        // 5. 整体组装与模板管理
+        // 6. 配置确定与导出 (buildCurrentConfig)
+        // ==========================================
+        fun buildCurrentConfig(): OrthogonalRuleLeafConfig? {
+            val finalGuardPayload = when (guardPanel.typeCombo.value) {
+                "普通条件" -> {
+                    val selectedCond = guardPanel.condCombo.value
+                    if (selectedCond != null) {
+                        ConditionPayload.ConditionRef(
+                            conditionId = selectedCond.conditionId,
+                            refId = "${selectedCond.conditionId}_${UUID.randomUUID().toString().substring(0, 4)}",
+                            args = HashMap(uiState.guardArgsMap)
+                        )
+                    } else null
+                }
+
+                "条件树" -> {
+                    val selectedTree = guardPanel.treeCombo.value
+                    if (selectedTree != null) {
+                        ConditionPayload.ConditionRef(
+                            conditionId = selectedTree.first,
+                            refId = selectedTree.first
+                        )
+                    } else null
+                }
+
+                "正交条件" -> uiState.selectedGuardPayload
+                else -> null
+            }
+
+            val finalScoreEffect = when (scorePanel.typeCombo.value) {
+                "固定分" -> {
+                    ScoreEffect.ConstantScore(
+                        value = scorePanel.constantValField.text.toDoubleOrNull() ?: 0.0,
+                        missValue = scorePanel.constantMissField.text.toDoubleOrNull() ?: 0.0
+                    )
+                }
+
+                "数据源评分" -> {
+                    val ds = scorePanel.sourceDsCombo.value
+                    val op = scorePanel.sourceOpCombo.value
+                    if (ds != null && op != null) {
+                        ScoreEffect.SourceScore(
+                            sourceId = ds.id,
+                            transforms = scorePanel.scorePipelineEditor.getTransformCalls(),
+                            operatorId = op.id,
+                            operatorArgs = HashMap(uiState.scoreArgsMap),
+                            missValue = scorePanel.sourceMissField.text.toDoubleOrNull() ?: 0.0
+                        )
+                    } else ScoreEffect.ConstantScore(0.0)
+                }
+
+                else -> ScoreEffect.ConstantScore(0.0)
+            }
+
+            return OrthogonalRuleLeafConfig(
+                nodeId = initialConfig?.nodeId ?: "rule_${System.currentTimeMillis()}",
+                sourceId = "orthogonal_rule",
+                scoreEffect = finalScoreEffect,
+                guardCondition = finalGuardPayload
+            )
+        }
+
+        // ==========================================
+        // 7. 整体布局管理与模板管理 UI
         // ==========================================
         val mainHBox = HBox(15.0).apply {
-            children.addAll(guardPane, scorePane)
-            HBox.setHgrow(guardPane, Priority.ALWAYS)
-            HBox.setHgrow(scorePane, Priority.ALWAYS)
+            children.addAll(guardPanel.root, scorePanel.root)
+            HBox.setHgrow(guardPanel.root, Priority.ALWAYS)
+            HBox.setHgrow(scorePanel.root, Priority.ALWAYS)
             prefWidth = 800.0
             prefHeight = 450.0
         }
@@ -380,7 +359,7 @@ class OrthogonalRuleDialog(
         templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
             if (template != null) {
                 try {
-                    val ref = mapper.readValue(
+                    val ref = dataContext.mapper.readValue(
                         template.contentJson,
                         EvaluatorLeafConfig::class.java
                     ) as? OrthogonalRuleLeafConfig
@@ -392,77 +371,6 @@ class OrthogonalRuleDialog(
                     Alert(Alert.AlertType.ERROR, "加载规则模板失败: ${e.message}").showAndWait()
                 }
             }
-        }
-
-        fun buildCurrentConfig(): OrthogonalRuleLeafConfig? {
-            // 1. 获取 Guard Payload
-            val finalGuardPayload = when (guardTypeCombo.value) {
-                "普通条件" -> {
-                    val condCombo = guardDetailArea.children.firstOrNull() as? ComboBox<ConditionMeta>
-                    val selectedCond = condCombo?.value
-                    if (selectedCond != null) {
-                        ConditionPayload.ConditionRef(
-                            conditionId = selectedCond.conditionId,
-                            refId = "${selectedCond.conditionId}_${UUID.randomUUID().toString().substring(0, 4)}",
-                            args = HashMap(guardArgsMap)
-                        )
-                    } else null
-                }
-
-                "条件树" -> {
-                    val treeCombo = guardDetailArea.children.firstOrNull() as? ComboBox<Pair<String, String>>
-                    val selectedTree = treeCombo?.value
-                    if (selectedTree != null) {
-                        ConditionPayload.ConditionRef(
-                            conditionId = selectedTree.first,
-                            refId = selectedTree.first
-                        )
-                    } else null
-                }
-
-                "正交条件" -> selectedGuardPayload
-                else -> null
-            }
-
-            // 2. 获取 ScoreEffect
-            val finalScoreEffect = when (scoreTypeCombo.value) {
-                "固定分" -> {
-                    val grid = scoreDetailArea.children.firstOrNull() as? GridPane
-                    val valField = grid?.children?.filterIsInstance<TextField>()?.firstOrNull()
-                    val missField = grid?.children?.filterIsInstance<TextField>()?.getOrNull(1)
-                    ScoreEffect.ConstantScore(
-                        value = valField?.text?.toDoubleOrNull() ?: 0.0,
-                        missValue = missField?.text?.toDoubleOrNull() ?: 0.0
-                    )
-                }
-
-                "数据源评分" -> {
-                    val grid = scoreDetailArea.children.firstOrNull() as? GridPane
-                    val dsCombo = grid?.children?.filterIsInstance<ComboBox<DataSource<*>>>()?.firstOrNull()
-                    val opCombo = grid?.children?.filterIsInstance<ComboBox<ScoreOperator<*, *>>>()?.firstOrNull()
-                    val missField = grid?.children?.filterIsInstance<TextField>()?.firstOrNull()
-                    val ds = dsCombo?.value
-                    val op = opCombo?.value
-                    if (ds != null && op != null) {
-                        ScoreEffect.SourceScore(
-                            sourceId = ds.id,
-                            transforms = emptyList(),
-                            operatorId = op.id,
-                            operatorArgs = HashMap(scoreArgsMap),
-                            missValue = missField?.text?.toDoubleOrNull() ?: 0.0
-                        )
-                    } else ScoreEffect.ConstantScore(0.0)
-                }
-
-                else -> ScoreEffect.ConstantScore(0.0)
-            }
-
-            return OrthogonalRuleLeafConfig(
-                nodeId = initialConfig?.nodeId ?: "rule_${System.currentTimeMillis()}",
-                sourceId = "orthogonal_rule",
-                scoreEffect = finalScoreEffect,
-                guardCondition = finalGuardPayload
-            )
         }
 
         val saveTemplateBtn = Button("保存为模板...").apply {
@@ -507,7 +415,7 @@ class OrthogonalRuleDialog(
                         name = name,
                         description = desc.takeIf { it.isNotBlank() },
                         type = "RULE",
-                        contentJson = mapper.writeValueAsString(currentConfig)
+                        contentJson = dataContext.mapper.writeValueAsString(currentConfig)
                     )
 
                     try {
@@ -543,49 +451,5 @@ class OrthogonalRuleDialog(
                 null
             }
         }
-    }
-
-    private fun createConditionMetaCell(): ListCell<ConditionMeta> {
-        return object : ListCell<ConditionMeta>() {
-            override fun updateItem(item: ConditionMeta?, empty: Boolean) {
-                super.updateItem(item, empty)
-                text = if (empty || item == null) null
-                else "${item.name} (${item.conditionId})"
-            }
-        }
-    }
-
-    private fun createConditionTreeCell(): ListCell<Pair<String, String>> {
-        return object : ListCell<Pair<String, String>>() {
-            override fun updateItem(item: Pair<String, String>?, empty: Boolean) {
-                super.updateItem(item, empty)
-                text = if (empty || item == null) null
-                else "${item.second} (${item.first})"
-            }
-        }
-    }
-
-    private fun createDataSourceCell(): ListCell<DataSource<*>> {
-        return object : ListCell<DataSource<*>>() {
-            override fun updateItem(item: DataSource<*>?, empty: Boolean) {
-                super.updateItem(item, empty)
-                text = if (empty || item == null) null
-                else "${item.name} (${item.id})"
-            }
-        }
-    }
-
-    private fun createScoreOperatorCell(): ListCell<ScoreOperator<*, *>> {
-        return object : ListCell<ScoreOperator<*, *>>() {
-            override fun updateItem(item: ScoreOperator<*, *>?, empty: Boolean) {
-                super.updateItem(item, empty)
-                text = if (empty || item == null) null
-                else "${item.name} (${item.id})"
-            }
-        }
-    }
-
-    private fun isCompatible(inputType: KType, outputType: KType): Boolean {
-        return inputType == outputType || outputType.isSubtypeOf(inputType)
     }
 }

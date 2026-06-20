@@ -1,13 +1,14 @@
 package lin.condition_tree.ui.components
 
-import javafx.geometry.Insets
 import javafx.scene.control.*
-import javafx.scene.layout.*
+import javafx.scene.layout.VBox
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
 import lin.rule.orthogonal.DataSource
 import lin.rule.orthogonal.Operator
+import lin.rule.orthogonal.Transform
 import lin.tree_config.ui.DynamicFieldForm
+import lin.tree_config.ui.components.ConditionConfigPanel
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -24,6 +25,17 @@ class OrthogonalConditionDialog(
 
     private val dynamicFieldForm by lazy { DynamicFieldForm() }
 
+    private class ConditionDataContext(
+        val dataSources: List<DataSource<*>>,
+        val allOperators: List<Operator<*, *>>,
+        val allTransforms: List<Transform<*, *>>,
+        val mapper: com.fasterxml.jackson.databind.ObjectMapper
+    )
+
+    private class ConditionInteractionState(
+        val argsMap: MutableMap<String, Any> = mutableMapOf()
+    )
+
     init {
         title = "配置正交条件"
         headerText = "正交条件由 数据源 + 比较算子 组合构成，并提供算子所需的具体参数"
@@ -34,90 +46,93 @@ class OrthogonalConditionDialog(
         val assembler = conditionRegistry.pipelineAssembler
             ?: error("PipelineAssembler is not configured in this context")
 
-        val dataSources = assembler.allDataSources().toList()
-        val allOperators = assembler.allOperators().toList()
-        val mapper = createTreeConfigMapper()
+        // 1. 数据与状态封装
+        val dataContext = ConditionDataContext(
+            dataSources = assembler.allDataSources().toList(),
+            allOperators = assembler.allOperators().toList(),
+            allTransforms = assembler.allTransforms().toList(),
+            mapper = createTreeConfigMapper()
+        )
 
-        // 1. 数据源下拉框
-        val dataSourceCombo = ComboBox<DataSource<*>>().apply {
-            maxWidth = Double.MAX_VALUE
-            items.addAll(dataSources)
-            setCellFactory { createDataSourceCell() }
-            buttonCell = createDataSourceCell()
+        val uiState = ConditionInteractionState()
+
+        // 2. 初始化布局面板
+        lateinit var panel: ConditionConfigPanel
+        panel = ConditionConfigPanel(
+            dataContext.dataSources,
+            dataContext.allTransforms,
+            dynamicFieldForm
+        ) { finalType ->
+            if (finalType != null) {
+                val compatibleOps = dataContext.allOperators.filter { isCompatible(it.inputType, finalType) }
+                val selectedOp = panel.operatorCombo.value
+                panel.operatorCombo.items.setAll(compatibleOps)
+                panel.operatorCombo.isDisable = false
+                if (selectedOp != null && compatibleOps.any { it.id == selectedOp.id }) {
+                    panel.operatorCombo.selectionModel.select(selectedOp)
+                } else {
+                    panel.operatorCombo.selectionModel.clearSelection()
+                    panel.paramsContainer.children.clear()
+                    uiState.argsMap.clear()
+                }
+            } else {
+                panel.operatorCombo.items.clear()
+                panel.operatorCombo.isDisable = true
+                panel.paramsContainer.children.clear()
+                uiState.argsMap.clear()
+            }
         }
 
-        // 2. 算子下拉框
-        val operatorCombo = ComboBox<Operator<*, *>>().apply {
-            maxWidth = Double.MAX_VALUE
-            setCellFactory { createOperatorCell() }
-            buttonCell = createOperatorCell()
-            isDisable = true
-        }
+        // 3. 配置 ComboBox 的 cell factory (样式绑定)
+        panel.dataSourceCombo.setCellFactory { createDataSourceCell() }
+        panel.dataSourceCombo.buttonCell = createDataSourceCell()
+        panel.operatorCombo.setCellFactory { createOperatorCell() }
+        panel.operatorCombo.buttonCell = createOperatorCell()
 
-        // 3. 参数区及表单
-        val paramsContainer = VBox(6.0)
-        val argsMap = mutableMapOf<String, Any>()
-
-        // 载入 Payload 辅助函数
+        // 4. 加载 Payload 辅助函数
         fun loadPayload(ref: ConditionPayload.PipelineRef) {
-            val ds = dataSources.firstOrNull { it.id == ref.sourceId }
+            val ds = dataContext.dataSources.firstOrNull { it.id == ref.sourceId }
             if (ds != null) {
-                dataSourceCombo.selectionModel.select(ds)
+                panel.dataSourceCombo.selectionModel.select(ds)
+                panel.pipelineEditor.loadTransforms(ref.transforms)
 
-                val compatibleOps = allOperators.filter { isCompatible(it.inputType, ds.outputType) }
-                operatorCombo.items.setAll(compatibleOps)
-                operatorCombo.isDisable = false
-
-                val op = compatibleOps.firstOrNull { it.id == ref.operatorId }
+                val op = dataContext.allOperators.firstOrNull { it.id == ref.operatorId }
                 if (op != null) {
-                    operatorCombo.selectionModel.select(op)
-                    argsMap.clear()
-                    argsMap.putAll(ref.operatorArgs)
-                    rebuildForm(paramsContainer, op, argsMap)
+                    panel.operatorCombo.selectionModel.select(op)
+                    uiState.argsMap.clear()
+                    uiState.argsMap.putAll(ref.operatorArgs)
+                    rebuildForm(panel.paramsContainer, op, uiState.argsMap)
                 }
             }
         }
 
-        // 加载初始值
         initialPayload?.let { loadPayload(it) }
 
         // 数据源改变监听
-        dataSourceCombo.selectionModel.selectedItemProperty().addListener { _, _, newDs ->
-            operatorCombo.items.clear()
-            paramsContainer.children.clear()
-            argsMap.clear()
-
-            if (newDs != null) {
-                val compatibleOps = allOperators.filter { isCompatible(it.inputType, newDs.outputType) }
-                operatorCombo.items.setAll(compatibleOps)
-                operatorCombo.isDisable = false
-            } else {
-                operatorCombo.isDisable = true
-            }
+        panel.dataSourceCombo.selectionModel.selectedItemProperty().addListener { _, _, newDs ->
+            panel.pipelineEditor.onDataSourceChanged(newDs?.outputType)
+            panel.operatorCombo.items.clear()
+            panel.paramsContainer.children.clear()
+            uiState.argsMap.clear()
         }
 
         // 算子改变监听
-        operatorCombo.selectionModel.selectedItemProperty().addListener { _, _, newOp ->
-            paramsContainer.children.clear()
-            argsMap.clear()
+        panel.operatorCombo.selectionModel.selectedItemProperty().addListener { _, _, newOp ->
+            panel.paramsContainer.children.clear()
+            uiState.argsMap.clear()
             if (newOp != null) {
-                rebuildForm(paramsContainer, newOp, argsMap)
+                rebuildForm(panel.paramsContainer, newOp, uiState.argsMap)
             }
         }
 
-        // 模板选择与保存区域
-        val templateCombo = ComboBox<lin.orthogonal_template.db.OrthogonalTemplateEntity>().apply {
-            maxWidth = Double.MAX_VALUE
-            promptText = "应用现有条件模板..."
-        }
-
+        // 模板载入逻辑
         fun reloadTemplates() {
             val templates = templateRepo.findAllByType("CONDITION")
-            templateCombo.items.setAll(templates)
+            panel.templateCombo.items.setAll(templates)
         }
         reloadTemplates()
 
-        templateCombo.setCellFactory {
+        panel.templateCombo.setCellFactory {
             object : ListCell<lin.orthogonal_template.db.OrthogonalTemplateEntity>() {
                 override fun updateItem(item: lin.orthogonal_template.db.OrthogonalTemplateEntity?, empty: Boolean) {
                     super.updateItem(item, empty)
@@ -125,12 +140,13 @@ class OrthogonalConditionDialog(
                 }
             }
         }
-        templateCombo.buttonCell = templateCombo.cellFactory.call(null)
+        panel.templateCombo.buttonCell = panel.templateCombo.cellFactory.call(null)
 
-        templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
+        panel.templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
             if (template != null) {
                 try {
-                    val ref = mapper.readValue(template.contentJson, ConditionPayload.PipelineRef::class.java)
+                    val ref =
+                        dataContext.mapper.readValue(template.contentJson, ConditionPayload.PipelineRef::class.java)
                     loadPayload(ref)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -139,103 +155,77 @@ class OrthogonalConditionDialog(
             }
         }
 
-        val saveTemplateBtn = Button("保存为模板...").apply {
-            setOnAction {
-                val ds = dataSourceCombo.value
-                val op = operatorCombo.value
-                if (ds == null || op == null) {
-                    Alert(Alert.AlertType.WARNING, "请先配置完有效的数据源与比较算子再保存模板！").showAndWait()
+        // 模板保存逻辑
+        panel.saveTemplateBtn.setOnAction {
+            val ds = panel.dataSourceCombo.value
+            val op = panel.operatorCombo.value
+            if (ds == null || op == null) {
+                Alert(Alert.AlertType.WARNING, "请先配置完有效的数据源与比较算子再保存模板！").showAndWait()
+                return@setOnAction
+            }
+
+            val nameDialog = Dialog<Pair<String, String>>().apply {
+                title = "保存为正交条件模板"
+                headerText = "请输入模板的名称 and 描述"
+                val dialogPane = this.dialogPane
+                dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
+
+                val nameInput = TextField().apply { promptText = "模板名称 (例如: 己方手牌数量大于等于3)" }
+                val descInput = TextField().apply { promptText = "描述信息 (例如: 适用于快速铺场卡组)" }
+                dialogPane.content = VBox(8.0).apply {
+                    children.addAll(
+                        Label("模板名称:"), nameInput,
+                        Label("描述:"), descInput
+                    )
+                }
+                setResultConverter { buttonType ->
+                    if (buttonType == ButtonType.OK) {
+                        nameInput.text.trim() to descInput.text.trim()
+                    } else null
+                }
+            }
+
+            val res = nameDialog.showAndWait()
+            if (res.isPresent) {
+                val (name, desc) = res.get() as Pair<String, String>
+                if (name.isBlank()) {
+                    Alert(Alert.AlertType.WARNING, "模板名称不能为空！").showAndWait()
                     return@setOnAction
                 }
 
-                val nameDialog = Dialog<Pair<String, String>>().apply {
-                    title = "保存为正交条件模板"
-                    headerText = "请输入模板的名称 and 描述"
-                    val dialogPane = this.dialogPane
-                    dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
+                val ref = ConditionPayload.PipelineRef(
+                    sourceId = ds.id,
+                    transforms = panel.pipelineEditor.getTransformCalls(),
+                    operatorId = op.id,
+                    operatorArgs = HashMap(uiState.argsMap),
+                    refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
+                )
 
-                    val nameInput = TextField().apply { promptText = "模板名称 (例如: 己方手牌数量大于等于3)" }
-                    val descInput = TextField().apply { promptText = "描述信息 (例如: 适用于快速铺场卡组)" }
-                    dialogPane.content = VBox(8.0).apply {
-                        children.addAll(
-                            Label("模板名称:"), nameInput,
-                            Label("描述:"), descInput
-                        )
-                    }
-                    setResultConverter { buttonType ->
-                        if (buttonType == ButtonType.OK) {
-                            nameInput.text.trim() to descInput.text.trim()
-                        } else null
-                    }
-                }
+                val entity = lin.orthogonal_template.db.OrthogonalTemplateEntity(
+                    id = "",
+                    name = name,
+                    description = desc.takeIf { it.isNotBlank() },
+                    type = "CONDITION",
+                    contentJson = dataContext.mapper.writeValueAsString(ref)
+                )
 
-                val res = nameDialog.showAndWait()
-                if (res.isPresent) {
-                    val (name, desc) = res.get() as Pair<String, String>
-                    if (name.isBlank()) {
-                        Alert(Alert.AlertType.WARNING, "模板名称不能为空！").showAndWait()
-                        return@setOnAction
-                    }
-
-                    val ref = ConditionPayload.PipelineRef(
-                        sourceId = ds.id,
-                        transforms = emptyList(),
-                        operatorId = op.id,
-                        operatorArgs = HashMap(argsMap),
-                        refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
-                    )
-
-                    val entity = lin.orthogonal_template.db.OrthogonalTemplateEntity(
-                        id = "",
-                        name = name,
-                        description = desc.takeIf { it.isNotBlank() },
-                        type = "CONDITION",
-                        contentJson = mapper.writeValueAsString(ref)
-                    )
-
-                    try {
-                        templateRepo.save(entity)
-                        Alert(Alert.AlertType.INFORMATION, "模板保存成功！").showAndWait()
-                        reloadTemplates()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        Alert(Alert.AlertType.ERROR, "保存模板失败: ${e.message}").showAndWait()
-                    }
+                try {
+                    templateRepo.save(entity)
+                    Alert(Alert.AlertType.INFORMATION, "模板保存成功！").showAndWait()
+                    reloadTemplates()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Alert(Alert.AlertType.ERROR, "保存模板失败: ${e.message}").showAndWait()
                 }
             }
         }
 
-        val grid = GridPane().apply {
-            hgap = 10.0
-            vgap = 10.0
-            padding = Insets(20.0, 50.0, 10.0, 10.0)
-            columnConstraints.addAll(
-                ColumnConstraints().apply { hgrow = Priority.NEVER },
-                ColumnConstraints().apply { hgrow = Priority.ALWAYS }
-            )
-        }
-
-        grid.add(Label("应用模板:"), 0, 0)
-        grid.add(HBox(8.0).apply {
-            children.addAll(templateCombo, saveTemplateBtn)
-            HBox.setHgrow(templateCombo, Priority.ALWAYS)
-        }, 1, 0)
-
-        grid.add(Label("条件数据源:"), 0, 1)
-        grid.add(dataSourceCombo, 1, 1)
-
-        grid.add(Label("比较算子:"), 0, 2)
-        grid.add(operatorCombo, 1, 2)
-
-        grid.add(Label("算子参数:"), 0, 3)
-        grid.add(paramsContainer, 1, 3)
-
-        dialogPane.content = grid
+        dialogPane.content = panel.root
 
         val okButton = dialogPane.lookupButton(ButtonType.OK) as Button
         okButton.addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
-            val ds = dataSourceCombo.value
-            val op = operatorCombo.value
+            val ds = panel.dataSourceCombo.value
+            val op = panel.operatorCombo.value
             if (ds == null || op == null) {
                 val alert = Alert(Alert.AlertType.WARNING, "必须选择数据源和算子！")
                 alert.showAndWait()
@@ -245,13 +235,13 @@ class OrthogonalConditionDialog(
 
         setResultConverter { buttonType ->
             if (buttonType == ButtonType.OK) {
-                val ds = dataSourceCombo.value!!
-                val op = operatorCombo.value!!
+                val ds = panel.dataSourceCombo.value!!
+                val op = panel.operatorCombo.value!!
                 ConditionPayload.PipelineRef(
                     sourceId = ds.id,
-                    transforms = emptyList(),
+                    transforms = panel.pipelineEditor.getTransformCalls(),
                     operatorId = op.id,
-                    operatorArgs = HashMap(argsMap),
+                    operatorArgs = HashMap(uiState.argsMap),
                     refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
                 )
             } else {

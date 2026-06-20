@@ -9,6 +9,8 @@ import lin.serviceLoader.provider.TransformProvider
  */
 class DefaultDataSourceProvider : DataSourceProvider {
     override fun get(): Collection<DataSource<*>> = listOf(
+        MeBoardCardsSource,
+        RivalBoardCardsSource,
         BoardCardsSource,
         HandCardsSource
     )
@@ -19,7 +21,6 @@ class DefaultDataSourceProvider : DataSourceProvider {
  */
 class DefaultTransformProvider : TransformProvider {
     override fun get(): Collection<Transform<*, *>> = listOf(
-        SideFilterTransform,
         RaceFilterTransform,
         CountProjectionTransform
     )

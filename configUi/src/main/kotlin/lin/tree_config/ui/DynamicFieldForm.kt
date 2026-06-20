@@ -27,7 +27,11 @@ class DynamicFieldForm : KoinComponent {
             vgap = 8.0
             padding = Insets(4.0, 0.0, 4.0, 0.0)
             columnConstraints.addAll(
-                ColumnConstraints().apply { hgrow = Priority.NEVER },
+                ColumnConstraints().apply {
+                    hgrow = Priority.NEVER
+                    prefWidth = 120.0
+                    minWidth = 120.0
+                },
                 ColumnConstraints().apply { hgrow = Priority.ALWAYS }
             )
         }
@@ -74,10 +78,24 @@ class DynamicFieldForm : KoinComponent {
             }
 
             is FieldType.SelectType -> {
-                val combo = ComboBox<String>().apply { maxWidth = Double.MAX_VALUE }
+                val combo = ComboBox<DynamicFieldOption>().apply {
+                    maxWidth = Double.MAX_VALUE
+                    setCellFactory {
+                        object : ListCell<DynamicFieldOption>() {
+                            override fun updateItem(item: DynamicFieldOption?, empty: Boolean) {
+                                super.updateItem(item, empty)
+                                text = if (empty || item == null) null else item.label
+                            }
+                        }
+                    }
+                    buttonCell = cellFactory.call(null)
+                }
                 val options = loadOptions(type.dataSourceId)
-                combo.items.addAll(options.map { it.value ?: it.value })
-                currentValue?.toString()?.let { combo.selectionModel.select(it) }
+                combo.items.addAll(options)
+                val selectedOpt = options.firstOrNull { it.value == currentValue?.toString() }
+                if (selectedOpt != null) {
+                    combo.selectionModel.select(selectedOpt)
+                }
                 combo
             }
 
@@ -155,7 +173,8 @@ class DynamicFieldForm : KoinComponent {
 
             is ComboBox<*> -> control.selectionModel.selectedItemProperty().addListener { _, _, newVal ->
                 if (newVal != null) {
-                    onChanged(newVal)
+                    val finalVal = if (newVal is DynamicFieldOption) newVal.value ?: "" else newVal
+                    onChanged(finalVal)
                 }
             }
 

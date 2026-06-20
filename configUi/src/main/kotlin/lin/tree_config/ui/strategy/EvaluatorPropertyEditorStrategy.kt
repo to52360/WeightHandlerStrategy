@@ -138,12 +138,16 @@ class EvaluatorPropertyEditorStrategy(
                     }
 
                     btn.setOnAction {
-                        val dialog = OrthogonalConditionDialog(currentOrtho)
+                        val liveOrtho =
+                            (leafConfigs[nodeId] as? ConditionLeafConfig)?.guardCondition as? ConditionPayload.PipelineRef
+                        val dialog = OrthogonalConditionDialog(liveOrtho)
                         val res = dialog.showAndWait()
                         if (res.isPresent) {
                             val orthoRef = res.get()
                             val scoreEffect =
-                                (currentConfig as? ConditionLeafConfig)?.scoreEffect ?: ScoreEffect.ConstantScore(0.0)
+                                (leafConfigs[nodeId] as? ConditionLeafConfig)?.scoreEffect ?: ScoreEffect.ConstantScore(
+                                    0.0
+                                )
                             val newConfig = ConditionLeafConfig(
                                 nodeId = nodeId,
                                 sourceId = "orthogonal_condition",
@@ -206,7 +210,13 @@ class EvaluatorPropertyEditorStrategy(
                         val clearGuardBtn = Button("清除").apply { isDisable = (currentGuard == null) }
 
                         configGuardBtn.setOnAction {
-                            val dialog = OrthogonalConditionDialog(currentGuard)
+                            val liveGuard = when (val c = leafConfigs[nodeId]) {
+                                is RuleLeafConfig -> c.guardCondition
+                                is OrthogonalRuleLeafConfig -> c.guardCondition
+                                is ConditionLeafConfig -> c.guardCondition
+                                else -> null
+                            } as? ConditionPayload.PipelineRef
+                            val dialog = OrthogonalConditionDialog(liveGuard)
                             val res = dialog.showAndWait()
                             if (res.isPresent) {
                                 val guardRef = res.get()
@@ -333,7 +343,7 @@ class EvaluatorPropertyEditorStrategy(
             existingValues = { propertyName -> fieldValueOf(propertyName, existing) },
         ) { propertyName, value ->
             args[propertyName] = value
-            updateLeafConfig(nodeId, leafSourceCombo.value, existing, args)
+            updateLeafConfig(nodeId, leafSourceCombo.value, leafConfigs[nodeId], args)
 
             if (propertyName == EVALUATOR_LEAF_SCORE_OPERATOR_FIELD ||
                 propertyName == EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD

@@ -2,24 +2,48 @@ package lin.rule.orthogonal
 
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.enums.CardRaceEnum
-import lin.rule.context.toWarView
 import lin.warExt.my.base.getHandCards
+import lin.warExt.my.base.getPlayCards
+import lin.warExt.rival.rivalCardsByPlayArea
 
 // ==========================================
 // 1. 默认数据源
 // ==========================================
 
 /**
- * 战场卡牌数据源：输出 List<Card>
+ * 我方战场随从数据源
+ */
+val MeBoardCardsSource = dataSource<List<Card>>(
+    id = "me_board_cards",
+    name = "我方战场随从",
+    description = "获取我方战场区域的随从卡牌列表",
+    categories = setOf("战场", "卡牌")
+) {
+    warInfo.getPlayCards()
+}
+
+/**
+ * 敌方战场随从数据源
+ */
+val RivalBoardCardsSource = dataSource<List<Card>>(
+    id = "rival_board_cards",
+    name = "敌方战场随从",
+    description = "获取敌方战场区域的随从卡牌列表",
+    categories = setOf("战场", "卡牌")
+) {
+    warInfo.rivalCardsByPlayArea()
+}
+
+/**
+ * 战场全部卡牌数据源：输出 List<Card>
  */
 val BoardCardsSource = dataSource<List<Card>>(
     id = "board_cards",
-    name = "战场卡牌列表",
-    description = "获取战场上的卡牌列表",
+    name = "全部战场随从",
+    description = "获取战场上的全部随从卡牌列表",
     categories = setOf("战场", "卡牌")
 ) {
-    val view = warInfo.toWarView()
-    view.me.cards + view.rival.cards
+    warInfo.getPlayCards() + warInfo.rivalCardsByPlayArea()
 }
 
 /**
@@ -38,33 +62,13 @@ val HandCardsSource = dataSource<List<Card>>(
 // 2. 默认转换器
 // ==========================================
 
-data class SideFilterParams(
-    @lin.rule.parse.RuleField(
-        name = "随从方",
-        description = "过滤我方(ME)、敌方(RIVAL)或双方(ALL)的随从",
-        required = true
-    )
-    val side: String = "ME"
-)
-
-/**
- * 所属方过滤器：过滤出我方或敌方的随从卡牌
- */
-val SideFilterTransform = transform<List<Card>, List<Card>, SideFilterParams>(
-    id = "side_filter",
-    name = "所属方过滤器",
-    description = "过滤出属于我方、敌方或双方的随从"
-) { input, params ->
-    val view = warInfo.toWarView()
-    when (params.side.uppercase()) {
-        "ME" -> input.filter { it in view.me.cards }
-        "RIVAL" -> input.filter { it in view.rival.cards }
-        else -> input
-    }
-}
-
 data class RaceFilterParams(
-    @lin.rule.parse.RuleField(name = "随从种族", description = "用于过滤的随从种族", required = true)
+    @lin.rule.parse.RuleField(
+        name = "随从种族",
+        description = "用于过滤的随从种族",
+        required = true,
+        dataSource = "card_races"
+    )
     val race: CardRaceEnum
 )
 
@@ -116,7 +120,7 @@ val GreaterThanOrEqualOp = operator<Int, GteParams>(
 }
 
 data class ContainsRaceParams(
-    @lin.rule.parse.RuleField(name = "目标种族", description = "匹配的种族", required = true)
+    @lin.rule.parse.RuleField(name = "目标种族", description = "匹配的种族", required = true, dataSource = "card_races")
     val targetRace: CardRaceEnum
 )
 
