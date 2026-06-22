@@ -3,7 +3,7 @@ package lin.ai.config
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.tree.EvaluatorLeafSourceType
+import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorTreeConfig
 
 /**
@@ -19,13 +19,14 @@ interface AiConfigGenerationService {
 }
 
 data class AiEvaluatorLeafSource(
-    val sourceType: EvaluatorLeafSourceType,
+    val kind: EvaluatorLeafKind,
     val sourceId: String,
     val name: String?,
     val desc: String?,
     val fields: List<AiFieldSpec>
 )
 
+// todo用同一套
 data class AiFieldSpec(
     val propertyName: String,
     val name: String,

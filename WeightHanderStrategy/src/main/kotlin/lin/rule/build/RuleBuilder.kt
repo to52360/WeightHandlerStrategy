@@ -2,13 +2,18 @@ package lin.rule.build
 
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
+import lin.rule.handler.EvalOutcome
 import lin.rule.handler.RuleResult
 import lin.rule.parse.FieldParser
 import lin.rule.parse.FieldSpec
+import lin.rule.score.ScoreEffect
 import lin.rule.tree.EvaluatorLeafConfig
 import kotlin.reflect.KClass
 
 typealias RuleLogic = context(RuleEnv) RuleContext.() -> RuleResult
+
+/** 叶子节点求值闭包：返回 [EvalOutcome] 三态，由守卫结果 + rule 评分组合而成 */
+typealias LeafLogic = context(RuleEnv) RuleContext.() -> EvalOutcome
 
 typealias RuleFactory<T> = (EvaluatorLeafConfig, T) -> RuleLogic
 
@@ -25,7 +30,7 @@ class RuleBuilder<T : Any>(
             if (field == null) field = RuleMetadata(id, id)
             return field!!
         }
-    private var scoreEffectType: ScoreEffectType = ScoreEffectType.CONSTANT
+    private var defaultScoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0)
 
     // 统一存放字段提供者：单条/批量都视为 () -> List<FieldSpec>，build 时 flatMap 展开
     private val extraFields = mutableListOf<() -> List<FieldSpec>>()
@@ -35,8 +40,7 @@ class RuleBuilder<T : Any>(
     fun metadata(metadata: RuleMetadata) = apply { this.metadata = metadata }
     fun metadata(name: String, desc: String? = null) = apply { this.metadata = RuleMetadata(name, desc) }
 
-    // ARCH-UNSETTLED(score-effect, U-005): scoreEffectType() 目前只声明类型，是否应直接接受 ScoreEffect 对象以支持预设值 | next: 评估工厂模式下预设 ScoreEffect 的需求场景
-    fun scoreEffectType(type: ScoreEffectType) = apply { this.scoreEffectType = type }
+    fun defaultScoreEffect(effect: ScoreEffect) = apply { this.defaultScoreEffect = effect }
 
     fun extraField(spec: FieldSpec) = apply {
         extraFields.add { listOf(spec) }
@@ -57,7 +61,7 @@ class RuleBuilder<T : Any>(
             metadata = metadata,
             parameterType = parameterType,
             ruleFactory = factory,
-            scoreEffectType = scoreEffectType,
+            defaultScoreEffect = defaultScoreEffect,
             // [完全延迟解析]：所有字段的反射在前端拉取表单时才真正执行
             lazyFieldsResolver = {
                 FieldParser.parse(parameterType) + snapshot.flatMap { it() }

@@ -34,6 +34,7 @@ fun createTreeConfigMapper(): ObjectMapper {
                 NamedType(lin.rule.tree.RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef"),
                 NamedType(lin.rule.tree.RuleLeafConfig::class.java, "RULE"),
                 NamedType(lin.rule.tree.OrthogonalRuleLeafConfig::class.java, "ORTHOGONAL_RULE"),
+                NamedType(lin.rule.tree.OrthogonalConditionLeafConfig::class.java, "ORTHOGONAL_CONDITION"),
                 NamedType(lin.rule.tree.ConditionLeafConfig::class.java, "CONDITION"),
                 NamedType(lin.rule.tree.ConditionTreeLeafConfig::class.java, "CONDITION_TREE")
             )
@@ -144,7 +145,7 @@ abstract class RulePayloadMixin
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.EXISTING_PROPERTY,
-    property = "sourceType",
+    property = "kind",
     visible = true
 )
 @JsonIgnoreProperties(ignoreUnknown = true)

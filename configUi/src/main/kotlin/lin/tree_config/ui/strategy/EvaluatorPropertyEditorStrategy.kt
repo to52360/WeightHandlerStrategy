@@ -1,13 +1,12 @@
 package lin.tree_config.ui.strategy
 
-import javafx.geometry.Pos
-import javafx.scene.control.*
+import javafx.scene.control.ComboBox
+import javafx.scene.control.Label
+import javafx.scene.control.ListCell
+import javafx.scene.control.Separator
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
-import lin.condition_tree.ui.components.OrthogonalConditionDialog
-import lin.rule.condition.ConditionPayload
-import lin.rule.parse.FieldSpec
 import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
@@ -15,7 +14,9 @@ import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.ui.DynamicFieldForm
 import lin.tree_config.ui.LogicNodeType
 import lin.tree_config.ui.LogicNodeWrapper
-import lin.tree_config.ui.components.OrthogonalRuleDialog
+import lin.tree_config.ui.strategy.editors.DynamicFormLeafEditor
+import lin.tree_config.ui.strategy.editors.OrthogonalConditionLeafEditor
+import lin.tree_config.ui.strategy.editors.OrthogonalRuleLeafEditor
 import lin.ui.components.PropertyEditorStrategy
 
 class EvaluatorPropertyEditorStrategy(
@@ -25,6 +26,15 @@ class EvaluatorPropertyEditorStrategy(
 ) : PropertyEditorStrategy<EvaluatorPayload> {
 
     private val dynamicFieldForm by lazy { DynamicFieldForm() }
+
+    private val editorRegistry = LeafEditorRegistry().apply {
+        register(EvaluatorLeafKind.Condition.Orthogonal, OrthogonalConditionLeafEditor())
+        register(EvaluatorLeafKind.Rule.Orthogonal, OrthogonalRuleLeafEditor())
+        val dynamicEditor = DynamicFormLeafEditor()
+        register(EvaluatorLeafKind.Rule.Coded, dynamicEditor)
+        register(EvaluatorLeafKind.Condition.Plain, dynamicEditor)
+        register(EvaluatorLeafKind.Condition.Tree, dynamicEditor)
+    }
 
     override fun canEdit(type: LogicNodeType): Boolean {
         return type == LogicNodeType.LEAF || type == LogicNodeType.BRANCH
@@ -46,14 +56,12 @@ class EvaluatorPropertyEditorStrategy(
 
         val allLeafItems = loadLeafUiItems()
 
-        val categoryCombo = ComboBox<EvaluatorLeafSourceType>().apply {
+        val categoryCombo = ComboBox<EvaluatorLeafCategory>().apply {
             maxWidth = Double.MAX_VALUE
-            val categories = if (isBranch) {
-                listOf(EvaluatorLeafSourceType.CONDITION, EvaluatorLeafSourceType.CONDITION_TREE)
-            } else {
-                EvaluatorLeafSourceType.values().toList()
-            }
-            items.addAll(categories)
+            items.addAll(
+                if (isBranch) listOf(EvaluatorLeafCategory.CONDITION)
+                else EvaluatorLeafCategory.entries.toList()
+            )
             setCellFactory { createCategoryCell() }
             buttonCell = createCategoryCell()
         }
@@ -64,13 +72,13 @@ class EvaluatorPropertyEditorStrategy(
             buttonCell = createLeafItemCell()
         }
 
-        // 联动逻辑：切换分类时，重新填充具体项下拉框，并恢复或默认选中
+        // 联动逻辑：切换分类时重新填充具体项
         categoryCombo.selectionModel.selectedItemProperty().addListener { _, _, newCategory ->
             leafSourceCombo.items.clear()
             if (newCategory != null) {
-                val filtered = allLeafItems.filter { it.sourceType == newCategory }
+                val filtered = allLeafItems.filter { it.kind.category == newCategory }
                 leafSourceCombo.items.addAll(filtered)
-                val toSelect = if (existing != null && existing.sourceType == newCategory) {
+                val toSelect = if (existing != null && existing.kind.category == newCategory) {
                     filtered.firstOrNull { it.sourceId == existing.sourceId }
                 } else {
                     null
@@ -84,190 +92,53 @@ class EvaluatorPropertyEditorStrategy(
             }
         }
 
-        // 初始化选中分类（会触发联动填充并选中 leafSourceCombo）
-        val initialCategory =
-            existing?.sourceType ?: if (isBranch) EvaluatorLeafSourceType.CONDITION else EvaluatorLeafSourceType.RULE
+        // 初始化选中分类
+        val initialCategory = existing?.kind?.category
+            ?: if (isBranch) EvaluatorLeafCategory.CONDITION else EvaluatorLeafCategory.RULE
         categoryCombo.selectionModel.select(initialCategory)
 
         val dynamicFormArea = VBox(8.0)
 
-        // 联动渲染函数
+        // 联动渲染函数（通过编辑器注册表分发）
         fun renderEditor(selectedLeaf: EvaluatorLeafMeta) {
             dynamicFormArea.children.clear()
-            val currentConfig = leafConfigs[nodeId]
-            val currentArgs = currentConfig?.args?.toMutableMap() ?: mutableMapOf()
+            val ctx = LeafEditContext(
+                nodeId = nodeId,
+                leafConfigs = leafConfigs,
+                selectedLeaf = selectedLeaf,
+                isBranch = isBranch,
+                onChanged = onChanged,
+                dynamicFieldForm = dynamicFieldForm,
+                scoreOperatorRegistry = scoreOperatorRegistry
+            )
+            try {
+                val editor = editorRegistry.editorFor(selectedLeaf.kind)
+                dynamicFormArea.children.add(editor.render(ctx))
+            } catch (e: Exception) {
+                dynamicFormArea.children.add(Label("编辑器不可用: ${e.message}").apply {
+                    style = "-fx-text-fill: red;"
+                })
+            }
 
-            when {
-                // 情景一：正交规则
-                selectedLeaf.sourceType == EvaluatorLeafSourceType.ORTHOGONAL_RULE -> {
-                    val btn = Button("编辑正交规则配置...").apply { maxWidth = Double.MAX_VALUE }
-                    val summaryLabel = Label(
-                        (currentConfig as? OrthogonalRuleLeafConfig)?.scoreEffect?.let { "已配置评分，守卫: ${if (currentConfig.guardCondition != null) "有" else "无"}" }
-                            ?: "未配置正交规则"
-                    ).apply {
-                        style =
-                            if ((currentConfig as? OrthogonalRuleLeafConfig)?.scoreEffect != null) "-fx-text-fill: #333;" else "-fx-text-fill: #888; -fx-font-style: italic;"
-                    }
-
-                    btn.setOnAction {
-                        val dialog = OrthogonalRuleDialog(currentConfig as? OrthogonalRuleLeafConfig)
-                        val res = dialog.showAndWait()
-                        if (res.isPresent) {
-                            val newConfig = res.get()
-                            val savedConfig = newConfig.copy(nodeId = nodeId)
-                            leafConfigs[nodeId] = savedConfig
-                            summaryLabel.text =
-                                "已配置评分，守卫: ${if (savedConfig.guardCondition != null) "有" else "无"}"
-                            summaryLabel.style = "-fx-text-fill: #333;"
-                            onChanged()
-                        }
-                    }
-                    dynamicFormArea.children.addAll(btn, summaryLabel)
-                }
-
-                // 情景二：正交条件 (无论是 Branch 还是 Leaf)
-                selectedLeaf.sourceType == EvaluatorLeafSourceType.CONDITION && selectedLeaf.sourceId == "orthogonal_condition" -> {
-                    val btn = Button("配置正交条件详情...").apply { maxWidth = Double.MAX_VALUE }
-                    val currentOrtho =
-                        (currentConfig as? ConditionLeafConfig)?.guardCondition as? ConditionPayload.PipelineRef
-                    val summaryLabel = Label(
-                        currentOrtho?.let { "正交条件: ${it.sourceId} -> ${it.operatorId}" } ?: "未配置正交条件"
-                    ).apply {
-                        style =
-                            if (currentOrtho != null) "-fx-text-fill: #333;" else "-fx-text-fill: #888; -fx-font-style: italic;"
-                    }
-
-                    btn.setOnAction {
-                        val liveOrtho =
-                            (leafConfigs[nodeId] as? ConditionLeafConfig)?.guardCondition as? ConditionPayload.PipelineRef
-                        val dialog = OrthogonalConditionDialog(liveOrtho)
-                        val res = dialog.showAndWait()
-                        if (res.isPresent) {
-                            val orthoRef = res.get()
-                            val scoreEffect =
-                                (leafConfigs[nodeId] as? ConditionLeafConfig)?.scoreEffect ?: ScoreEffect.ConstantScore(
-                                    0.0
-                                )
-                            val newConfig = ConditionLeafConfig(
-                                nodeId = nodeId,
-                                sourceId = "orthogonal_condition",
-                                scoreEffect = scoreEffect,
-                                guardCondition = orthoRef
-                            )
-                            leafConfigs[nodeId] = newConfig
-                            summaryLabel.text = "正交条件: ${orthoRef.sourceId} -> ${orthoRef.operatorId}"
-                            summaryLabel.style = "-fx-text-fill: #333;"
-                            onChanged()
-                        }
-                    }
-                    dynamicFormArea.children.addAll(btn, summaryLabel)
-
-                    // 如果不是 Branch 节点，正交条件作为叶子时，支持输入分数 (ConstantScore)
-                    if (!isBranch) {
-                        dynamicFormArea.children.add(Separator())
-                        val specs = CONDITION_BUILT_IN_FIELDS
-                        val form = dynamicFieldForm.build(
-                            specs,
-                            { prop -> fieldValueOf(prop, leafConfigs[nodeId]) }) { prop, value ->
-                            currentArgs[prop] = value
-                            updateLeafConfig(nodeId, selectedLeaf, leafConfigs[nodeId], currentArgs)
-                            onChanged()
-                        }
-                        dynamicFormArea.children.add(form)
-                    }
-                }
-
-                // 情景三：常规 RULE/CONDITION/CONDITION_TREE
-                else -> {
-                    buildDynamicForm(
-                        dynamicFormArea,
-                        selectedLeaf,
-                        nodeId,
-                        leafSourceCombo,
-                        leafConfigs[nodeId],
-                        currentArgs,
-                        isBranch
-                    )
-
-                    // 🌟 对常规非 Branch 节点，额外在最下方展示“通用外挂守卫配置”区
-                    if (!isBranch) {
-                        dynamicFormArea.children.add(Separator())
-                        val guardBox = HBox(8.0).apply { alignment = Pos.CENTER_LEFT }
-                        val currentGuard = when (val c = leafConfigs[nodeId]) {
-                            is RuleLeafConfig -> c.guardCondition
-                            is OrthogonalRuleLeafConfig -> c.guardCondition
-                            is ConditionLeafConfig -> c.guardCondition
-                            else -> null
-                        } as? ConditionPayload.PipelineRef
-                        val guardSummary = Label(
-                            currentGuard?.let { "守卫: ${it.sourceId} -> ${it.operatorId}" } ?: "无通用守卫"
-                        ).apply {
-                            style =
-                                if (currentGuard != null) "-fx-text-fill: #333;" else "-fx-text-fill: #888; -fx-font-style: italic;"
-                        }
-
-                        val configGuardBtn = Button("配置通用守卫...")
-                        val clearGuardBtn = Button("清除").apply { isDisable = (currentGuard == null) }
-
-                        configGuardBtn.setOnAction {
-                            val liveGuard = when (val c = leafConfigs[nodeId]) {
-                                is RuleLeafConfig -> c.guardCondition
-                                is OrthogonalRuleLeafConfig -> c.guardCondition
-                                is ConditionLeafConfig -> c.guardCondition
-                                else -> null
-                            } as? ConditionPayload.PipelineRef
-                            val dialog = OrthogonalConditionDialog(liveGuard)
-                            val res = dialog.showAndWait()
-                            if (res.isPresent) {
-                                val guardRef = res.get()
-                                val oldConfig = leafConfigs[nodeId] ?: buildEvaluatorLeafConfig(
-                                    nodeId,
-                                    selectedLeaf,
-                                    null,
-                                    currentArgs
-                                )
-                                val newConfig = when (oldConfig) {
-                                    is RuleLeafConfig -> oldConfig.copy(guardCondition = guardRef)
-                                    is OrthogonalRuleLeafConfig -> oldConfig.copy(guardCondition = guardRef)
-                                    is ConditionLeafConfig -> oldConfig.copy(guardCondition = guardRef)
-                                    is ConditionTreeLeafConfig -> oldConfig
-                                }
-                                leafConfigs[nodeId] = newConfig
-                                guardSummary.text = "守卫: ${guardRef.sourceId} -> ${guardRef.operatorId}"
-                                guardSummary.style = "-fx-text-fill: #333;"
-                                clearGuardBtn.isDisable = false
-                                onChanged()
-                            }
-                        }
-
-                        clearGuardBtn.setOnAction {
-                            val oldConfig =
-                                leafConfigs[nodeId] ?: buildEvaluatorLeafConfig(nodeId, selectedLeaf, null, currentArgs)
-                            val newConfig = when (oldConfig) {
-                                is RuleLeafConfig -> oldConfig.copy(guardCondition = null)
-                                is OrthogonalRuleLeafConfig -> oldConfig.copy(guardCondition = null)
-                                is ConditionLeafConfig -> oldConfig.copy(guardCondition = null)
-                                is ConditionTreeLeafConfig -> oldConfig
-                            }
-                            leafConfigs[nodeId] = newConfig
-                            guardSummary.text = "无通用守卫"
-                            guardSummary.style = "-fx-text-fill: #888; -fx-font-style: italic;"
-                            clearGuardBtn.isDisable = true
-                            onChanged()
-                        }
-
-                        guardBox.children.addAll(Label("外挂守卫:"), configGuardBtn, clearGuardBtn, guardSummary)
-                        dynamicFormArea.children.add(guardBox)
-                    }
-                }
+            // 非 Branch 节点添加守卫未命中行为选择器
+            if (!isBranch) {
+                dynamicFormArea.children.add(Separator())
+                dynamicFormArea.children.add(
+                    buildGuardMissBehaviorRow(nodeId, leafConfigs, onChanged)
+                )
             }
         }
 
-        // 添加 leafSourceCombo 监听器以处理后续手动修改
+        // leafSourceCombo 切换监听
         leafSourceCombo.selectionModel.selectedItemProperty().addListener { _, _, selectedLeaf ->
             if (selectedLeaf != null) {
-                val currentArgs = leafConfigs[nodeId]?.args?.toMutableMap() ?: mutableMapOf()
-                updateLeafConfig(nodeId, selectedLeaf, leafConfigs[nodeId], currentArgs)
+                try {
+                    val args = leafConfigs[nodeId]?.args?.toMutableMap() ?: mutableMapOf()
+                    updateLeafConfig(nodeId, selectedLeaf, leafConfigs[nodeId], args)
+                } catch (_: Exception) {
+                    // 正交条件等需要用户额外配置 PipelineRef 的类型，
+                    // 由编辑器（如 OrthogonalConditionLeafEditor）接管初始构建
+                }
                 renderEditor(selectedLeaf)
                 onChanged()
             }
@@ -275,7 +146,7 @@ class EvaluatorPropertyEditorStrategy(
 
         panel.children.addAll(
             HBox(8.0).apply {
-                alignment = Pos.CENTER_LEFT
+                alignment = javafx.geometry.Pos.CENTER_LEFT
                 children.addAll(
                     Label("分类:"), categoryCombo,
                     Label("策略:"), leafSourceCombo
@@ -293,16 +164,16 @@ class EvaluatorPropertyEditorStrategy(
         }
     }
 
-    private fun createCategoryCell(): ListCell<EvaluatorLeafSourceType> {
-        return object : ListCell<EvaluatorLeafSourceType>() {
-            override fun updateItem(item: EvaluatorLeafSourceType?, empty: Boolean) {
+    // ===== private helpers =====
+
+    private fun createCategoryCell(): ListCell<EvaluatorLeafCategory> {
+        return object : ListCell<EvaluatorLeafCategory>() {
+            override fun updateItem(item: EvaluatorLeafCategory?, empty: Boolean) {
                 super.updateItem(item, empty)
                 text = if (empty || item == null) null
                 else when (item) {
-                    EvaluatorLeafSourceType.CONDITION -> "普通条件"
-                    EvaluatorLeafSourceType.CONDITION_TREE -> "条件树"
-                    EvaluatorLeafSourceType.RULE -> "硬编码规则"
-                    EvaluatorLeafSourceType.ORTHOGONAL_RULE -> "正交规则"
+                    EvaluatorLeafCategory.CONDITION -> "条件"
+                    EvaluatorLeafCategory.RULE -> "规则"
                 }
             }
         }
@@ -325,87 +196,6 @@ class EvaluatorPropertyEditorStrategy(
         return nodes
     }
 
-    private fun buildDynamicForm(
-        container: VBox,
-        uiItem: EvaluatorLeafMeta,
-        nodeId: String,
-        leafSourceCombo: ComboBox<EvaluatorLeafMeta>,
-        existing: EvaluatorLeafConfig?,
-        args: MutableMap<String, Any>,
-        isBranch: Boolean = false
-    ) {
-        container.children.clear()
-
-        val specs = computeFieldSpecs(uiItem, args, existing, isBranch)
-
-        val form = dynamicFieldForm.build(
-            specs = specs,
-            existingValues = { propertyName -> fieldValueOf(propertyName, existing) },
-        ) { propertyName, value ->
-            args[propertyName] = value
-            updateLeafConfig(nodeId, leafSourceCombo.value, leafConfigs[nodeId], args)
-
-            if (propertyName == EVALUATOR_LEAF_SCORE_OPERATOR_FIELD ||
-                propertyName == EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD
-            ) {
-                val updatedExisting = leafConfigs[nodeId]
-                buildDynamicForm(
-                    container, uiItem, nodeId, leafSourceCombo,
-                    updatedExisting, mutableMapOf(), isBranch
-                )
-            }
-        }
-
-        container.children.add(form)
-    }
-
-    private fun computeFieldSpecs(
-        uiItem: EvaluatorLeafMeta,
-        args: Map<String, Any>,
-        existing: EvaluatorLeafConfig?,
-        isBranch: Boolean
-    ): List<FieldSpec> {
-        if (isBranch) return uiItem.fields
-
-        val builtIn = uiItem.builtInFields.toMutableList()
-
-        val existingScoreEffect = when (existing) {
-            is OrthogonalRuleLeafConfig -> existing.scoreEffect
-            is ConditionLeafConfig -> existing.scoreEffect
-            is ConditionTreeLeafConfig -> existing.scoreEffect
-            else -> null
-        }
-
-        val effectType = args[EVALUATOR_LEAF_SCORE_EFFECT_TYPE_FIELD] as? String
-            ?: when (existingScoreEffect) {
-                is ScoreEffect.SourceScore -> SCORE_EFFECT_TYPE_SOURCE
-                else -> null
-            }
-
-        if (effectType == SCORE_EFFECT_TYPE_SOURCE) {
-            val sourceId = args[EVALUATOR_LEAF_SCORE_SOURCE_FIELD] as? String
-                ?: (existingScoreEffect as? ScoreEffect.SourceScore)?.sourceId
-            val operatorId = args[EVALUATOR_LEAF_SCORE_OPERATOR_FIELD] as? String
-                ?: (existingScoreEffect as? ScoreEffect.SourceScore)?.operatorId
-
-            val registry = org.koin.core.context.GlobalContext.get().get<lin.rule.condition.ConditionRegistry>()
-            val assembler = registry.pipelineAssembler
-            val dataSource = sourceId?.let { assembler?.findDataSource(it) }
-            if (dataSource != null) {
-                // Root DataSource has no parameter fields in the new pipeline design
-            }
-
-            val operator = operatorId?.let { scoreOperatorRegistry.find(it) }
-            if (operator != null) {
-                builtIn.addAll(operator.paramSpecs)
-            }
-        }
-
-        builtIn.addAll(uiItem.fields)
-        return builtIn
-    }
-
-
     private fun loadLeafUiItems(): List<EvaluatorLeafMeta> {
         return leafSourceCatalog.loadAll()
     }
@@ -420,8 +210,62 @@ class EvaluatorPropertyEditorStrategy(
         }
     }
 
-    private fun fieldValueOf(propertyName: String, existing: EvaluatorLeafConfig?): Any? {
-        return existing?.valueOfField(propertyName)
+    private fun buildGuardMissBehaviorRow(
+        nodeId: String,
+        leafConfigs: MutableMap<String, EvaluatorLeafConfig>,
+        onChanged: () -> Unit
+    ): HBox {
+        val behaviorCombo = ComboBox<GuardMissBehavior>().apply {
+            maxWidth = Double.MAX_VALUE
+            items.addAll(GuardMissBehavior.entries)
+            setCellFactory { createGuardMissBehaviorCell() }
+            buttonCell = createGuardMissBehaviorCell()
+        }
+
+        val currentBehavior = leafConfigs[nodeId]?.guardMissBehavior ?: GuardMissBehavior.SCORE
+        behaviorCombo.selectionModel.select(currentBehavior)
+
+        behaviorCombo.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
+            if (newValue != null) {
+                updateGuardMissBehavior(nodeId, newValue, leafConfigs)
+                onChanged()
+            }
+        }
+
+        return HBox(8.0).apply {
+            alignment = javafx.geometry.Pos.CENTER_LEFT
+            children.addAll(Label("条件不匹配时:"), behaviorCombo)
+            HBox.setHgrow(behaviorCombo, Priority.ALWAYS)
+        }
+    }
+
+    private fun updateGuardMissBehavior(
+        nodeId: String,
+        behavior: GuardMissBehavior,
+        leafConfigs: MutableMap<String, EvaluatorLeafConfig>
+    ) {
+        val existing = leafConfigs[nodeId] ?: return
+        val newConfig = when (existing) {
+            is RuleLeafConfig -> existing.copy(guardMissBehavior = behavior)
+            is OrthogonalRuleLeafConfig -> existing.copy(guardMissBehavior = behavior)
+            is ConditionLeafConfig -> existing.copy(guardMissBehavior = behavior)
+            is OrthogonalConditionLeafConfig -> existing.copy(guardMissBehavior = behavior)
+            is ConditionTreeLeafConfig -> existing.copy(guardMissBehavior = behavior)
+        }
+        leafConfigs[nodeId] = newConfig
+    }
+
+    private fun createGuardMissBehaviorCell(): ListCell<GuardMissBehavior> {
+        return object : ListCell<GuardMissBehavior>() {
+            override fun updateItem(item: GuardMissBehavior?, empty: Boolean) {
+                super.updateItem(item, empty)
+                text = if (empty || item == null) null
+                else when (item) {
+                    GuardMissBehavior.SCORE -> "给兜底分 (继续评估)"
+                    GuardMissBehavior.PRUNE -> "剪枝 (终止评估树)"
+                }
+            }
+        }
     }
 
     private fun updateLeafConfig(
@@ -431,12 +275,32 @@ class EvaluatorPropertyEditorStrategy(
         args: MutableMap<String, Any>
     ) {
         selectedLeaf ?: return
+        val existingScoreEffect = (existing as? Scoreable)?.scoreEffect
+        val scoreEffect = buildScoreEffect(args, existingScoreEffect, scoreOperatorRegistry)
+            ?: ScoreEffect.ConstantScore(0.0)
+        val extArgs = computeExtArgs(selectedLeaf, args, scoreEffect)
         val newConfig = buildEvaluatorLeafConfig(
             nodeId = nodeId,
             selectedLeaf = selectedLeaf,
             existing = existing,
-            formValues = args
+            scoreEffect = scoreEffect,
+            extArgs = extArgs
         )
         leafConfigs[nodeId] = newConfig
+    }
+
+    private fun computeExtArgs(
+        selectedLeaf: EvaluatorLeafMeta,
+        formValues: Map<String, Any>,
+        scoreEffect: ScoreEffect
+    ): Map<String, Any> {
+        val builtInFieldNames = selectedLeaf.builtInFields.map { it.propertyName }.toSet()
+        val operatorParamKeys = when (scoreEffect) {
+            is ScoreEffect.SourceScore -> scoreOperatorRegistry.find(scoreEffect.operatorId)
+                ?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
+
+            else -> emptySet()
+        }
+        return formValues.filterKeys { it !in builtInFieldNames && it !in operatorParamKeys }
     }
 }

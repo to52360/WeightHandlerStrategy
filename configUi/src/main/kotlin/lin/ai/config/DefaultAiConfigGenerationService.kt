@@ -13,11 +13,11 @@ class DefaultAiConfigGenerationService(
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
     private val treeConfigService: TreeConfigService
 ) : AiConfigGenerationService {
-
+    // todo 是否统一套元素数据
     override fun listEvaluatorLeafSources(): List<AiEvaluatorLeafSource> {
         return leafSourceCatalog.loadAll().map { item ->
             AiEvaluatorLeafSource(
-                sourceType = item.sourceType,
+                kind = item.kind,
                 sourceId = item.sourceId,
                 name = item.name,
                 desc = item.desc,
@@ -29,7 +29,7 @@ class DefaultAiConfigGenerationService(
     override fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport {
         val diagnostics = mutableListOf<ConfigDiagnostic>()
         val leafConfigs = request.config.leafConfigs
-        val knownSources = leafSourceCatalog.loadAll().associateBy { it.sourceType to it.sourceId }
+        val knownSources = leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
 
         collectReferencedLeafNodeIds(request.config.root).forEach { nodeId ->
             if (leafConfigs[nodeId] == null) {
@@ -71,14 +71,14 @@ class DefaultAiConfigGenerationService(
 
     private fun validateLeafConfig(
         leafConfig: EvaluatorLeafConfig,
-        knownSources: Map<Pair<EvaluatorLeafSourceType, String>, EvaluatorLeafMeta>,
+        knownSources: Map<Pair<EvaluatorLeafKind, String>, EvaluatorLeafMeta>,
         diagnostics: MutableList<ConfigDiagnostic>
     ) {
-        val meta = knownSources[leafConfig.sourceType to leafConfig.sourceId]
+        val meta = knownSources[leafConfig.kind to leafConfig.sourceId]
         if (meta == null) {
             diagnostics += ConfigDiagnostic(
                 code = "unknown_leaf_source",
-                message = "未知评估树叶子来源: type=${leafConfig.sourceType}, sourceId=${leafConfig.sourceId}",
+                message = "未知评估树叶子来源: type=${leafConfig.kind}, sourceId=${leafConfig.sourceId}",
                 path = "leafConfigs.${leafConfig.nodeId}.sourceId"
             )
             return

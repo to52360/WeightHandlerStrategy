@@ -9,6 +9,7 @@ import lin.rule.orthogonal.Operator
 import lin.rule.orthogonal.Transform
 import lin.tree_config.ui.DynamicFieldForm
 import lin.tree_config.ui.components.ConditionConfigPanel
+import lin.ui.components.TemplateNameDialog
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -106,14 +107,12 @@ class OrthogonalConditionDialog(
             }
         }
 
-        initialPayload?.let { loadPayload(it) }
-
-        // 数据源改变监听
+        // 数据源改变监听 (必须在初始加载前注册，否则 pipelineEditor.dataSourceType 不会被初始化)
         panel.dataSourceCombo.selectionModel.selectedItemProperty().addListener { _, _, newDs ->
-            panel.pipelineEditor.onDataSourceChanged(newDs?.outputType)
             panel.operatorCombo.items.clear()
             panel.paramsContainer.children.clear()
             uiState.argsMap.clear()
+            panel.pipelineEditor.onDataSourceChanged(newDs?.outputType)
         }
 
         // 算子改变监听
@@ -125,6 +124,9 @@ class OrthogonalConditionDialog(
             }
         }
 
+        // 初始加载 (必须在监听器注册之后)
+        initialPayload?.let { loadPayload(it) }
+
         // 模板载入逻辑
         fun reloadTemplates() {
             val templates = templateRepo.findAllByType("CONDITION")
@@ -132,15 +134,7 @@ class OrthogonalConditionDialog(
         }
         reloadTemplates()
 
-        panel.templateCombo.setCellFactory {
-            object : ListCell<lin.orthogonal_template.db.OrthogonalTemplateEntity>() {
-                override fun updateItem(item: lin.orthogonal_template.db.OrthogonalTemplateEntity?, empty: Boolean) {
-                    super.updateItem(item, empty)
-                    text = if (empty || item == null) null else "${item.name} (${item.description ?: "无描述"})"
-                }
-            }
-        }
-        panel.templateCombo.buttonCell = panel.templateCombo.cellFactory.call(null)
+        TemplateNameDialog.applyTemplateEntityCellFactory(panel.templateCombo)
 
         panel.templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
             if (template != null) {
@@ -164,26 +158,12 @@ class OrthogonalConditionDialog(
                 return@setOnAction
             }
 
-            val nameDialog = Dialog<Pair<String, String>>().apply {
-                title = "保存为正交条件模板"
-                headerText = "请输入模板的名称 and 描述"
-                val dialogPane = this.dialogPane
-                dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
-
-                val nameInput = TextField().apply { promptText = "模板名称 (例如: 己方手牌数量大于等于3)" }
-                val descInput = TextField().apply { promptText = "描述信息 (例如: 适用于快速铺场卡组)" }
-                dialogPane.content = VBox(8.0).apply {
-                    children.addAll(
-                        Label("模板名称:"), nameInput,
-                        Label("描述:"), descInput
-                    )
-                }
-                setResultConverter { buttonType ->
-                    if (buttonType == ButtonType.OK) {
-                        nameInput.text.trim() to descInput.text.trim()
-                    } else null
-                }
-            }
+            val nameDialog = TemplateNameDialog(
+                title = "保存为正交条件模板",
+                headerText = "请输入模板的名称和描述",
+                namePromptText = "模板名称 (例如: 己方手牌数量大于等于3)",
+                descPromptText = "描述信息 (例如: 适用于快速铺场卡组)"
+            )
 
             val res = nameDialog.showAndWait()
             if (res.isPresent) {

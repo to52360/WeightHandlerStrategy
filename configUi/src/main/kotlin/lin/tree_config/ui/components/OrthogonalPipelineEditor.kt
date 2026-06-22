@@ -19,7 +19,8 @@ class TransformRow(
     val container: VBox,
     val transformCombo: ComboBox<Transform<*, *>>,
     val argsContainer: VBox,
-    val args: MutableMap<String, Any> = mutableMapOf()
+    val args: MutableMap<String, Any> = mutableMapOf(),
+    var loadedTransform: Transform<*, *>? = null
 )
 
 class OrthogonalPipelineEditor(
@@ -93,21 +94,38 @@ class OrthogonalPipelineEditor(
                     row.transformCombo.isDisable = true
                     row.argsContainer.children.clear()
                     row.args.clear()
+                    row.loadedTransform = null
                     continue
                 }
 
                 val compatibleTransforms = allTransforms.filter { isCompatible(it.inputType, currentType!!) }
-                val selected = row.transformCombo.value
+                val selected = row.transformCombo.value ?: row.loadedTransform
                 row.transformCombo.items.setAll(compatibleTransforms)
                 row.transformCombo.isDisable = false
 
-                if (selected != null && compatibleTransforms.any { it.id == selected.id }) {
-                    row.transformCombo.selectionModel.select(selected)
-                    currentType = selected.outputType
+                val target = if (selected != null) {
+                    compatibleTransforms.firstOrNull { it.id == selected.id }
+                } else null
+
+                if (target != null) {
+                    row.transformCombo.selectionModel.select(target)
+                    row.loadedTransform = null
+                    currentType = target.outputType
+
+                    if (row.argsContainer.children.isEmpty() && target.fields.isNotEmpty()) {
+                        val form = dynamicFieldForm.build(
+                            specs = target.fields,
+                            existingValues = { prop -> row.args[prop] }
+                        ) { prop, value ->
+                            row.args[prop] = value
+                        }
+                        row.argsContainer.children.add(form)
+                    }
                 } else {
                     row.transformCombo.selectionModel.clearSelection()
                     row.argsContainer.children.clear()
                     row.args.clear()
+                    row.loadedTransform = null
                     currentType = null
                 }
             }
@@ -142,7 +160,8 @@ class OrthogonalPipelineEditor(
             container = rowContainer,
             transformCombo = transformCombo,
             argsContainer = argsContainer,
-            args = rowArgs
+            args = rowArgs,
+            loadedTransform = loadedTransform
         )
 
         val deleteBtn = Button("删除").apply {
@@ -160,22 +179,6 @@ class OrthogonalPipelineEditor(
         }
         topBar.children.addAll(indexLabel, transformCombo, deleteBtn)
         rowContainer.children.addAll(topBar, argsContainer)
-
-        if (loadedTransform != null) {
-            transformCombo.items.setAll(allTransforms)
-            transformCombo.selectionModel.select(loadedTransform)
-
-            val specs = loadedTransform.fields
-            if (specs.isNotEmpty()) {
-                val form = dynamicFieldForm.build(
-                    specs = specs,
-                    existingValues = { prop -> rowArgs[prop] }
-                ) { prop, value ->
-                    rowArgs[prop] = value
-                }
-                argsContainer.children.add(form)
-            }
-        }
 
         transformCombo.selectionModel.selectedItemProperty().addListener { _, _, newT ->
             if (updatingPipeline) return@addListener

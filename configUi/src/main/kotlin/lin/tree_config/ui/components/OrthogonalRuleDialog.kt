@@ -19,6 +19,7 @@ import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.OrthogonalRuleLeafConfig
 import lin.tree_config.ui.DynamicFieldForm
+import lin.ui.components.TemplateNameDialog
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.*
@@ -117,10 +118,10 @@ class OrthogonalRuleDialog(
 
         // 3.2 右侧 Score 联动监听
         scorePanel.sourceDsCombo.selectionModel.selectedItemProperty().addListener { _, _, newDs ->
-            scorePanel.scorePipelineEditor.onDataSourceChanged(newDs?.outputType)
             scorePanel.sourceOpCombo.items.clear()
             scorePanel.sourceOpArgsContainer.children.clear()
             uiState.scoreArgsMap.clear()
+            scorePanel.scorePipelineEditor.onDataSourceChanged(newDs?.outputType)
         }
 
         scorePanel.sourceOpCombo.selectionModel.selectedItemProperty().addListener { _, _, newOp ->
@@ -184,48 +185,31 @@ class OrthogonalRuleDialog(
             rebuildGuardDetail(newType)
         }
 
-        fun rebuildScoreDetail(newType: String?) {
-            scorePanel.showType(newType ?: "固定分")
+        // 仅处理 SourceScore — 正交规则不包含 ConstantScore
+        fun loadScoreDetail(existing: ScoreEffect?) {
             uiState.scoreArgsMap.clear()
-            when (newType) {
-                "固定分" -> {
-                    val existing = uiState.currentScoreEffect
-                    if (existing is ScoreEffect.ConstantScore) {
-                        scorePanel.constantValField.text = existing.value.toString()
-                        scorePanel.constantMissField.text = existing.missValue.toString()
-                    }
-                }
+            if (existing is ScoreEffect.SourceScore) {
+                val ds = dataContext.dataSources.firstOrNull { it.id == existing.sourceId }
+                if (ds != null) {
+                    scorePanel.sourceDsCombo.selectionModel.select(ds)
+                    scorePanel.scorePipelineEditor.loadTransforms(existing.transforms)
 
-                "数据源评分" -> {
-                    val existing = uiState.currentScoreEffect
-                    if (existing is ScoreEffect.SourceScore) {
-                        val ds = dataContext.dataSources.firstOrNull { it.id == existing.sourceId }
-                        if (ds != null) {
-                            scorePanel.sourceDsCombo.selectionModel.select(ds)
-                            scorePanel.scorePipelineEditor.loadTransforms(existing.transforms)
-
-                            val op = dataContext.scoreOperators.firstOrNull { it.id == existing.operatorId }
-                            if (op != null) {
-                                scorePanel.sourceOpCombo.selectionModel.select(op)
-                                uiState.scoreArgsMap.putAll(existing.operatorArgs)
-                                scorePanel.sourceOpArgsContainer.children.clear()
-                                val specs = op.paramSpecs
-                                val form = dynamicFieldForm.build(
-                                    specs,
-                                    { propertyName -> uiState.scoreArgsMap[propertyName] }) { prop, value ->
-                                    uiState.scoreArgsMap[prop] = value
-                                }
-                                scorePanel.sourceOpArgsContainer.children.add(form)
-                            }
+                    val op = dataContext.scoreOperators.firstOrNull { it.id == existing.operatorId }
+                    if (op != null) {
+                        scorePanel.sourceOpCombo.selectionModel.select(op)
+                        uiState.scoreArgsMap.putAll(existing.operatorArgs)
+                        scorePanel.sourceOpArgsContainer.children.clear()
+                        val specs = op.paramSpecs
+                        val form = dynamicFieldForm.build(
+                            specs,
+                            { propertyName -> uiState.scoreArgsMap[propertyName] }) { prop, value ->
+                            uiState.scoreArgsMap[prop] = value
                         }
-                        scorePanel.sourceMissField.text = existing.missValue.toString()
+                        scorePanel.sourceOpArgsContainer.children.add(form)
                     }
                 }
+                scorePanel.sourceMissField.text = existing.missValue.toString()
             }
-        }
-
-        scorePanel.typeCombo.selectionModel.selectedItemProperty().addListener { _, _, newType ->
-            rebuildScoreDetail(newType)
         }
 
         // ==========================================
@@ -246,19 +230,12 @@ class OrthogonalRuleDialog(
             guardPanel.typeCombo.selectionModel.select(guardType)
             rebuildGuardDetail(guardType)
 
-            val scoreType = uiState.currentScoreEffect?.let { effect ->
-                when (effect) {
-                    is ScoreEffect.ConstantScore -> "固定分"
-                    is ScoreEffect.SourceScore -> "数据源评分"
-                }
-            } ?: "固定分"
-            scorePanel.typeCombo.selectionModel.select(scoreType)
-            rebuildScoreDetail(scoreType)
+            loadScoreDetail(uiState.currentScoreEffect)
         }
 
         initialConfig?.let { loadConfig(it) } ?: run {
             rebuildGuardDetail("无 (Always True)")
-            rebuildScoreDetail("固定分")
+            loadScoreDetail(null)
         }
 
         // ==========================================
@@ -291,29 +268,21 @@ class OrthogonalRuleDialog(
                 else -> null
             }
 
-            val finalScoreEffect = when (scorePanel.typeCombo.value) {
-                "固定分" -> {
-                    ScoreEffect.ConstantScore(
-                        value = scorePanel.constantValField.text.toDoubleOrNull() ?: 0.0,
-                        missValue = scorePanel.constantMissField.text.toDoubleOrNull() ?: 0.0
+            val finalScoreEffect = run {
+                val ds = scorePanel.sourceDsCombo.value
+                val op = scorePanel.sourceOpCombo.value
+                if (ds != null && op != null) {
+                    ScoreEffect.SourceScore(
+                        sourceId = ds.id,
+                        transforms = scorePanel.scorePipelineEditor.getTransformCalls(),
+                        operatorId = op.id,
+                        operatorArgs = HashMap(uiState.scoreArgsMap),
+                        missValue = scorePanel.sourceMissField.text.toDoubleOrNull() ?: 0.0
                     )
+                } else {
+                    // 未完整配置时使用空 SourceScore，OK 按钮验证会拦截
+                    ScoreEffect.SourceScore("", emptyList(), "", emptyMap(), 0.0)
                 }
-
-                "数据源评分" -> {
-                    val ds = scorePanel.sourceDsCombo.value
-                    val op = scorePanel.sourceOpCombo.value
-                    if (ds != null && op != null) {
-                        ScoreEffect.SourceScore(
-                            sourceId = ds.id,
-                            transforms = scorePanel.scorePipelineEditor.getTransformCalls(),
-                            operatorId = op.id,
-                            operatorArgs = HashMap(uiState.scoreArgsMap),
-                            missValue = scorePanel.sourceMissField.text.toDoubleOrNull() ?: 0.0
-                        )
-                    } else ScoreEffect.ConstantScore(0.0)
-                }
-
-                else -> ScoreEffect.ConstantScore(0.0)
             }
 
             return OrthogonalRuleLeafConfig(
@@ -346,15 +315,7 @@ class OrthogonalRuleDialog(
         }
         reloadTemplates()
 
-        templateCombo.setCellFactory {
-            object : ListCell<lin.orthogonal_template.db.OrthogonalTemplateEntity>() {
-                override fun updateItem(item: lin.orthogonal_template.db.OrthogonalTemplateEntity?, empty: Boolean) {
-                    super.updateItem(item, empty)
-                    text = if (empty || item == null) null else "${item.name} (${item.description ?: "无描述"})"
-                }
-            }
-        }
-        templateCombo.buttonCell = templateCombo.cellFactory.call(null)
+        TemplateNameDialog.applyTemplateEntityCellFactory(templateCombo)
 
         templateCombo.selectionModel.selectedItemProperty().addListener { _, _, template ->
             if (template != null) {
@@ -381,26 +342,12 @@ class OrthogonalRuleDialog(
                     return@setOnAction
                 }
 
-                val nameDialog = Dialog<Pair<String, String>>().apply {
-                    title = "保存为正交规则模板"
-                    headerText = "请输入模板的名称和描述"
-                    val dialogPane = this.dialogPane
-                    dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
-
-                    val nameInput = TextField().apply { promptText = "模板名称 (例如: 固定10分规则加手牌守卫)" }
-                    val descInput = TextField().apply { promptText = "描述信息" }
-                    dialogPane.content = VBox(8.0).apply {
-                        children.addAll(
-                            Label("模板名称:"), nameInput,
-                            Label("描述:"), descInput
-                        )
-                    }
-                    setResultConverter { buttonType ->
-                        if (buttonType == ButtonType.OK) {
-                            nameInput.text.trim() to descInput.text.trim()
-                        } else null
-                    }
-                }
+                val nameDialog = TemplateNameDialog(
+                    title = "保存为正交规则模板",
+                    headerText = "请输入模板的名称和描述",
+                    namePromptText = "模板名称 (例如: 固定10分规则加手牌守卫)",
+                    descPromptText = "描述信息"
+                )
 
                 val res = nameDialog.showAndWait()
                 if (res.isPresent) {

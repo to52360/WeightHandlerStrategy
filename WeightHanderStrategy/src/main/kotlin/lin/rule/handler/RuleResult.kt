@@ -4,11 +4,7 @@ package lin.rule.handler
  * 规则执行后产生的结果意图
  */
 sealed class RuleResult {
-    // 一票否决/剪枝
-    //todo 评分加入控制,ui还有给于表达控制的字段
-    object Prune : RuleResult()
-
-    // 继续/评估完成
+    // 继续/评估完成（rule 工厂只能返回此类型，剪枝职责已移至守卫侧 EvalOutcome.Pruned）
     data class Continue(
         val score: Double,
         val modifyCard: ComboCardAction? = null

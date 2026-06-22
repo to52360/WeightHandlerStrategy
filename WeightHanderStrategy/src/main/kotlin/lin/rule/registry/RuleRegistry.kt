@@ -6,8 +6,8 @@ import lin.rule.build.RuleRegistration
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.mapToRuleArgs
 import lin.rule.tree.EvaluatorLeafConfig
+import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorLeafMeta
-import lin.rule.tree.EvaluatorLeafSourceType
 import lin.rule.tree.scoreEffectFieldsFor
 import lin.serviceLoader.provider.RuleRegistrationProvider
 
@@ -66,11 +66,11 @@ class RuleRegistry(
     fun leafMetas(): List<EvaluatorLeafMeta> {
         return registrationsById.values.map { reg ->
             EvaluatorLeafMeta(
-                sourceType = EvaluatorLeafSourceType.RULE,
+                kind = EvaluatorLeafKind.Rule.Coded,
                 sourceId = reg.ruleId,
                 name = reg.metadata?.name,
                 desc = reg.metadata?.desc,
-                builtInFields = scoreEffectFieldsFor(reg.scoreEffectType),
+                builtInFields = scoreEffectFieldsFor(reg.defaultScoreEffect),
                 fields = reg.lazyFieldsResolver()
             )
         }

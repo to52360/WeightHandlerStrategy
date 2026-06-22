@@ -1,6 +1,6 @@
 package lin.rule.tree
 
-import lin.rule.build.RuleLogic
+import lin.rule.build.LeafLogic
 import lin.rule.condition.ConditionLogic
 
 data class EvaluatorTreeInstance(
@@ -11,7 +11,7 @@ data class EvaluatorTreeInstance(
 sealed interface EvaluatorInstanceNode {
     data class RuleNode(
         val nodeId: String,
-        val ruleLogic: RuleLogic
+        val leafLogic: LeafLogic
     ) : EvaluatorInstanceNode
 
     data class AndNode(val children: List<EvaluatorInstanceNode>) : EvaluatorInstanceNode
@@ -29,10 +29,10 @@ sealed interface EvaluatorInstanceNode {
  * 函数式架构核心：
  * 把对依赖的解析交还给顶层，本文件只提供纯粹的转换逻辑（从 JSON 数据转换为运行时对象）。
  *
- * @param leafBuilder 高阶函数，表示如何将一个具体的叶子配置转为真正的可执行 RuleLogic 闭包
+ * @param leafBuilder 高阶函数，表示如何将一个具体的叶子配置转为真正的可执行 LeafLogic 闭包
  */
 fun EvaluatorTreeConfig.instantiate(
-    leafBuilder: (EvaluatorLeafConfig) -> RuleLogic,
+    leafBuilder: (EvaluatorLeafConfig) -> LeafLogic,
     branchConditionBuilder: (EvaluatorLeafConfig) -> ConditionLogic
 ): EvaluatorTreeInstance {
     fun instantiateNode(node: EvaluatorNode): EvaluatorInstanceNode {
@@ -44,7 +44,7 @@ fun EvaluatorTreeConfig.instantiate(
                             ?: error("EvaluatorLeafConfig not found for nodeId=${payload.nodeId}")
                         EvaluatorInstanceNode.RuleNode(
                             nodeId = payload.nodeId,
-                            ruleLogic = leafBuilder(leafConfig)
+                            leafLogic = leafBuilder(leafConfig)
                         )
                     }
 

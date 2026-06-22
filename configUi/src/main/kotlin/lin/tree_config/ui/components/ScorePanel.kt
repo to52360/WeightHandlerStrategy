@@ -1,12 +1,14 @@
 package lin.tree_config.ui.components
 
 import javafx.geometry.Insets
-import javafx.geometry.Pos
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
 import javafx.scene.control.ListCell
 import javafx.scene.control.TextField
-import javafx.scene.layout.*
+import javafx.scene.layout.ColumnConstraints
+import javafx.scene.layout.GridPane
+import javafx.scene.layout.Priority
+import javafx.scene.layout.VBox
 import lin.rule.orthogonal.DataSource
 import lin.rule.orthogonal.Transform
 import lin.rule.score.ScoreOperator
@@ -14,6 +16,10 @@ import lin.tree_config.ui.DynamicFieldForm
 import kotlin.reflect.KType
 import kotlin.reflect.full.isSubtypeOf
 
+/**
+ * 正交规则的评分面板 — 仅支持数据源评分 (SourceScore)。
+ * 固定分 (ConstantScore) 不属于正交规则的职责范围，已于从 ScorePanel 中移除。
+ */
 class ScorePanel(
     dataSources: List<DataSource<*>>,
     allTransforms: List<Transform<*, *>>,
@@ -25,34 +31,6 @@ class ScorePanel(
         style = "-fx-border-color: #ddd; -fx-border-radius: 4px; -fx-background-color: #fafafa;"
     }
 
-    val typeCombo = ComboBox<String>().apply {
-        items.addAll("固定分", "数据源评分")
-        selectionModel.selectFirst()
-        maxWidth = Double.MAX_VALUE
-    }
-
-    val detailArea = VBox(8.0)
-
-    // 固定评分控件与布局
-    val constantValField = TextField("0.0")
-    val constantMissField = TextField("0.0")
-    private val constantGrid = GridPane().apply {
-        hgap = 8.0; vgap = 8.0
-        columnConstraints.addAll(
-            ColumnConstraints().apply {
-                hgrow = Priority.NEVER
-                prefWidth = 100.0
-                minWidth = 100.0
-            },
-            ColumnConstraints().apply { hgrow = Priority.ALWAYS }
-        )
-        add(Label("命中分数:"), 0, 0)
-        add(constantValField, 1, 0)
-        add(Label("未命中分数:"), 0, 1)
-        add(constantMissField, 1, 1)
-    }
-
-    // 数据源评分控件与布局
     val sourceDsCombo = ComboBox<DataSource<*>>().apply {
         items.addAll(dataSources)
         maxWidth = Double.MAX_VALUE
@@ -111,19 +89,10 @@ class ScorePanel(
     }
 
     init {
-        root.children.add(Label("评分效应 (ScoreEffect)").apply {
+        root.children.add(Label("评分效应 (SourceScore)").apply {
             style = "-fx-font-weight: bold; -fx-font-size: 14px;"
         })
-        root.children.add(HBox(8.0, Label("评分类型:"), typeCombo).apply { alignment = Pos.CENTER_LEFT })
-        root.children.add(detailArea)
-    }
-
-    fun showType(type: String) {
-        detailArea.children.clear()
-        when (type) {
-            "固定分" -> detailArea.children.add(constantGrid)
-            "数据源评分" -> detailArea.children.add(sourceGrid)
-        }
+        root.children.add(sourceGrid)
     }
 
     private fun createDataSourceCell(): ListCell<DataSource<*>> {

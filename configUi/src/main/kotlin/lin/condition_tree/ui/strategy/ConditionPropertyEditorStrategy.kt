@@ -18,13 +18,6 @@ class ConditionPropertyEditorStrategy(
     private val conditionRegistry: ConditionRegistry
 ) : PropertyEditorStrategy<ConditionPayload> {
 
-    private val orthoMeta = ConditionMeta(
-        conditionId = "orthogonal_condition",
-        name = "正交条件 (配置型)",
-        desc = "使用数据源与算子灵活组合的配置型条件",
-        fields = emptyList()
-    )
-
     override fun canEdit(type: LogicNodeType): Boolean {
         return type == LogicNodeType.LEAF || type == LogicNodeType.BRANCH
     }
@@ -34,101 +27,141 @@ class ConditionPropertyEditorStrategy(
 
         val payload = wrapper.payload
         val isOrtho = payload is ConditionPayload.PipelineRef
-        val conditionId =
-            if (isOrtho) "orthogonal_condition" else (payload as? ConditionPayload.ConditionRef)?.conditionId
         val refId = payload?.refId
         val isBranch = wrapper.type == LogicNodeType.BRANCH
 
-        panel.children.addAll(buildHeader(conditionId, refId, isBranch))
+        panel.children.addAll(buildHeader(isOrtho, refId, isBranch))
         panel.children.add(Separator())
 
-        val allConditions = listOf(orthoMeta) + conditionRegistry.metadataList()
-        val conditionCombo = createConditionCombo(allConditions, conditionId)
+        // 类型切换区（正交管道型 / 编码硬编码型）
+        val typeToggleBox = HBox(8.0).apply { alignment = Pos.CENTER_LEFT; maxWidth = Double.MAX_VALUE }
+        val typeLabel = Label(if (isOrtho) "条件类型: 正交(管道型)" else "条件类型: 编码(硬编码型)")
+        val toggleBtn = Button(if (isOrtho) "切换为编码条件" else "切换为正交条件")
+        typeToggleBox.children.addAll(typeLabel, toggleBtn)
+        panel.children.add(typeToggleBox)
 
         val detailContainer = VBox(8.0)
-        panel.children.addAll(
-            HBox(8.0).apply {
-                alignment = Pos.CENTER_LEFT
-                children.addAll(Label("条件:"), conditionCombo)
-                HBox.setHgrow(conditionCombo, Priority.ALWAYS)
-            },
-            detailContainer
-        )
+        panel.children.add(detailContainer)
 
-        // 渲染联动编辑区
-        fun renderDetail(selected: ConditionMeta) {
+        // 渲染联动编辑区（按 payload 类型而非字符串分发）
+        fun renderDetail() {
             detailContainer.children.clear()
-            if (selected.conditionId == "orthogonal_condition") {
-                val btn = Button("配置正交条件详情...")
-                val currentRef = wrapper.payload as? ConditionPayload.PipelineRef
-                val summaryLabel = Label(
-                    currentRef?.let { "已配置: ${it.sourceId} -> ${it.operatorId}" } ?: "未配置正交条件"
-                ).apply {
-                    style =
-                        if (currentRef != null) "-fx-text-fill: #333;" else "-fx-text-fill: #888; -fx-font-style: italic;"
-                }
-
-                btn.setOnAction {
-                    val dialog = OrthogonalConditionDialog(wrapper.payload as? ConditionPayload.PipelineRef)
-                    val res = dialog.showAndWait()
-                    if (res.isPresent) {
-                        wrapper.payload = res.get()
-                        summaryLabel.text = "已配置: ${res.get().sourceId} -> ${res.get().operatorId}"
-                        summaryLabel.style = "-fx-text-fill: #333;"
-                        onChanged()
-                    }
-                }
-                detailContainer.children.addAll(btn, summaryLabel)
+            if (isOrtho) {
+                renderOrthogonalDetail(detailContainer, wrapper, onChanged)
             } else {
-                // 普通条件在条件树编辑阶段没有参数输入，具体参数在评估树阶段作为 arguments 平铺渲染
-                detailContainer.children.add(Label("普通硬编码条件，可在引用该条件树的评估树叶子节点中统一配置参数。").apply {
-                    style = "-fx-text-fill: #888; -fx-font-size: 11px; -fx-font-style: italic;"
-                    isWrapText = true
-                })
+                renderCodedDetail(detailContainer, wrapper, onChanged)
             }
         }
 
+        toggleBtn.setOnAction {
+            if (isOrtho) {
+                // 正交 → 编码：切片到第一个注册条件
+                val firstCond = conditionRegistry.metadataList().firstOrNull()
+                val newRefId = generateUniqueRefId(firstCond?.conditionId ?: "unknown")
+                wrapper.payload = ConditionPayload.ConditionRef(
+                    conditionId = firstCond?.conditionId ?: "",
+                    refId = newRefId
+                )
+            } else {
+                // 编码 → 正交
+                wrapper.payload = ConditionPayload.PipelineRef(
+                    sourceId = "",
+                    transforms = emptyList(),
+                    operatorId = "",
+                    operatorArgs = emptyMap(),
+                    refId = "orthogonal_${UUID.randomUUID().toString().substring(0, 4)}"
+                )
+            }
+            onChanged()
+            // 重新渲染整个面板
+            panel.children.clear()
+            render(panel, wrapper, onChanged)
+        }
+
+        renderDetail()
+    }
+
+    private fun renderOrthogonalDetail(
+        container: VBox,
+        wrapper: LogicNodeWrapper<ConditionPayload>,
+        onChanged: () -> Unit
+    ) {
+        val btn = Button("配置正交条件详情...")
+        val currentRef = wrapper.payload as? ConditionPayload.PipelineRef
+        val summaryLabel = Label(
+            currentRef?.let { "已配置: ${it.sourceId} -> ${it.operatorId}" } ?: "未配置正交条件"
+        ).apply {
+            style = if (currentRef != null) "-fx-text-fill: #333;" else "-fx-text-fill: #888; -fx-font-style: italic;"
+        }
+
+        btn.setOnAction {
+            val dialog = OrthogonalConditionDialog(wrapper.payload as? ConditionPayload.PipelineRef)
+            val res = dialog.showAndWait()
+            if (res.isPresent) {
+                wrapper.payload = res.get()
+                summaryLabel.text = "已配置: ${res.get().sourceId} -> ${res.get().operatorId}"
+                summaryLabel.style = "-fx-text-fill: #333;"
+                onChanged()
+            }
+        }
+        container.children.addAll(btn, summaryLabel)
+    }
+
+    private fun renderCodedDetail(
+        container: VBox,
+        wrapper: LogicNodeWrapper<ConditionPayload>,
+        onChanged: () -> Unit
+    ) {
+        val allConditions = conditionRegistry.metadataList()
+        val currentConditionId = (wrapper.payload as? ConditionPayload.ConditionRef)?.conditionId
+        val refId = wrapper.payload?.refId
+
+        val conditionCombo = ComboBox<ConditionMeta>().apply {
+            maxWidth = Double.MAX_VALUE
+            items.addAll(allConditions)
+            setCellFactory { createConditionCell() }
+            buttonCell = createConditionCell()
+            allConditions.firstOrNull { it.conditionId == currentConditionId }
+                ?.let { selectionModel.select(it) }
+        }
+
         conditionCombo.selectionModel.selectedItemProperty().addListener { _, _, selectedCondition ->
-            if (selectedCondition != null) {
-                if (selectedCondition.conditionId == "orthogonal_condition") {
-                    val currentPayload = wrapper.payload
-                    if (currentPayload !is ConditionPayload.PipelineRef) {
-                        wrapper.payload = ConditionPayload.PipelineRef(
-                            sourceId = "",
-                            transforms = emptyList(),
-                            operatorId = "",
-                            operatorArgs = emptyMap(),
-                            refId = "orthogonal_${UUID.randomUUID().toString().substring(0, 4)}"
-                        )
-                    }
+            if (selectedCondition != null && selectedCondition.conditionId != currentConditionId) {
+                val newRefId = if (currentConditionId == selectedCondition.conditionId) {
+                    refId ?: selectedCondition.conditionId
                 } else {
-                    val newRefId = if (conditionId == selectedCondition.conditionId) {
-                        refId ?: selectedCondition.conditionId
-                    } else {
-                        generateUniqueRefId(selectedCondition.conditionId)
-                    }
-                    wrapper.payload = ConditionPayload.ConditionRef(
-                        conditionId = selectedCondition.conditionId,
-                        refId = newRefId
-                    )
+                    generateUniqueRefId(selectedCondition.conditionId)
                 }
-                renderDetail(selectedCondition)
+                wrapper.payload = ConditionPayload.ConditionRef(
+                    conditionId = selectedCondition.conditionId,
+                    refId = newRefId
+                )
                 onChanged()
             }
         }
 
-        conditionCombo.value?.let { renderDetail(it) }
+        container.children.addAll(
+            HBox(8.0).apply {
+                alignment = Pos.CENTER_LEFT
+                children.addAll(Label("编码条件:"), conditionCombo)
+                HBox.setHgrow(conditionCombo, Priority.ALWAYS)
+            },
+            Label("普通硬编码条件，可在引用该条件树的评估树叶子节点中统一配置参数。").apply {
+                style = "-fx-text-fill: #888; -fx-font-size: 11px; -fx-font-style: italic;"
+                isWrapText = true
+            }
+        )
     }
 
     private fun generateUniqueRefId(conditionId: String): String {
         return "${conditionId}_${System.currentTimeMillis().toString(16).takeLast(4)}"
     }
 
-    private fun buildHeader(conditionId: String?, refId: String?, isBranch: Boolean): List<javafx.scene.Node> {
+    private fun buildHeader(isOrtho: Boolean, refId: String?, isBranch: Boolean): List<javafx.scene.Node> {
         val typeLabel = if (isBranch) "Branch 节点" else "条件节点"
-        val displayCondId = if (conditionId == "orthogonal_condition") "配置型正交条件" else (conditionId ?: "<未命名>")
+        val displayType = if (isOrtho) "配置型正交条件" else "编码型条件"
         val nodes = mutableListOf<javafx.scene.Node>(
-            Label("$typeLabel (refId: ${refId ?: "<未命名>"}, 类型: $displayCondId)").apply {
+            Label("$typeLabel (refId: ${refId ?: "<未命名>"}, 类型: $displayType)").apply {
                 style = "-fx-font-weight: bold;"
             }
         )
@@ -140,20 +173,6 @@ class ConditionPropertyEditorStrategy(
             )
         }
         return nodes
-    }
-
-    private fun createConditionCombo(
-        allConditions: List<ConditionMeta>,
-        selectedId: String?
-    ): ComboBox<ConditionMeta> {
-        return ComboBox<ConditionMeta>().apply {
-            maxWidth = Double.MAX_VALUE
-            items.addAll(allConditions)
-            setCellFactory { createConditionCell() }
-            buttonCell = createConditionCell()
-            allConditions.firstOrNull { it.conditionId == selectedId }
-                ?.let { selectionModel.select(it) }
-        }
     }
 
     private fun createConditionCell(): ListCell<ConditionMeta> {

@@ -1,16 +1,14 @@
 package lin.rule.build
 
 import lin.rule.parse.FieldSpec
+import lin.rule.score.ScoreEffect
 import kotlin.reflect.KClass
 
 /**
- * Rule 声明其评分类型，框架据此动态生成 builtInFields 和运行时路径。
- * - [CONSTANT] (默认)：builtInFields = [constantScore, missValue]，运行时走 toGuardScoreRule
- * - [SOURCE]：builtInFields = [scoreEffectType, scoreSourceId, scoreOperatorId, missValue]，运行时走 toGuardScoreRule
- * - [NONE]：builtInFields = 空，运行时走 ruleRegistry.build（factory 全权控制）
+ * Rule 声明其默认评分效应，框架据此动态生成 builtInFields。
+ * 所有 Rule.Coded 命中分统一走 scoreEffect（NONE 方案已移除），
+ * factory 负责副作用/剪枝，factory 可通过 leafConfig.scoreEffect 获取命中分。
  */
-enum class ScoreEffectType { CONSTANT, SOURCE, NONE }
-
 data class RuleRegistration<T : Any>(
     val ruleId: String,
     val metadata: RuleMetadata?,
@@ -19,7 +17,7 @@ data class RuleRegistration<T : Any>(
     val lazyFieldsResolver: () -> List<FieldSpec>,
     // 真正的逻辑规则创造工厂
     val ruleFactory: RuleFactory<T>,
-    val scoreEffectType: ScoreEffectType = ScoreEffectType.CONSTANT
+    val defaultScoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0)
 )
 
 data class RuleMetadata(

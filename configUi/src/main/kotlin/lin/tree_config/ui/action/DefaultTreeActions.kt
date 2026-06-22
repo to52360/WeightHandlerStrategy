@@ -120,11 +120,11 @@ class SaveTreeAction : TreeWorkbenchAction {
             }
 
             // ====== 接入底层统一的 SpecValidator 参数约束校验 ======
-            val knownSources = workbench.leafSourceCatalog.loadAll().associateBy { it.sourceType to it.sourceId }
+            val knownSources = workbench.leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
             val diagnostics = mutableListOf<String>()
 
             workbench.leafConfigs.forEach { (nodeId, leafConfig) ->
-                val meta = knownSources[leafConfig.sourceType to leafConfig.sourceId]
+                val meta = knownSources[leafConfig.kind to leafConfig.sourceId]
                 if (meta == null) {
                     diagnostics += "节点 [$nodeId]：未知叶子来源 [${leafConfig.sourceId}]"
                 } else {

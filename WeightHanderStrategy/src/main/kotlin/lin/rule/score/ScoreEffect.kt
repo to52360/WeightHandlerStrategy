@@ -7,13 +7,15 @@ import lin.rule.orthogonal.TransformCall
  * Guard 条件由调用方先判断，命中后再执行这里的评分逻辑。
  */
 sealed interface ScoreEffect {
+    val missValue: Double
+
     /**
      * 固定分值：条件命中时直接返回固定分数。
      * 示例：ConstantScore(3.0) → 命中就给 3 分，不依赖任何外部数据。
      */
     data class ConstantScore(
         val value: Double,
-        val missValue: Double = 0.0
+        override val missValue: Double = 0.0
     ) : ScoreEffect
 
     /**
@@ -31,6 +33,6 @@ sealed interface ScoreEffect {
         val transforms: List<TransformCall> = emptyList(),
         val operatorId: String,
         val operatorArgs: Map<String, Any> = emptyMap(),
-        val missValue: Double = 0.0
+        override val missValue: Double = 0.0
     ) : ScoreEffect
 }

@@ -3,8 +3,8 @@ package lin.rule.condition
 import lin.myLog
 import lin.rule.parse.FieldSpec
 import lin.rule.tree.CONDITION_BUILT_IN_FIELDS
+import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorLeafMeta
-import lin.rule.tree.EvaluatorLeafSourceType
 import lin.serviceLoader.provider.ConditionRegistrationProvider
 
 data class ConditionMeta(
@@ -71,7 +71,7 @@ class ConditionRegistry(
     fun leafMetas(): List<EvaluatorLeafMeta> {
         return registrationsById.values.map { registration ->
             EvaluatorLeafMeta(
-                sourceType = EvaluatorLeafSourceType.CONDITION,
+                kind = EvaluatorLeafKind.Condition.Plain,
                 sourceId = registration.conditionId,
                 name = registration.metadata?.name,
                 desc = registration.metadata?.desc,

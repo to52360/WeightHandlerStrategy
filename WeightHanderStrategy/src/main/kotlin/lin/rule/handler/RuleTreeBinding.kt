@@ -5,6 +5,7 @@ import lin.bean.cardExt.base.intentEvaluatorRoots
 import lin.config.ConfigDispatcher
 import lin.config.EvaluatorTreeRoot
 import lin.domain.MyWarManage
+import lin.rule.build.LeafLogic
 import lin.rule.build.RuleLogic
 import lin.rule.condition.*
 import lin.rule.context.RuleContext
@@ -43,10 +44,10 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
         for (provider in providers) {
             for (config in provider.findAll()) {
                 val instance = config.instantiate(
-                    leafBuilder = { leafConfig ->
+                    leafBuilder = { leafConfig: EvaluatorLeafConfig ->
                         buildEvaluatorLeafLogic(leafConfig, ruleRegistry, conditionRegistry, conditionTreeProviders)
                     },
-                    branchConditionBuilder = { leafConfig ->
+                    branchConditionBuilder = { leafConfig: EvaluatorLeafConfig ->
                         buildBranchConditionLogic(leafConfig, conditionRegistry, conditionTreeProviders)
                     }
                 )
@@ -76,7 +77,7 @@ internal fun buildEvaluatorLeafLogic(
     ruleRegistry: RuleRegistry,
     conditionRegistry: ConditionRegistry,
     conditionTreeProviders: List<ConditionTreeConfigProvider>
-): RuleLogic {
+): LeafLogic {
     val assembler = conditionRegistry.pipelineAssembler
         ?: error("PipelineAssembler is not configured in this context")
 
@@ -97,6 +98,24 @@ internal fun buildEvaluatorLeafLogic(
                     ?: error("Operator not found: ${payload.operatorId}")
                 validateAndThrow("管道算子 [${operator.id}]", payload.refId, payload.operatorArgs, operator.paramSpecs)
             }
+            conditionRegistry.build(payload) as ConditionLogic?
+        }
+
+        is OrthogonalConditionLeafConfig -> {
+            val payload = leafConfig.guardCondition
+            for (call in payload.transforms) {
+                val transform = assembler.findTransform(call.transformId)
+                    ?: error("Transform not found: ${call.transformId}")
+                validateAndThrow("正交条件管道步骤 [${transform.id}]", payload.refId, call.args, transform.fields)
+            }
+            val operator = assembler.findOperator(payload.operatorId)
+                ?: error("Operator not found: ${payload.operatorId}")
+            validateAndThrow(
+                "正交条件管道算子 [${operator.id}]",
+                payload.refId,
+                payload.operatorArgs,
+                operator.paramSpecs
+            )
             conditionRegistry.build(payload) as ConditionLogic?
         }
 
@@ -130,37 +149,24 @@ internal fun buildEvaluatorLeafLogic(
         }
     }
 
-    // 3. 获取未命中分值 (MissValue)
-    val missValue = when (leafConfig) {
-        is RuleLeafConfig -> leafConfig.missValue
-        is OrthogonalRuleLeafConfig -> when (val effect = leafConfig.scoreEffect) {
-            is ScoreEffect.ConstantScore -> effect.missValue
-            is ScoreEffect.SourceScore -> effect.missValue
-        }
-
-        is ConditionLeafConfig -> when (val effect = leafConfig.scoreEffect) {
-            is ScoreEffect.ConstantScore -> effect.missValue
-            is ScoreEffect.SourceScore -> effect.missValue
-        }
-
-        is ConditionTreeLeafConfig -> when (val effect = leafConfig.scoreEffect) {
-            is ScoreEffect.ConstantScore -> effect.missValue
-            is ScoreEffect.SourceScore -> effect.missValue
-        }
-    }
+    // 3. 获取未命中分值 (MissValue) — 所有叶子节点统一通过 ScoreEffect 获取
+    val missValue = (leafConfig as Scoreable).scoreEffect.missValue
 
 
-    // 4. 归一化执行闭包，通过命名函数绕开 Lambda 内部 Context Receiver 的匹配漏洞
-    val finalLogic: RuleLogic = {
-        val matched = if (guardLogic != null) {
-            invokeCondition(guardLogic, this)
-        } else {
-            true
-        }
-        if (matched) {
-            invokeRule(scoreLogic, this)
-        } else {
-            RuleResult.Continue(score = missValue)
+    // 4. 归一化执行闭包：守卫先跑，根据 guardMissBehavior 决定未命中行为
+    val guardMissBehavior = leafConfig.guardMissBehavior
+    val finalLogic: LeafLogic = {
+        val guardPassed = guardLogic == null || invokeCondition(guardLogic, this)
+        when {
+            guardPassed -> {
+                val res = invokeRule(scoreLogic, this)
+                when (res) {
+                    is RuleResult.Continue -> EvalOutcome.Matched(res.score, res.modifyCard)
+                }
+            }
+
+            guardMissBehavior == GuardMissBehavior.PRUNE -> EvalOutcome.Pruned
+            else -> EvalOutcome.Skipped(missValue)
         }
     }
     return finalLogic
@@ -199,6 +205,24 @@ internal fun buildBranchConditionLogic(
                     operator.paramSpecs
                 )
             }
+            conditionRegistry.build(payload) as ConditionLogic
+        }
+
+        is OrthogonalConditionLeafConfig -> {
+            val payload = leafConfig.guardCondition
+            for (call in payload.transforms) {
+                val transform = assembler.findTransform(call.transformId)
+                    ?: error("Transform not found: ${call.transformId}")
+                validateAndThrow("分支正交条件管道步骤 [${transform.id}]", payload.refId, call.args, transform.fields)
+            }
+            val operator = assembler.findOperator(payload.operatorId)
+                ?: error("Operator not found: ${payload.operatorId}")
+            validateAndThrow(
+                "分支正交条件管道算子 [${operator.id}]",
+                payload.refId,
+                payload.operatorArgs,
+                operator.paramSpecs
+            )
             conditionRegistry.build(payload) as ConditionLogic
         }
 
@@ -301,13 +325,7 @@ private fun compileScoreEffect(
     leafConfig: EvaluatorLeafConfig,
     assembler: PipelineAssembler
 ): ScoreLogic {
-    val effect = when (leafConfig) {
-        is OrthogonalRuleLeafConfig -> leafConfig.scoreEffect
-        is ConditionLeafConfig -> leafConfig.scoreEffect
-        is ConditionTreeLeafConfig -> leafConfig.scoreEffect
-        is RuleLeafConfig -> ScoreEffect.ConstantScore(0.0)
-    }
-    return when (effect) {
+    return when (val effect = (leafConfig as Scoreable).scoreEffect) {
         is ScoreEffect.ConstantScore -> {
             { effect.value }
         }
@@ -396,9 +414,11 @@ fun evaluateCardRoots(
         val context = RuleContext(card, warManage)
         for (root in roots) {
             val res = evaluateConditionTree(root, context, collectedActions)
-            if (res is RuleResult.Prune) return RuleResult.Accumulate(totalScore, collectedActions, pruned = true)
-            if (res is RuleResult.Continue) {
-                totalScore += res.score
+            if (res is EvalOutcome.Pruned) return RuleResult.Accumulate(totalScore, collectedActions, pruned = true)
+            when (res) {
+                is EvalOutcome.Matched -> totalScore += res.score
+                is EvalOutcome.Skipped -> totalScore += res.score
+                EvalOutcome.Pruned -> {} // 不可达，前面已 return
             }
         }
     }
@@ -414,47 +434,56 @@ fun evaluateConditionTree(
     node: EvaluatorInstanceNode,
     context: RuleContext,
     collectedActions: MutableList<ComboCardAction>
-): RuleResult {
+): EvalOutcome {
     return when (node) {
         is EvaluatorInstanceNode.RuleNode -> {
-            val res = node.ruleLogic(context)
-            if (res is RuleResult.Continue && res.modifyCard != null) {
-                collectedActions.add(res.modifyCard)
+            val outcome = node.leafLogic(context)
+            if (outcome is EvalOutcome.Matched && outcome.modifyCard != null) {
+                collectedActions.add(outcome.modifyCard)
             }
-            res
+            outcome
         }
 
         is EvaluatorInstanceNode.AndNode -> {
             var totalScore = 0.0
+            var anyMatched = false
             for (child in node.children) {
                 val res = evaluateConditionTree(child, context, collectedActions)
-                if (res is RuleResult.Prune) return RuleResult.Prune
-                if (res is RuleResult.Continue) {
-                    totalScore += res.score
+                if (res is EvalOutcome.Pruned) return EvalOutcome.Pruned
+                when (res) {
+                    is EvalOutcome.Matched -> {
+                        anyMatched = true
+                        totalScore += res.score
+                    }
+
+                    is EvalOutcome.Skipped -> totalScore += res.score
+                    is EvalOutcome.Pruned -> {}
                 }
             }
-            RuleResult.Continue(score = totalScore)
+            if (anyMatched) EvalOutcome.Matched(totalScore) else EvalOutcome.Skipped(totalScore)
         }
 
         is EvaluatorInstanceNode.OrNode -> {
             for (child in node.children) {
                 val localActions = mutableListOf<ComboCardAction>()
                 val res = evaluateConditionTree(child, context, localActions)
-                if (res is RuleResult.Continue) {
+                if (res is EvalOutcome.Matched) {
                     collectedActions.addAll(localActions)
                     return res
                 }
+                if (res is EvalOutcome.Pruned) return EvalOutcome.Pruned
+                // Skipped: 继续尝试下一个子节点
             }
-            RuleResult.Prune
+            EvalOutcome.Skipped(score = 0.0)
         }
 
         is EvaluatorInstanceNode.NotNode -> {
             val localActions = mutableListOf<ComboCardAction>()
             val res = evaluateConditionTree(node.child, context, localActions)
-            if (res is RuleResult.Prune) {
-                RuleResult.Continue(score = 0.0)
-            } else {
-                RuleResult.Prune
+            when (res) {
+                is EvalOutcome.Matched -> EvalOutcome.Skipped(score = 0.0)
+                is EvalOutcome.Skipped -> EvalOutcome.Matched(score = 0.0)
+                is EvalOutcome.Pruned -> EvalOutcome.Pruned
             }
         }
 

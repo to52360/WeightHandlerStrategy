@@ -7,8 +7,8 @@ import lin.rule.condition.collectConditionRefs
 import lin.rule.parse.withConditionPrefix
 import lin.rule.registry.RuleRegistry
 import lin.rule.tree.CONDITION_BUILT_IN_FIELDS
+import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorLeafMeta
-import lin.rule.tree.EvaluatorLeafSourceType
 import lin.utils.runCatchingLog
 
 class EvaluatorLeafSourceCatalog(
@@ -19,7 +19,7 @@ class EvaluatorLeafSourceCatalog(
     fun loadAll(): List<EvaluatorLeafMeta> {
         val virtualMetas = listOf(
             EvaluatorLeafMeta(
-                sourceType = EvaluatorLeafSourceType.CONDITION,
+                kind = EvaluatorLeafKind.Condition.Orthogonal,
                 sourceId = "orthogonal_condition",
                 name = "正交条件 (配置型)",
                 desc = "使用数据源与算子灵活组合的配置型条件",
@@ -27,7 +27,7 @@ class EvaluatorLeafSourceCatalog(
                 fields = emptyList()
             ),
             EvaluatorLeafMeta(
-                sourceType = EvaluatorLeafSourceType.ORTHOGONAL_RULE,
+                kind = EvaluatorLeafKind.Rule.Orthogonal,
                 sourceId = "orthogonal_rule",
                 name = "正交规则 (配置型)",
                 desc = "使用守卫条件与评分效应组合的配置型规则",
@@ -74,7 +74,7 @@ class EvaluatorLeafSourceCatalog(
                 }
                     ?: emptyList()
                 EvaluatorLeafMeta(
-                    sourceType = EvaluatorLeafSourceType.CONDITION_TREE,
+                    kind = EvaluatorLeafKind.Condition.Tree,
                     sourceId = id,
                     name = name,
                     desc = null,
