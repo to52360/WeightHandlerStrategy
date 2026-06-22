@@ -160,7 +160,7 @@ sealed interface Scoreable {
     val scoreEffect: ScoreEffect
 }
 
-/** 标记接口：具有显式守卫条件的叶子节点（ConditionTree 除外，其守卫由树结构内部构建） */
+/** 标记接口：具有显式守卫条件的叶子节点（仅 Rule 类型；Condition 类型通过 sourceId 兜底） */
 sealed interface Guarded {
     val guardCondition: ConditionPayload?
 }
@@ -201,15 +201,14 @@ data class OrthogonalConditionLeafConfig(
     override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Condition.Orthogonal
 }
 
-/** 普通(编码)条件：guard 为可选守卫或 ConditionRef 兜底 */
+/** 普通(编码)条件：条件本体由 sourceId 索引的条件实现提供，无需额外守卫 */
 data class ConditionLeafConfig(
     override val nodeId: String,
     override val sourceId: String,
     override val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
     override val args: Map<String, Any> = emptyMap(),
-    override val guardCondition: ConditionPayload? = null,
     override val guardMissBehavior: GuardMissBehavior = GuardMissBehavior.SCORE
-) : EvaluatorLeafConfig(), Scoreable, Guarded {
+) : EvaluatorLeafConfig(), Scoreable {
     override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Condition.Plain
 }
 
@@ -225,8 +224,8 @@ data class ConditionTreeLeafConfig(
 
 /**
  * 兼容性解析函数：
- * 如果存在 guardCondition 则直接返回该 ConditionPayload；
- * 否则利用 sourceId 与 args 兜底构建 ConditionRef。
+ * Rule 类型通过 Guarded 接口获取显式守卫条件；
+ * Condition 类型通过 sourceId + args 兜底构建 ConditionRef。
  */
 fun EvaluatorLeafConfig.resolveConditionPayload(): ConditionPayload {
     val guard = (this as? Guarded)?.guardCondition
@@ -284,7 +283,6 @@ fun buildEvaluatorLeafConfig(
             sourceId = selectedLeaf.sourceId,
             scoreEffect = scoreEffect,
             args = extArgs,
-            guardCondition = guardCondition,
             guardMissBehavior = existingGuardMissBehavior
         )
 

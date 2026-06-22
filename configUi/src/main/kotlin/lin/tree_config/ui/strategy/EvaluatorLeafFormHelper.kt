@@ -46,6 +46,26 @@ fun buildScoreEffect(
     }
 }
 
+/**
+ * 从 formValues 中过滤出不属于 builtIn 字段、也不属于算子参数的自定义参数。
+ * builtIn 字段名来自 selectedLeaf.builtInFields，算子参数名来自 scoreEffect 的 ScoreOperator 注册表。
+ */
+fun computeExtArgs(
+    selectedLeaf: EvaluatorLeafMeta,
+    formValues: Map<String, Any>,
+    scoreEffect: ScoreEffect,
+    scoreOperatorRegistry: ScoreOperatorRegistry
+): Map<String, Any> {
+    val builtInFieldNames = selectedLeaf.builtInFields.map { it.propertyName }.toSet()
+    val operatorParamKeys = when (scoreEffect) {
+        is ScoreEffect.SourceScore -> scoreOperatorRegistry.find(scoreEffect.operatorId)
+            ?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
+
+        else -> emptySet()
+    }
+    return formValues.filterKeys { it !in builtInFieldNames && it !in operatorParamKeys }
+}
+
 /** 从 formValues + scoreEffect 反查属性值，用于表单预填 */
 fun EvaluatorLeafConfig.valueOfField(propertyName: String): Any? {
     val scoreable = this as? Scoreable ?: return args[propertyName]

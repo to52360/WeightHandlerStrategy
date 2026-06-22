@@ -278,7 +278,7 @@ class EvaluatorPropertyEditorStrategy(
         val existingScoreEffect = (existing as? Scoreable)?.scoreEffect
         val scoreEffect = buildScoreEffect(args, existingScoreEffect, scoreOperatorRegistry)
             ?: ScoreEffect.ConstantScore(0.0)
-        val extArgs = computeExtArgs(selectedLeaf, args, scoreEffect)
+        val extArgs = computeExtArgs(selectedLeaf, args, scoreEffect, scoreOperatorRegistry)
         val newConfig = buildEvaluatorLeafConfig(
             nodeId = nodeId,
             selectedLeaf = selectedLeaf,
@@ -289,18 +289,4 @@ class EvaluatorPropertyEditorStrategy(
         leafConfigs[nodeId] = newConfig
     }
 
-    private fun computeExtArgs(
-        selectedLeaf: EvaluatorLeafMeta,
-        formValues: Map<String, Any>,
-        scoreEffect: ScoreEffect
-    ): Map<String, Any> {
-        val builtInFieldNames = selectedLeaf.builtInFields.map { it.propertyName }.toSet()
-        val operatorParamKeys = when (scoreEffect) {
-            is ScoreEffect.SourceScore -> scoreOperatorRegistry.find(scoreEffect.operatorId)
-                ?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
-
-            else -> emptySet()
-        }
-        return formValues.filterKeys { it !in builtInFieldNames && it !in operatorParamKeys }
-    }
 }

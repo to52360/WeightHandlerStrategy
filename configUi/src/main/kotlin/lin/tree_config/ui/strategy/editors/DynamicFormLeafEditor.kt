@@ -9,12 +9,8 @@ import lin.condition_tree.ui.components.OrthogonalConditionDialog
 import lin.rule.condition.ConditionPayload
 import lin.rule.parse.FieldSpec
 import lin.rule.score.ScoreEffect
-import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
-import lin.tree_config.ui.strategy.LeafEditContext
-import lin.tree_config.ui.strategy.LeafEditor
-import lin.tree_config.ui.strategy.buildScoreEffect
-import lin.tree_config.ui.strategy.valueOfField
+import lin.tree_config.ui.strategy.*
 
 class DynamicFormLeafEditor : LeafEditor {
 
@@ -25,15 +21,12 @@ class DynamicFormLeafEditor : LeafEditor {
 
         buildDynamicForm(container, ctx, existing, args)
 
-        // 非 Branch 节点额外显示通用外挂守卫区
-        if (!ctx.isBranch) {
+        // 仅 Rule 类型节点显示外挂守卫区（Condition 类型通过 sourceId 兜底，无需守卫）
+        if (ctx.selectedLeaf.kind is EvaluatorLeafKind.Rule) {
             container.children.add(Separator())
             val guardBox = HBox(8.0).apply { alignment = javafx.geometry.Pos.CENTER_LEFT }
-            val currentGuard = when (val c = ctx.leafConfigs[ctx.nodeId]) {
-                is RuleLeafConfig -> c.guardCondition
-                is OrthogonalRuleLeafConfig -> c.guardCondition
-                else -> null
-            } as? ConditionPayload.PipelineRef
+            val currentGuard =
+                (ctx.leafConfigs[ctx.nodeId] as? Guarded)?.guardCondition as? ConditionPayload.PipelineRef
             val guardSummary = Label(
                 currentGuard?.let { "守卫: ${it.sourceId} -> ${it.operatorId}" } ?: "无通用守卫"
             ).apply {
@@ -45,11 +38,8 @@ class DynamicFormLeafEditor : LeafEditor {
             val clearGuardBtn = Button("清除").apply { isDisable = (currentGuard == null) }
 
             configGuardBtn.setOnAction {
-                val liveGuard = when (val c = ctx.leafConfigs[ctx.nodeId]) {
-                    is RuleLeafConfig -> c.guardCondition
-                    is OrthogonalRuleLeafConfig -> c.guardCondition
-                    else -> null
-                } as? ConditionPayload.PipelineRef
+                val liveGuard =
+                    (ctx.leafConfigs[ctx.nodeId] as? Guarded)?.guardCondition as? ConditionPayload.PipelineRef
                 val dialog = OrthogonalConditionDialog(liveGuard)
                 val res = dialog.showAndWait()
                 if (res.isPresent) {
@@ -171,21 +161,5 @@ class DynamicFormLeafEditor : LeafEditor {
             extArgs = extArgs
         )
         ctx.leafConfigs[ctx.nodeId] = newConfig
-    }
-
-    private fun computeExtArgs(
-        selectedLeaf: EvaluatorLeafMeta,
-        formValues: Map<String, Any>,
-        scoreEffect: ScoreEffect,
-        scoreOperatorRegistry: ScoreOperatorRegistry
-    ): Map<String, Any> {
-        val builtInFieldNames = selectedLeaf.builtInFields.map { it.propertyName }.toSet()
-        val operatorParamKeys = when (scoreEffect) {
-            is ScoreEffect.SourceScore -> scoreOperatorRegistry.find(scoreEffect.operatorId)
-                ?.paramSpecs?.map { it.propertyName }?.toSet() ?: emptySet()
-
-            else -> emptySet()
-        }
-        return formValues.filterKeys { it !in builtInFieldNames && it !in operatorParamKeys }
     }
 }
