@@ -2,6 +2,7 @@ package lin.rule.orthogonal
 
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.enums.CardRaceEnum
+import lin.bean.ComboCard
 import lin.warExt.my.base.getHandCards
 import lin.warExt.my.base.getPlayCards
 import lin.warExt.rival.rivalCardsByPlayArea
@@ -58,6 +59,32 @@ val HandCardsSource = dataSource<List<Card>>(
     warInfo.getHandCards()
 }
 
+/**
+ * 手牌 ComboCard 数据源：输出 List<ComboCard>（含权重分组信息）
+ * 直接读取 WarInfo 预计算缓存，零额外开销
+ */
+val HandComboCardsSource = dataSource<List<ComboCard>>(
+    id = "hand_combo_cards",
+    name = "手牌ComboCard列表",
+    description = "获取手牌的 ComboCard 列表（含权重分组信息，从预计算缓存读取）",
+    categories = setOf("手牌", "卡牌")
+) {
+    warInfo.handComboCards
+}
+
+/**
+ * 我方战场 ComboCard 数据源：输出 List<ComboCard>（含权重分组信息）
+ * 直接读取 WarInfo 预计算缓存，零额外开销
+ */
+val MeComboCardsSource = dataSource<List<ComboCard>>(
+    id = "me_combo_cards",
+    name = "我方战场ComboCard",
+    description = "获取我方战场的 ComboCard 列表（含权重分组信息，从预计算缓存读取）",
+    categories = setOf("战场", "卡牌")
+) {
+    warInfo.playComboCards
+}
+
 // ==========================================
 // 2. 默认转换器
 // ==========================================
@@ -96,6 +123,18 @@ val CountProjectionTransform = transform<List<*>, Int>(
     description = "计算集合中元素的数量"
 ) { input, _ ->
     input.size
+}
+
+/**
+ * ComboCard → Card 桥接转换器：将 ComboCard 列表投影为其底层的 Card 列表
+ * 用于在 ComboCard 级操作（如分组过滤）后切换到 Card 级操作（如种族过滤），避免重写 ComboCard 变体 Transform
+ */
+val ToCardsTransform = transform<List<ComboCard>, List<Card>>(
+    id = "to_cards",
+    name = "投影为Card",
+    description = "将 ComboCard 列表投影为其底层的 Card 列表，桥接 ComboCard 级与 Card 级管道"
+) { input, _ ->
+    input.map { it.card }
 }
 
 // ==========================================

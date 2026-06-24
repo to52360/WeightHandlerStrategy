@@ -23,19 +23,24 @@
 
 - 背景: 评估树最终由引擎启动绑定解释，但 AI/UI 还需要名称、描述、schema、保存体验等作者侧校验。
 - 选项: 全部放引擎层；全部放 configUi/MCP；分层。
-- 决定: 🔶 分层。运行契约校验可考虑抽到 `WeightHanderStrategy`，作者侧保存/编辑/AI schema 校验留在 `configUi/MCP`。
-- 理由: 引擎只应关心配置能否解释执行，不应承接 AI 协作、UI 展示和 SQLite 作者侧规则。
-- 影响: 当前最小模型先在 `DefaultAiConfigGenerationService` 放作者侧结构校验，运行契约 validator 继续标记 U-001。
-- 日期: 2026-06-09
+- 决定: ✅ 分层。运行契约校验已落地到 `WeightHanderStrategy` 的 `SpecValidator`（`FieldSpec` 类型/必填/约束校验），作者侧保存/编辑/AI
+  schema 校验留在 `configUi/MCP`。
+- 理由: 引擎只应关心配置能否解释执行，不应承接 AI 协作、UI 展示和 SQLite 作者侧规则。`SpecValidator`
+  覆盖了引擎侧的契约合规校验，作者侧仅需做名称、描述、schema 等体验层校验。
+- 影响: `DefaultAiConfigGenerationService` 做作者侧结构校验，`SpecValidator` 做引擎侧运行时契约校验。U-001 中 validator
+  放置问题已确认，剩余子问题（依赖哪些 registry/provider）留待 T-009 处理。
+- 日期: 2026-06-09（评估）/ 2026-06-23（🔶→✅ 确认）
 
-## D-004: AI 生成条件逻辑暂只记录不展开
+## D-004: AI 生成条件逻辑已由正交条件底座接管
 
-- 背景: 条件逻辑生成会引入条件引用、参数作用域、条件树复用和更复杂校验。
+- 背景: 条件逻辑生成曾担心会引入条件引用、参数作用域、条件树复用和更复杂校验。
 - 选项: 同步纳入 MCP 最小模型；只记录方向。
-- 决定: ✅ 只记录方向，当前阶段不展开实现。
-- 理由: 先让评估树 MCP 生成链路跑通，避免同时扩张两个配置域。
-- 影响: `TRACKER.md` 中保留 T-004，后续单独进入条件逻辑生成讨论。
-- 日期: 2026-06-09
+- 决定: ✅ 正交条件已通过 `orthogonal-condition` 主题完成（T-004 done），条件逻辑本身已可配置化。AI 生成侧不再需要"
+  生成条件逻辑"，而是利用已有正交组件元数据（DataSource/Operator）提供精确校验。
+- 理由: `orthogonal-condition` 建立了 DataSource→Operator→ConditionAssembler 的完整正交链路，AI
+  配置生成只需暴露正交组件元数据供校验，无需重复建造条件引擎。
+- 影响: T-004 已 done，`TRACKER.md` 中不再阻塞条件域扩张。后续 MCP 校验工作聚焦于 T-007（暴露正交组件元数据）。
+- 日期: 2026-06-09（原始）/ 2026-06-23（更新）
 
 
 

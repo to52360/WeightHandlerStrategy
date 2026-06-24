@@ -8,6 +8,7 @@ import javafx.scene.control.SplitPane
 import javafx.scene.layout.HBox
 import lin.card_group.ui.ActiveManagerHolder
 import lin.card_purpose.PurposeTagProvider
+import lin.rule.condition.PipelineAssembler
 import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorPayload
@@ -35,6 +36,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
     val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
     val activeManagerHolder: ActiveManagerHolder by inject()
     private val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
+    val pipelineAssembler: PipelineAssembler by inject()
 
     // 选中的叶子配置 (目前先只在内存中修改)
     val leafConfigs = mutableMapOf<String, EvaluatorLeafConfig>()

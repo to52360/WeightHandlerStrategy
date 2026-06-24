@@ -1,0 +1,239 @@
+package lin.tree_config.validation
+
+import lin.rule.condition.ConditionPayload
+import lin.rule.condition.PipelineAssembler
+import lin.rule.parse.SpecValidator
+import lin.rule.score.ScoreEffect
+import lin.rule.tree.*
+import lin.tree_config.db.EvaluatorLeafSourceCatalog
+
+/**
+ * 评估树配置的统一验证器，同时服务 UI 手动保存和 AI/MCP 自动保存两条路径。
+ *
+ * 验证内容：
+ * - root 引用的 leaf nodeId 是否缺失 leafConfig
+ * - leafConfig 的 kind + sourceId 是否在 leafSourceCatalog 中存在
+ * - leafConfig.args 是否满足 FieldSpec 类型/必填/约束契约
+ * - Guard+ScoreEffect 相容性：Kind 匹配、PipelineRef/SourceScore 引用非空。
+ *   PipelineRef 注册表级校验委托给 PipelineAssembler.validatePipelineRef()。
+ */
+class EvaluatorTreeValidator(
+    private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
+    private val pipelineAssembler: PipelineAssembler
+) {
+    data class ValidationDiagnostic(
+        val code: String,
+        val message: String,
+        val path: String? = null
+    )
+
+    data class ValidationReport(
+        val ok: Boolean,
+        val diagnostics: List<ValidationDiagnostic> = emptyList()
+    )
+
+    fun validate(config: EvaluatorTreeConfig): ValidationReport {
+        val diagnostics = mutableListOf<ValidationDiagnostic>()
+        val leafConfigs = config.leafConfigs
+        val knownSources = leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
+
+        // 1. root 引用的 leaf nodeId 是否缺失 leafConfig
+        collectReferencedLeafNodeIds(config.root).forEach { nodeId ->
+            if (leafConfigs[nodeId] == null) {
+                diagnostics += ValidationDiagnostic(
+                    code = "missing_leaf_config",
+                    message = "评估树节点缺少 leafConfig: nodeId=$nodeId",
+                    path = "leafConfigs.$nodeId"
+                )
+            }
+        }
+
+        // 2. 每个 leafConfig 的合法性校验
+        leafConfigs.values.forEach { leafConfig ->
+            validateLeafConfig(leafConfig, knownSources, diagnostics)
+        }
+
+        return ValidationReport(
+            ok = diagnostics.isEmpty(),
+            diagnostics = diagnostics
+        )
+    }
+
+    private fun validateLeafConfig(
+        leafConfig: EvaluatorLeafConfig,
+        knownSources: Map<Pair<EvaluatorLeafKind, String>, EvaluatorLeafMeta>,
+        diagnostics: MutableList<ValidationDiagnostic>
+    ) {
+        val meta = knownSources[leafConfig.kind to leafConfig.sourceId]
+        if (meta == null) {
+            diagnostics += ValidationDiagnostic(
+                code = "unknown_leaf_source",
+                message = "未知评估树叶子来源: kind=${leafConfig.kind}, sourceId=${leafConfig.sourceId}",
+                path = "leafConfigs.${leafConfig.nodeId}.sourceId"
+            )
+            return
+        }
+
+        val allFields = meta.builtInFields + meta.fields
+        val validationResult = SpecValidator.validate(leafConfig.args, allFields)
+        if (!validationResult.isValid) {
+            validationResult.errors.forEach { error ->
+                diagnostics += ValidationDiagnostic(
+                    code = error.errorCode,
+                    message = error.message,
+                    path = "leafConfigs.${leafConfig.nodeId}.args.${error.propertyName}"
+                )
+            }
+        }
+
+        // T-009: Guard+ScoreEffect 相容性校验
+        validateScoreEffectCompatibility(leafConfig, diagnostics)
+    }
+
+    // ================================================================
+    // T-009: Guard + ScoreEffect 策略校验
+    // ================================================================
+
+    /** CONDITION 类叶子统一使用 ConstantScore，校验 ScoreEffect 类型相容性 */
+    private fun validateScoreEffectCompatibility(
+        leafConfig: EvaluatorLeafConfig,
+        diagnostics: MutableList<ValidationDiagnostic>
+    ) {
+        val prefix = "leafConfigs.${leafConfig.nodeId}"
+        val scoreable = leafConfig as? Scoreable ?: return
+
+        when (leafConfig) {
+            is OrthogonalConditionLeafConfig -> {
+                // Condition.Orthogonal: 只能 ConstantScore
+                if (scoreable.scoreEffect !is ScoreEffect.ConstantScore) {
+                    diagnostics += ValidationDiagnostic(
+                        code = "score_effect_kind_mismatch",
+                        message = "正交条件只允许固定分(ConstantScore)，当前为 ${scoreable.scoreEffect::class.simpleName}",
+                        path = "$prefix.scoreEffect"
+                    )
+                }
+                // PipelineRef 非空
+                validatePipelineRef(leafConfig.guardCondition, prefix, diagnostics)
+            }
+
+            is ConditionLeafConfig, is ConditionTreeLeafConfig -> {
+                // Condition.Plain / Condition.Tree: 只能 ConstantScore
+                if (scoreable.scoreEffect !is ScoreEffect.ConstantScore) {
+                    diagnostics += ValidationDiagnostic(
+                        code = "score_effect_kind_mismatch",
+                        message = "CONDITION 类叶子只允许固定分(ConstantScore)，当前为 ${scoreable.scoreEffect::class.simpleName}",
+                        path = "$prefix.scoreEffect"
+                    )
+                }
+            }
+
+            is RuleLeafConfig -> {
+                // Rule.Coded: ScoreEffect 无限制（ConstantScore 或 SourceScore 均可）
+                if (scoreable.scoreEffect is ScoreEffect.SourceScore) {
+                    validateSourceScore(scoreable.scoreEffect as ScoreEffect.SourceScore, prefix, diagnostics)
+                }
+            }
+
+            is OrthogonalRuleLeafConfig -> {
+                // Rule.Orthogonal: 默认 SourceScore
+                if (scoreable.scoreEffect is ScoreEffect.SourceScore) {
+                    validateSourceScore(scoreable.scoreEffect as ScoreEffect.SourceScore, prefix, diagnostics)
+                }
+            }
+        }
+
+        // PRUNE 时 missValue 无意义（warn 级，不拦截）
+        if (leafConfig.guardMissBehavior == GuardMissBehavior.PRUNE && scoreable.scoreEffect.missValue != 0.0) {
+            diagnostics += ValidationDiagnostic(
+                code = "prune_miss_value_warn",
+                message = "剪枝(PRUNE)行为下 missValue 不会被使用，当前值 ${scoreable.scoreEffect.missValue} 无意义",
+                path = "$prefix.guardMissBehavior"
+            )
+        }
+    }
+
+    private fun validatePipelineRef(
+        ref: ConditionPayload.PipelineRef,
+        prefix: String,
+        diagnostics: MutableList<ValidationDiagnostic>
+    ) {
+        if (ref.sourceId.isBlank()) {
+            diagnostics += ValidationDiagnostic(
+                code = "pipeline_missing_source",
+                message = "正交管道缺少数据源(dataSource)",
+                path = "$prefix.guardCondition.sourceId"
+            )
+        }
+        if (ref.operatorId.isBlank()) {
+            diagnostics += ValidationDiagnostic(
+                code = "pipeline_missing_operator",
+                message = "正交管道缺少算子(operator)",
+                path = "$prefix.guardCondition.operatorId"
+            )
+        }
+
+        // 委托 PipelineAssembler 做注册表级校验（存在性、类型链兼容、参数）
+        if (ref.sourceId.isNotBlank() && ref.operatorId.isNotBlank()) {
+            val pipelineValidation = pipelineAssembler.validatePipelineRef(ref)
+            pipelineValidation.errors.forEach { error ->
+                diagnostics += ValidationDiagnostic(
+                    code = error.errorCode,
+                    message = error.message,
+                    path = "$prefix.guardCondition"
+                )
+            }
+        }
+    }
+
+    private fun validateSourceScore(
+        effect: ScoreEffect.SourceScore,
+        prefix: String,
+        diagnostics: MutableList<ValidationDiagnostic>
+    ) {
+        if (effect.sourceId.isBlank()) {
+            diagnostics += ValidationDiagnostic(
+                code = "source_score_missing_source",
+                message = "数据源评分缺少数据源(sourceId)",
+                path = "$prefix.scoreEffect.sourceId"
+            )
+        }
+        if (effect.operatorId.isBlank()) {
+            diagnostics += ValidationDiagnostic(
+                code = "source_score_missing_operator",
+                message = "数据源评分缺少算子(operatorId)",
+                path = "$prefix.scoreEffect.operatorId"
+            )
+        }
+    }
+
+    private fun collectReferencedLeafNodeIds(root: EvaluatorNode): Set<String> {
+        val ids = linkedSetOf<String>()
+
+        fun visit(node: EvaluatorNode) {
+            when (node) {
+                is LogicNode.And -> node.children.forEach(::visit)
+                is LogicNode.Branch -> {
+                    val payload = node.payload
+                    if (payload is EvaluatorPayload.BranchCondition) {
+                        ids += payload.nodeId
+                    }
+                    visit(node.onTrue)
+                    visit(node.onFalse)
+                }
+
+                is LogicNode.Leaf -> {
+                    val payload = node.payload
+                    if (payload is EvaluatorPayload.Rule) {
+                        ids += payload.nodeId
+                    }
+                }
+
+                is LogicNode.Not -> visit(node.child)
+                is LogicNode.Or -> node.children.forEach(::visit)
+            }
+        }
+
+        visit(root)
+        return ids
+    }
+}

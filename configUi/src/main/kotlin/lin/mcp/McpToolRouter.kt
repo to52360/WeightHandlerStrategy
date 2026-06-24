@@ -13,18 +13,18 @@ class McpToolRouter(
     private val mapper: ObjectMapper
 ) {
     fun tools(): List<McpToolHandler> = listOf(
-        ListEvaluatorLeafSourcesTool(),
+        ListEvaluatorLeafKindsTool(),
         ValidateEvaluatorTreeTool(),
         SaveEvaluatorTreeTool()
     )
 
-    private inner class ListEvaluatorLeafSourcesTool : McpToolHandler {
-        override val name: String = "list_evaluator_leaf_sources"
-        override val description: String = "列出 AI 生成评估树可使用的规则、条件和条件树叶子来源。"
+    private inner class ListEvaluatorLeafKindsTool : McpToolHandler {
+        override val name: String = "list_evaluator_leaf_kinds"
+        override val description: String = "列出 AI 生成评估树可使用的叶子种类（规则、条件、条件树）。"
         override val inputSchemaJson: String = """{"type":"object","properties":{}}"""
 
         override fun call(arguments: Map<String, Any?>): McpToolResult {
-            return jsonResult(aiConfigGenerationService.listEvaluatorLeafSources())
+            return jsonResult(aiConfigGenerationService.listEvaluatorLeafKinds())
         }
     }
 

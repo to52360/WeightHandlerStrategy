@@ -5,6 +5,8 @@ import lin.rule.orthogonal.DataSource
 import lin.rule.orthogonal.Operator
 import lin.rule.orthogonal.Transform
 import lin.rule.parse.SpecValidator
+import lin.rule.parse.ValidationError
+import lin.rule.parse.ValidationResult
 import kotlin.reflect.KType
 import kotlin.reflect.full.isSubtypeOf
 
@@ -27,63 +29,91 @@ class PipelineAssembler(
     fun allOperators(): Collection<Operator<*, *>> = operators.values
 
     /**
-     * 将 PipelineRef 动态装配为可运行的 ConditionLogic 闭包。
-     * 核心步骤包括：
-     * 1. 查找数据源、各级转换器与判定算子。
-     * 2. 进行编译装配期级联强类型契约匹配校验（利用 KType.isSubtypeOf 支持协变）。
-     * 3. 校验各级参数，装配为链式执行闭包。
+     * 校验 PipelineRef 的完整性：dataSource/transform/operator 存在性、类型链兼容性、参数合法性。
+     * 供 assemble 内部和外部验证器共用。
      */
-    fun assemble(ref: ConditionPayload.PipelineRef): ConditionLogic {
+    fun validatePipelineRef(ref: ConditionPayload.PipelineRef): ValidationResult {
+        val errors = mutableListOf<ValidationError>()
+
         val source = dataSources[ref.sourceId]
-            ?: throw IllegalArgumentException("DataSource not found: ${ref.sourceId}")
+        if (source == null) {
+            errors += ValidationError(ref.sourceId, "PIPELINE_UNKNOWN_SOURCE", "DataSource not found: ${ref.sourceId}")
+            return ValidationResult(errors)
+        }
 
         var currentType: KType = source.outputType
 
-        // 1. 逐级验证 Transform 的参数与类型兼容性
-        val transformInstances = ref.transforms.map { call ->
+        for (call in ref.transforms) {
             @Suppress("UNCHECKED_CAST")
             val transform = transforms[call.transformId] as? Transform<Any, Any>
-                ?: throw IllegalArgumentException("Transform not found: ${call.transformId}")
-
-            // 级联类型检查
-            require(currentType.isSubtypeOf(transform.inputType)) {
-                "Type mismatch: previous output type [$currentType] is not compatible with Transform [${transform.id}] input type [${transform.inputType}]"
+            if (transform == null) {
+                errors += ValidationError(
+                    call.transformId,
+                    "PIPELINE_UNKNOWN_TRANSFORM",
+                    "Transform not found: ${call.transformId}"
+                )
+                continue
             }
-
-            // 参数校验
-            val validation = SpecValidator.validate(call.args, transform.fields)
-            if (!validation.isValid) {
-                throw IllegalArgumentException("转换器 [${transform.id}] 参数校验失败: ${validation.errors.joinToString { it.message }}")
+            if (!currentType.isSubtypeOf(transform.inputType)) {
+                errors += ValidationError(
+                    call.transformId, "PIPELINE_TYPE_MISMATCH",
+                    "Type mismatch: previous output [$currentType] not compatible with Transform [${transform.id}] input [${transform.inputType}]"
+                )
             }
+            errors += SpecValidator.validate(call.args, transform.fields).errors
+            currentType = transform.outputType
+        }
 
+        @Suppress("UNCHECKED_CAST")
+        val operator = operators[ref.operatorId] as? Operator<Any, Any>
+        if (operator == null) {
+            errors += lin.rule.parse.ValidationError(
+                ref.operatorId,
+                "PIPELINE_UNKNOWN_OPERATOR",
+                "Operator not found: ${ref.operatorId}"
+            )
+        } else {
+            if (!currentType.isSubtypeOf(operator.inputType)) {
+                errors += ValidationError(
+                    ref.operatorId, "PIPELINE_TYPE_MISMATCH",
+                    "Type mismatch: pipeline output [$currentType] not compatible with Operator [${operator.id}] input [${operator.inputType}]"
+                )
+            }
+            errors += SpecValidator.validate(ref.operatorArgs, operator.paramSpecs).errors
+        }
+
+        return ValidationResult(errors)
+    }
+
+    /**
+     * 将 PipelineRef 动态装配为可运行的 ConditionLogic 闭包。
+     * 内部先调 validatePipelineRef 做前置校验，通过后再装配。
+     */
+    fun assemble(ref: ConditionPayload.PipelineRef): ConditionLogic {
+        val validation = validatePipelineRef(ref)
+        if (!validation.isValid) {
+            throw IllegalArgumentException("PipelineRef [${ref.refId}] 校验失败: ${validation.errors.joinToString { it.message }}")
+        }
+
+        val source = dataSources[ref.sourceId]!!
+        var currentType: KType = source.outputType
+
+        val transformInstances = ref.transforms.map { call ->
+            @Suppress("UNCHECKED_CAST")
+            val transform = transforms[call.transformId] as Transform<Any, Any>
             currentType = transform.outputType
             transform to call.args
         }
 
-        // 2. 验证判定算子
         @Suppress("UNCHECKED_CAST")
-        val operator = operators[ref.operatorId] as? Operator<Any, Any>
-            ?: throw IllegalArgumentException("Operator not found: ${ref.operatorId}")
+        val operator = operators[ref.operatorId] as Operator<Any, Any>
 
-        // 判定算子输入类型检查
-        require(currentType.isSubtypeOf(operator.inputType)) {
-            "Type mismatch: final pipeline output type [$currentType] is not compatible with Operator [${operator.id}] input type [${operator.inputType}]"
-        }
-
-        // 算子参数校验
-        val operatorValidation = SpecValidator.validate(ref.operatorArgs, operator.paramSpecs)
-        if (!operatorValidation.isValid) {
-            throw IllegalArgumentException("动态条件 [${ref.refId}] 算子参数校验失败: ${operatorValidation.errors.joinToString { it.message }}")
-        }
-
-        // 统一在编译装配期，将 Map 参数转换为算子声明的强类型数据类
         val parsedOperatorParameter = try {
             objectMapper.convertValue(ref.operatorArgs, operator.parameterType.java)
         } catch (e: Exception) {
             throw IllegalArgumentException("Invalid arguments for Operator [${ref.operatorId}]: ${e.message}", e)
         }
 
-        // 3. 构建闭包
         return { // context(RuleEnv) RuleContext.() -> Boolean
             var currentVal: Any = source.resolve(this)
 

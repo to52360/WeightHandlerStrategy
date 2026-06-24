@@ -11,14 +11,14 @@ import lin.rule.tree.EvaluatorTreeConfig
  * MCP 只负责协议适配，本接口负责暴露“AI 需要知道什么、提交什么、得到什么反馈”。
  */
 interface AiConfigGenerationService {
-    fun listEvaluatorLeafSources(): List<AiEvaluatorLeafSource>
+    fun listEvaluatorLeafKinds(): List<AiEvaluatorLeafKind>
 
     fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport
 
     fun saveEvaluatorTree(request: SaveEvaluatorTreeRequest): SaveEvaluatorTreeResult
 }
 
-data class AiEvaluatorLeafSource(
+data class AiEvaluatorLeafKind(
     val kind: EvaluatorLeafKind,
     val sourceId: String,
     val name: String?,
@@ -26,7 +26,6 @@ data class AiEvaluatorLeafSource(
     val fields: List<AiFieldSpec>
 )
 
-// todo用同一套
 data class AiFieldSpec(
     val propertyName: String,
     val name: String,

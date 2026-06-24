@@ -7,8 +7,7 @@ import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.condition.ConditionPayload
 import lin.rule.score.ScoreEffect
-import lin.rule.tree.EvaluatorPayload
-import lin.rule.tree.EvaluatorTreeConfig
+import lin.rule.tree.*
 import lin.tree_config.db.TreeConfigEntity
 import lin.tree_config.db.TreeConfigRepository
 import lin.utils.json.registerLogicNodeMixin
@@ -17,26 +16,47 @@ import java.util.*
 fun createTreeConfigMapper(): ObjectMapper {
     return jacksonObjectMapper()
         .registerLogicNodeMixin()
-        .addMixIn(EvaluatorPayload::class.java, EvaluatorPayloadMixin::class.java)
-        .addMixIn(ScoreEffect::class.java, ScoreEffectMixin::class.java)
-        .addMixIn(ConditionPayload::class.java, ConditionPayloadMixin::class.java)
-        .addMixIn(lin.rule.tree.RulePayload::class.java, RulePayloadMixin::class.java)
-        .addMixIn(lin.rule.tree.EvaluatorLeafConfig::class.java, EvaluatorLeafConfigMixin::class.java)
+        // ── 评估树节点 ──
         .apply {
+            addMixIn(EvaluatorPayload::class.java, EvaluatorPayloadMixin::class.java)
             registerSubtypes(
                 NamedType(EvaluatorPayload.Rule::class.java, "Rule"),
-                NamedType(EvaluatorPayload.BranchCondition::class.java, "BranchCondition"),
+                NamedType(EvaluatorPayload.BranchCondition::class.java, "BranchCondition")
+            )
+        }
+        // ── 评分效应 ──
+        .apply {
+            addMixIn(ScoreEffect::class.java, ScoreEffectMixin::class.java)
+            registerSubtypes(
                 NamedType(ScoreEffect.ConstantScore::class.java, "ConstantScore"),
-                NamedType(ScoreEffect.SourceScore::class.java, "SourceScore"),
+                NamedType(ScoreEffect.SourceScore::class.java, "SourceScore")
+            )
+        }
+        // ── 条件节点 ──
+        .apply {
+            addMixIn(ConditionPayload::class.java, ConditionPayloadMixin::class.java)
+            registerSubtypes(
                 NamedType(ConditionPayload.ConditionRef::class.java, "ConditionRef"),
-                NamedType(ConditionPayload.PipelineRef::class.java, "PipelineRef"),
-                NamedType(lin.rule.tree.RulePayload.RuleRef::class.java, "RuleRef"),
-                NamedType(lin.rule.tree.RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef"),
-                NamedType(lin.rule.tree.RuleLeafConfig::class.java, "RULE"),
-                NamedType(lin.rule.tree.OrthogonalRuleLeafConfig::class.java, "ORTHOGONAL_RULE"),
-                NamedType(lin.rule.tree.OrthogonalConditionLeafConfig::class.java, "ORTHOGONAL_CONDITION"),
-                NamedType(lin.rule.tree.ConditionLeafConfig::class.java, "CONDITION"),
-                NamedType(lin.rule.tree.ConditionTreeLeafConfig::class.java, "CONDITION_TREE")
+                NamedType(ConditionPayload.PipelineRef::class.java, "PipelineRef")
+            )
+        }
+        // ── 规则负载 ──
+        .apply {
+            addMixIn(RulePayload::class.java, RulePayloadMixin::class.java)
+            registerSubtypes(
+                NamedType(RulePayload.RuleRef::class.java, "RuleRef"),
+                NamedType(RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef")
+            )
+        }
+        // ── 叶子节点配置 ──
+        .apply {
+            addMixIn(EvaluatorLeafConfig::class.java, EvaluatorLeafConfigMixin::class.java)
+            registerSubtypes(
+                NamedType(RuleLeafConfig::class.java, "RULE"),
+                NamedType(OrthogonalRuleLeafConfig::class.java, "ORTHOGONAL_RULE"),
+                NamedType(OrthogonalConditionLeafConfig::class.java, "ORTHOGONAL_CONDITION"),
+                NamedType(ConditionLeafConfig::class.java, "CONDITION"),
+                NamedType(ConditionTreeLeafConfig::class.java, "CONDITION_TREE")
             )
         }
 }

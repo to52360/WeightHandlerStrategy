@@ -7,6 +7,7 @@ import io.modelcontextprotocol.server.transport.StdioServerTransportProvider
 import io.modelcontextprotocol.spec.McpSchema
 import lin.ai.config.DefaultAiConfigGenerationService
 import lin.moduls.ModelsDefine
+import lin.rule.condition.PipelineAssembler
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
@@ -24,7 +25,8 @@ object McpServerMain {
         val koin = GlobalContext.get()
         val service = DefaultAiConfigGenerationService(
             leafSourceCatalog = koin.get<EvaluatorLeafSourceCatalog>(),
-            treeConfigService = koin.get<TreeConfigService>()
+            treeConfigService = koin.get<TreeConfigService>(),
+            pipelineAssembler = koin.get<PipelineAssembler>()
         )
 
         val router = McpToolRouter(

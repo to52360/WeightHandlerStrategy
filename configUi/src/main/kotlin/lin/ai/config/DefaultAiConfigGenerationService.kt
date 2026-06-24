@@ -1,8 +1,8 @@
 package lin.ai.config
 
-import lin.rule.parse.SpecValidator
-import lin.rule.tree.*
+import lin.rule.condition.PipelineAssembler
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
+import lin.tree_config.validation.EvaluatorTreeValidator
 import lin.ui.service.TreeConfigService
 
 /**
@@ -11,12 +11,14 @@ import lin.ui.service.TreeConfigService
  */
 class DefaultAiConfigGenerationService(
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
-    private val treeConfigService: TreeConfigService
+    private val treeConfigService: TreeConfigService,
+    pipelineAssembler: PipelineAssembler
 ) : AiConfigGenerationService {
-    // todo 是否统一套元素数据
-    override fun listEvaluatorLeafSources(): List<AiEvaluatorLeafSource> {
+    private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
+
+    override fun listEvaluatorLeafKinds(): List<AiEvaluatorLeafKind> {
         return leafSourceCatalog.loadAll().map { item ->
-            AiEvaluatorLeafSource(
+            AiEvaluatorLeafKind(
                 kind = item.kind,
                 sourceId = item.sourceId,
                 name = item.name,
@@ -27,28 +29,12 @@ class DefaultAiConfigGenerationService(
     }
 
     override fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport {
-        val diagnostics = mutableListOf<ConfigDiagnostic>()
-        val leafConfigs = request.config.leafConfigs
-        val knownSources = leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
-
-        collectReferencedLeafNodeIds(request.config.root).forEach { nodeId ->
-            if (leafConfigs[nodeId] == null) {
-                diagnostics += ConfigDiagnostic(
-                    code = "missing_leaf_config",
-                    message = "评估树节点缺少 leafConfig: nodeId=$nodeId",
-                    path = "leafConfigs.$nodeId"
-                )
-            }
-        }
-
-        leafConfigs.values.forEach { leafConfig ->
-            validateLeafConfig(leafConfig, knownSources, diagnostics)
-        }
-
-        // ARCH-UNSETTLED(ai-config-generator, U-001): 这里先做作者侧结构校验，运行契约校验是否抽到 WeightHanderStrategy 独立 validator 仍需确认 | next: 讨论 EvaluatorTreeContractValidator 的归属和输入依赖
+        val treeReport = validator.validate(request.config)
         return ValidationReport(
-            ok = diagnostics.isEmpty(),
-            diagnostics = diagnostics
+            ok = treeReport.ok,
+            diagnostics = treeReport.diagnostics.map { d ->
+                ConfigDiagnostic(code = d.code, message = d.message, path = d.path)
+            }
         )
     }
 
@@ -67,65 +53,5 @@ class DefaultAiConfigGenerationService(
             isTemplate = request.isTemplate
         )
         return SaveEvaluatorTreeResult(id = id, validation = validation)
-    }
-
-    private fun validateLeafConfig(
-        leafConfig: EvaluatorLeafConfig,
-        knownSources: Map<Pair<EvaluatorLeafKind, String>, EvaluatorLeafMeta>,
-        diagnostics: MutableList<ConfigDiagnostic>
-    ) {
-        val meta = knownSources[leafConfig.kind to leafConfig.sourceId]
-        if (meta == null) {
-            diagnostics += ConfigDiagnostic(
-                code = "unknown_leaf_source",
-                message = "未知评估树叶子来源: type=${leafConfig.kind}, sourceId=${leafConfig.sourceId}",
-                path = "leafConfigs.${leafConfig.nodeId}.sourceId"
-            )
-            return
-        }
-
-        // 调用底层的 SpecValidator 校验 args
-        val allFields = meta.builtInFields + meta.fields
-        val validationResult = SpecValidator.validate(leafConfig.args, allFields)
-        if (!validationResult.isValid) {
-            validationResult.errors.forEach { error ->
-                diagnostics += ConfigDiagnostic(
-                    code = error.errorCode,
-                    message = error.message,
-                    path = "leafConfigs.${leafConfig.nodeId}.args.${error.propertyName}"
-                )
-            }
-        }
-    }
-
-    private fun collectReferencedLeafNodeIds(root: EvaluatorNode): Set<String> {
-        val ids = linkedSetOf<String>()
-
-        fun visit(node: EvaluatorNode) {
-            when (node) {
-                is LogicNode.And -> node.children.forEach(::visit)
-                is LogicNode.Branch -> {
-                    val payload = node.payload
-                    if (payload is EvaluatorPayload.BranchCondition) {
-                        ids += payload.nodeId
-                    }
-                    visit(node.onTrue)
-                    visit(node.onFalse)
-                }
-
-                is LogicNode.Leaf -> {
-                    val payload = node.payload
-                    if (payload is EvaluatorPayload.Rule) {
-                        ids += payload.nodeId
-                    }
-                }
-
-                is LogicNode.Not -> visit(node.child)
-                is LogicNode.Or -> node.children.forEach(::visit)
-            }
-        }
-
-        visit(root)
-        return ids
     }
 }

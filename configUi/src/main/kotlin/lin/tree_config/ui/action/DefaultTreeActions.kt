@@ -4,13 +4,13 @@ import javafx.scene.control.Alert
 import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.ButtonType
 import javafx.scene.control.TreeItem
-import lin.rule.parse.SpecValidator
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.tree_config.ui.EvaluatorTreeWorkbench
 import lin.tree_config.ui.LogicNodeType
 import lin.tree_config.ui.LogicNodeWrapper
 import lin.tree_config.ui.TreeModelConverter
+import lin.tree_config.validation.EvaluatorTreeValidator
 
 class CreateNewTreeAction : TreeWorkbenchAction {
     override val title: String = "新建"
@@ -119,31 +119,7 @@ class SaveTreeAction : TreeWorkbenchAction {
                 return
             }
 
-            // ====== 接入底层统一的 SpecValidator 参数约束校验 ======
-            val knownSources = workbench.leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
-            val diagnostics = mutableListOf<String>()
-
-            workbench.leafConfigs.forEach { (nodeId, leafConfig) ->
-                val meta = knownSources[leafConfig.kind to leafConfig.sourceId]
-                if (meta == null) {
-                    diagnostics += "节点 [$nodeId]：未知叶子来源 [${leafConfig.sourceId}]"
-                } else {
-                    val allFields = meta.builtInFields + meta.fields
-                    val validationResult = SpecValidator.validate(leafConfig.args, allFields)
-                    if (!validationResult.isValid) {
-                        validationResult.errors.forEach { error ->
-                            diagnostics += "规则/条件 [${meta.name ?: leafConfig.sourceId}] 属性 [${error.propertyName}] 校验失败 (${error.message})"
-                        }
-                    }
-                }
-            }
-
-            if (diagnostics.isNotEmpty()) {
-                showError("保存被拒绝，检测到参数配置不符合约束契约：\n\n" + diagnostics.joinToString("\n"))
-                return
-            }
-            // ================================================
-
+            // ====== 统一使用 EvaluatorTreeValidator（UI 和 MCP 共用同一套验证） ======
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
             val config = EvaluatorTreeConfig(
                 bindings = bindings,
@@ -151,6 +127,15 @@ class SaveTreeAction : TreeWorkbenchAction {
                 root = evaluatorNode,
                 leafConfigs = workbench.leafConfigs.toMap()
             )
+
+            val treeValidator = EvaluatorTreeValidator(workbench.leafSourceCatalog, workbench.pipelineAssembler)
+            val treeReport = treeValidator.validate(config)
+            if (!treeReport.ok) {
+                val msg = treeReport.diagnostics.joinToString("\n") { "(${it.code}) ${it.message}" }
+                showError("保存被拒绝，检测到参数配置不符合约束契约：\n\n$msg")
+                return
+            }
+            // ================================================================
             // 草稿条目：不传入 existingId，直接新建数据库记录
             // 已保存条目：传入 existingId，执行 UPSERT
             val savedId = if (selectedItem.isDraft) {
