@@ -1,6 +1,5 @@
 package lin.rule.tree
 
-import lin.rule.condition.ConditionPayload
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
 import lin.rule.score.ScoreEffect
@@ -124,176 +123,13 @@ sealed class EvaluatorLeafKind(
     }
 }
 
-sealed interface RulePayload {
-    val args: Map<String, Any> get() = emptyMap()
-
-    data class RuleRef(
-        override val args: Map<String, Any> = emptyMap()
-    ) : RulePayload
-
-    data class OrthogonalRuleRef(
-        val guardCondition: ConditionPayload? = null,
-        val scoreEffect: ScoreEffect? = null,
-        override val args: Map<String, Any> = emptyMap()
-    ) : RulePayload
-}
-
 data class EvaluatorLeafMeta(
     val kind: EvaluatorLeafKind,
     val sourceId: String,
-    val name: String?,
-    val desc: String?,
+    val name: String,
+    val desc: String = "",
     val builtInFields: List<FieldSpec> = emptyList(),
     val fields: List<FieldSpec>
 )
-
-sealed class EvaluatorLeafConfig {
-    abstract val nodeId: String
-    abstract val kind: EvaluatorLeafKind
-    abstract val sourceId: String
-    abstract val args: Map<String, Any>
-    abstract val guardMissBehavior: GuardMissBehavior
-}
-
-/** 标记接口：具有 ScoreEffect 评分效应的叶子节点 */
-sealed interface Scoreable {
-    val scoreEffect: ScoreEffect
-}
-
-/** 标记接口：具有显式守卫条件的叶子节点（仅 Rule 类型；Condition 类型通过 sourceId 兜底） */
-sealed interface Guarded {
-    val guardCondition: ConditionPayload?
-}
-
-data class RuleLeafConfig(
-    override val nodeId: String,
-    override val sourceId: String,
-    override val args: Map<String, Any> = emptyMap(),
-    override val guardCondition: ConditionPayload? = null,
-    override val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
-    override val guardMissBehavior: GuardMissBehavior = GuardMissBehavior.SCORE
-) : EvaluatorLeafConfig(), Scoreable, Guarded {
-    override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Rule.Coded
-    val rulePayload: RulePayload.RuleRef = RulePayload.RuleRef(args)
-}
-
-data class OrthogonalRuleLeafConfig(
-    override val nodeId: String,
-    override val sourceId: String = "orthogonal_rule",
-    override val guardCondition: ConditionPayload? = null,
-    override val scoreEffect: ScoreEffect = ScoreEffect.SourceScore(sourceId = "", operatorId = "", missValue = 0.0),
-    override val args: Map<String, Any> = emptyMap(),
-    override val guardMissBehavior: GuardMissBehavior = GuardMissBehavior.SCORE
-) : EvaluatorLeafConfig(), Scoreable, Guarded {
-    override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Rule.Orthogonal
-    val rulePayload: RulePayload.OrthogonalRuleRef = RulePayload.OrthogonalRuleRef(guardCondition, scoreEffect, args)
-}
-
-/** 正交条件：guard 即[比较算子]管道，固定非空；含叶子态评分 */
-data class OrthogonalConditionLeafConfig(
-    override val nodeId: String,
-    override val sourceId: String = "orthogonal_condition",
-    override val guardCondition: ConditionPayload.PipelineRef,
-    override val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
-    override val args: Map<String, Any> = emptyMap(),
-    override val guardMissBehavior: GuardMissBehavior = GuardMissBehavior.SCORE
-) : EvaluatorLeafConfig(), Scoreable, Guarded {
-    override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Condition.Orthogonal
-}
-
-/** 普通(编码)条件：条件本体由 sourceId 索引的条件实现提供，无需额外守卫 */
-data class ConditionLeafConfig(
-    override val nodeId: String,
-    override val sourceId: String,
-    override val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
-    override val args: Map<String, Any> = emptyMap(),
-    override val guardMissBehavior: GuardMissBehavior = GuardMissBehavior.SCORE
-) : EvaluatorLeafConfig(), Scoreable {
-    override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Condition.Plain
-}
-
-data class ConditionTreeLeafConfig(
-    override val nodeId: String,
-    override val sourceId: String,
-    override val scoreEffect: ScoreEffect = ScoreEffect.ConstantScore(0.0),
-    override val args: Map<String, Any> = emptyMap(),
-    override val guardMissBehavior: GuardMissBehavior = GuardMissBehavior.SCORE
-) : EvaluatorLeafConfig(), Scoreable {
-    override val kind: EvaluatorLeafKind = EvaluatorLeafKind.Condition.Tree
-}
-
-/**
- * 兼容性解析函数：
- * Rule 类型通过 Guarded 接口获取显式守卫条件；
- * Condition 类型通过 sourceId + args 兜底构建 ConditionRef。
- */
-fun EvaluatorLeafConfig.resolveConditionPayload(): ConditionPayload {
-    val guard = (this as? Guarded)?.guardCondition
-    if (guard != null) return guard
-    return ConditionPayload.ConditionRef(conditionId = sourceId, args = args)
-}
-
-fun buildEvaluatorLeafConfig(
-    nodeId: String,
-    selectedLeaf: EvaluatorLeafMeta,
-    existing: EvaluatorLeafConfig?,
-    scoreEffect: ScoreEffect,
-    extArgs: Map<String, Any>
-): EvaluatorLeafConfig {
-
-    val existingGuardMissBehavior = existing?.guardMissBehavior ?: GuardMissBehavior.SCORE
-
-    val guardCondition = (existing as? Guarded)?.guardCondition
-        ?: if (selectedLeaf.kind is EvaluatorLeafKind.Condition.Plain) {
-            ConditionPayload.ConditionRef(conditionId = selectedLeaf.sourceId, args = extArgs)
-        } else null
-
-    return when (selectedLeaf.kind) {
-        is EvaluatorLeafKind.Rule.Coded -> RuleLeafConfig(
-            nodeId = nodeId,
-            sourceId = selectedLeaf.sourceId,
-            args = extArgs,
-            guardCondition = (existing as? Guarded)?.guardCondition,
-            scoreEffect = scoreEffect,
-            guardMissBehavior = existingGuardMissBehavior
-        )
-
-        is EvaluatorLeafKind.Rule.Orthogonal -> OrthogonalRuleLeafConfig(
-            nodeId = nodeId,
-            sourceId = selectedLeaf.sourceId,
-            guardCondition = guardCondition,
-            scoreEffect = scoreEffect,
-            args = extArgs,
-            guardMissBehavior = existingGuardMissBehavior
-        )
-
-        is EvaluatorLeafKind.Condition.Orthogonal -> OrthogonalConditionLeafConfig(
-            nodeId = nodeId,
-            sourceId = selectedLeaf.sourceId,
-            guardCondition = (existing as? OrthogonalConditionLeafConfig)?.guardCondition
-                ?: (guardCondition as? ConditionPayload.PipelineRef)
-                ?: error("正交条件必须配置 PipelineRef"),
-            scoreEffect = scoreEffect,
-            args = extArgs,
-            guardMissBehavior = existingGuardMissBehavior
-        )
-
-        is EvaluatorLeafKind.Condition.Plain -> ConditionLeafConfig(
-            nodeId = nodeId,
-            sourceId = selectedLeaf.sourceId,
-            scoreEffect = scoreEffect,
-            args = extArgs,
-            guardMissBehavior = existingGuardMissBehavior
-        )
-
-        is EvaluatorLeafKind.Condition.Tree -> ConditionTreeLeafConfig(
-            nodeId = nodeId,
-            sourceId = selectedLeaf.sourceId,
-            scoreEffect = scoreEffect,
-            args = extArgs,
-            guardMissBehavior = existingGuardMissBehavior
-        )
-    }
-}
 
 

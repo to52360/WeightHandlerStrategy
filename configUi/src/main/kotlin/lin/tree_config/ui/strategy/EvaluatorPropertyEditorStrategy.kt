@@ -10,6 +10,9 @@ import javafx.scene.layout.VBox
 import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
+import lin.tree_config.bridge.buildEvaluatorLeafConfig
+import lin.tree_config.bridge.leafKind
+import lin.tree_config.bridge.withGuardMissBehavior
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.ui.DynamicFieldForm
 import lin.tree_config.ui.LogicNodeType
@@ -78,7 +81,7 @@ class EvaluatorPropertyEditorStrategy(
             if (newCategory != null) {
                 val filtered = allLeafItems.filter { it.kind.category == newCategory }
                 leafSourceCombo.items.addAll(filtered)
-                val toSelect = if (existing != null && existing.kind.category == newCategory) {
+                val toSelect = if (existing != null && existing.leafKind.category == newCategory) {
                     filtered.firstOrNull { it.sourceId == existing.sourceId }
                 } else {
                     null
@@ -93,7 +96,7 @@ class EvaluatorPropertyEditorStrategy(
         }
 
         // 初始化选中分类
-        val initialCategory = existing?.kind?.category
+        val initialCategory = existing?.leafKind?.category
             ?: if (isBranch) EvaluatorLeafCategory.CONDITION else EvaluatorLeafCategory.RULE
         categoryCombo.selectionModel.select(initialCategory)
 
@@ -205,7 +208,7 @@ class EvaluatorPropertyEditorStrategy(
             override fun updateItem(item: EvaluatorLeafMeta?, empty: Boolean) {
                 super.updateItem(item, empty)
                 text = if (empty || item == null) null
-                else item.name?.takeIf { it.isNotBlank() } ?: item.sourceId
+                else item.name.ifBlank { item.sourceId }
             }
         }
     }
@@ -245,14 +248,7 @@ class EvaluatorPropertyEditorStrategy(
         leafConfigs: MutableMap<String, EvaluatorLeafConfig>
     ) {
         val existing = leafConfigs[nodeId] ?: return
-        val newConfig = when (existing) {
-            is RuleLeafConfig -> existing.copy(guardMissBehavior = behavior)
-            is OrthogonalRuleLeafConfig -> existing.copy(guardMissBehavior = behavior)
-            is ConditionLeafConfig -> existing.copy(guardMissBehavior = behavior)
-            is OrthogonalConditionLeafConfig -> existing.copy(guardMissBehavior = behavior)
-            is ConditionTreeLeafConfig -> existing.copy(guardMissBehavior = behavior)
-        }
-        leafConfigs[nodeId] = newConfig
+        leafConfigs[nodeId] = existing.withGuardMissBehavior(behavior)
     }
 
     private fun createGuardMissBehaviorCell(): ListCell<GuardMissBehavior> {

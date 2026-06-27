@@ -12,7 +12,7 @@ class EvaluatorTreeIntegrationTest {
     val testJson = """
         {"bindings":[{"type":"GROUP","id":"19fd1490"},{"type":"GROUP","id":"29b7b85a"}],
         "root":{"Leaf":{"payload":{"Rule":{"nodeId":"rule_1778405395362"}}}},
-        "leafConfigs":{"rule_1778405395362":{"nodeId":"rule_1778405395362","kind":"RULE","sourceId":"typed_simple_rule","scoreEffect":{"ConstantScore":{"value":1.0}},"args":{"limit":3}}}}
+        "leafConfigs":{"rule_1778405395362":{"RULE":{"nodeId":"rule_1778405395362","sourceId":"typed_simple_rule","scoreEffect":{"ConstantScore":{"value":1.0}},"args":{"limit":3}}}}}
         }
     """.trimIndent()
 

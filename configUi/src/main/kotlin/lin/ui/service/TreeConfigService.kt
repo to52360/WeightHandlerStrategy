@@ -40,14 +40,6 @@ fun createTreeConfigMapper(): ObjectMapper {
                 NamedType(ConditionPayload.PipelineRef::class.java, "PipelineRef")
             )
         }
-        // ── 规则负载 ──
-        .apply {
-            addMixIn(RulePayload::class.java, RulePayloadMixin::class.java)
-            registerSubtypes(
-                NamedType(RulePayload.RuleRef::class.java, "RuleRef"),
-                NamedType(RulePayload.OrthogonalRuleRef::class.java, "OrthogonalRuleRef")
-            )
-        }
         // ── 叶子节点配置 ──
         .apply {
             addMixIn(EvaluatorLeafConfig::class.java, EvaluatorLeafConfigMixin::class.java)
@@ -159,14 +151,9 @@ class TreeConfigService(
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 abstract class ConditionPayloadMixin
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
-abstract class RulePayloadMixin
-
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.EXISTING_PROPERTY,
-    property = "kind",
-    visible = true
+    include = JsonTypeInfo.As.WRAPPER_OBJECT
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 abstract class EvaluatorLeafConfigMixin

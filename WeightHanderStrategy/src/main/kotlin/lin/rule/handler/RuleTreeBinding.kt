@@ -5,30 +5,13 @@ import lin.bean.cardExt.base.intentEvaluatorRoots
 import lin.config.ConfigDispatcher
 import lin.config.EvaluatorTreeRoot
 import lin.domain.MyWarManage
-import lin.rule.build.LeafLogic
-import lin.rule.build.RuleLogic
-import lin.rule.condition.*
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
-import lin.rule.orthogonal.Transform
-import lin.rule.parse.extractPrefixedArgs
-import lin.rule.registry.RuleRegistry
-import lin.rule.score.ScoreEffect
-import lin.rule.score.ScoreOperator
-import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
-import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import lin.serviceLoader.provider.TreeConfigProvider
 import lin.utils.startup.StartupTask
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
-import org.koin.core.component.inject
-import kotlin.reflect.KType
-import kotlin.reflect.full.isSubtypeOf
-
-internal object RuleTreeBindingHelper : KoinComponent {
-    val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
-}
 
 /**
  * 启动任务：将 TreeConfigProvider 中的评估树绑定到 ConfigDispatcher。
@@ -36,20 +19,15 @@ internal object RuleTreeBindingHelper : KoinComponent {
 class RuleTreeBindingTask : StartupTask, KoinComponent {
 
     override fun execute() {
-        val ruleRegistry = get<RuleRegistry>()
-        val conditionRegistry = get<ConditionRegistry>()
         val configDispatcher = get<ConfigDispatcher>()
+        val logicAssembler = get<LeafLogicAssembler>()
         val providers = getKoin().getAll<TreeConfigProvider>()
-        val conditionTreeProviders = getKoin().getAll<ConditionTreeConfigProvider>()
+
         for (provider in providers) {
             for (config in provider.findAll()) {
                 val instance = config.instantiate(
-                    leafBuilder = { leafConfig: EvaluatorLeafConfig ->
-                        buildEvaluatorLeafLogic(leafConfig, ruleRegistry, conditionRegistry, conditionTreeProviders)
-                    },
-                    branchConditionBuilder = { leafConfig: EvaluatorLeafConfig ->
-                        buildBranchConditionLogic(leafConfig, conditionRegistry, conditionTreeProviders)
-                    }
+                    leafBuilder = logicAssembler::build,
+                    branchConditionBuilder = logicAssembler::buildBranch
                 )
 
                 // 按 binding.type 分发给对应的 Finder
@@ -69,327 +47,6 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                 }
             }
         }
-    }
-}
-
-internal fun buildEvaluatorLeafLogic(
-    leafConfig: EvaluatorLeafConfig,
-    ruleRegistry: RuleRegistry,
-    conditionRegistry: ConditionRegistry,
-    conditionTreeProviders: List<ConditionTreeConfigProvider>
-): LeafLogic {
-    val assembler = conditionRegistry.pipelineAssembler
-        ?: error("PipelineAssembler is not configured in this context")
-
-    // 1. 获取守卫条件逻辑 (GuardLogic)
-    val guardLogic: ConditionLogic? = when (leafConfig) {
-        is ConditionLeafConfig -> {
-            val payload = leafConfig.resolveConditionPayload()
-            if (payload is ConditionPayload.ConditionRef) {
-                val registration = conditionRegistry.require(payload.conditionId)
-                validateAndThrow("条件", payload.conditionId, payload.args, listOf(registration.field.toFieldSpec()))
-            } else if (payload is ConditionPayload.PipelineRef) {
-                for (call in payload.transforms) {
-                    val transform = assembler.findTransform(call.transformId)
-                        ?: error("Transform not found: ${call.transformId}")
-                    validateAndThrow("管道步骤 [${transform.id}]", payload.refId, call.args, transform.fields)
-                }
-                val operator = assembler.findOperator(payload.operatorId)
-                    ?: error("Operator not found: ${payload.operatorId}")
-                validateAndThrow("管道算子 [${operator.id}]", payload.refId, payload.operatorArgs, operator.paramSpecs)
-            }
-            conditionRegistry.build(payload) as ConditionLogic?
-        }
-
-        is OrthogonalConditionLeafConfig -> {
-            val payload = leafConfig.guardCondition
-            for (call in payload.transforms) {
-                val transform = assembler.findTransform(call.transformId)
-                    ?: error("Transform not found: ${call.transformId}")
-                validateAndThrow("正交条件管道步骤 [${transform.id}]", payload.refId, call.args, transform.fields)
-            }
-            val operator = assembler.findOperator(payload.operatorId)
-                ?: error("Operator not found: ${payload.operatorId}")
-            validateAndThrow(
-                "正交条件管道算子 [${operator.id}]",
-                payload.refId,
-                payload.operatorArgs,
-                operator.paramSpecs
-            )
-            conditionRegistry.build(payload) as ConditionLogic?
-        }
-
-        is ConditionTreeLeafConfig -> {
-            buildConditionTreeLogic(leafConfig, conditionRegistry, conditionTreeProviders) as ConditionLogic?
-        }
-
-        is RuleLeafConfig -> {
-            leafConfig.guardCondition?.let { conditionRegistry.build(it) as ConditionLogic? }
-        }
-
-        is OrthogonalRuleLeafConfig -> {
-            leafConfig.guardCondition?.let { conditionRegistry.build(it) as ConditionLogic? }
-        }
-    }
-
-    // 2. 获取核心得分逻辑 (ScoreLogic)
-    val scoreLogic: RuleLogic = when (leafConfig) {
-        is RuleLeafConfig -> {
-            val registration = ruleRegistry.require(leafConfig.sourceId)
-            validateAndThrow("规则", leafConfig.sourceId, leafConfig.args, registration.lazyFieldsResolver())
-            ruleRegistry.build(leafConfig)
-        }
-
-        else -> {
-            val scoreEffectLogic = compileScoreEffect(leafConfig, assembler)
-            val logicClosure: RuleLogic = {
-                RuleResult.Continue(score = scoreEffectLogic(this))
-            }
-            logicClosure
-        }
-    }
-
-    // 3. 获取未命中分值 (MissValue) — 所有叶子节点统一通过 ScoreEffect 获取
-    val missValue = (leafConfig as Scoreable).scoreEffect.missValue
-
-
-    // 4. 归一化执行闭包：守卫先跑，根据 guardMissBehavior 决定未命中行为
-    val guardMissBehavior = leafConfig.guardMissBehavior
-    val finalLogic: LeafLogic = {
-        val guardPassed = guardLogic == null || invokeCondition(guardLogic, this)
-        when {
-            guardPassed -> {
-                val res = invokeRule(scoreLogic, this)
-                when (res) {
-                    is RuleResult.Continue -> EvalOutcome.Matched(res.score, res.modifyCard)
-                }
-            }
-
-            guardMissBehavior == GuardMissBehavior.PRUNE -> EvalOutcome.Pruned
-            else -> EvalOutcome.Skipped(missValue)
-        }
-    }
-    return finalLogic
-}
-
-internal fun buildBranchConditionLogic(
-    leafConfig: EvaluatorLeafConfig,
-    conditionRegistry: ConditionRegistry,
-    conditionTreeProviders: List<ConditionTreeConfigProvider>
-): ConditionLogic {
-    val assembler = conditionRegistry.pipelineAssembler
-        ?: error("PipelineAssembler is not configured in this context")
-    return when (leafConfig) {
-        is ConditionLeafConfig -> {
-            val payload = leafConfig.resolveConditionPayload()
-            if (payload is ConditionPayload.ConditionRef) {
-                val registration = conditionRegistry.require(payload.conditionId)
-                validateAndThrow(
-                    "分支条件",
-                    payload.conditionId,
-                    payload.args,
-                    listOf(registration.field.toFieldSpec())
-                )
-            } else if (payload is ConditionPayload.PipelineRef) {
-                for (call in payload.transforms) {
-                    val transform = assembler.findTransform(call.transformId)
-                        ?: error("Transform not found: ${call.transformId}")
-                    validateAndThrow("分支管道步骤 [${transform.id}]", payload.refId, call.args, transform.fields)
-                }
-                val operator = assembler.findOperator(payload.operatorId)
-                    ?: error("Operator not found: ${payload.operatorId}")
-                validateAndThrow(
-                    "分支管道算子 [${operator.id}]",
-                    payload.refId,
-                    payload.operatorArgs,
-                    operator.paramSpecs
-                )
-            }
-            conditionRegistry.build(payload) as ConditionLogic
-        }
-
-        is OrthogonalConditionLeafConfig -> {
-            val payload = leafConfig.guardCondition
-            for (call in payload.transforms) {
-                val transform = assembler.findTransform(call.transformId)
-                    ?: error("Transform not found: ${call.transformId}")
-                validateAndThrow("分支正交条件管道步骤 [${transform.id}]", payload.refId, call.args, transform.fields)
-            }
-            val operator = assembler.findOperator(payload.operatorId)
-                ?: error("Operator not found: ${payload.operatorId}")
-            validateAndThrow(
-                "分支正交条件管道算子 [${operator.id}]",
-                payload.refId,
-                payload.operatorArgs,
-                operator.paramSpecs
-            )
-            conditionRegistry.build(payload) as ConditionLogic
-        }
-
-        is ConditionTreeLeafConfig -> {
-            buildConditionTreeLogic(
-                leafConfig,
-                conditionRegistry,
-                conditionTreeProviders
-            ) as ConditionLogic
-        }
-
-        is RuleLeafConfig, is OrthogonalRuleLeafConfig -> {
-            error("Branch control node cannot bind RULE: nodeId=${leafConfig.nodeId}")
-        }
-    }
-}
-
-private fun buildConditionTreeLogic(
-    leafConfig: EvaluatorLeafConfig,
-    conditionRegistry: ConditionRegistry,
-    conditionTreeProviders: List<ConditionTreeConfigProvider>
-): ConditionLogic {
-    val assembler = conditionRegistry.pipelineAssembler
-        ?: error("PipelineAssembler is not configured in this context")
-    val conditionTree = conditionTreeProviders
-        .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
-        ?: error("Condition tree config not found: sourceId=${leafConfig.sourceId}")
-    val args = leafConfig.args
-    val conditionRefs = conditionTree.root.collectConditionRefs().distinctBy { it.refId }
-    for (ref in conditionRefs) {
-        val conditionArgs = args.extractPrefixedArgs(ref.refId)
-        when (ref) {
-            is ConditionPayload.ConditionRef -> {
-                val registration = conditionRegistry.require(ref.conditionId)
-                validateAndThrow(
-                    contextName = "条件树 [${leafConfig.sourceId}] 嵌套条件",
-                    id = ref.refId,
-                    args = conditionArgs,
-                    fields = listOf(registration.field.toFieldSpec())
-                )
-            }
-
-            is ConditionPayload.PipelineRef -> {
-                for (call in ref.transforms) {
-                    val transform = assembler.findTransform(call.transformId)
-                        ?: error("Transform not found: ${call.transformId}")
-                    validateAndThrow(
-                        contextName = "条件树 [${leafConfig.sourceId}] 嵌套管道步骤 [${transform.id}]",
-                        id = ref.refId,
-                        args = call.args,
-                        fields = transform.fields
-                    )
-                }
-                val operator = assembler.findOperator(ref.operatorId)
-                    ?: error("Operator not found: ${ref.operatorId}")
-                val finalOpArgs = ref.operatorArgs + conditionArgs
-                validateAndThrow(
-                    contextName = "条件树 [${leafConfig.sourceId}] 嵌套管道算子 [${operator.id}]",
-                    id = ref.refId,
-                    args = finalOpArgs,
-                    fields = operator.paramSpecs
-                )
-            }
-        }
-    }
-    return conditionTree.root.compile { ref ->
-        val conditionArgs = args.extractPrefixedArgs(ref.refId)
-        val newPayload = when (ref) {
-            is ConditionPayload.ConditionRef -> ref.copy(args = conditionArgs)
-            is ConditionPayload.PipelineRef -> {
-                if (conditionArgs.isNotEmpty()) {
-                    ref.copy(operatorArgs = ref.operatorArgs + conditionArgs)
-                } else {
-                    ref
-                }
-            }
-        }
-        conditionRegistry.build(newPayload)
-    }
-}
-
-private fun validateAndThrow(
-    contextName: String,
-    id: String,
-    args: Map<String, Any?>,
-    fields: List<lin.rule.parse.FieldSpec>
-) {
-    val validation = lin.rule.parse.SpecValidator.validate(args, fields)
-    if (!validation.isValid) {
-        val detail = validation.errors.joinToString { it.message }
-        lin.myLog.error { "$contextName [$id] 绑定校验失败: $detail" }
-        throw IllegalArgumentException("$contextName [$id] 绑定校验失败: $detail")
-    }
-}
-
-
-private typealias ScoreLogic = context(RuleEnv) RuleContext.() -> Double
-
-private fun compileScoreEffect(
-    leafConfig: EvaluatorLeafConfig,
-    assembler: PipelineAssembler
-): ScoreLogic {
-    return when (val effect = (leafConfig as Scoreable).scoreEffect) {
-        is ScoreEffect.ConstantScore -> {
-            { effect.value }
-        }
-
-        is ScoreEffect.SourceScore -> compileSourceScore(effect, assembler)
-    }
-}
-
-
-private fun compileSourceScore(
-    effect: ScoreEffect.SourceScore,
-    assembler: PipelineAssembler
-): ScoreLogic {
-    val source = assembler.findDataSource(effect.sourceId)
-        ?: error("Score DataSource not found: ${effect.sourceId}")
-
-    var currentType: KType = source.outputType
-
-    // 1. 验证 Transforms
-    val transformInstances = effect.transforms.map { call ->
-        @Suppress("UNCHECKED_CAST")
-        val transform = assembler.findTransform(call.transformId) as? Transform<Any, Any>
-            ?: error("Transform not found: ${call.transformId}")
-
-        require(currentType.isSubtypeOf(transform.inputType)) {
-            "Type mismatch: previous output type [$currentType] is not compatible with Transform [${transform.id}] input type [${transform.inputType}]"
-        }
-
-        val validation = lin.rule.parse.SpecValidator.validate(call.args, transform.fields)
-        if (!validation.isValid) {
-            throw IllegalArgumentException("评分转换器 [${transform.id}] 参数校验失败: ${validation.errors.joinToString { it.message }}")
-        }
-
-        currentType = transform.outputType
-        transform to call.args
-    }
-
-    // 2. 验证 ScoreOperator
-    @Suppress("UNCHECKED_CAST")
-    val operator = RuleTreeBindingHelper.scoreOperatorRegistry.find(effect.operatorId) as? ScoreOperator<Any, Any>
-        ?: error("ScoreOperator not found: ${effect.operatorId}")
-
-    // 检查兼容性
-    require(currentType.isSubtypeOf(operator.inputType)) {
-        "Type mismatch: final pipeline output type [$currentType] is not compatible with ScoreOperator [${operator.id}] input type [${operator.inputType}]"
-    }
-
-    // 校验算子参数
-    val validation = lin.rule.parse.SpecValidator.validate(effect.operatorArgs, operator.paramSpecs)
-    if (!validation.isValid) {
-        lin.myLog.error { "评分效应 [${effect.operatorId}] 算子参数校验失败: ${validation.errors.joinToString { it.message }}" }
-        throw IllegalArgumentException("评分效应 [${effect.operatorId}] 校验失败: ${validation.errors.joinToString { it.message }}")
-    }
-
-    // SourceScore 参数复用规则参数 ObjectMapper 进行转换，由单元测试覆盖验证
-    val parameter = lin.rule.parse.mapToRuleArgs(effect.operatorArgs, operator.parameterType)
-    return {
-        var currentVal: Any = source.resolve(this)
-
-        for ((transform, args) in transformInstances) {
-            currentVal = transform.transform(currentVal, this, args)
-        }
-
-        operator.score(currentVal, parameter)
     }
 }
 
@@ -524,13 +181,5 @@ fun ComboCard.updateIntent(actions: List<ComboCardAction>) {
     }
 }
 
-context(env: RuleEnv)
-private fun invokeCondition(logic: ConditionLogic, context: RuleContext): Boolean {
-    return logic(env, context)
-}
 
-context(env: RuleEnv)
-private fun invokeRule(logic: RuleLogic, context: RuleContext): RuleResult {
-    return logic(env, context)
-}
 

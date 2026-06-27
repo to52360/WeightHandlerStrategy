@@ -68,8 +68,8 @@ class RuleRegistry(
             EvaluatorLeafMeta(
                 kind = EvaluatorLeafKind.Rule.Coded,
                 sourceId = reg.ruleId,
-                name = reg.metadata?.name,
-                desc = reg.metadata?.desc,
+                name = reg.metadata?.name ?: reg.ruleId,
+                desc = reg.metadata?.desc ?: "",
                 builtInFields = scoreEffectFieldsFor(reg.defaultScoreEffect),
                 fields = reg.lazyFieldsResolver()
             )

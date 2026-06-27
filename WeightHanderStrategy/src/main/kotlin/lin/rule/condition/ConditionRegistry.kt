@@ -73,8 +73,8 @@ class ConditionRegistry(
             EvaluatorLeafMeta(
                 kind = EvaluatorLeafKind.Condition.Plain,
                 sourceId = registration.conditionId,
-                name = registration.metadata?.name,
-                desc = registration.metadata?.desc,
+                name = registration.metadata?.name ?: registration.conditionId,
+                desc = registration.metadata?.desc ?: "",
                 builtInFields = CONDITION_BUILT_IN_FIELDS,
                 fields = listOf(registration.field.toFieldSpec())
             )

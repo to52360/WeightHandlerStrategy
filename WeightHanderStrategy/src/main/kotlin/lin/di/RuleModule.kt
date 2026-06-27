@@ -7,9 +7,13 @@ import lin.domain.use.plan.UsePlanBuilder
 import lin.rule.RuleInfoRegister
 import lin.rule.condition.ConditionRegistry
 import lin.rule.condition.PipelineAssembler
+import lin.rule.handler.GuardCompiler
+import lin.rule.handler.LeafLogicAssembler
 import lin.rule.handler.RuleTreeBindingTask
+import lin.rule.handler.ScoreCompiler
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
+import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import lin.serviceLoader.provider.DataSourceProvider
 import lin.serviceLoader.provider.OperatorProvider
 import lin.serviceLoader.provider.TransformProvider
@@ -59,6 +63,12 @@ val ruleModule = module {
     single<UsePlanBuilder> { UsePlanBuilder() }
 
     // 🌟 先注册配置组装，后注册规则树绑定，保证 StartupTask 执行顺序
+    single<GuardCompiler> {
+        GuardCompiler(get(), getAll<ConditionTreeConfigProvider>(), get())
+    }
+    single<ScoreCompiler> { ScoreCompiler(get(), get(), get()) }
+    single<LeafLogicAssembler> { LeafLogicAssembler(get(), get()) }
+
     single<StartupTask>(named("cardConfigBinding")) { CardConfigBindingTask() }
     single<StartupTask>(named("ruleTreeBinding")) { RuleTreeBindingTask() }
 }

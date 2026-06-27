@@ -5,6 +5,7 @@ import lin.rule.condition.PipelineAssembler
 import lin.rule.parse.SpecValidator
 import lin.rule.score.ScoreEffect
 import lin.rule.tree.*
+import lin.tree_config.bridge.leafKind
 import lin.tree_config.db.EvaluatorLeafSourceCatalog
 
 /**
@@ -64,11 +65,11 @@ class EvaluatorTreeValidator(
         knownSources: Map<Pair<EvaluatorLeafKind, String>, EvaluatorLeafMeta>,
         diagnostics: MutableList<ValidationDiagnostic>
     ) {
-        val meta = knownSources[leafConfig.kind to leafConfig.sourceId]
+        val meta = knownSources[leafConfig.leafKind to leafConfig.sourceId]
         if (meta == null) {
             diagnostics += ValidationDiagnostic(
                 code = "unknown_leaf_source",
-                message = "未知评估树叶子来源: kind=${leafConfig.kind}, sourceId=${leafConfig.sourceId}",
+                message = "未知评估树叶子来源: kind=${leafConfig.leafKind}, sourceId=${leafConfig.sourceId}",
                 path = "leafConfigs.${leafConfig.nodeId}.sourceId"
             )
             return
@@ -94,7 +95,11 @@ class EvaluatorTreeValidator(
     // T-009: Guard + ScoreEffect 策略校验
     // ================================================================
 
-    /** CONDITION 类叶子统一使用 ConstantScore，校验 ScoreEffect 类型相容性 */
+    /**
+     * ScoreEffect 相容性校验。
+     * Condition 类叶子由类型系统编译期保证只能用 ConstantScore，无需运行时校验。
+     * Rule 类叶子若用 SourceScore，校验数据源/算子非空。
+     */
     private fun validateScoreEffectCompatibility(
         leafConfig: EvaluatorLeafConfig,
         diagnostics: MutableList<ValidationDiagnostic>
@@ -104,40 +109,20 @@ class EvaluatorTreeValidator(
 
         when (leafConfig) {
             is OrthogonalConditionLeafConfig -> {
-                // Condition.Orthogonal: 只能 ConstantScore
-                if (scoreable.scoreEffect !is ScoreEffect.ConstantScore) {
-                    diagnostics += ValidationDiagnostic(
-                        code = "score_effect_kind_mismatch",
-                        message = "正交条件只允许固定分(ConstantScore)，当前为 ${scoreable.scoreEffect::class.simpleName}",
-                        path = "$prefix.scoreEffect"
-                    )
-                }
-                // PipelineRef 非空
+                // Condition.Orthogonal: scoreEffect 类型已由编译期保证为 ConstantScore
+                // 仅校验 PipelineRef 非空
                 validatePipelineRef(leafConfig.guardCondition, prefix, diagnostics)
             }
 
             is ConditionLeafConfig, is ConditionTreeLeafConfig -> {
-                // Condition.Plain / Condition.Tree: 只能 ConstantScore
-                if (scoreable.scoreEffect !is ScoreEffect.ConstantScore) {
-                    diagnostics += ValidationDiagnostic(
-                        code = "score_effect_kind_mismatch",
-                        message = "CONDITION 类叶子只允许固定分(ConstantScore)，当前为 ${scoreable.scoreEffect::class.simpleName}",
-                        path = "$prefix.scoreEffect"
-                    )
-                }
+                // Condition.Plain / Condition.Tree: scoreEffect 类型已由编译期保证为 ConstantScore
             }
 
-            is RuleLeafConfig -> {
-                // Rule.Coded: ScoreEffect 无限制（ConstantScore 或 SourceScore 均可）
-                if (scoreable.scoreEffect is ScoreEffect.SourceScore) {
-                    validateSourceScore(scoreable.scoreEffect as ScoreEffect.SourceScore, prefix, diagnostics)
-                }
-            }
-
-            is OrthogonalRuleLeafConfig -> {
-                // Rule.Orthogonal: 默认 SourceScore
-                if (scoreable.scoreEffect is ScoreEffect.SourceScore) {
-                    validateSourceScore(scoreable.scoreEffect as ScoreEffect.SourceScore, prefix, diagnostics)
+            is EvaluatorLeafConfig.Rule -> {
+                // Rule: 若用 SourceScore，校验数据源/算子非空
+                val effect = scoreable.scoreEffect
+                if (effect is ScoreEffect.SourceScore) {
+                    validateSourceScore(effect, prefix, diagnostics)
                 }
             }
         }

@@ -77,7 +77,7 @@ class EvaluatorLeafSourceCatalog(
                     kind = EvaluatorLeafKind.Condition.Tree,
                     sourceId = id,
                     name = name,
-                    desc = null,
+                    desc = "",
                     builtInFields = CONDITION_BUILT_IN_FIELDS,
                     fields = fields
                 )
