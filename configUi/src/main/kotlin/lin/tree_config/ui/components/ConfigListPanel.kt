@@ -4,6 +4,7 @@ import javafx.geometry.Insets
 import javafx.scene.control.*
 import javafx.scene.layout.FlowPane
 import javafx.scene.layout.VBox
+import lin.card_group.ui.ActiveManagerHolder
 import lin.card_purpose.PurposeTagProvider
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.tree_config.ui.ConfigListItem
@@ -15,11 +16,12 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class ConfigListPanel(
-    private val workbench: EvaluatorTreeWorkbench,
-    private val treeConfigService: TreeConfigService
+    private val workbench: EvaluatorTreeWorkbench
 ) : VBox(5.0), KoinComponent {
 
+    private val treeConfigService: TreeConfigService by inject()
     private val tagProvider: PurposeTagProvider by inject()
+    private val activeManagerHolder: ActiveManagerHolder by inject()
 
     val configListView = ListView<ConfigListItem>()
     private val filterComboBox = ComboBox<String>().apply {
@@ -54,6 +56,11 @@ class ConfigListPanel(
         setVgrow(configListView, javafx.scene.layout.Priority.ALWAYS)
 
         setupListView()
+
+        // 监听当前 manager 切换，自动刷新列表
+        activeManagerHolder.activeManagerProperty.addListener { _, _, _ ->
+            refreshList()
+        }
     }
 
     private fun setupListView() {
@@ -94,8 +101,11 @@ class ConfigListPanel(
 
         configListView.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
             newValue?.let { item ->
-                workbench.setSelectedBindings(item.config?.bindings ?: emptyList())
-                workbench.setCurrentEnabled(item.enabled)
+                val type = item.config?.bindingType
+                val ids = item.config?.bindingIds ?: emptyList()
+                if (type != null) {
+                    workbench.updateSelectionState(type, ids, item.enabled)
+                }
                 if (item.config != null) {
                     workbench.logicTreeEditor.treeView.root =
                         lin.tree_config.ui.TreeModelConverter.toTreeItem(item.config.root)
@@ -110,7 +120,7 @@ class ConfigListPanel(
         val currentDrafts = configListView.items.filter { it.isDraft }
         configListView.items.clear()
 
-        val activeManagerId = workbench.activeManagerHolder.activeManagerId
+        val activeManagerId = activeManagerHolder.activeManagerId
 
         // 加载当前 manager + 全局共享的配置（含模板或仅非模板取决于 isTemplate 过滤）
         val configs = treeConfigService.loadByManagerId(activeManagerId)
@@ -136,7 +146,7 @@ class ConfigListPanel(
                 ConfigListItem(
                     entity.id,
                     entity.name,
-                    entity.bindingsSummary,
+                    entity.bindingIds,
                     config,
                     enabled = entity.enabled,
                     managerId = entity.managerId,
@@ -145,10 +155,10 @@ class ConfigListPanel(
             )
         }
         currentDrafts.filter { draft ->
-            val firstBindingType = draft.config?.bindings?.firstOrNull()?.type
+            val draftBindingType = draft.config?.bindingType
             when (filterType) {
-                "按卡组绑定" -> firstBindingType == EvaluatorTreeBindingType.GROUP
-                "按用途标签绑定" -> firstBindingType == EvaluatorTreeBindingType.PURPOSE_TAG
+                "按卡组绑定" -> draftBindingType == EvaluatorTreeBindingType.GROUP
+                "按用途标签绑定" -> draftBindingType == EvaluatorTreeBindingType.PURPOSE_TAG
                 else -> true
             }
         }.forEach { configListView.items.add(0, it) }
@@ -157,21 +167,18 @@ class ConfigListPanel(
     fun addDraftItem(
         name: String,
         enabled: Boolean = true,
-        bindings: List<lin.rule.tree.EvaluatorTreeBinding> = emptyList(),
+        bindingType: lin.rule.tree.EvaluatorTreeBindingType,
+        bindingIds: List<String> = emptyList(),
         managerId: String? = null,
         isTemplate: Boolean = false
     ): ConfigListItem {
         val draftItem = ConfigListItem(
             id = "draft_${System.currentTimeMillis()}",
             name = name,
-            bindingsSummary = bindings.joinToString(",") { binding ->
-                when (binding.type) {
-                    EvaluatorTreeBindingType.PURPOSE_TAG -> tagProvider.displayName(binding.id)
-                    else -> binding.id
-                }
-            },
+            bindingIds = bindingIds.joinToString(","),
             config = lin.rule.tree.EvaluatorTreeConfig(
-                bindings = bindings,
+                bindingType = bindingType,
+                bindingIds = bindingIds,
                 root = lin.rule.tree.LogicNode.And(emptyList()),
                 leafConfigs = emptyMap()
             ),

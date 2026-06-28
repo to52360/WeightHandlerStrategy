@@ -77,14 +77,10 @@ class TreeConfigService(
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
         val json = mapper.writeValueAsString(config)
-        val bindingType = config.bindings.firstOrNull()?.type?.name ?: "UNKNOWN"
-        val bindingsSummary = config.bindings.joinToString(",") {
-            "${it.type.name}:${it.id}"
-        }
         val entity = TreeConfigEntity(
             id = id,
-            bindingType = bindingType,
-            bindingsSummary = bindingsSummary,
+            bindingType = config.bindingType.name,
+            bindingIds = config.bindingIds.joinToString(","),
             name = name,
             configData = json,
             enabled = enabled,

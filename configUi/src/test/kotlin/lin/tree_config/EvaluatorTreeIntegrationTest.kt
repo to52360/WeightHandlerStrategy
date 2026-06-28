@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 
 class EvaluatorTreeIntegrationTest {
     val testJson = """
-        {"bindings":[{"type":"GROUP","id":"19fd1490"},{"type":"GROUP","id":"29b7b85a"}],
+        {"bindingType":"GROUP","bindingIds":["19fd1490","29b7b85a"],
         "root":{"Leaf":{"payload":{"Rule":{"nodeId":"rule_1778405395362"}}}},
         "leafConfigs":{"rule_1778405395362":{"RULE":{"nodeId":"rule_1778405395362","sourceId":"typed_simple_rule","scoreEffect":{"ConstantScore":{"value":1.0}},"args":{"limit":3}}}}}
         }
@@ -23,7 +23,7 @@ class EvaluatorTreeIntegrationTest {
         val config = mapper.readValue(testJson, EvaluatorTreeConfig::class.java)
 
         assertNotNull(config, "JSON 应当成功解析为 EvaluatorTreeConfig")
-        assertEquals(2, config.bindings.size)
+        assertEquals(2, config.bindingIds.size)
         assertTrue(config.leafConfigs.containsKey("rule_1778405395362"))
 
         // 2. 实例化为 Tree Instance

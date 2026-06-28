@@ -46,25 +46,25 @@ class SqliteTreeConfigProvider(
 
     // @defect D-001: GROUP 绑定跟随分组管理 enabled 状态，已修复缓存缺陷，现为动态查询。
     private fun filterBindings(config: EvaluatorTreeConfig, currentEnabledGroupIds: Set<String>): EvaluatorTreeConfig {
-        val filtered = config.bindings.filter { binding ->
-            when (binding.type) {
+        val filtered = config.bindingIds.filter { id ->
+            when (config.bindingType) {
                 EvaluatorTreeBindingType.GROUP -> {
-                    val enabled = binding.id in currentEnabledGroupIds
+                    val enabled = id in currentEnabledGroupIds
                     if (!enabled) {
-                        myLog.debug { "跳过已禁用分组的绑定: groupId=${binding.id}" }
+                        myLog.debug { "跳过已禁用分组的绑定: groupId=$id" }
                     }
                     enabled
                 }
 
                 EvaluatorTreeBindingType.PURPOSE_TAG -> {
-                    val enabled = binding.id in tagPolicy.enabledTags.map { it.value }
+                    val enabled = id in tagPolicy.enabledTags.map { it.value }
                     if (!enabled) {
-                        myLog.debug { "跳过已禁用用途标签的绑定: tagId=${binding.id}" }
+                        myLog.debug { "跳过已禁用用途标签的绑定: tagId=$id" }
                     }
                     enabled
                 }
             }
         }
-        return config.copy(bindings = filtered)
+        return config.copy(bindingIds = filtered)
     }
 }

@@ -10,6 +10,7 @@ import lin.rule.condition.ConditionPayload
 import lin.rule.parse.FieldSpec
 import lin.rule.score.ScoreEffect
 import lin.rule.tree.*
+import lin.tree_config.bridge.buildEvaluatorLeafConfig
 import lin.tree_config.ui.strategy.*
 
 class DynamicFormLeafEditor : LeafEditor {

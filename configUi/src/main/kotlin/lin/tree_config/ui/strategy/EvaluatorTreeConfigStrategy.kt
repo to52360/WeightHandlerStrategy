@@ -16,10 +16,13 @@ class EvaluatorTreeConfigStrategy(
         existingId: String?,
         extras: Map<String, Any>
     ): String {
-        val bindings = extras["bindings"] as? List<lin.rule.tree.EvaluatorTreeBinding> ?: emptyList()
+        val bindingType = extras["bindingType"] as? lin.rule.tree.EvaluatorTreeBindingType
+            ?: lin.rule.tree.EvaluatorTreeBindingType.GROUP
+        val bindingIds = extras["bindingIds"] as? List<String> ?: emptyList()
         val leafConfigs = extras["leafConfigs"] as? Map<String, lin.rule.tree.EvaluatorLeafConfig> ?: emptyMap()
         val config = EvaluatorTreeConfig(
-            bindings = bindings,
+            bindingType = bindingType,
+            bindingIds = bindingIds,
             root = root,
             leafConfigs = leafConfigs
         )
@@ -33,8 +36,11 @@ class EvaluatorTreeConfigStrategy(
                 name = entity.name,
                 root = config?.root,
                 extras = buildMap {
-                    put("bindingsSummary", entity.bindingsSummary)
-                    config?.bindings?.let { put("bindings", it) }
+                    put("bindingIds", entity.bindingIds)
+                    config?.let {
+                        put("bindingType", it.bindingType)
+                        put("bindingIds", it.bindingIds)
+                    }
                     config?.leafConfigs?.let { put("leafConfigs", it) }
                 }
             )

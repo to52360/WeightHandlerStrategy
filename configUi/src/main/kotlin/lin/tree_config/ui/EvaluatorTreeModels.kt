@@ -87,7 +87,7 @@ object TreeModelConverter {
 data class ConfigListItem(
     val id: String,
     val name: String,
-    val bindingsSummary: String,
+    val bindingIds: String,
     val config: EvaluatorTreeConfig?,
     val isDraft: Boolean = false,
     val enabled: Boolean = true,

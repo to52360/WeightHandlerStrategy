@@ -30,20 +30,21 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                     branchConditionBuilder = logicAssembler::buildBranch
                 )
 
-                // 按 binding.type 分发给对应的 Finder
-                val groupBindings = instance.bindings.filter { it.type == EvaluatorTreeBindingType.GROUP }
-                if (groupBindings.isNotEmpty()) {
-                    configDispatcher.processByType(
-                        groupBindings.map { BindingGroupId(it.id) },
-                        listOf(EvaluatorTreeRoot(instance.root))
-                    )
-                }
-                val tagBindings = instance.bindings.filter { it.type == EvaluatorTreeBindingType.PURPOSE_TAG }
-                if (tagBindings.isNotEmpty()) {
-                    configDispatcher.processByType(
-                        tagBindings.map { PurposeTagBindingId(it.id) },
-                        listOf(EvaluatorTreeRoot(instance.root))
-                    )
+                // 按 instance.bindingType 分发给对应的 Finder
+                when (instance.bindingType) {
+                    EvaluatorTreeBindingType.GROUP -> {
+                        configDispatcher.processByType(
+                            instance.bindingIds.map { BindingGroupId(it) },
+                            listOf(EvaluatorTreeRoot(instance.root))
+                        )
+                    }
+
+                    EvaluatorTreeBindingType.PURPOSE_TAG -> {
+                        configDispatcher.processByType(
+                            instance.bindingIds.map { PurposeTagBindingId(it) },
+                            listOf(EvaluatorTreeRoot(instance.root))
+                        )
+                    }
                 }
             }
         }

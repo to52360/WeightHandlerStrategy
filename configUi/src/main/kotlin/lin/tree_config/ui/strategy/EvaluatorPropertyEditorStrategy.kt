@@ -13,7 +13,6 @@ import lin.rule.tree.*
 import lin.tree_config.bridge.buildEvaluatorLeafConfig
 import lin.tree_config.bridge.leafKind
 import lin.tree_config.bridge.withGuardMissBehavior
-import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.ui.DynamicFieldForm
 import lin.tree_config.ui.LogicNodeType
 import lin.tree_config.ui.LogicNodeWrapper
@@ -21,12 +20,15 @@ import lin.tree_config.ui.strategy.editors.DynamicFormLeafEditor
 import lin.tree_config.ui.strategy.editors.OrthogonalConditionLeafEditor
 import lin.tree_config.ui.strategy.editors.OrthogonalRuleLeafEditor
 import lin.ui.components.PropertyEditorStrategy
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 class EvaluatorPropertyEditorStrategy(
-    private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
-    private val scoreOperatorRegistry: ScoreOperatorRegistry,
     private val leafConfigs: MutableMap<String, EvaluatorLeafConfig>
-) : PropertyEditorStrategy<EvaluatorPayload> {
+) : PropertyEditorStrategy<EvaluatorPayload>, KoinComponent {
+
+    private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
+    private val scoreOperatorRegistry: ScoreOperatorRegistry by inject()
 
     private val dynamicFieldForm by lazy { DynamicFieldForm() }
 

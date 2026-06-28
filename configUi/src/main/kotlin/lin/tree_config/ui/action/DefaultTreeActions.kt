@@ -4,13 +4,20 @@ import javafx.scene.control.Alert
 import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.ButtonType
 import javafx.scene.control.TreeItem
+import lin.card_group.ui.ActiveManagerHolder
+import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorPayload
+import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
+import lin.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.tree_config.ui.EvaluatorTreeWorkbench
 import lin.tree_config.ui.LogicNodeType
 import lin.tree_config.ui.LogicNodeWrapper
 import lin.tree_config.ui.TreeModelConverter
 import lin.tree_config.validation.EvaluatorTreeValidator
+import lin.ui.service.TreeConfigService
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 class CreateNewTreeAction : TreeWorkbenchAction {
     override val title: String = "新建"
@@ -23,20 +30,19 @@ class CreateNewTreeAction : TreeWorkbenchAction {
                 showError("名称不能为空")
                 return@ifPresent
             }
-            if (result.bindings.isEmpty()) {
+            if (result.bindingIds.isEmpty()) {
                 showError("必须选择至少一个绑定目标")
                 return@ifPresent
             }
 
             val draftItem = workbench.addDraftItem(
-                result.name, result.enabled, result.bindings,
+                result.name, result.enabled, result.bindingType, result.bindingIds,
                 managerId = result.managerId, isTemplate = result.isTemplate
             )
 
             val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
-            workbench.setSelectedBindings(result.bindings)
-            workbench.setCurrentEnabled(result.enabled)
+            workbench.updateSelectionState(result.bindingType, result.bindingIds, result.enabled)
             workbench.leafConfigs.clear()
             workbench.propertyPanel.showPlaceholder()
 
@@ -56,13 +62,14 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
             return
         }
 
-        val currentBindings = workbench.getSelectedBindings()
+        val (currentBindingType, currentBindingIds) = workbench.getSelectedBindings()
         val currentEnabled = workbench.getCurrentEnabled()
 
         val dialog = lin.tree_config.ui.components.TreePropertiesDialog(
             initialName = selectedItem.name,
             initialEnabled = currentEnabled,
-            initialBindings = currentBindings,
+            initialBindingType = currentBindingType,
+            initialBindingIds = currentBindingIds,
             initialManagerId = selectedItem.managerId,
             initialIsTemplate = selectedItem.isTemplate
         )
@@ -72,7 +79,7 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
                 showError("名称不能为空")
                 return@ifPresent
             }
-            if (result.bindings.isEmpty()) {
+            if (result.bindingIds.isEmpty()) {
                 showError("必须选择至少一个绑定目标")
                 return@ifPresent
             }
@@ -80,7 +87,7 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
             val newItem = selectedItem.copy(
                 name = result.name,
                 enabled = result.enabled,
-                bindingsSummary = result.bindings.joinToString(",") { "${it.type.name}:${it.id}" },
+                bindingIds = result.bindingIds.joinToString(","),
                 managerId = result.managerId,
                 isTemplate = result.isTemplate
             )
@@ -90,15 +97,18 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
                 workbench.configListView.selectionModel.select(newItem)
             }
 
-            workbench.setSelectedBindings(result.bindings)
-            workbench.setCurrentEnabled(result.enabled)
+            workbench.updateSelectionState(result.bindingType, result.bindingIds, result.enabled)
         }
     }
 }
 
-class SaveTreeAction : TreeWorkbenchAction {
+class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
     override val title: String = "保存"
     override val order: Int = 20
+
+    private val pipelineAssembler: PipelineAssembler by inject()
+    private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
+    private val treeConfigService: TreeConfigService by inject()
 
     override fun execute(workbench: EvaluatorTreeWorkbench) {
         val selectedItem = workbench.configListView.selectionModel.selectedItem
@@ -113,8 +123,8 @@ class SaveTreeAction : TreeWorkbenchAction {
         }
 
         try {
-            val bindings = workbench.getSelectedBindings()
-            if (bindings.isEmpty()) {
+            val (bindingType, bindingIds) = workbench.getSelectedBindings()
+            if (bindingIds.isEmpty()) {
                 showError("请选择至少一个绑定目标（分组或用途标签）")
                 return
             }
@@ -122,13 +132,13 @@ class SaveTreeAction : TreeWorkbenchAction {
             // ====== 统一使用 EvaluatorTreeValidator（UI 和 MCP 共用同一套验证） ======
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
             val config = EvaluatorTreeConfig(
-                bindings = bindings,
-
+                bindingType = bindingType ?: EvaluatorTreeBindingType.GROUP,
+                bindingIds = bindingIds,
                 root = evaluatorNode,
                 leafConfigs = workbench.leafConfigs.toMap()
             )
 
-            val treeValidator = EvaluatorTreeValidator(workbench.leafSourceCatalog, workbench.pipelineAssembler)
+            val treeValidator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
             val treeReport = treeValidator.validate(config)
             if (!treeReport.ok) {
                 val msg = treeReport.diagnostics.joinToString("\n") { "(${it.code}) ${it.message}" }
@@ -139,12 +149,12 @@ class SaveTreeAction : TreeWorkbenchAction {
             // 草稿条目：不传入 existingId，直接新建数据库记录
             // 已保存条目：传入 existingId，执行 UPSERT
             val savedId = if (selectedItem.isDraft) {
-                workbench.treeConfigService.saveConfig(
+                treeConfigService.saveConfig(
                     selectedItem.name, config, null, workbench.getCurrentEnabled(),
                     managerId = selectedItem.managerId, isTemplate = selectedItem.isTemplate
                 )
             } else {
-                workbench.treeConfigService.saveConfig(
+                treeConfigService.saveConfig(
                     selectedItem.name, config, selectedItem.id, workbench.getCurrentEnabled(),
                     managerId = selectedItem.managerId, isTemplate = selectedItem.isTemplate
                 )
@@ -165,9 +175,11 @@ class SaveTreeAction : TreeWorkbenchAction {
     }
 }
 
-class DeleteTreeAction : TreeWorkbenchAction {
+class DeleteTreeAction : TreeWorkbenchAction, KoinComponent {
     override val title: String = "删除"
     override val order: Int = 30
+
+    private val treeConfigService: TreeConfigService by inject()
 
     override fun execute(workbench: EvaluatorTreeWorkbench) {
         val selectedItem = workbench.configListView.selectionModel.selectedItem
@@ -184,7 +196,7 @@ class DeleteTreeAction : TreeWorkbenchAction {
         if (confirm.orElse(ButtonType.CANCEL) == ButtonType.OK) {
             try {
                 if (!selectedItem.isDraft) {
-                    workbench.treeConfigService.delete(selectedItem.id)
+                    treeConfigService.delete(selectedItem.id)
                 }
                 workbench.nodeTreeView.root = null
                 workbench.propertyPanel.showPlaceholder()
@@ -200,13 +212,16 @@ class DeleteTreeAction : TreeWorkbenchAction {
 /**
  * 从模板新建评估树：选择一个已有模板，复制其树结构和叶子配置为新草稿。
  */
-class CreateFromTemplateAction : TreeWorkbenchAction {
+class CreateFromTemplateAction : TreeWorkbenchAction, KoinComponent {
     override val title: String = "从模板新建"
     override val order: Int = 12
 
+    private val activeManagerHolder: ActiveManagerHolder by inject()
+    private val treeConfigService: TreeConfigService by inject()
+
     override fun execute(workbench: EvaluatorTreeWorkbench) {
-        val managerIdSnapshot = workbench.activeManagerHolder.activeManagerId
-        val templates = workbench.treeConfigService.loadTemplates()
+        val managerIdSnapshot = activeManagerHolder.activeManagerId
+        val templates = treeConfigService.loadTemplates()
         if (templates.isEmpty()) {
             showError("暂无可用模板，请先创建并勾选 设为模板 的评估树")
             return
@@ -234,15 +249,14 @@ class CreateFromTemplateAction : TreeWorkbenchAction {
             // 复制模板结构为新草稿（名称加后缀）
             val newName = "${entity.name} 副本"
             val draftItem = workbench.addDraftItem(
-                newName, entity.enabled, config.bindings,
+                newName, entity.enabled, config.bindingType, config.bindingIds,
                 managerId = managerIdSnapshot,
                 isTemplate = false // 从模板创建的不是模板
             )
 
             // 加载模板的树结构
             workbench.nodeTreeView.root = TreeModelConverter.toTreeItem(config.root)
-            workbench.setSelectedBindings(config.bindings)
-            workbench.setCurrentEnabled(entity.enabled)
+            workbench.updateSelectionState(config.bindingType, config.bindingIds, entity.enabled)
             workbench.leafConfigs.clear()
             workbench.leafConfigs.putAll(config.leafConfigs)
             workbench.propertyPanel.showPlaceholder()

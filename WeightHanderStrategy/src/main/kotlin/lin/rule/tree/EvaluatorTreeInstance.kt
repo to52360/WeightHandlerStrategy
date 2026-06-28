@@ -4,7 +4,8 @@ import lin.rule.build.LeafLogic
 import lin.rule.condition.ConditionLogic
 
 data class EvaluatorTreeInstance(
-    val bindings: List<EvaluatorTreeBinding>,
+    val bindingType: EvaluatorTreeBindingType,
+    val bindingIds: List<String>,
     val root: EvaluatorInstanceNode
 )
 
@@ -71,7 +72,8 @@ fun EvaluatorTreeConfig.instantiate(
     }
 
     return EvaluatorTreeInstance(
-        bindings = this.bindings,
+        bindingType = this.bindingType,
+        bindingIds = this.bindingIds,
         root = instantiateNode(this.root)
     )
 }

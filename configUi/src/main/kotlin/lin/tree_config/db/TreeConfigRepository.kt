@@ -12,46 +12,25 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
         val sql = """
             CREATE TABLE IF NOT EXISTS tree_config (
                 id TEXT PRIMARY KEY,
-                bindings_summary TEXT NOT NULL,
+                binding_type TEXT NOT NULL,
+                binding_ids TEXT NOT NULL,
                 name TEXT NOT NULL,
-                config_data TEXT NOT NULL
+                config_data TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                manager_id TEXT,
+                is_template INTEGER NOT NULL DEFAULT 0
             );
         """.trimIndent()
         jdbcTemplate.execute(sql)
-
-        // 兼容旧表：尝试重命名 group_id 列
-        try {
-            jdbcTemplate.execute("ALTER TABLE tree_config RENAME COLUMN group_id TO bindings_summary;")
-        } catch (e: Exception) {
-            // 列已重命名或不存在，忽略
-        }
-
-        // 兼容迁移：添加新列
-        try {
-            jdbcTemplate.execute("ALTER TABLE tree_config ADD COLUMN binding_type TEXT DEFAULT 'UNKNOWN';")
-        } catch (_: Exception) {
-        }
-        try {
-            jdbcTemplate.execute("ALTER TABLE tree_config ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;")
-        } catch (_: Exception) {
-        }
-        try {
-            jdbcTemplate.execute("ALTER TABLE tree_config ADD COLUMN manager_id TEXT;")
-        } catch (_: Exception) {
-        }
-        try {
-            jdbcTemplate.execute("ALTER TABLE tree_config ADD COLUMN is_template INTEGER NOT NULL DEFAULT 0;")
-        } catch (_: Exception) {
-        }
     }
 
     fun save(entity: TreeConfigEntity) {
         val sql = """
-            INSERT INTO tree_config (id, binding_type, bindings_summary, name, config_data, enabled, manager_id, is_template) 
+            INSERT INTO tree_config (id, binding_type, binding_ids, name, config_data, enabled, manager_id, is_template) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET 
                 binding_type = excluded.binding_type,
-                bindings_summary = excluded.bindings_summary,
+                binding_ids = excluded.binding_ids,
                 name = excluded.name,
                 config_data = excluded.config_data,
                 enabled = excluded.enabled,
@@ -62,7 +41,7 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             sql,
             entity.id,
             entity.bindingType,
-            entity.bindingsSummary,
+            entity.bindingIds,
             entity.name,
             entity.configData,
             if (entity.enabled) 1 else 0,
@@ -74,8 +53,8 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
     private val rowMapper = RowMapper { rs, _ ->
         TreeConfigEntity(
             id = rs.getString("id"),
-            bindingType = rs.getString("binding_type") ?: "UNKNOWN",
-            bindingsSummary = rs.getString("bindings_summary"),
+            bindingType = rs.getString("binding_type"),
+            bindingIds = rs.getString("binding_ids"),
             name = rs.getString("name"),
             configData = rs.getString("config_data"),
             enabled = rs.getInt("enabled") != 0,

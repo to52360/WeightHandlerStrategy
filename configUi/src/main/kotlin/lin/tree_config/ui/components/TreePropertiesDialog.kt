@@ -7,7 +7,6 @@ import javafx.scene.layout.VBox
 import lin.card_group.ui.ActiveManagerHolder
 import lin.card_purpose.PurposeTagProvider
 import lin.dao.CardSelectOptionProvider
-import lin.rule.tree.EvaluatorTreeBinding
 import lin.rule.tree.EvaluatorTreeBindingType
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -15,7 +14,8 @@ import org.koin.core.component.inject
 class TreePropertiesDialog(
     initialName: String = "",
     initialEnabled: Boolean = true,
-    initialBindings: List<EvaluatorTreeBinding> = emptyList(),
+    initialBindingType: EvaluatorTreeBindingType? = null,
+    initialBindingIds: List<String> = emptyList(),
     initialManagerId: String? = null,
     initialIsTemplate: Boolean = false
 ) : Dialog<TreePropertiesDialog.Result>(), KoinComponent {
@@ -23,7 +23,8 @@ class TreePropertiesDialog(
     data class Result(
         val name: String,
         val enabled: Boolean,
-        val bindings: List<EvaluatorTreeBinding>,
+        val bindingType: EvaluatorTreeBindingType,
+        val bindingIds: List<String>,
         val managerId: String?,
         val isTemplate: Boolean
     )
@@ -58,7 +59,6 @@ class TreePropertiesDialog(
         val groupCheckItems = mutableMapOf<String, CheckBox>()
         val groupVBox = VBox(5.0)
         try {
-            // 按当前 manager 过滤分组列表（仅 GROUP 绑定时有意义）
             val options = if (managerIdSnapshot != null)
                 CardSelectOptionProvider().getOptionsByManager(managerIdSnapshot)
             else
@@ -89,17 +89,19 @@ class TreePropertiesDialog(
             prefHeight = 150.0
         }
 
-        val initialGroupIds = initialBindings.filter { it.type == EvaluatorTreeBindingType.GROUP }.map { it.id }.toSet()
-        val initialTagIds =
-            initialBindings.filter { it.type == EvaluatorTreeBindingType.PURPOSE_TAG }.map { it.id }.toSet()
+        // 根据 initialBindingType 恢复选择
+        when (initialBindingType) {
+            EvaluatorTreeBindingType.PURPOSE_TAG -> {
+                typeComboBox.selectionModel.select("绑定到用途标签")
+                initialBindingIds.forEach { id -> tagCheckItems[id]?.isSelected = true }
+            }
 
-        groupCheckItems.forEach { (id, item) -> item.isSelected = initialGroupIds.contains(id) }
-        tagCheckItems.forEach { (id, item) -> item.isSelected = initialTagIds.contains(id) }
+            EvaluatorTreeBindingType.GROUP -> {
+                typeComboBox.selectionModel.select("绑定到卡组")
+                initialBindingIds.forEach { id -> groupCheckItems[id]?.isSelected = true }
+            }
 
-        if (initialTagIds.isNotEmpty() && initialGroupIds.isEmpty()) {
-            typeComboBox.selectionModel.select("绑定到用途标签")
-        } else {
-            typeComboBox.selectionModel.select("绑定到卡组")
+            null -> typeComboBox.selectionModel.selectFirst()
         }
 
         val bindingBox = VBox(10.0).apply {
@@ -140,22 +142,16 @@ class TreePropertiesDialog(
 
         setResultConverter { buttonType ->
             if (buttonType == ButtonType.OK) {
-                val bindings = mutableListOf<EvaluatorTreeBinding>()
-                if (typeComboBox.selectionModel.selectedItem == "绑定到卡组") {
-                    groupCheckItems.entries.filter { it.value.isSelected }.forEach {
-                        bindings.add(EvaluatorTreeBinding(EvaluatorTreeBindingType.GROUP, it.key))
-                    }
+                val (bindingType, bindingIds) = if (typeComboBox.selectionModel.selectedItem == "绑定到卡组") {
+                    EvaluatorTreeBindingType.GROUP to groupCheckItems.entries.filter { it.value.isSelected }
+                        .map { it.key }
                 } else {
-                    tagCheckItems.entries.filter { it.value.isSelected }.forEach {
-                        bindings.add(EvaluatorTreeBinding(EvaluatorTreeBindingType.PURPOSE_TAG, it.key))
-                    }
+                    EvaluatorTreeBindingType.PURPOSE_TAG to tagCheckItems.entries.filter { it.value.isSelected }
+                        .map { it.key }
                 }
                 Result(
-                    nameField.text, enabledCheckBox.isSelected, bindings,
-                    // GROUP 绑定使用打开弹窗时的 manager 快照；PURPOSE_TAG 为全局共享。
-                    if (typeComboBox.selectionModel.selectedItem == "绑定到卡组")
-                        managerIdSnapshot
-                    else null,
+                    nameField.text, enabledCheckBox.isSelected, bindingType, bindingIds,
+                    if (bindingType == EvaluatorTreeBindingType.GROUP) managerIdSnapshot else null,
                     templateCheckBox.isSelected
                 )
             } else {
