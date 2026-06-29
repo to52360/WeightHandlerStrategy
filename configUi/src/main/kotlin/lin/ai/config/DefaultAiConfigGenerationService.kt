@@ -29,7 +29,12 @@ class DefaultAiConfigGenerationService(
     }
 
     override fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport {
-        val treeReport = validator.validate(request.config)
+        val treeReport = validator.validate(
+            config = request.config,
+            name = request.name,
+            managerId = request.managerId,
+            requireMetadata = true
+        )
         return ValidationReport(
             ok = treeReport.ok,
             diagnostics = treeReport.diagnostics.map { d ->
@@ -50,8 +55,7 @@ class DefaultAiConfigGenerationService(
             description = request.description,
             existingId = request.existingId,
             enabled = request.enabled,
-            managerId = request.managerId,
-            isTemplate = request.isTemplate
+            managerId = request.managerId
         )
         return SaveEvaluatorTreeResult(id = id, validation = validation)
     }

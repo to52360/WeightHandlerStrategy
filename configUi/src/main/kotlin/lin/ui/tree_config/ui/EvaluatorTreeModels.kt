@@ -92,11 +92,9 @@ data class ConfigListItem(
     val config: EvaluatorTreeConfig?,
     val isDraft: Boolean = false,
     val enabled: Boolean = true,
-    val managerId: String? = null,
-    val isTemplate: Boolean = false
+    val managerId: String? = null
 ) {
     override fun toString(): String = when {
-        isTemplate -> "\uD83D\uDCCB $name [模板]"
         isDraft -> "* $name (未保存)"
         else -> name
     }

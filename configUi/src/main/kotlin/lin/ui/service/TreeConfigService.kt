@@ -79,7 +79,6 @@ class TreeConfigService(
         existingId: String? = null,
         enabled: Boolean = true,
         managerId: String? = null,
-        isTemplate: Boolean = false,
         description: String? = null
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
@@ -95,8 +94,7 @@ class TreeConfigService(
             description = description,
             configData = rootJson,
             enabled = enabled,
-            managerId = managerId,
-            isTemplate = isTemplate
+            managerId = managerId
         )
         repository.save(entity)
         leafConfigRepository.saveAll(id, config.leafConfigs, mapper)
@@ -149,16 +147,9 @@ class TreeConfigService(
         repository.deleteById(id)
     }
 
-    /** 按 managerId 加载配置（包含全局共享），排除模板 */
+    /** 按 managerId 加载配置（包含全局共享） */
     fun loadByManagerId(managerId: String?): List<Pair<TreeConfigEntity, EvaluatorTreeConfig?>> {
         return repository.findByManagerId(managerId, includeGlobal = true).map { entity ->
-            entity to parseConfig(entity)
-        }
-    }
-
-    /** 加载所有模板 */
-    fun loadTemplates(): List<Pair<TreeConfigEntity, EvaluatorTreeConfig?>> {
-        return repository.findTemplates().map { entity ->
             entity to parseConfig(entity)
         }
     }

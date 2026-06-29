@@ -18,8 +18,7 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
                 description TEXT,
                 config_data TEXT NOT NULL,
                 enabled INTEGER NOT NULL DEFAULT 1,
-                manager_id TEXT,
-                is_template INTEGER NOT NULL DEFAULT 0
+                manager_id TEXT
             );
         """.trimIndent()
         jdbcTemplate.execute(treeConfigTable)
@@ -33,12 +32,38 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             );
         """.trimIndent()
         jdbcTemplate.execute(leafConfigTable)
+
+        // 平滑数据迁移：如果有旧表 tree_config 中的 is_template 列和模板数据，自动搬迁并清理
+        migrateTemplatesIfNeeded()
+    }
+
+    private fun migrateTemplatesIfNeeded() {
+        try {
+            val checkColumnSql = "PRAGMA table_info(tree_config)"
+            val columns = jdbcTemplate.queryForList(checkColumnSql)
+            val hasIsTemplate = columns.any { it["name"].toString().equals("is_template", ignoreCase = true) }
+            if (hasIsTemplate) {
+                val migrateSql = """
+                    INSERT OR IGNORE INTO evaluator_tree_template (id, name, description, config_data)
+                    SELECT id, name, description, config_data 
+                    FROM tree_config 
+                    WHERE is_template = 1
+                """.trimIndent()
+                jdbcTemplate.execute(migrateSql)
+
+                val deleteOldTemplatesSql = "DELETE FROM tree_config WHERE is_template = 1"
+                jdbcTemplate.execute(deleteOldTemplatesSql)
+            }
+        } catch (e: Exception) {
+            // 迁移过程遇错容错，避免阻塞引擎启动
+            e.printStackTrace()
+        }
     }
 
     fun save(entity: TreeConfigEntity) {
         val sql = """
-            INSERT INTO tree_config (id, binding_type, binding_ids, name, description, config_data, enabled, manager_id, is_template) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tree_config (id, binding_type, binding_ids, name, description, config_data, enabled, manager_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET 
                 binding_type = excluded.binding_type,
                 binding_ids = excluded.binding_ids,
@@ -46,8 +71,7 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
                 description = excluded.description,
                 config_data = excluded.config_data,
                 enabled = excluded.enabled,
-                manager_id = excluded.manager_id,
-                is_template = excluded.is_template
+                manager_id = excluded.manager_id
         """.trimIndent()
         jdbcTemplate.update(
             sql,
@@ -58,8 +82,7 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             entity.description,
             entity.configData,
             if (entity.enabled) 1 else 0,
-            entity.managerId,
-            if (entity.isTemplate) 1 else 0
+            entity.managerId
         )
     }
 
@@ -72,8 +95,7 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             description = rs.getString("description"),
             configData = rs.getString("config_data"),
             enabled = rs.getInt("enabled") != 0,
-            managerId = rs.getString("manager_id"),
-            isTemplate = rs.getInt("is_template") != 0
+            managerId = rs.getString("manager_id")
         )
     }
 
@@ -115,27 +137,21 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
         jdbcTemplate.update(sql, id)
     }
 
-    /** 按 managerId 过滤，null=全局共享，返回非模板的配置 */
+    /** 按 managerId 过滤，null=全局共享 */
     fun findByManagerId(managerId: String?, includeGlobal: Boolean = true): List<TreeConfigEntity> {
         if (includeGlobal && managerId != null) {
             val sql =
-                "SELECT * FROM tree_config WHERE (manager_id = ? OR manager_id IS NULL) AND is_template = 0 ORDER BY name COLLATE NOCASE ASC"
+                "SELECT * FROM tree_config WHERE (manager_id = ? OR manager_id IS NULL) ORDER BY name COLLATE NOCASE ASC"
             return jdbcTemplate.query(sql, rowMapper, managerId)
         } else if (managerId != null) {
             val sql =
-                "SELECT * FROM tree_config WHERE manager_id = ? AND is_template = 0 ORDER BY name COLLATE NOCASE ASC"
+                "SELECT * FROM tree_config WHERE manager_id = ? ORDER BY name COLLATE NOCASE ASC"
             return jdbcTemplate.query(sql, rowMapper, managerId)
         } else {
             // 全局共享的
             val sql =
-                "SELECT * FROM tree_config WHERE manager_id IS NULL AND is_template = 0 ORDER BY name COLLATE NOCASE ASC"
+                "SELECT * FROM tree_config WHERE manager_id IS NULL ORDER BY name COLLATE NOCASE ASC"
             return jdbcTemplate.query(sql, rowMapper)
         }
-    }
-
-    /** 查询所有模板 */
-    fun findTemplates(): List<TreeConfigEntity> {
-        val sql = "SELECT * FROM tree_config WHERE is_template = 1 ORDER BY name COLLATE NOCASE ASC"
-        return jdbcTemplate.query(sql, rowMapper)
     }
 }

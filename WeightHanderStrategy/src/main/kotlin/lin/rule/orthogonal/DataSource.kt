@@ -12,6 +12,10 @@ interface DataSource<out T : Any> {
     val id: String
     val name: String
     val description: String
+
+    /**
+     * 所属分类 ID 集合（建议使用 [OrthogonalCategoryCatalog] 中的标准分类 ID）
+     */
     val categories: Set<String>
     val outputType: KType
 

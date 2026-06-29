@@ -109,6 +109,11 @@ class TreePropertiesDialog(
             children.addAll(typeComboBox, pane)
         }
 
+        val managerLabel = Label(managerIdSnapshot ?: "全局通用 (未限定卡组)").apply {
+            style =
+                if (managerIdSnapshot != null) "-fx-font-weight: bold; -fx-text-fill: #2196F3;" else "-fx-font-weight: bold; -fx-text-fill: #4CAF50;"
+        }
+
         typeComboBox.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
             if (bindingBox.children.size > 1) {
                 bindingBox.children.removeAt(1)
@@ -126,23 +131,55 @@ class TreePropertiesDialog(
             padding = Insets(20.0, 50.0, 10.0, 10.0)
         }
 
-        grid.add(Label("名称:"), 0, 0)
-        grid.add(nameField, 1, 0)
+        grid.add(Label("当前卡组环境:"), 0, 0)
+        grid.add(managerLabel, 1, 0)
 
-        grid.add(Label("描述:"), 0, 1)
-        grid.add(descField, 1, 1)
+        grid.add(Label("名称:"), 0, 1)
+        grid.add(nameField, 1, 1)
 
-        grid.add(Label("状态:"), 0, 2)
-        grid.add(enabledCheckBox, 1, 2)
+        grid.add(Label("描述:"), 0, 2)
+        grid.add(descField, 1, 2)
 
-        grid.add(Label("绑定目标:"), 0, 3)
-        grid.add(bindingBox, 1, 3)
+        grid.add(Label("状态:"), 0, 3)
+        grid.add(enabledCheckBox, 1, 3)
+
+        grid.add(Label("绑定目标:"), 0, 4)
+        grid.add(bindingBox, 1, 4)
 
         dialogPane.content = grid
 
+        val okButton = dialogPane.lookupButton(ButtonType.OK)
+        okButton.addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
+            if (nameField.text.trim().isBlank()) {
+                Alert(Alert.AlertType.WARNING).apply {
+                    title = "校验未通过"
+                    headerText = "请输入评估树名称"
+                }.showAndWait()
+                event.consume()
+                return@addEventFilter
+            }
+
+            val isGroup = typeComboBox.selectionModel.selectedItem == "绑定到卡组"
+            val selectedBindingIds = if (isGroup) {
+                groupCheckItems.entries.filter { it.value.isSelected }.map { it.key }
+            } else {
+                tagCheckItems.entries.filter { it.value.isSelected }.map { it.key }
+            }
+
+            if (selectedBindingIds.isEmpty()) {
+                Alert(Alert.AlertType.WARNING).apply {
+                    title = "校验未通过"
+                    headerText = "必须选择至少一个绑定目标（绑定卡组或用途标签）！"
+                }.showAndWait()
+                event.consume()
+                return@addEventFilter
+            }
+        }
+
         setResultConverter { buttonType ->
             if (buttonType == ButtonType.OK) {
-                val (bindingType, bindingIds) = if (typeComboBox.selectionModel.selectedItem == "绑定到卡组") {
+                val isGroup = typeComboBox.selectionModel.selectedItem == "绑定到卡组"
+                val (bindingType, bindingIds) = if (isGroup) {
                     EvaluatorTreeBindingType.GROUP to groupCheckItems.entries.filter { it.value.isSelected }
                         .map { it.key }
                 } else {
@@ -150,12 +187,12 @@ class TreePropertiesDialog(
                         .map { it.key }
                 }
                 Result(
-                    name = nameField.text,
+                    name = nameField.text.trim(),
                     description = descField.text.trim().takeIf { it.isNotBlank() },
                     enabled = enabledCheckBox.isSelected,
                     bindingType = bindingType,
                     bindingIds = bindingIds,
-                    managerId = if (bindingType == EvaluatorTreeBindingType.GROUP) managerIdSnapshot else null
+                    managerId = managerIdSnapshot
                 )
             } else {
                 null

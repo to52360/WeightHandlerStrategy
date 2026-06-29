@@ -7,10 +7,13 @@ import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
 import lin.ui.UiExtension
+import lin.ui.service.EvaluatorTreeResolver
+import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
 import lin.ui.tree_config.db.EvaluatorLeafConfigRepository
 import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
+import lin.ui.tree_config.db.EvaluatorTreeTemplateRepository
 import lin.ui.tree_config.db.TreeConfigRepository
 import lin.ui.tree_config.ui.EvaluatorTreeExtension
 import lin.ui.tree_config.ui.action.*
@@ -106,8 +109,11 @@ val dbModule = module {
 }
 val uiDBModule = module {
     single { TreeConfigRepository(get()) }
+    single { EvaluatorTreeTemplateRepository(get()) }
     single { EvaluatorLeafConfigRepository(get()) }
     single { TreeConfigService(get(), get(), createTreeConfigMapper()) }
+    single { EvaluatorTreeTemplateService(get(), get(), createTreeConfigMapper()) }
+    single { EvaluatorTreeResolver(get(), get()) }
     single { _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigRepository(get()) }
     single {
         _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigService(

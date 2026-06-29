@@ -101,7 +101,6 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         bindingType: EvaluatorTreeBindingType,
         bindingIds: List<String>,
         managerId: String? = null,
-        isTemplate: Boolean = false,
         initialRoot: LogicNode<EvaluatorPayload>? = null,
         initialLeafConfigs: Map<String, EvaluatorLeafConfig>? = null
     ) =
@@ -112,7 +111,6 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
             bindingType,
             bindingIds,
             managerId,
-            isTemplate,
             initialRoot,
             initialLeafConfigs
         )

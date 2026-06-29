@@ -8,6 +8,7 @@ import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
+import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
 import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.ui.tree_config.ui.EvaluatorTreeWorkbench
@@ -37,7 +38,7 @@ class CreateNewTreeAction : TreeWorkbenchAction {
 
             val draftItem = workbench.addDraftItem(
                 result.name, result.description, result.enabled, result.bindingType, result.bindingIds,
-                managerId = result.managerId, isTemplate = false
+                managerId = result.managerId
             )
 
             val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
@@ -89,8 +90,7 @@ class EditTreePropertiesAction : TreeWorkbenchAction {
                 description = result.description,
                 enabled = result.enabled,
                 bindingIds = result.bindingIds.joinToString(","),
-                managerId = result.managerId,
-                isTemplate = selectedItem.isTemplate
+                managerId = result.managerId
             )
             val idx = workbench.configListView.items.indexOf(selectedItem)
             if (idx >= 0) {
@@ -140,10 +140,15 @@ class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
             )
 
             val treeValidator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
-            val treeReport = treeValidator.validate(config)
+            val treeReport = treeValidator.validate(
+                config = config,
+                name = selectedItem.name,
+                managerId = selectedItem.managerId,
+                requireMetadata = true
+            )
             if (!treeReport.ok) {
                 val msg = treeReport.diagnostics.joinToString("\n") { "(${it.code}) ${it.message}" }
-                showError("保存被拒绝，检测到参数配置不符合约束契约：\n\n$msg")
+                showError("保存被拒绝，检测到配置参数不符合约束契约：\n\n$msg")
                 return
             }
             // ================================================================
@@ -152,13 +157,13 @@ class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
             val savedId = if (selectedItem.isDraft) {
                 treeConfigService.saveConfig(
                     selectedItem.name, config, null, workbench.getCurrentEnabled(),
-                    managerId = selectedItem.managerId, isTemplate = selectedItem.isTemplate,
+                    managerId = selectedItem.managerId,
                     description = selectedItem.description
                 )
             } else {
                 treeConfigService.saveConfig(
                     selectedItem.name, config, selectedItem.id, workbench.getCurrentEnabled(),
-                    managerId = selectedItem.managerId, isTemplate = selectedItem.isTemplate,
+                    managerId = selectedItem.managerId,
                     description = selectedItem.description
                 )
             }
@@ -182,21 +187,17 @@ class SaveAsTemplateAction : TreeWorkbenchAction, KoinComponent {
     override val title: String = "存为模板"
     override val order: Int = 25
 
-    private val treeConfigService: TreeConfigService by inject()
+    private val templateService: EvaluatorTreeTemplateService by inject()
     private val pipelineAssembler: PipelineAssembler by inject()
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog by inject()
 
     override fun execute(workbench: EvaluatorTreeWorkbench) {
-        val selectedItem = workbench.configListView.selectionModel.selectedItem
-        if (selectedItem == null) {
-            showError("请先在左侧列表中选择要另存为模板的评估树")
-            return
-        }
         val rootNode = workbench.nodeTreeView.root
         if (rootNode == null) {
-            showError("当前树为空，无法另存为模板")
+            showError("当前树为空，无法保存为模板")
             return
         }
+        val selectedItem = workbench.configListView.selectionModel.selectedItem ?: return
 
         val dialog = javafx.scene.control.TextInputDialog("${selectedItem.name} 模板").apply {
             title = "存为模板"
@@ -229,14 +230,11 @@ class SaveAsTemplateAction : TreeWorkbenchAction, KoinComponent {
                     return@ifPresent
                 }
 
-                treeConfigService.saveConfig(
+                templateService.saveTemplate(
                     name = name,
                     config = config,
-                    existingId = null,
-                    enabled = true,
-                    managerId = selectedItem.managerId,
-                    isTemplate = true,
-                    description = selectedItem.description
+                    description = selectedItem.description,
+                    groupId = null
                 )
 
                 showInfo("存为模板成功", "已成功另存模板 [$name]")
@@ -288,10 +286,10 @@ class CreateFromTemplateAction : TreeWorkbenchAction, KoinComponent {
     override val title: String = "从模板新建"
     override val order: Int = 12
 
-    private val treeConfigService: TreeConfigService by inject()
+    private val templateService: EvaluatorTreeTemplateService by inject()
 
     override fun execute(workbench: EvaluatorTreeWorkbench) {
-        val templates = treeConfigService.loadTemplates()
+        val templates = templateService.loadAllTemplates()
         if (templates.isEmpty()) {
             showError("暂无可用模板，请先使用 [存为模板] 功能创建模板")
             return
@@ -321,9 +319,9 @@ class CreateFromTemplateAction : TreeWorkbenchAction, KoinComponent {
                 initialName = "${entity.name} 策略",
                 initialDescription = entity.description,
                 initialEnabled = true,
-                initialBindingType = config.bindingType,
-                initialBindingIds = config.bindingIds,
-                initialManagerId = entity.managerId
+                initialBindingType = EvaluatorTreeBindingType.GROUP,
+                initialBindingIds = emptyList(),
+                initialManagerId = null
             )
 
             propDialog.showAndWait().ifPresent { result ->
@@ -336,10 +334,10 @@ class CreateFromTemplateAction : TreeWorkbenchAction, KoinComponent {
                     return@ifPresent
                 }
 
-                // 3. 创建新草稿并装载模板的树结构与叶子配置
+                // 3. 创建新草稿并装载模板的树结构与完整的叶子配置
                 val draftItem = workbench.addDraftItem(
                     result.name, result.description, result.enabled, result.bindingType, result.bindingIds,
-                    managerId = result.managerId, isTemplate = false,
+                    managerId = result.managerId,
                     initialRoot = config.root, initialLeafConfigs = config.leafConfigs
                 )
 

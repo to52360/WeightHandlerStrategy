@@ -83,15 +83,13 @@ class ConfigListPanel(
                         style = ""
                     } else {
                         val statusStr = if (item.enabled) "" else " [已禁用]"
-                        val templateStr = if (item.isTemplate) " [模板]" else ""
                         text = when {
                             item.isDraft -> "* ${item.name}$statusStr (未保存)"
-                            else -> "${item.name}$templateStr$statusStr"
+                            else -> "${item.name}$statusStr"
                         }
                         style = when {
                             !item.enabled -> "-fx-text-fill: #999999;"
                             item.isDraft -> "-fx-text-fill: gray; -fx-font-style: italic;"
-                            item.isTemplate -> "-fx-text-fill: #2196F3;"
                             else -> ""
                         }
                     }
@@ -150,8 +148,7 @@ class ConfigListPanel(
                     bindingIds = entity.bindingIds,
                     config = config,
                     enabled = entity.enabled,
-                    managerId = entity.managerId,
-                    isTemplate = entity.isTemplate
+                    managerId = entity.managerId
                 )
             )
         }
@@ -172,7 +169,6 @@ class ConfigListPanel(
         bindingType: EvaluatorTreeBindingType,
         bindingIds: List<String> = emptyList(),
         managerId: String? = null,
-        isTemplate: Boolean = false,
         initialRoot: lin.rule.tree.LogicNode<lin.rule.tree.EvaluatorPayload>? = null,
         initialLeafConfigs: Map<String, lin.rule.tree.EvaluatorLeafConfig>? = null
     ): ConfigListItem {
@@ -191,8 +187,7 @@ class ConfigListPanel(
             ),
             isDraft = true,
             enabled = enabled,
-            managerId = managerId,
-            isTemplate = isTemplate
+            managerId = managerId
         )
         configListView.items.add(0, draftItem)
         return draftItem

@@ -66,7 +66,6 @@ class McpToolRouter(
                 "existingId": { "type": "string" },
                 "enabled": { "type": "boolean" },
                 "managerId": { "type": "string" },
-                "isTemplate": { "type": "boolean" },
                 "config": { "type": "object" }
               }
             }

@@ -34,10 +34,36 @@ class EvaluatorTreeValidator(
         val diagnostics: List<ValidationDiagnostic> = emptyList()
     )
 
-    fun validate(config: EvaluatorTreeConfig): ValidationReport {
+    fun validate(
+        config: EvaluatorTreeConfig,
+        name: String? = null,
+        managerId: String? = null,
+        requireMetadata: Boolean = false
+    ): ValidationReport {
         val diagnostics = mutableListOf<ValidationDiagnostic>()
         val leafConfigs = config.leafConfigs
         val knownSources = leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
+
+        // 0. 元数据校验（名称、卡组管理ID、绑定目标）
+        if (name != null && name.trim().isBlank()) {
+            diagnostics += ValidationDiagnostic("config_name_blank", "配置名称不能为空", "name")
+        }
+        if (requireMetadata) {
+            if (config.bindingType == EvaluatorTreeBindingType.GROUP && managerId.isNullOrBlank()) {
+                diagnostics += ValidationDiagnostic(
+                    "manager_id_missing",
+                    "卡组专属策略必须指定所属卡组管理 ID (managerId)",
+                    "managerId"
+                )
+            }
+            if (config.bindingIds.isEmpty()) {
+                diagnostics += ValidationDiagnostic(
+                    "binding_ids_empty",
+                    "必须选择至少一个绑定目标 (bindingIds)",
+                    "bindingIds"
+                )
+            }
+        }
 
         // 1. root 引用的 leaf nodeId 是否缺失 leafConfig
         collectReferencedLeafNodeIds(config.root).forEach { nodeId ->

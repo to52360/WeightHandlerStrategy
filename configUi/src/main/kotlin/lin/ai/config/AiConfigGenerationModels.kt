@@ -40,8 +40,7 @@ data class SaveEvaluatorTreeRequest(
     val description: String? = null,
     val existingId: String? = null,
     val enabled: Boolean = true,
-    val managerId: String? = null,
-    val isTemplate: Boolean = false
+    val managerId: String? = null
 )
 
 data class SaveEvaluatorTreeResult(
