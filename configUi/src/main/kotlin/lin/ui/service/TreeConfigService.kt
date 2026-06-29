@@ -8,8 +8,9 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.condition.ConditionPayload
 import lin.rule.score.ScoreEffect
 import lin.rule.tree.*
-import lin.tree_config.db.TreeConfigEntity
-import lin.tree_config.db.TreeConfigRepository
+import lin.ui.tree_config.db.EvaluatorLeafConfigRepository
+import lin.ui.tree_config.db.TreeConfigEntity
+import lin.ui.tree_config.db.TreeConfigRepository
 import lin.utils.json.registerLogicNodeMixin
 import java.util.*
 
@@ -63,9 +64,14 @@ abstract class ScoreEffectMixin
 
 class TreeConfigService(
     private val repository: TreeConfigRepository,
+    private val leafConfigRepository: EvaluatorLeafConfigRepository,
     private val mapper: ObjectMapper
 ) {
-
+    /**
+     * 避免 EvaluatorNode (typealias) 导致的 Jackson 泛型解析丢失。
+     * 显式声明 LogicNode&lt;EvaluatorPayload&gt; 使 JsonTypeInfo 正确处理 payload 多态。
+     */
+    private data class RootHolder(val root: LogicNode<EvaluatorPayload>)
 
     fun saveConfig(
         name: String,
@@ -73,21 +79,27 @@ class TreeConfigService(
         existingId: String? = null,
         enabled: Boolean = true,
         managerId: String? = null,
-        isTemplate: Boolean = false
+        isTemplate: Boolean = false,
+        description: String? = null
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
-        val json = mapper.writeValueAsString(config)
+
+        // 仅序列化 root（树结构），leafConfigs 走独立表。
+        // 用 RootHolder 包装以绕过 typealias 的泛型解析丢失问题。
+        val rootJson = mapper.writeValueAsString(RootHolder(config.root))
         val entity = TreeConfigEntity(
             id = id,
             bindingType = config.bindingType.name,
             bindingIds = config.bindingIds.joinToString(","),
             name = name,
-            configData = json,
+            description = description,
+            configData = rootJson,
             enabled = enabled,
             managerId = managerId,
             isTemplate = isTemplate
         )
         repository.save(entity)
+        leafConfigRepository.saveAll(id, config.leafConfigs, mapper)
         return id
     }
 
@@ -117,15 +129,23 @@ class TreeConfigService(
     }
 
     private fun parseConfig(entity: TreeConfigEntity): EvaluatorTreeConfig? {
-        return try {
-            mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
+        val root = try {
+            mapper.readValue(entity.configData, RootHolder::class.java).root
         } catch (e: Exception) {
             e.printStackTrace()
-            null
+            return null
         }
+        val leafConfigs = leafConfigRepository.findByConfigId(entity.id, mapper)
+        return EvaluatorTreeConfig(
+            bindingType = EvaluatorTreeBindingType.valueOf(entity.bindingType),
+            bindingIds = entity.bindingIds.split(",").filter { it.isNotBlank() },
+            root = root,
+            leafConfigs = leafConfigs
+        )
     }
 
     fun delete(id: String) {
+        leafConfigRepository.deleteByConfigId(id)
         repository.deleteById(id)
     }
 

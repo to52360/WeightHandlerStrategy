@@ -37,6 +37,7 @@ data class AiFieldSpec(
 data class SaveEvaluatorTreeRequest(
     val name: String,
     val config: EvaluatorTreeConfig,
+    val description: String? = null,
     val existingId: String? = null,
     val enabled: Boolean = true,
     val managerId: String? = null,

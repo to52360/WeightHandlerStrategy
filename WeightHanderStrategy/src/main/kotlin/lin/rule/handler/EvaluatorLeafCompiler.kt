@@ -22,7 +22,7 @@ import kotlin.reflect.full.isSubtypeOf
  * 守卫逻辑编译：查注册表、验参数、构建 [ConditionLogic]。
  * 只依赖条件相关服务，不碰评分。
  */
-internal class GuardCompiler(
+class GuardCompiler(
     private val conditionRegistry: ConditionRegistry,
     private val conditionTreeProviders: List<ConditionTreeConfigProvider>,
     private val assembler: PipelineAssembler
@@ -126,7 +126,7 @@ internal class GuardCompiler(
  * 评分逻辑编译：编译编码规则或 SourceScore 管道。
  * 只依赖规则/评分相关服务，不碰条件守卫。
  */
-internal class ScoreCompiler(
+class ScoreCompiler(
     private val ruleRegistry: RuleRegistry,
     private val assembler: PipelineAssembler,
     private val scoreOperatorRegistry: ScoreOperatorRegistry
@@ -210,7 +210,7 @@ internal class ScoreCompiler(
  * 叶子逻辑编排器：组合 [GuardCompiler] 和 [ScoreCompiler] 的结果，
  * 包装为 [LeafLogic] 执行闭包。
  */
-internal class LeafLogicAssembler(
+class LeafLogicAssembler(
     private val guardCompiler: GuardCompiler,
     private val scoreCompiler: ScoreCompiler
 ) {

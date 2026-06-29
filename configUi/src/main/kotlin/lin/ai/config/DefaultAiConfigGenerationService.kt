@@ -1,9 +1,9 @@
 package lin.ai.config
 
 import lin.rule.condition.PipelineAssembler
-import lin.tree_config.db.EvaluatorLeafSourceCatalog
-import lin.tree_config.validation.EvaluatorTreeValidator
 import lin.ui.service.TreeConfigService
+import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
+import lin.ui.tree_config.validation.EvaluatorTreeValidator
 
 /**
  * 面向 MCP 的配置生成门面。
@@ -47,6 +47,7 @@ class DefaultAiConfigGenerationService(
         val id = treeConfigService.saveConfig(
             name = request.name,
             config = request.config,
+            description = request.description,
             existingId = request.existingId,
             enabled = request.enabled,
             managerId = request.managerId,

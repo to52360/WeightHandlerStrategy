@@ -1,27 +1,26 @@
 package lin.provider
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import lin.card_group.db.CardGroupRepository
-import lin.card_purpose.PurposeTagTreeBindingPolicy
 import lin.myLog
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.serviceLoader.provider.TreeConfigProvider
-import lin.tree_config.db.TreeConfigRepository
+
+import lin.ui.tree_config.db.TreeConfigRepository
 import lin.utils.runCatchingLog
 
 /**
  * [TreeConfigProvider] 的 SQLite 实现，供策略层通过 SPI 加载评估树配置。
  *
  * 在 SPI 边界完成绑定过滤：GROUP 绑定参考 [CardManagerEntity.enabled]，
- * PURPOSE_TAG 绑定参考 [PurposeTagTreeBindingPolicy]。
+ * PURPOSE_TAG 绑定参考 [lin.ui.card_purpose.PurposeTagTreeBindingPolicy]。
  * 引擎层收到的 [EvaluatorTreeConfig] 只包含有效的绑定目标。
  */
 class SqliteTreeConfigProvider(
     private val repository: TreeConfigRepository,
     private val mapper: ObjectMapper,
-    private val groupRepository: CardGroupRepository,
-    private val tagPolicy: PurposeTagTreeBindingPolicy
+    private val groupRepository: lin.ui.card_group.db.CardGroupRepository,
+    private val tagPolicy: lin.ui.card_purpose.PurposeTagTreeBindingPolicy
 ) : TreeConfigProvider {
     override fun findById(id: String): EvaluatorTreeConfig? {
         val entity = repository.findById(id) ?: return null

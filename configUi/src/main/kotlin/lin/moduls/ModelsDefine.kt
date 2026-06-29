@@ -2,37 +2,18 @@ package lin.moduls
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import lin.card_group.db.CardGroupRepository
-import lin.card_group.db.CardGroupService
-import lin.card_group.ui.ActiveManagerHolder
-import lin.card_group.ui.CardGroupExtension
-import lin.card_purpose.DefaultPurposeTagProvider
-import lin.card_purpose.PurposeTagProvider
-import lin.card_purpose.PurposeTagTreeBindingPolicy
-import lin.card_purpose.db.CardPurposeRepository
-import lin.card_purpose.ui.CardPurposeExtension
-import lin.condition_tree.db.ConditionTreeConfigRepository
-import lin.condition_tree.db.ConditionTreeConfigService
-import lin.condition_tree.db.createConditionTreeConfigMapper
-import lin.condition_tree.ui.ConditionTreeExtension
-import lin.condition_tree.ui.action.ConditionTreeWorkbenchAction
-import lin.condition_tree.ui.action.CreateConditionTreeAction
-import lin.condition_tree.ui.action.DeleteConditionTreeAction
-import lin.condition_tree.ui.action.SaveConditionTreeAction
 import lin.config.AppConfig
 import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
-import lin.tree_config.db.EvaluatorLeafSourceCatalog
-import lin.tree_config.db.TreeConfigRepository
-import lin.tree_config.ui.EvaluatorTreeExtension
-import lin.tree_config.ui.action.CreateNewTreeAction
-import lin.tree_config.ui.action.DeleteTreeAction
-import lin.tree_config.ui.action.SaveTreeAction
-import lin.tree_config.ui.action.TreeWorkbenchAction
 import lin.ui.UiExtension
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
+import lin.ui.tree_config.db.EvaluatorLeafConfigRepository
+import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
+import lin.ui.tree_config.db.TreeConfigRepository
+import lin.ui.tree_config.ui.EvaluatorTreeExtension
+import lin.ui.tree_config.ui.action.*
 import lin.utils.serviceLoader.loadSpiList
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
@@ -71,30 +52,31 @@ val uiModule = module {
     single { ScoreOperatorRegistry(loadSpiList()) }
 
     // UI 扩展注册
-    single { CardGroupExtension() } bind UiExtension::class
+    single { _root_ide_package_.lin.ui.card_group.ui.CardGroupExtension() } bind UiExtension::class
     single { EvaluatorTreeExtension() } bind UiExtension::class
-    single { ConditionTreeExtension() } bind UiExtension::class
-    single { CardPurposeExtension() } bind UiExtension::class
-    single { lin.combo_plan.ui.ComboPlanExtension() } bind UiExtension::class
+    single { _root_ide_package_.lin.ui.condition_tree.ui.ConditionTreeExtension() } bind UiExtension::class
+    single { _root_ide_package_.lin.ui.card_purpose.ui.CardPurposeExtension() } bind UiExtension::class
+    single { _root_ide_package_.lin.ui.combo_plan.ui.ComboPlanExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
-    single { lin.tree_config.ui.action.CreateFromTemplateAction() } bind TreeWorkbenchAction::class
-    single { lin.tree_config.ui.action.EditTreePropertiesAction() } bind TreeWorkbenchAction::class
+    single { CreateFromTemplateAction() } bind TreeWorkbenchAction::class
+    single { EditTreePropertiesAction() } bind TreeWorkbenchAction::class
     single { SaveTreeAction() } bind TreeWorkbenchAction::class
+    single { SaveAsTemplateAction() } bind TreeWorkbenchAction::class
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
 
     // 条件树工作台动作注册
-    single { CreateConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
-    single { SaveConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
-    single { DeleteConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+    single { _root_ide_package_.lin.ui.condition_tree.ui.action.CreateConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
+    single { _root_ide_package_.lin.ui.condition_tree.ui.action.SaveConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
+    single { _root_ide_package_.lin.ui.condition_tree.ui.action.DeleteConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
 
     // 用途标签目录与显示
-    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
-    single { PurposeTagTreeBindingPolicy(get()) }
+    single<lin.ui.card_purpose.PurposeTagProvider> { _root_ide_package_.lin.ui.card_purpose.DefaultPurposeTagProvider() }
+    single { _root_ide_package_.lin.ui.card_purpose.PurposeTagTreeBindingPolicy(get()) }
 
     // 全局卡组选择状态
-    single { ActiveManagerHolder() }
+    single { _root_ide_package_.lin.ui.card_group.ui.ActiveManagerHolder() }
 
 }
 
@@ -124,15 +106,22 @@ val dbModule = module {
 }
 val uiDBModule = module {
     single { TreeConfigRepository(get()) }
-    single { TreeConfigService(get(), createTreeConfigMapper()) }
-    single { ConditionTreeConfigRepository(get()) }
-    single { ConditionTreeConfigService(get(), createConditionTreeConfigMapper()) }
+    single { EvaluatorLeafConfigRepository(get()) }
+    single { TreeConfigService(get(), get(), createTreeConfigMapper()) }
+    single { _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigRepository(get()) }
+    single {
+        _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigService(
+            get(),
+            _root_ide_package_.lin.ui.condition_tree.db.createConditionTreeConfigMapper()
+        )
+    }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
-    single { CardGroupRepository(get()) }
-    single { CardGroupService(get()) }
-    single { CardPurposeRepository(get()) }
-    single { lin.combo_plan.db.ComboPlanDefinitionRepository(get()) }
-    single { lin.orthogonal_template.db.OrthogonalTemplateRepository(get()) }
+    single { _root_ide_package_.lin.ui.card_group.db.CardGroupRepository(get()) }
+    single { _root_ide_package_.lin.ui.card_group.db.CardGroupService(get()) }
+    single { _root_ide_package_.lin.ui.card_purpose.db.CardPurposeRepository(get()) }
+    single { _root_ide_package_.lin.ui.combo_plan.db.ComboPlanDefinitionRepository(get()) }
+    single { _root_ide_package_.lin.ui.db.TemplateGroupRepository(get()) }
+    single { _root_ide_package_.lin.ui.db.OrthogonalTemplateRepository(get()) }
 }
 
 

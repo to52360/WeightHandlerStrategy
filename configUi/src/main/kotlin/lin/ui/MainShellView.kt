@@ -9,9 +9,9 @@ import javafx.scene.layout.BorderPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
-import lin.card_group.db.CardGroupRepository
-import lin.card_group.db.CardManagerEntity
-import lin.card_group.ui.ActiveManagerHolder
+import lin.ui.card_group.db.CardGroupRepository
+import lin.ui.card_group.db.CardManagerEntity
+import lin.ui.card_group.ui.ActiveManagerHolder
 import org.koin.core.component.KoinComponent
 
 /**

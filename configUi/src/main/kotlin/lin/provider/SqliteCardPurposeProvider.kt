@@ -1,8 +1,8 @@
 package lin.provider
 
 import lin.bean.usePlan.CardPurpose
-import lin.card_purpose.db.CardPurposeRepository
 import lin.serviceLoader.provider.CardPurposeProvider
+import lin.ui.card_purpose.db.CardPurposeRepository
 
 class SqliteCardPurposeProvider(
     private val repository: CardPurposeRepository

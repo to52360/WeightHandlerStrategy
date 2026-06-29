@@ -2,10 +2,14 @@ package lin.ui.components
 
 import javafx.scene.control.*
 import javafx.scene.layout.VBox
-import lin.orthogonal_template.db.OrthogonalTemplateEntity
+import lin.ui.db.OrthogonalTemplateEntity
+import lin.ui.db.TemplateGroupEntity
+import lin.ui.db.TemplateGroupRepository
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 /**
- * 可复用的模板名称/描述输入对话框，同时用于 正交条件 和 正交规则 的模板保存。
+ * 可复用的模板名称/描述/分组输入对话框，同时用于 正交条件 和 正交规则 的模板保存。
  *
  * 用法：
  * ```
@@ -17,7 +21,7 @@ import lin.orthogonal_template.db.OrthogonalTemplateEntity
  * )
  * val result = dialog.showAndWait()
  * if (result.isPresent) {
- *     val (name, desc) = result.get()
+ *     val (name, desc, groupId) = result.get()
  *     ...
  * }
  * ```
@@ -27,7 +31,9 @@ class TemplateNameDialog(
     headerText: String,
     namePromptText: String = "模板名称",
     descPromptText: String = "描述信息"
-) : Dialog<Pair<String, String>>() {
+) : Dialog<Triple<String, String, String?>>(), KoinComponent {
+
+    private val templateGroupRepo: TemplateGroupRepository by inject()
 
     init {
         this.title = title
@@ -38,16 +44,36 @@ class TemplateNameDialog(
         val nameInput = TextField().apply { promptText = namePromptText }
         val descInput = TextField().apply { promptText = descPromptText }
 
+        fun groupCellText(item: TemplateGroupEntity?) = item?.name ?: ""
+        val groupCombo = ComboBox<TemplateGroupEntity>().apply {
+            promptText = "选择分组（可选）"
+            maxWidth = Double.MAX_VALUE
+            setCellFactory {
+                object : ListCell<TemplateGroupEntity>() {
+                    override fun updateItem(item: TemplateGroupEntity?, empty: Boolean) {
+                        super.updateItem(item, empty); text = groupCellText(item)
+                    }
+                }
+            }
+            buttonCell = object : ListCell<TemplateGroupEntity>() {
+                override fun updateItem(item: TemplateGroupEntity?, empty: Boolean) {
+                    super.updateItem(item, empty); text = groupCellText(item)
+                }
+            }
+        }
+        groupCombo.items.addAll(templateGroupRepo.findAll())
+
         dialogPane.content = VBox(8.0).apply {
             children.addAll(
                 Label("模板名称:"), nameInput,
-                Label("描述:"), descInput
+                Label("描述:"), descInput,
+                Label("分组:"), groupCombo
             )
         }
 
         setResultConverter { buttonType ->
             if (buttonType == ButtonType.OK) {
-                nameInput.text.trim() to descInput.text.trim()
+                Triple(nameInput.text.trim(), descInput.text.trim(), groupCombo.value?.id)
             } else null
         }
     }
