@@ -7,6 +7,26 @@ import lin.rule.condition.ConditionRegistry
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreOperatorRegistry
 import lin.ui.UiExtension
+import lin.ui.card_group.db.CardGroupRepository
+import lin.ui.card_group.db.CardGroupService
+import lin.ui.card_group.ui.ActiveManagerHolder
+import lin.ui.card_group.ui.CardGroupExtension
+import lin.ui.card_purpose.DefaultPurposeTagProvider
+import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
+import lin.ui.card_purpose.db.CardPurposeRepository
+import lin.ui.card_purpose.ui.CardPurposeExtension
+import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
+import lin.ui.combo_plan.ui.ComboPlanExtension
+import lin.ui.condition_tree.db.ConditionTreeConfigRepository
+import lin.ui.condition_tree.db.ConditionTreeConfigService
+import lin.ui.condition_tree.db.createConditionTreeConfigMapper
+import lin.ui.condition_tree.ui.ConditionTreeExtension
+import lin.ui.condition_tree.ui.action.CreateConditionTreeAction
+import lin.ui.condition_tree.ui.action.DeleteConditionTreeAction
+import lin.ui.condition_tree.ui.action.SaveConditionTreeAction
+import lin.ui.db.HsCardRepository
+import lin.ui.db.OrthogonalTemplateRepository
+import lin.ui.db.TemplateGroupRepository
 import lin.ui.service.EvaluatorTreeResolver
 import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
@@ -55,11 +75,11 @@ val uiModule = module {
     single { ScoreOperatorRegistry(loadSpiList()) }
 
     // UI 扩展注册
-    single { _root_ide_package_.lin.ui.card_group.ui.CardGroupExtension() } bind UiExtension::class
+    single { CardGroupExtension() } bind UiExtension::class
     single { EvaluatorTreeExtension() } bind UiExtension::class
-    single { _root_ide_package_.lin.ui.condition_tree.ui.ConditionTreeExtension() } bind UiExtension::class
-    single { _root_ide_package_.lin.ui.card_purpose.ui.CardPurposeExtension() } bind UiExtension::class
-    single { _root_ide_package_.lin.ui.combo_plan.ui.ComboPlanExtension() } bind UiExtension::class
+    single { ConditionTreeExtension() } bind UiExtension::class
+    single { CardPurposeExtension() } bind UiExtension::class
+    single { ComboPlanExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
@@ -70,16 +90,16 @@ val uiModule = module {
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
 
     // 条件树工作台动作注册
-    single { _root_ide_package_.lin.ui.condition_tree.ui.action.CreateConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
-    single { _root_ide_package_.lin.ui.condition_tree.ui.action.SaveConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
-    single { _root_ide_package_.lin.ui.condition_tree.ui.action.DeleteConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
+    single { CreateConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
+    single { SaveConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
+    single { DeleteConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
 
     // 用途标签目录与显示
-    single<lin.ui.card_purpose.PurposeTagProvider> { _root_ide_package_.lin.ui.card_purpose.DefaultPurposeTagProvider() }
-    single { _root_ide_package_.lin.ui.card_purpose.PurposeTagTreeBindingPolicy(get()) }
+    single<lin.ui.card_purpose.PurposeTagProvider> { DefaultPurposeTagProvider() }
+    single { PurposeTagTreeBindingPolicy(get()) }
 
     // 全局卡组选择状态
-    single { _root_ide_package_.lin.ui.card_group.ui.ActiveManagerHolder() }
+    single { ActiveManagerHolder() }
 
 }
 
@@ -101,6 +121,7 @@ val dbModule = module {
             idleTimeout = 30_000
             connectionTimeout = 10_000
             connectionTestQuery = "SELECT 1"
+            connectionInitSql = "ATTACH DATABASE '${AppConfig.hsCardsDbPath.toAbsolutePath()}' AS hs"
             poolName = "ConfigUiPool"
         }
         JdbcTemplate(HikariDataSource(config))
@@ -114,20 +135,21 @@ val uiDBModule = module {
     single { TreeConfigService(get(), get(), createTreeConfigMapper()) }
     single { EvaluatorTreeTemplateService(get(), get(), createTreeConfigMapper()) }
     single { EvaluatorTreeResolver(get(), get()) }
-    single { _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigRepository(get()) }
+    single { ConditionTreeConfigRepository(get()) }
     single {
-        _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigService(
+        ConditionTreeConfigService(
             get(),
-            _root_ide_package_.lin.ui.condition_tree.db.createConditionTreeConfigMapper()
+            createConditionTreeConfigMapper()
         )
     }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
-    single { _root_ide_package_.lin.ui.card_group.db.CardGroupRepository(get()) }
-    single { _root_ide_package_.lin.ui.card_group.db.CardGroupService(get()) }
-    single { _root_ide_package_.lin.ui.card_purpose.db.CardPurposeRepository(get()) }
-    single { _root_ide_package_.lin.ui.combo_plan.db.ComboPlanDefinitionRepository(get()) }
-    single { _root_ide_package_.lin.ui.db.TemplateGroupRepository(get()) }
-    single { _root_ide_package_.lin.ui.db.OrthogonalTemplateRepository(get()) }
+    single { CardGroupRepository(get()) }
+    single { CardGroupService(get()) }
+    single { CardPurposeRepository(get()) }
+    single { HsCardRepository(get()) }
+    single { ComboPlanDefinitionRepository(get()) }
+    single { TemplateGroupRepository(get()) }
+    single { OrthogonalTemplateRepository(get()) }
 }
 
 

@@ -16,6 +16,8 @@ interface AiConfigGenerationService {
     fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport
 
     fun saveEvaluatorTree(request: SaveEvaluatorTreeRequest): SaveEvaluatorTreeResult
+
+    fun getEvaluatorTreeInputSchema(): String
 }
 
 data class AiEvaluatorLeafKind(

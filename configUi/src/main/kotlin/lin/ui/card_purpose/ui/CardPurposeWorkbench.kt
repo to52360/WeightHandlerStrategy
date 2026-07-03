@@ -5,16 +5,16 @@ import javafx.collections.ListChangeListener
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.*
-import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.PurposeTagId
-
 import lin.ui.ActiveAware
+import lin.ui.card_group.ui.ActiveManagerHolder
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.db.CardPurposeRepository
 import lin.ui.components.PaginationBar
+import lin.ui.db.HsCardRepository
 import lin.utils.addColumn
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -22,11 +22,13 @@ import org.koin.core.component.inject
 class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
     private val repository: CardPurposeRepository by inject()
+    private val hsCardRepo: HsCardRepository by inject()
     private val tagProvider: PurposeTagProvider by inject()
+    private val activeManagerHolder: ActiveManagerHolder by inject()
     private var tagDefs = tagProvider.tags()
     private var displayNameToTagId = tagDefs.associate { it.displayName to it.id }
     private var tagIdToDisplayName = tagDefs.associate { it.id to it.displayName }
-    private val store = CardPurposeStore(repository)
+    private val store = CardPurposeStore(repository, hsCardRepo)
 
     private val tableView = TableView<CardUiItem>()
     private val obsCards = FXCollections.observableArrayList<CardUiItem>()
@@ -93,15 +95,11 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 value = "全部日期"
             }
 
-            val btnImport = Button("导入卡牌").apply {
-                setOnAction { showImportCardGroupDialog() }
-            }
-
             val btnAdd = Button("手动录入").apply {
                 setOnAction { showAddCustomCardDialog() }
             }
 
-            children.addAll(searchField, groupCombo, tagCombo, dateCombo, btnImport, btnAdd)
+            children.addAll(searchField, groupCombo, tagCombo, dateCombo, btnAdd)
         }
 
         // 配置 TableView
@@ -321,6 +319,12 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
     override fun onActive() {
         // 当视图被主容器激活展示时，安全、按需触发初次数据读取
         store.loadInitialData()
+
+        // 与主 Shell 的"当前卡组方案"联动：自动设为来源文件筛选
+        val sourceFile = activeManagerHolder.activeManager?.sourceFile?.removeSuffix(".cardgroup")
+        if (sourceFile != null && sourceFile in store.state.cardGroupFiles) {
+            groupCombo.value = sourceFile
+        }
     }
 
     /**
@@ -345,60 +349,63 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
     }
 
     /**
-     * 手动录入新卡弹窗
+     * 从 hs_cards 库中搜索并选取卡牌录入。
      */
     private fun showAddCustomCardDialog() {
-        val dialog = Dialog<Pair<String, String>>().apply {
-            title = "录入自定义新卡牌"
-            headerText = "请输入卡牌唯一 ID 和卡牌显示名称"
+        val okButtonType = ButtonType("录入并编辑", ButtonBar.ButtonData.OK_DONE)
+        val dialog = Dialog<String>().apply {
+            title = "从卡库选取卡牌"
+            headerText = "搜索 hs_cards 库中的卡牌 ID 或名称"
 
-            val idField = TextField().apply { promptText = "输入卡牌唯一 ID (例如 CS2_024)" }
-            val nameField = TextField().apply { promptText = "输入卡牌显示名称 (例如 寒冰箭)" }
-
-            dialogPane.content = GridPane().apply {
-                hgap = 10.0
-                vgap = 10.0
-                padding = Insets(20.0, 100.0, 10.0, 10.0)
-
-                add(Label("卡牌 ID (cardId):"), 0, 0)
-                add(idField, 1, 0)
-                add(Label("卡牌显示名称:"), 0, 1)
-                add(nameField, 1, 1)
+            val searchField = TextField().apply {
+                promptText = "输入卡牌 ID 或名称搜索 (例如 寒冰箭 或 CS2_024)"
+                prefWidth = 360.0
             }
 
-            val okButtonType = ButtonType("录入并编辑", ButtonBar.ButtonData.OK_DONE)
+            val resultList = ListView<Pair<String, String>>().apply {
+                prefHeight = 300.0
+                cellFactory = javafx.util.Callback {
+                    object : ListCell<Pair<String, String>>() {
+                        override fun updateItem(item: Pair<String, String>?, empty: Boolean) {
+                            super.updateItem(item, empty)
+                            text = if (empty || item == null) "" else "${item.first}  —  ${item.second}"
+                        }
+                    }
+                }
+            }
+
+            val content = VBox(10.0).apply {
+                padding = Insets(15.0)
+                children.addAll(searchField, resultList)
+            }
+            dialogPane.content = content
             dialogPane.buttonTypes.addAll(okButtonType, ButtonType.CANCEL)
+
+            val okButton = dialogPane.lookupButton(okButtonType).apply { isDisable = true }
+
+            // 搜索：输入即查 hs.cards
+            searchField.textProperty().addListener { _, _, newVal ->
+                val results = hsCardRepo.search(newVal)
+                resultList.items.setAll(results)
+                okButton.isDisable = true
+            }
+
+            // 选中后启用确认按钮
+            resultList.selectionModel.selectedItemProperty().addListener { _, _, _ ->
+                okButton.isDisable = resultList.selectionModel.selectedItem == null
+            }
 
             setResultConverter { buttonType ->
                 if (buttonType == okButtonType) {
-                    val id = idField.text.trim()
-                    val name = nameField.text.trim()
-                    if (id.isNotEmpty()) id to name else null
+                    resultList.selectionModel.selectedItem?.first
                 } else null
             }
         }
 
-        dialog.showAndWait().ifPresent { (id, name) ->
-            store.addCustomCard(id, name)
+        dialog.showAndWait().ifPresent { cardId ->
+            store.addCustomCard(cardId)
         }
     }
 
-    /**
-     * 弹出导入卡组文件窗口
-     */
-    private fun showImportCardGroupDialog() {
-        val files = store.state.cardGroupFiles
-        if (files.isEmpty()) {
-            Alert(Alert.AlertType.WARNING, "没有检测到任何本地卡组配置文件 (.cardgroup)。").showAndWait()
-            return
-        }
-        val dialog = ChoiceDialog(files.first(), files).apply {
-            title = "从本地卡组导入卡牌"
-            headerText = "请选择需要导入的 .cardgroup 配置文件"
-            contentText = "卡组名称:"
-        }
-        dialog.showAndWait().ifPresent { selectedFile ->
-            store.importCardGroup(selectedFile)
-        }
-    }
+
 }

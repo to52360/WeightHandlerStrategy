@@ -56,19 +56,6 @@ class McpToolRouter(
     }
 
     private fun saveEvaluatorTreeSchema(): String {
-        // ARCH-PLACEHOLDER(ai-config-generator, P-002): MCP inputSchema 暂用宽松 object，未展开 EvaluatorTreeConfig JSON Schema | replace-with: 根据 EvaluatorNode/EvaluatorPayload 生成或手写最小 JSON Schema
-        return """
-            {
-              "type": "object",
-              "required": ["name", "config"],
-              "properties": {
-                "name": { "type": "string" },
-                "existingId": { "type": "string" },
-                "enabled": { "type": "boolean" },
-                "managerId": { "type": "string" },
-                "config": { "type": "object" }
-              }
-            }
-        """.trimIndent()
+        return aiConfigGenerationService.getEvaluatorTreeInputSchema()
     }
 }

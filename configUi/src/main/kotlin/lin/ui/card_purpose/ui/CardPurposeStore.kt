@@ -6,9 +6,13 @@ import lin.bean.usePlan.PurposeTagId
 import lin.dao.CardGroupJsonParser
 import lin.ui.card_purpose.db.CardPurposeEntity
 import lin.ui.card_purpose.db.CardPurposeRepository
+import lin.ui.db.HsCardRepository
 import java.time.LocalDate
 
-class CardPurposeStore(private val repository: CardPurposeRepository) {
+class CardPurposeStore(
+    private val repository: CardPurposeRepository,
+    private val hsCardRepo: HsCardRepository
+) {
 
     private val stateProperty = SimpleObjectProperty(CardPurposeState())
     val state: CardPurposeState get() = stateProperty.value
@@ -42,42 +46,6 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
         loadPage(1)
     }
 
-    /**
-     * 手动选择并导入单个卡组文件的卡牌到数据库中，并将录入日期设置为当天
-     */
-    fun importCardGroup(fileName: String) {
-        val config = CardGroupJsonParser.loadByFileName(fileName) ?: return
-        val currentDate = LocalDate.now().toString()
-
-        val cardsToSync = config.cards.map {
-            CardPurposeEntity(
-                cardId = it.cardId,
-                name = it.name,
-                purposeTags = "",
-                replanAfterUse = false,
-                createdDate = currentDate
-            )
-        }
-
-        if (cardsToSync.isNotEmpty()) {
-            repository.syncCards(cardsToSync)
-        }
-
-        // 刷新列表和下拉框状态
-        val fileNames = CardGroupJsonParser.listAvailableFiles()
-        val availableDates = repository.getAvailableDates()
-
-        stateProperty.set(
-            state.copy(
-                cardGroupFiles = fileNames,
-                availableDates = availableDates
-            )
-        )
-
-        // 刷新后重置回第一页显示
-        loadPage(1)
-    }
-
     private fun getCardIdsForGroup(groupName: String?): Set<String>? {
         if (groupName == null) return null
         val config = CardGroupJsonParser.loadByFileName(groupName) ?: return emptySet()
@@ -95,14 +63,14 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
         dateFilter: String? = state.selectedDateFilter
     ) {
         val resolvedCardIds = getCardIdsForGroup(groupFilter)
+        val tagFilterStr = tagFilter?.value
 
-        // 统计当前过滤条件下的数据总数
-        val total = repository.count(
-            cardIds = resolvedCardIds,
-            searchText = searchText,
-            tagFilter = tagFilter?.value,
-            dateFilter = dateFilter
-        )
+        // 分支查询总数
+        val total = if (resolvedCardIds != null) {
+            repository.countConfig(resolvedCardIds, searchText, tagFilterStr, dateFilter)
+        } else {
+            repository.countView(searchText, tagFilterStr, dateFilter)
+        }
 
         // 修正目标页码范围
         val limit = state.pageSize
@@ -116,14 +84,13 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
         }
 
         val offset = (targetPage - 1) * limit
-        val dbEntities = repository.findPaginated(
-            cardIds = resolvedCardIds,
-            searchText = searchText,
-            tagFilter = tagFilter?.value,
-            dateFilter = dateFilter,
-            limit = limit,
-            offset = offset
-        )
+
+        // 分支查询数据
+        val dbEntities = if (resolvedCardIds != null) {
+            repository.findConfigPage(resolvedCardIds, searchText, tagFilterStr, dateFilter, limit, offset)
+        } else {
+            repository.findViewPage(searchText, tagFilterStr, dateFilter, limit, offset)
+        }
 
         // 直接转换为 UI 展示项
         val currentPageCards = dbEntities.map { entity ->
@@ -229,10 +196,11 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
     /**
      * 手动录入新卡牌
      */
-    fun addCustomCard(cardId: String, name: String) {
+    fun addCustomCard(cardId: String) {
         val cleanId = cardId.trim()
-        val cleanName = name.trim().ifBlank { "自定义卡牌" }
         if (cleanId.isBlank()) return
+
+        val name = hsCardRepo.findName(cleanId) ?: "未知卡牌"
 
         val dbEntity = repository.findByCardId(cleanId)
         val tagsString = dbEntity?.purposeTags ?: ""
@@ -241,7 +209,7 @@ class CardPurposeStore(private val repository: CardPurposeRepository) {
 
         val entity = CardPurposeEntity(
             cardId = cleanId,
-            name = cleanName,
+            name = name,
             purposeTags = tagsString,
             replanAfterUse = replan,
             createdDate = currentDate
