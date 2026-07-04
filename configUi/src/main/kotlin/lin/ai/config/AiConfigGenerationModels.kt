@@ -1,4 +1,4 @@
-package lin.ai.config
+﻿package lin.ai.config
 
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
@@ -8,7 +8,8 @@ import lin.rule.tree.EvaluatorTreeConfig
 
 /**
  * AI 配置生成的最小业务入口。
- * MCP 只负责协议适配，本接口负责暴露“AI 需要知道什么、提交什么、得到什么反馈”。
+ * MCP 只负责协议适配，本接口负责暴露"AI 需要知道什么、提交什么、得到什么反馈"。
+ * 仅聚焦评估树领域（叶子查询 / 校验 / 保存），卡池查询已拆到 CardGroupQueryService。
  */
 interface AiConfigGenerationService {
     fun listEvaluatorLeafKinds(): List<AiEvaluatorLeafKind>
@@ -59,6 +60,35 @@ data class ConfigDiagnostic(
     val code: String,
     val message: String,
     val path: String? = null
+)
+
+/**
+ * .cardgroup 卡组文件摘要。
+ * fileName 不含 .cardgroup 后缀，enabled 表示该卡组是否启用，cardCount 为卡池卡牌数量。
+ */
+data class CardGroupSourceInfo(
+    val fileName: String,
+    val enabled: Boolean,
+    val cardCount: Int
+)
+
+/**
+ * 指定 .cardgroup 文件的完整卡池详情。
+ * cards 从 hs.cards 批量查询，text 为卡牌效果描述，可能为 null。
+ */
+data class CardGroupDetail(
+    val fileName: String,
+    val cards: List<CardGroupCard>
+)
+
+/**
+ * 单张卡牌信息。
+ * cardId 为唯一标识，name 为卡牌名称，text 为卡牌效果描述（可能为 null）。
+ */
+data class CardGroupCard(
+    val cardId: String,
+    val name: String,
+    val text: String?
 )
 
 fun FieldSpec.toAiFieldSpec(): AiFieldSpec {

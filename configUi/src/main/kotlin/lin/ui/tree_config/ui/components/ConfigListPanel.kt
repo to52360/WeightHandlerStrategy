@@ -3,9 +3,11 @@ package lin.ui.tree_config.ui.components
 import javafx.geometry.Insets
 import javafx.scene.control.*
 import javafx.scene.layout.FlowPane
+import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
-import lin.rule.tree.EvaluatorTreeBindingType
-import lin.rule.tree.EvaluatorTreeConfig
+import lin.rule.tree.*
+import lin.ui.card_group.ui.ActiveManagerHolder
+import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.components.PaginationBar
 import lin.ui.service.TreeConfigService
 import lin.ui.tree_config.ui.ConfigListItem
@@ -20,8 +22,8 @@ class ConfigListPanel(
 ) : VBox(5.0), KoinComponent {
 
     private val treeConfigService: TreeConfigService by inject()
-    private val tagProvider: lin.ui.card_purpose.PurposeTagProvider by inject()
-    private val activeManagerHolder: lin.ui.card_group.ui.ActiveManagerHolder by inject()
+    private val tagProvider: PurposeTagProvider by inject()
+    private val activeManagerHolder: ActiveManagerHolder by inject()
 
     val configListView = ListView<ConfigListItem>()
     private val filterComboBox = ComboBox<String>().apply {
@@ -53,7 +55,7 @@ class ConfigListPanel(
         }
 
         children.addAll(title, filterComboBox, buttonBox, configListView, paginationBar)
-        setVgrow(configListView, javafx.scene.layout.Priority.ALWAYS)
+        setVgrow(configListView, Priority.ALWAYS)
 
         setupListView()
 
@@ -120,8 +122,12 @@ class ConfigListPanel(
 
         val activeManagerId = activeManagerHolder.activeManagerId
 
-        // 加载当前 manager + 全局共享的配置（含模板或仅非模板取决于 isTemplate 过滤）
-        val configs = treeConfigService.loadByManagerId(activeManagerId)
+        // 未选卡组时展示全部配置，选中后展示当前 manager + 全局共享配置
+        val configs = if (activeManagerId != null) {
+            treeConfigService.loadByManagerId(activeManagerId)
+        } else {
+            treeConfigService.loadAll()
+        }
 
         val filterType = filterComboBox.selectionModel.selectedItem ?: "全部"
         val bindingTypeStr = when (filterType) {
@@ -169,10 +175,10 @@ class ConfigListPanel(
         bindingType: EvaluatorTreeBindingType,
         bindingIds: List<String> = emptyList(),
         managerId: String? = null,
-        initialRoot: lin.rule.tree.LogicNode<lin.rule.tree.EvaluatorPayload>? = null,
-        initialLeafConfigs: Map<String, lin.rule.tree.EvaluatorLeafConfig>? = null
+        initialRoot: LogicNode<EvaluatorPayload>? = null,
+        initialLeafConfigs: Map<String, EvaluatorLeafConfig>? = null
     ): ConfigListItem {
-        val rootNode = initialRoot ?: lin.rule.tree.LogicNode.And(emptyList())
+        val rootNode = initialRoot ?: LogicNode.And(emptyList())
         val leaves = initialLeafConfigs ?: emptyMap()
         val draftItem = ConfigListItem(
             id = "draft_${System.currentTimeMillis()}",

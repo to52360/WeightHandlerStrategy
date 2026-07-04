@@ -3,7 +3,7 @@ package lin
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.stage.Stage
-import lin.moduls.ModelsDefine
+import lin.moduls.loadUiModules
 import lin.ui.MainShellView
 import org.koin.core.context.GlobalContext.stopKoin
 
@@ -11,7 +11,7 @@ class ConfigUiApp : Application() {
     override fun init() {
         super.init()
         // 启动依赖注入
-        ModelsDefine().loadModules()
+        loadUiModules()
     }
 
     override fun start(primaryStage: Stage) {

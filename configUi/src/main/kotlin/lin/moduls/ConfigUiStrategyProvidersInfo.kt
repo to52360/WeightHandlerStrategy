@@ -7,6 +7,16 @@ import lin.provider.SqliteConditionTreeConfigProvider
 import lin.provider.SqliteTreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.*
+import lin.ui.card_group.db.CardGroupRepository
+import lin.ui.card_group.db.CardGroupService
+import lin.ui.card_purpose.DefaultPurposeTagProvider
+import lin.ui.card_purpose.PurposeTagProvider
+import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
+import lin.ui.card_purpose.db.CardPurposeRepository
+import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
+import lin.ui.condition_tree.db.ConditionTreeConfigRepository
+import lin.ui.condition_tree.db.ConditionTreeConfigService
+import lin.ui.condition_tree.db.createConditionTreeConfigMapper
 import lin.ui.service.createTreeConfigMapper
 import lin.ui.tree_config.db.TreeConfigRepository
 import org.koin.core.module.Module
@@ -14,19 +24,19 @@ import org.koin.dsl.module
 
 val strategyProviderModule = module {
     single {
-        _root_ide_package_.lin.ui.card_group.db.CardGroupService(
-            _root_ide_package_.lin.ui.card_group.db.CardGroupRepository(
+        CardGroupService(
+            CardGroupRepository(
                 get()
             )
         )
     }
 
     single {
-        _root_ide_package_.lin.ui.combo_plan.db.ComboPlanDefinitionRepository(get())
+        ComboPlanDefinitionRepository(get())
     }
 
     single {
-        _root_ide_package_.lin.ui.card_purpose.db.CardPurposeRepository(get())
+        CardPurposeRepository(get())
     }
 
     single<ComboPlanDefinitionProvider> {
@@ -37,29 +47,29 @@ val strategyProviderModule = module {
         SqliteCardPurposeProvider(get())
     }
 
-    single<lin.ui.card_purpose.PurposeTagProvider> { _root_ide_package_.lin.ui.card_purpose.DefaultPurposeTagProvider() }
-    single { _root_ide_package_.lin.ui.card_purpose.PurposeTagTreeBindingPolicy(get()) }
+    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    single { PurposeTagTreeBindingPolicy(get()) }
 
     single<TreeConfigProvider> {
         SqliteTreeConfigProvider(
             repository = TreeConfigRepository(get()),
             mapper = createTreeConfigMapper(),
-            groupRepository = _root_ide_package_.lin.ui.card_group.db.CardGroupRepository(get()),
+            groupRepository = CardGroupRepository(get()),
             tagPolicy = get()
         )
     }
 
     single<ConditionTreeConfigProvider> {
         SqliteConditionTreeConfigProvider(
-            service = _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigService(
-                repository = _root_ide_package_.lin.ui.condition_tree.db.ConditionTreeConfigRepository(get()),
-                mapper = _root_ide_package_.lin.ui.condition_tree.db.createConditionTreeConfigMapper()
+            service = ConditionTreeConfigService(
+                repository = ConditionTreeConfigRepository(get()),
+                mapper = createConditionTreeConfigMapper()
             )
         )
     }
 
     single<CardGroupIndexProvider> {
-        val svc = get<lin.ui.card_group.db.CardGroupService>()
+        val svc = get<CardGroupService>()
         object : CardGroupIndexProvider {
             override fun provide(): Map<String, Set<String>> = svc.loadCardGroupIndex()
             override fun provideBindingOverrides(): Map<String, GroupUseOverride> = svc.loadBindingOverrides()
@@ -69,7 +79,7 @@ val strategyProviderModule = module {
     single<BindingCardIdProvider> {
         object : BindingCardIdProvider {
             override fun provide(): Map<String, List<String>> =
-                get<lin.ui.card_group.db.CardGroupService>().loadBindingCardIds()
+                get<CardGroupService>().loadBindingCardIds()
         }
     }
 }
@@ -78,7 +88,7 @@ class ConfigUiStrategyProvidersInfo : ModulesInfo {
     override fun loadModules(): Module = strategyProviderModule
 }
 
-private fun lin.ui.card_group.db.CardGroupService.loadCardGroupIndex(): Map<String, Set<String>> {
+private fun CardGroupService.loadCardGroupIndex(): Map<String, Set<String>> {
     val index = linkedMapOf<String, MutableSet<String>>()
     loadAll(onlyEnabled = true)
         .asSequence()
@@ -91,7 +101,7 @@ private fun lin.ui.card_group.db.CardGroupService.loadCardGroupIndex(): Map<Stri
     return index.mapValues { (_, groupIds) -> groupIds.toSet() }
 }
 
-private fun lin.ui.card_group.db.CardGroupService.loadBindingCardIds(): Map<String, List<String>> {
+private fun CardGroupService.loadBindingCardIds(): Map<String, List<String>> {
     val index = linkedMapOf<String, MutableList<String>>()
     loadAll(onlyEnabled = true)
         .asSequence()
@@ -102,7 +112,7 @@ private fun lin.ui.card_group.db.CardGroupService.loadBindingCardIds(): Map<Stri
     return index
 }
 
-private fun lin.ui.card_group.db.CardGroupService.loadBindingOverrides(): Map<String, GroupUseOverride> {
+private fun CardGroupService.loadBindingOverrides(): Map<String, GroupUseOverride> {
     return loadAll(onlyEnabled = true)
         .asSequence()
         .flatMap { it.bindings.asSequence() }

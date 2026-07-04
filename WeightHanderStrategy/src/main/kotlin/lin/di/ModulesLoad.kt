@@ -18,7 +18,8 @@ class ModulesLoad {
                 dataModule,
                 domainModule,
                 configModule,
-                ruleModule // ✨ 独立引入
+                infraModule,
+                ruleModule
             )
             modules(module { singleOf(::LifecycleRegisterImpl) bind LifecycleRegister::class })
             val extraModule = ServiceLoaderUtils.loadServices(ModulesInfo::class.java)

@@ -1,17 +1,17 @@
-package lin.moduls
+﻿package lin.moduls
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import lin.config.AppConfig
-import lin.rule.condition.ConditionRegistry
-import lin.rule.registry.RuleRegistry
-import lin.rule.score.ScoreOperatorRegistry
+import lin.di.infraModule
+import lin.ui.SelectOptionRegistry
 import lin.ui.UiExtension
 import lin.ui.card_group.db.CardGroupRepository
 import lin.ui.card_group.db.CardGroupService
 import lin.ui.card_group.ui.ActiveManagerHolder
 import lin.ui.card_group.ui.CardGroupExtension
 import lin.ui.card_purpose.DefaultPurposeTagProvider
+import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
 import lin.ui.card_purpose.db.CardPurposeRepository
 import lin.ui.card_purpose.ui.CardPurposeExtension
@@ -21,6 +21,7 @@ import lin.ui.condition_tree.db.ConditionTreeConfigRepository
 import lin.ui.condition_tree.db.ConditionTreeConfigService
 import lin.ui.condition_tree.db.createConditionTreeConfigMapper
 import lin.ui.condition_tree.ui.ConditionTreeExtension
+import lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction
 import lin.ui.condition_tree.ui.action.CreateConditionTreeAction
 import lin.ui.condition_tree.ui.action.DeleteConditionTreeAction
 import lin.ui.condition_tree.ui.action.SaveConditionTreeAction
@@ -37,7 +38,6 @@ import lin.ui.tree_config.db.EvaluatorTreeTemplateRepository
 import lin.ui.tree_config.db.TreeConfigRepository
 import lin.ui.tree_config.ui.EvaluatorTreeExtension
 import lin.ui.tree_config.ui.action.*
-import lin.utils.serviceLoader.loadSpiList
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -45,34 +45,25 @@ import org.springframework.jdbc.core.JdbcTemplate
 import java.nio.file.Files
 
 
+/**
+ * 业务服务模块——不依赖 JavaFX，MCP server 也需要加载。
+ * SPI 基础设施（RuleRegistry/PipelineAssembler/ConditionRegistry/ScoreOperatorRegistry）
+ * 已提取至 WeightHandlerStrategy 的 [infraModule]，避免与 [ruleModule] 重复。
+ */
+val serviceModule = module {
+
+    single { SelectOptionRegistry() }
+
+    // 用途标签目录与显示
+    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    single { PurposeTagTreeBindingPolicy(get()) }
+
+    // 全局卡组选择状态
+    single { ActiveManagerHolder() }
+
+}
+
 val uiModule = module {
-
-    single { lin.ui.SelectOptionRegistry() }
-    single { RuleRegistry(loadSpiList()) }
-    single {
-        val dataSources = loadSpiList<lin.serviceLoader.provider.DataSourceProvider>()
-            .flatMap { it.get() }
-            .associateBy { it.id }
-
-        val transforms = loadSpiList<lin.serviceLoader.provider.TransformProvider>()
-            .flatMap { it.get() }
-            .associateBy { it.id }
-
-        val operators = loadSpiList<lin.serviceLoader.provider.OperatorProvider>()
-            .flatMap { it.get() }
-            .associateBy { it.id }
-
-        lin.rule.condition.PipelineAssembler(
-            dataSources = dataSources,
-            transforms = transforms,
-            operators = operators,
-            objectMapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper().apply {
-                configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            }
-        )
-    }
-    single { ConditionRegistry(loadSpiList(), get()) }
-    single { ScoreOperatorRegistry(loadSpiList()) }
 
     // UI 扩展注册
     single { CardGroupExtension() } bind UiExtension::class
@@ -90,16 +81,9 @@ val uiModule = module {
     single { DeleteTreeAction() } bind TreeWorkbenchAction::class
 
     // 条件树工作台动作注册
-    single { CreateConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
-    single { SaveConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
-    single { DeleteConditionTreeAction() } bind lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction::class
-
-    // 用途标签目录与显示
-    single<lin.ui.card_purpose.PurposeTagProvider> { DefaultPurposeTagProvider() }
-    single { PurposeTagTreeBindingPolicy(get()) }
-
-    // 全局卡组选择状态
-    single { ActiveManagerHolder() }
+    single { CreateConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+    single { SaveConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
+    single { DeleteConditionTreeAction() } bind ConditionTreeWorkbenchAction::class
 
 }
 
@@ -147,16 +131,19 @@ val uiDBModule = module {
     single { CardGroupService(get()) }
     single { CardPurposeRepository(get()) }
     single { HsCardRepository(get()) }
+
     single { ComboPlanDefinitionRepository(get()) }
     single { TemplateGroupRepository(get()) }
     single { OrthogonalTemplateRepository(get()) }
 }
 
 
-class ModelsDefine {
-    fun loadModules() {
-        startKoin {
-            modules(uiModule, dbModule, uiDBModule)
-        }
+/** 加载完整模块（含 JavaFX UI 扩展，不含 MCP） */
+fun loadUiModules() {
+    startKoin {
+        modules(infraModule, serviceModule, dbModule, uiDBModule, uiModule)
     }
 }
+
+    
+

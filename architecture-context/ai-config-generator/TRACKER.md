@@ -1,4 +1,4 @@
-# 任务追踪 - ai-config-generator
+﻿# 任务追踪 - ai-config-generator
 
 ## 当前目标
 
@@ -22,11 +22,11 @@
 
 ### 分组编排 AI 集成（V1 核心）
 
-| 编号    | 状态      | 任务             | 说明                                                                                                                                                                                                                     |
-|-------|---------|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| T-010 | pending | 暴露卡池源文件列表及卡池内容 | 新增 `list_card_group_sources` MCP tool，列出 `data/cardgroup/` 下所有 `.cardgroup` 文件及其卡池（cardId + name），让 AI 知道可用的卡池范围。cardId 来自 .cardgroup 文件，name 来自 hs.cards（通过 ATTACH 已挂载）。前置重构（card_catalog 删除 + ATTACH + 配置/视图分路径）已完成。 |
-| T-011 | pending | 暴露分组方案查询       | 新增 `list_card_groups` MCP tool，让 AI 查询已有的 Manager + Bindings（含 enabled 状态、cardIds、overrides），用于绑定评估树时引用。                                                                                                               |
-| T-012 | pending | AI 创建/保存分组方案   | 新增 `save_card_group` MCP tool，让 AI 创建或编辑 Manager + Bindings。输入：name、sourceFile、bindings（name + cardIds + overrides）。cardIds 必须来自源文件卡池。                                                                                 |
+| 编号    | 状态      | 任务             | 说明                                                                                                                                                                                                                 |
+|-------|---------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| T-010 | done    | 暴露卡池源文件列表及卡池内容 | 新增 `list_card_group_sources` + `get_card_group_detail` 两个 MCP tool。list 列出所有 .cardgroup 文件的 fileName/enabled/cardCount；get 按 fileName 返回完整卡池详情（cardId + name + text，name/text 从 hs.cards 批量查询）。AI 先列后查，基于指定卡组编排分组。 |
+| T-011 | pending | 暴露分组方案查询       | 新增 `list_card_groups` MCP tool，让 AI 查询已有的 Manager + Bindings（含 enabled 状态、cardIds、overrides），用于绑定评估树时引用。                                                                                                           |
+| T-012 | pending | AI 创建/保存分组方案   | 新增 `save_card_group` MCP tool，让 AI 创建或编辑 Manager + Bindings。输入：name、sourceFile、bindings（name + cardIds + overrides）。cardIds 必须来自源文件卡池。                                                                             |
 
 ### 绑定评估树校验增强（V1 核心）
 

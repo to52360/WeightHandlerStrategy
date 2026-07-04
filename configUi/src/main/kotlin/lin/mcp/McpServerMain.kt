@@ -1,46 +1,35 @@
-package lin.mcp
+﻿package lin.mcp
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper
 import io.modelcontextprotocol.server.McpServer
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider
 import io.modelcontextprotocol.spec.McpSchema
-import lin.ai.config.DefaultAiConfigGenerationService
-import lin.moduls.ModelsDefine
-import lin.rule.condition.PipelineAssembler
-import lin.ui.service.TreeConfigService
-import lin.ui.service.createTreeConfigMapper
-import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
+import lin.moduls.loadMcpModules
 import org.koin.core.context.GlobalContext
 
 /**
  * configUi 模块下的 MCP 独立入口。
- * IDE 启动 MCP 进程后，本入口加载与配置端一致的 Koin 容器，再把 tools 暴露给 MCP SDK。
+ * 唯一职责：启动 MCP server。
+ * 不感知任何 domain 类，不加载 UI 模块。
  */
-object McpServerMain {
-    @JvmStatic
-    fun main(args: Array<String>) {
-        ModelsDefine().loadModules()
 
-        val koin = GlobalContext.get()
-        val service = DefaultAiConfigGenerationService(
-            leafSourceCatalog = koin.get<EvaluatorLeafSourceCatalog>(),
-            treeConfigService = koin.get<TreeConfigService>(),
-            pipelineAssembler = koin.get<PipelineAssembler>()
-        )
-
-        val router = McpToolRouter(
-            aiConfigGenerationService = service,
-            mapper = createTreeConfigMapper()
-        )
-        JavaSdkStdioMcpAdapter(router).start()
-    }
+fun main() {
+    loadMcpModules()
+    val koin = GlobalContext.get()
+    koin.get<MyMcpServer>().start()
 }
 
-class JavaSdkStdioMcpAdapter(
-    private val router: McpToolRouter
+
+/**
+ * MCP server 装配器。
+ * 通过 Koin 获取所有 McpToolProvider，汇聚 tool 列表后注册到 MCP SDK。
+ */
+class MyMcpServer(
+    private val providers: List<McpToolProvider>
 ) {
     fun start() {
+        val tools = providers.flatMap { it.provide() }
         val mcpJsonMapper = JacksonMcpJsonMapper(ObjectMapper())
         val transportProvider = StdioServerTransportProvider(mcpJsonMapper)
 
@@ -48,14 +37,14 @@ class JavaSdkStdioMcpAdapter(
             .serverInfo("deck-plugin-market-config", "0.1.0")
             .instructions("提供卡牌策略配置生成所需的元数据查询、评估树校验和保存工具。")
 
-        router.tools().forEach { toolHandler ->
+        tools.forEach { handler ->
             val tool = McpSchema.Tool.builder()
-                .name(toolHandler.name)
-                .description(toolHandler.description)
-                .inputSchema(mcpJsonMapper, toolHandler.inputSchemaJson)
+                .name(handler.name)
+                .description(handler.description)
+                .inputSchema(mcpJsonMapper, handler.inputSchemaJson)
                 .build()
             server = server.toolCall(tool) { _, request ->
-                val result = toolHandler.call(request.arguments().orEmpty())
+                val result = handler.call(request.arguments().orEmpty())
                 McpSchema.CallToolResult.builder()
                     .addTextContent(result.contentJson)
                     .isError(result.isError)
