@@ -1,4 +1,4 @@
-﻿# 任务追踪 - ai-config-generator
+# 任务追踪 - ai-config-generator
 
 ## 当前目标
 
@@ -22,24 +22,24 @@
 
 ### 分组编排 AI 集成（V1 核心）
 
-| 编号    | 状态      | 任务             | 说明                                                                                                                                                                                                                 |
-|-------|---------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| T-010 | done    | 暴露卡池源文件列表及卡池内容 | 新增 `list_card_group_sources` + `get_card_group_detail` 两个 MCP tool。list 列出所有 .cardgroup 文件的 fileName/enabled/cardCount；get 按 fileName 返回完整卡池详情（cardId + name + text，name/text 从 hs.cards 批量查询）。AI 先列后查，基于指定卡组编排分组。 |
-| T-011 | pending | 暴露分组方案查询       | 新增 `list_card_groups` MCP tool，让 AI 查询已有的 Manager + Bindings（含 enabled 状态、cardIds、overrides），用于绑定评估树时引用。                                                                                                           |
-| T-012 | pending | AI 创建/保存分组方案   | 新增 `save_card_group` MCP tool，让 AI 创建或编辑 Manager + Bindings。输入：name、sourceFile、bindings（name + cardIds + overrides）。cardIds 必须来自源文件卡池。                                                                             |
+| 编号    | 状态   | 任务             | 说明                                                                                                                                                                                                                                                            |
+|-------|------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| T-010 | done | 暴露卡池源文件列表及卡池内容 | 新增 `list_card_group_sources` + `get_card_group_detail` 两个 MCP tool。list 列出所有 .cardgroup 文件的 fileName/enabled/cardCount；get 按 fileName 返回完整卡池详情（cardId + name + text，name/text 从 hs.cards 批量查询）。AI 先列后查，基于指定卡组编排分组。                                            |
+| T-011 | done | 暴露分组方案查询       | 新增 `list_card_groups` MCP tool，直接序列化 `CardGroupService.loadAllManagers()` 结果（id/name/sourceFile/enabled），渐进式先摘要后详情。`CardGroupToolProvider` 新增 `CardGroupService` 注入参数，无新 model。                                                                               |
+| T-012 | done | AI 创建/保存分组方案   | 新增 `save_card_group` MCP tool。AI 提供 sourceFile + bindings[{name,description,cardIds}] + 可选 managerName/existingId；服务端补齐 enabled/binding.id。existingId 非空即更新，为空即新建。cardIds 校验依赖 sourceFile 卡池。`CardGroupBinding` 新增 `description` 字段（领域模型+DB 表+实体+Service 同步）。 |
 
 ### 绑定评估树校验增强（V1 核心）
 
-| 编号    | 状态      | 任务                               | 说明                                                                                                                            |
-|-------|---------|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| T-013 | pending | 绑定类型感知：扩展 save_evaluator_tree 校验 | `save_evaluator_tree` 校验增加：`bindingType=GROUP` 时检查 `bindingIds` 是否存在于已启用分组方案中；`bindingType=PURPOSE_TAG` 时提示 AI 该绑定类型 V1 暂不可用。 |
+| 编号    | 状态   | 任务                               | 说明                                                                                                                                                                                                          |
+|-------|------|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| T-013 | done | 绑定类型感知：扩展 save_evaluator_tree 校验 | `DefaultAiConfigGenerationService.validateEvaluatorTree()` 内追加 MCP-only 校验：`PURPOSE_TAG` → 拒绝；`GROUP` → 逐 bindingId 核查已启用分组方案中存在性。`EvaluatorTreeValidator` 保持不变（UI 不受影响）。`McpModule` 注入 `CardGroupService`。 |
 
 ### 模板参考（V1 只读）
 
-| 编号    | 状态      | 任务                 | 说明                                                                                                                                                                                          |
-|-------|---------|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| T-014 | pending | 暴露模板查询与沉淀供 AI 自主决策 | 新增 MCP tool：`list_template_groups` + `list_templates`（按 DataSource/Transform/Operator 检索，返回纯结构，对应 D-007）+ `save_template`（AI 判断有复用价值时沉淀，强制剥离参数）。复用与沉淀均由 AI 自主判断，不自动存（D-006）。对应 D-007/D-008。 |
-| T-015 | pending | 修复模板保存参数剥离         | 现有代码从正式配置提升为模板时未剥离参数（细节问题，当前可用故未处理）。修复所有模板保存路径：正交模板剥离组件参数、评估树模板剥离叶子 args，确保只存结构。对应 D-007。                                                                                                   |
+| 编号    | 状态   | 任务                 | 说明                                                                                                                                                                                                                                                                       |
+|-------|------|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| T-014 | done | 暴露模板查询与沉淀供 AI 自主决策 | 拆为两个维度：`TemplateToolProvider`（正交叶子级：`list_template_groups` + `list_templates`（CONDITION/RULE）+ `save_template`）；`AiConfigToolProvider`（评估树树级：`list_evaluator_tree_templates` + `save_evaluator_tree_template`）。互不混淆。                                                     |
+| T-015 | done | 修复模板保存参数剥离         | 三条保存路径统一剥离：`OrthogonalConditionDialog`（PipelineRef.operatorArgs/transforms[].args/refId→空）、`OrthogonalRuleDialog`（OrthogonalRuleLeafConfig 的所有 args+guard+score）、`EvaluatorTreeTemplateService.saveTemplate()`（所有5种 leaf config 递归剥离 args/nodeId/guard/score 参数）。零 lint。 |
 
 ### 设计决策记录（不编码）
 
@@ -49,12 +49,14 @@
 
 ## 后续待定任务
 
-| 编号    | 状态      | 任务                        | 说明                                                                                                                         |
-|-------|---------|---------------------------|----------------------------------------------------------------------------------------------------------------------------|
-| T-020 | pending | 建立草稿池服务 DraftTreeService  | 建立内存/缓存级评估树生成草稿池，支持基于 `draftId` 的树骨架暂存、叶子节点配置逐步增量更新与生命周期管理。                                                                |
-| T-021 | pending | 暴露渐进式流式 MCP 工具组           | 提供 `create_draft_tree` (创建骨架), `validate_leaf_config` (单叶子校验), `put_draft_leaf` (填入叶子), `commit_draft_tree` (终极总装落盘) 工具支持。 |
-| T-022 | pending | Combo 编排 MCP 暴露           | Combo 编排的查询/保存 MCP 工具。V1 不做，留待后续版本。                                                                                        |
-| T-023 | pending | 用途标签 (PURPOSE_TAG) MCP 暴露 | 用途标签配置的查询/保存 MCP 工具。V1 不做，留待后续版本。                                                                                          |
+| 编号    | 状态      | 任务                        | 说明                                                                                                                                        |
+|-------|---------|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| T-020 | done    | 建立草稿池服务 DraftTreeService  | 建立内存/缓存级评估树生成草稿池，支持基于 `draftId` 的树骨架暂存、叶子节点配置逐步增量更新与生命周期管理。                                                                               |
+| T-021 | done    | 暴露渐进式流式 MCP 工具组           | 提供 `create_draft_tree` (创建骨架), `put_draft_leaf` (填入叶子), `commit_draft_tree` (终极总装落盘) 工具支持。并移除了旧的全量长 JSON 生成工具，强制大模型走流式填充流程。               |
+| T-022 | pending | Combo 编排 MCP 暴露           | Combo 编排的查询/保存 MCP 工具。V1 不做，留待后续版本。                                                                                                       |
+| T-023 | pending | 用途标签 (PURPOSE_TAG) MCP 暴露 | 用途标签配置的查询/保存 MCP 工具。V1 不做，留待后续版本。                                                                                                         |
+| T-024 | done    | 暴露树读取工具与骨架语义增强            | 新增 `get_evaluator_tree_template` 和 `get_evaluator_tree`。并在底层 `LogicNode` 引入全栈一等公民 `nodeName`，满足 UI 与 AI 的双向拓扑语义预览。                        |
+| T-025 | done    | 暴露正交组件与配置列表树摘要            | 彻底打通 AI 配置生成闭环。新增 `list_evaluator_trees` 供检索编辑目标；新增极简轻量的 `list_orthogonal_components` 彻底暴露正交算子，并严格实现 `pipeline` 与 `score` 的领域边界隔离防止大模型误用。 |
 
 ## 外部依赖同步（orthogonal-condition 已完成）
 

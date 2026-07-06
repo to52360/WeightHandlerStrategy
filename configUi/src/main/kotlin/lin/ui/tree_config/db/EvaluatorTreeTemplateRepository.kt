@@ -17,6 +17,7 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
                 group_id TEXT,
                 config_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                node_names TEXT,
                 FOREIGN KEY (group_id) REFERENCES template_group(id)
             );
         """.trimIndent()
@@ -29,19 +30,21 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
             name = rs.getString("name"),
             description = rs.getString("description"),
             groupId = rs.getString("group_id"),
-            configData = rs.getString("config_data")
+            configData = rs.getString("config_data"),
+            nodeNames = rs.getString("node_names")
         )
     }
 
     fun save(entity: EvaluatorTreeTemplateEntity) {
         val sql = """
-            INSERT INTO evaluator_tree_template (id, name, description, group_id, config_data)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO evaluator_tree_template (id, name, description, group_id, config_data, node_names)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 description = excluded.description,
                 group_id = excluded.group_id,
-                config_data = excluded.config_data
+                config_data = excluded.config_data,
+                node_names = excluded.node_names
         """.trimIndent()
         jdbcTemplate.update(
             sql,
@@ -49,7 +52,8 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
             entity.name,
             entity.description,
             entity.groupId,
-            entity.configData
+            entity.configData,
+            entity.nodeNames
         )
     }
 

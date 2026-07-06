@@ -132,6 +132,7 @@ class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
 
             // ====== 统一使用 EvaluatorTreeValidator（UI 和 MCP 共用同一套验证） ======
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
+            val nodeNames = TreeModelConverter.extractCustomNames(rootNode)
             val config = EvaluatorTreeConfig(
                 bindingType = bindingType ?: EvaluatorTreeBindingType.GROUP,
                 bindingIds = bindingIds,
@@ -158,13 +159,15 @@ class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
                 treeConfigService.saveConfig(
                     selectedItem.name, config, null, workbench.getCurrentEnabled(),
                     managerId = selectedItem.managerId,
-                    description = selectedItem.description
+                    description = selectedItem.description,
+                    nodeNames = nodeNames
                 )
             } else {
                 treeConfigService.saveConfig(
                     selectedItem.name, config, selectedItem.id, workbench.getCurrentEnabled(),
                     managerId = selectedItem.managerId,
-                    description = selectedItem.description
+                    description = selectedItem.description,
+                    nodeNames = nodeNames
                 )
             }
 
@@ -215,6 +218,7 @@ class SaveAsTemplateAction : TreeWorkbenchAction, KoinComponent {
             try {
                 val (bindingType, bindingIds) = workbench.getSelectedBindings()
                 val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
+                val nodeNames = TreeModelConverter.extractCustomNames(rootNode)
                 val config = EvaluatorTreeConfig(
                     bindingType = bindingType ?: EvaluatorTreeBindingType.GROUP,
                     bindingIds = bindingIds.ifEmpty { listOf("TEMPLATE") },
@@ -234,7 +238,8 @@ class SaveAsTemplateAction : TreeWorkbenchAction, KoinComponent {
                     name = name,
                     config = config,
                     description = selectedItem.description,
-                    groupId = null
+                    groupId = null,
+                    nodeNames = nodeNames
                 )
 
                 showInfo("存为模板成功", "已成功另存模板 [$name]")

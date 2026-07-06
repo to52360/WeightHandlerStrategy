@@ -25,7 +25,8 @@ data class CardBindingEntity(
     val managerId: String,
     val name: String,
     val cardIds: String, // JSON 数组字符串
-    val overrides: String? = null // JSON 字符串
+    val overrides: String? = null, // JSON 字符串
+    val description: String? = null
 ) {
     fun toDomain(): CardGroupBinding {
         return CardGroupBinding(
@@ -33,7 +34,8 @@ data class CardBindingEntity(
             managerId = managerId,
             name = name,
             cardIds = mapper.readValue(cardIds),
-            overrides = overrides?.let { mapper.readValue<GroupUseOverride>(it) }
+            overrides = overrides?.let { mapper.readValue<GroupUseOverride>(it) },
+            description = description
         )
     }
 }

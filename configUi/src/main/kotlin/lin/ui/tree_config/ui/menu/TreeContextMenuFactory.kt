@@ -39,8 +39,26 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
             menu.items.add(addMenu)
         }
 
-        // 节点类型替换功能：允许所有节点（包括 Root 和 Branch 的子节点）更改类型
+        // 重命名
         if (menu.items.isNotEmpty()) menu.items.add(SeparatorMenuItem())
+        val renameItem = MenuItem("重命名")
+        renameItem.setOnAction {
+            val dialog =
+                javafx.scene.control.TextInputDialog(treeItem.value.customName ?: treeItem.value.toString()).apply {
+                    title = "重命名节点"
+                    headerText = "请输入节点的新名称"
+                    contentText = "名称:"
+                }
+            dialog.showAndWait().ifPresent { newName ->
+                val trimmed = newName.trim()
+                treeItem.value.customName = if (trimmed.isBlank()) null else trimmed
+                treeView.refresh()
+            }
+        }
+        menu.items.add(renameItem)
+
+        // 节点类型替换功能：允许所有节点（包括 Root 和 Branch 的子节点）更改类型
+        menu.items.add(SeparatorMenuItem())
         val changeMenu = Menu(if (isRoot) "更改根节点类型" else "更改节点类型")
         LogicNodeType.entries.filter { it != type }.forEach { targetType ->
             changeMenu.items.add(MenuItem("${targetType.name} 节点").apply {

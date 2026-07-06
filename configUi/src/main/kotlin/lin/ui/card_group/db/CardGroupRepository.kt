@@ -32,7 +32,8 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
                 manager_id      TEXT    NOT NULL,
                 name            TEXT    NOT NULL,
                 card_ids        TEXT    NOT NULL,
-                overrides       TEXT
+                overrides       TEXT,
+                description     TEXT
             );
             """.trimIndent()
         )
@@ -88,22 +89,24 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
             managerId = rs.getString("manager_id"),
             name = rs.getString("name"),
             cardIds = rs.getString("card_ids"),
-            overrides = rs.getString("overrides")
+            overrides = rs.getString("overrides"),
+            description = rs.getString("description")
         )
     }
 
     fun saveBinding(entity: CardBindingEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_binding (id, manager_id, name, card_ids, overrides)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO card_group_binding (id, manager_id, name, card_ids, overrides, description)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name            = excluded.name,
                 card_ids        = excluded.card_ids,
-                overrides       = excluded.overrides
+                overrides       = excluded.overrides,
+                description     = excluded.description
             """.trimIndent(),
             entity.id, entity.managerId, entity.name, entity.cardIds,
-            entity.overrides
+            entity.overrides, entity.description
         )
     }
 

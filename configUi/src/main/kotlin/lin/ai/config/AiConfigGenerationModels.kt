@@ -1,5 +1,6 @@
-﻿package lin.ai.config
+package lin.ai.config
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
@@ -17,8 +18,6 @@ interface AiConfigGenerationService {
     fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport
 
     fun saveEvaluatorTree(request: SaveEvaluatorTreeRequest): SaveEvaluatorTreeResult
-
-    fun getEvaluatorTreeInputSchema(): String
 }
 
 data class AiEvaluatorLeafKind(
@@ -38,12 +37,20 @@ data class AiFieldSpec(
 )
 
 data class SaveEvaluatorTreeRequest(
+    @field:JsonPropertyDescription("评估树的名称，方便人工识别")
     val name: String,
+    @field:JsonPropertyDescription("评估树的配置结构体")
     val config: EvaluatorTreeConfig,
+    @field:JsonPropertyDescription("评估树的用途或备注描述")
     val description: String? = null,
+    @field:JsonPropertyDescription("如果要更新现有配置，请提供现有配置的 ID")
     val existingId: String? = null,
+    @field:JsonPropertyDescription("是否启用该配置")
     val enabled: Boolean = true,
-    val managerId: String? = null
+    @field:JsonPropertyDescription("所属组的ID")
+    val managerId: String? = null,
+    @field:JsonPropertyDescription("节点自定义名称映射（路径键 → 名称），可选")
+    val nodeNames: Map<String, String>? = null
 )
 
 data class SaveEvaluatorTreeResult(

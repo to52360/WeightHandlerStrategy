@@ -24,5 +24,6 @@ data class CardGroupBinding(
     val managerId: String,
     val name: String,
     val cardIds: List<String>,
-    val overrides: GroupUseOverride? = null
+    val overrides: GroupUseOverride? = null,
+    val description: String? = null
 )

@@ -5,10 +5,8 @@ import lin.ai.config.CardGroupQueryService
 import lin.ai.config.DefaultAiConfigGenerationService
 import lin.ai.config.DefaultCardGroupQueryService
 import lin.di.infraModule
-import lin.mcp.AiConfigToolProvider
-import lin.mcp.CardGroupToolProvider
-import lin.mcp.McpToolProvider
-import lin.mcp.MyMcpServer
+import lin.mcp.*
+import lin.ui.card_group.db.CardGroupService
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.module
@@ -17,9 +15,26 @@ import org.koin.dsl.module
 val mcpModule = module {
 
     single<CardGroupQueryService> { DefaultCardGroupQueryService(get()) }
-    single<AiConfigGenerationService> { DefaultAiConfigGenerationService(get(), get(), get()) }
-    single<McpToolProvider> { AiConfigToolProvider(get<AiConfigGenerationService>(), createTreeConfigMapper()) }
-    single<McpToolProvider> { CardGroupToolProvider(get<CardGroupQueryService>(), createTreeConfigMapper()) }
+    single<AiConfigGenerationService> { DefaultAiConfigGenerationService(get(), get(), get(), get<CardGroupService>()) }
+    single<lin.ai.config.draft.DraftTreeService> { lin.ai.config.draft.DefaultDraftTreeService(get(), get(), get()) }
+    single<McpToolProvider> {
+        AiTreeTemplateToolProvider(get(), get(), createTreeConfigMapper())
+    }
+    single<McpToolProvider> {
+        AiTreeConfigToolProvider(get<AiConfigGenerationService>(), get(), createTreeConfigMapper())
+    }
+    single<McpToolProvider> {
+        AiOrthogonalToolProvider(get(), get(), createTreeConfigMapper())
+    }
+    single<McpToolProvider> {
+        CardGroupToolProvider(
+            get<CardGroupQueryService>(),
+            get<CardGroupService>(),
+            createTreeConfigMapper()
+        )
+    }
+    single<McpToolProvider> { TemplateToolProvider(get(), get(), createTreeConfigMapper()) }
+    single<McpToolProvider> { lin.mcp.AiDraftTreeToolProvider(get(), createTreeConfigMapper()) }
     single { MyMcpServer(getAll<McpToolProvider>()) }
 }
 

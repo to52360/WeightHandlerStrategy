@@ -5,9 +5,18 @@ package lin.rule.tree
  * @param L 具体的叶子节点负载数据（业务逻辑载体）
  */
 sealed interface LogicNode<out L> {
-    data class And<L>(val children: List<LogicNode<L>>) : LogicNode<L>
-    data class Or<L>(val children: List<LogicNode<L>>) : LogicNode<L>
-    data class Not<L>(val child: LogicNode<L>) : LogicNode<L>
+
+    data class And<L>(
+        val children: List<LogicNode<L>>
+    ) : LogicNode<L>
+
+    data class Or<L>(
+        val children: List<LogicNode<L>>
+    ) : LogicNode<L>
+
+    data class Not<L>(
+        val child: LogicNode<L>
+    ) : LogicNode<L>
 
     /**
      * 控制流：分支（If-Then-Else）
@@ -22,5 +31,7 @@ sealed interface LogicNode<out L> {
     /**
      * 叶子节点，承载具体的业务逻辑判断或规则
      */
-    data class Leaf<L>(val payload: L) : LogicNode<L>
+    data class Leaf<L>(
+        val payload: L
+    ) : LogicNode<L>
 }

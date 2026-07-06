@@ -119,6 +119,16 @@
             <artifactId>mcp-json-jackson2</artifactId>
         </dependency>
 
+        <!-- ===== Victools JSON Schema ===== -->
+        <dependency>
+            <groupId>com.github.victools</groupId>
+            <artifactId>jsonschema-generator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.victools</groupId>
+            <artifactId>jsonschema-module-jackson</artifactId>
+        </dependency>
+
         <!-- 连接池 (configUi 交互频繁，HikariCP 复用连接) -->
         <dependency>
             <groupId>com.zaxxer</groupId>

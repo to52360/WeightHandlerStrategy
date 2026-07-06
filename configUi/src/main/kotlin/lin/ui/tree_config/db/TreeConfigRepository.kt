@@ -18,7 +18,8 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
                 description TEXT,
                 config_data TEXT NOT NULL,
                 enabled INTEGER NOT NULL DEFAULT 1,
-                manager_id TEXT
+                manager_id TEXT,
+                node_names TEXT
             );
         """.trimIndent()
         jdbcTemplate.execute(treeConfigTable)
@@ -62,8 +63,8 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
 
     fun save(entity: TreeConfigEntity) {
         val sql = """
-            INSERT INTO tree_config (id, binding_type, binding_ids, name, description, config_data, enabled, manager_id) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tree_config (id, binding_type, binding_ids, name, description, config_data, enabled, manager_id, node_names) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET 
                 binding_type = excluded.binding_type,
                 binding_ids = excluded.binding_ids,
@@ -71,7 +72,8 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
                 description = excluded.description,
                 config_data = excluded.config_data,
                 enabled = excluded.enabled,
-                manager_id = excluded.manager_id
+                manager_id = excluded.manager_id,
+                node_names = excluded.node_names
         """.trimIndent()
         jdbcTemplate.update(
             sql,
@@ -82,7 +84,8 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             entity.description,
             entity.configData,
             if (entity.enabled) 1 else 0,
-            entity.managerId
+            entity.managerId,
+            entity.nodeNames
         )
     }
 
@@ -95,7 +98,8 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             description = rs.getString("description"),
             configData = rs.getString("config_data"),
             enabled = rs.getInt("enabled") != 0,
-            managerId = rs.getString("manager_id")
+            managerId = rs.getString("manager_id"),
+            nodeNames = rs.getString("node_names")
         )
     }
 

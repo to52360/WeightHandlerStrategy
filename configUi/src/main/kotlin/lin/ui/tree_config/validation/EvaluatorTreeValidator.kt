@@ -78,7 +78,7 @@ class EvaluatorTreeValidator(
 
         // 2. 每个 leafConfig 的合法性校验
         leafConfigs.values.forEach { leafConfig ->
-            validateLeafConfig(leafConfig, knownSources, diagnostics)
+            validateLeafConfigInternal(leafConfig, knownSources, diagnostics)
         }
 
         return ValidationReport(
@@ -87,7 +87,17 @@ class EvaluatorTreeValidator(
         )
     }
 
-    private fun validateLeafConfig(
+    /**
+     * 单节点严格验证，供草稿池增量填装叶子时快速 Fail-Fast 使用。
+     */
+    fun validateSingleLeafConfig(leafConfig: EvaluatorLeafConfig): ValidationReport {
+        val diagnostics = mutableListOf<ValidationDiagnostic>()
+        val knownSources = leafSourceCatalog.loadAll().associateBy { it.kind to it.sourceId }
+        validateLeafConfigInternal(leafConfig, knownSources, diagnostics)
+        return ValidationReport(ok = diagnostics.isEmpty(), diagnostics = diagnostics)
+    }
+
+    private fun validateLeafConfigInternal(
         leafConfig: EvaluatorLeafConfig,
         knownSources: Map<Pair<EvaluatorLeafKind, String>, EvaluatorLeafMeta>,
         diagnostics: MutableList<ValidationDiagnostic>
@@ -218,7 +228,7 @@ class EvaluatorTreeValidator(
         }
     }
 
-    private fun collectReferencedLeafNodeIds(root: EvaluatorNode): Set<String> {
+    fun collectReferencedLeafNodeIds(root: EvaluatorNode): Set<String> {
         val ids = linkedSetOf<String>()
 
         fun visit(node: EvaluatorNode) {

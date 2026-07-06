@@ -1,6 +1,8 @@
-﻿package lin.ai.config
+package lin.ai.config
 
 import lin.rule.condition.PipelineAssembler
+import lin.rule.tree.EvaluatorTreeBindingType
+import lin.ui.card_group.db.CardGroupService
 import lin.ui.service.TreeConfigService
 import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.ui.tree_config.validation.EvaluatorTreeValidator
@@ -13,7 +15,8 @@ import lin.ui.tree_config.validation.EvaluatorTreeValidator
 class DefaultAiConfigGenerationService(
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
     private val treeConfigService: TreeConfigService,
-    pipelineAssembler: PipelineAssembler
+    pipelineAssembler: PipelineAssembler,
+    private val cardGroupService: CardGroupService
 ) : AiConfigGenerationService {
     private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
 
@@ -36,9 +39,38 @@ class DefaultAiConfigGenerationService(
             managerId = request.managerId,
             requireMetadata = true
         )
+        val diagnostics = treeReport.diagnostics.toMutableList()
+
+        // T-013: MCP-only 绑定类型感知校验
+        when (request.config.bindingType) {
+            EvaluatorTreeBindingType.PURPOSE_TAG -> {
+                diagnostics += EvaluatorTreeValidator.ValidationDiagnostic(
+                    "binding_purpose_tag_unavailable",
+                    "用途标签(PURPOSE_TAG)绑定类型 V1 暂不可用",
+                    "bindingType"
+                )
+            }
+
+            EvaluatorTreeBindingType.GROUP -> {
+                val enabledBindingIds = cardGroupService.loadAll(onlyEnabled = true)
+                    .flatMap { it.bindings }
+                    .map { it.id }
+                    .toSet()
+                request.config.bindingIds.forEach { bindingId ->
+                    if (bindingId !in enabledBindingIds) {
+                        diagnostics += EvaluatorTreeValidator.ValidationDiagnostic(
+                            "binding_group_not_found",
+                            "绑定的分组ID不存在或未启用: $bindingId",
+                            "bindingIds"
+                        )
+                    }
+                }
+            }
+        }
+
         return ValidationReport(
-            ok = treeReport.ok,
-            diagnostics = treeReport.diagnostics.map { d ->
+            ok = diagnostics.isEmpty(),
+            diagnostics = diagnostics.map { d ->
                 ConfigDiagnostic(code = d.code, message = d.message, path = d.path)
             }
         )
@@ -56,12 +88,9 @@ class DefaultAiConfigGenerationService(
             description = request.description,
             existingId = request.existingId,
             enabled = request.enabled,
-            managerId = request.managerId
+            managerId = request.managerId,
+            nodeNames = request.nodeNames
         )
         return SaveEvaluatorTreeResult(id = id, validation = validation)
-    }
-
-    override fun getEvaluatorTreeInputSchema(): String {
-        TODO("拆解多部分配置")
     }
 }

@@ -213,13 +213,20 @@ class OrthogonalConditionDialog(
                     refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
                 )
 
+                // T-015: 模板只存结构不含参数 (D-007)
+                val stripped = ref.copy(
+                    operatorArgs = emptyMap(),
+                    transforms = ref.transforms.map { it.copy(args = emptyMap()) },
+                    refId = ""
+                )
+
                 val entity = OrthogonalTemplateEntity(
                     id = "",
                     name = name,
                     description = desc.takeIf { it.isNotBlank() },
                     groupId = groupId,
                     type = "CONDITION",
-                    contentJson = dataContext.mapper.writeValueAsString(ref)
+                    contentJson = dataContext.mapper.writeValueAsString(stripped)
                 )
 
                 try {

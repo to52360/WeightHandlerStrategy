@@ -370,6 +370,14 @@ class OrthogonalRuleDialog(
                     return@setOnAction
                 }
 
+                // T-015: 模板只存结构不含参数 (D-007)
+                val strippedConfig = currentConfig.copy(
+                    nodeId = "",
+                    args = emptyMap(),
+                    guardCondition = currentConfig.guardCondition?.let { stripConditionArgs(it) },
+                    scoreEffect = stripScoreArgs(currentConfig.scoreEffect)
+                )
+
                 val nameDialog = TemplateNameDialog(
                     title = "保存为正交规则模板",
                     headerText = "请输入模板的名称、描述和分组",
@@ -391,7 +399,7 @@ class OrthogonalRuleDialog(
                         description = desc.takeIf { it.isNotBlank() },
                         groupId = groupId,
                         type = "RULE",
-                        contentJson = dataContext.mapper.writeValueAsString(currentConfig)
+                        contentJson = dataContext.mapper.writeValueAsString(strippedConfig)
                     )
 
                     try {
@@ -431,4 +439,25 @@ class OrthogonalRuleDialog(
             }
         }
     }
+}
+
+// T-015: 模板参数剥离 (D-007) — 只保留结构引用，去除所有运行时参数值
+
+private fun stripConditionArgs(payload: ConditionPayload): ConditionPayload = when (payload) {
+    is ConditionPayload.PipelineRef -> payload.copy(
+        operatorArgs = emptyMap(),
+        transforms = payload.transforms.map { it.copy(args = emptyMap()) },
+        refId = ""
+    )
+
+    is ConditionPayload.ConditionRef -> payload.copy(args = emptyMap())
+}
+
+private fun stripScoreArgs(scoreEffect: ScoreEffect): ScoreEffect = when (scoreEffect) {
+    is ScoreEffect.SourceScore -> scoreEffect.copy(
+        operatorArgs = emptyMap(),
+        transforms = scoreEffect.transforms.map { it.copy(args = emptyMap()) }
+    )
+
+    else -> scoreEffect
 }
