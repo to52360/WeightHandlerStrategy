@@ -79,15 +79,13 @@ class TreeConfigService(
         existingId: String? = null,
         enabled: Boolean = true,
         managerId: String? = null,
-        description: String? = null,
-        nodeNames: Map<String, String>? = null
+        description: String? = null
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
 
         // 仅序列化 root（树结构），leafConfigs 走独立表。
         // 用 RootHolder 包装以绕过 typealias 的泛型解析丢失问题。
         val rootJson = mapper.writeValueAsString(RootHolder(config.root))
-        val nodeNamesJson = if (nodeNames.isNullOrEmpty()) null else mapper.writeValueAsString(nodeNames)
         val entity = TreeConfigEntity(
             id = id,
             bindingType = config.bindingType.name,
@@ -96,8 +94,7 @@ class TreeConfigService(
             description = description,
             configData = rootJson,
             enabled = enabled,
-            managerId = managerId,
-            nodeNames = nodeNamesJson
+            managerId = managerId
         )
         repository.save(entity)
         leafConfigRepository.saveAll(id, config.leafConfigs, mapper)

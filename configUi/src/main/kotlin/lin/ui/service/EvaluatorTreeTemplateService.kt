@@ -21,20 +21,17 @@ class EvaluatorTreeTemplateService(
         config: EvaluatorTreeConfig,
         description: String? = null,
         groupId: String? = null,
-        existingId: String? = null,
-        nodeNames: Map<String, String>? = null
+        existingId: String? = null
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
         val rootJson = mapper.writeValueAsString(RootHolder(config.root))
-        val nodeNamesJson = if (nodeNames.isNullOrEmpty()) null else mapper.writeValueAsString(nodeNames)
 
         val entity = EvaluatorTreeTemplateEntity(
             id = id,
             name = name,
             description = description,
             groupId = groupId,
-            configData = rootJson,
-            nodeNames = nodeNamesJson
+            configData = rootJson
         )
         templateRepository.save(entity)
 

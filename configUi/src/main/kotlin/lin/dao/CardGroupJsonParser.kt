@@ -7,6 +7,7 @@ import lin.config.AppConfig.defaultDirPath
 import lin.rule.build.DynamicFieldOption
 import lin.serviceLoader.provider.SelectOptionProvider
 import lin.ui.card_group.db.CardGroupService
+import lin.ui.db.CardIdNameText
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.nio.file.Files
@@ -65,6 +66,33 @@ object CardGroupJsonParser {
                 .map { it.fileName.toString().removeSuffix(".cardgroup") }
                 .toList()
         }
+    }
+
+    /**
+     * 将卡牌列表（通常来自炉石卡组代码解析得到的 [CardIdNameText]）写成一个 `.cardgroup` JSON 文件。
+     * 文件写入 [dirPath]（默认 [defaultDirPath]，即 app.properties 中的 cardgroup.dir.path），
+     * 文件名为 `$groupName.cardgroup`。目录不存在时自动创建。
+     * 返回写入的文件路径。
+     */
+    fun saveCardGroup(
+        cards: List<CardIdNameText>,
+        groupName: String,
+        enabled: Boolean = true,
+        dirPath: Path = defaultDirPath
+    ): Path {
+        if (cards.isEmpty()) {
+            throw IllegalArgumentException("卡牌列表为空，无法生成 .cardgroup 文件")
+        }
+        if (!Files.exists(dirPath)) {
+            Files.createDirectories(dirPath)
+        }
+        val config = CardGroupConfig(
+            enabled = enabled,
+            cards = cards.map { CardWeightConfig(cardId = it.cardId, name = it.name) }
+        )
+        val file = dirPath.resolve("$groupName.cardgroup")
+        Files.writeString(file, mapper.writeValueAsString(config))
+        return file
     }
 
 

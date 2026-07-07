@@ -5,17 +5,21 @@ package lin.rule.tree
  * @param L 具体的叶子节点负载数据（业务逻辑载体）
  */
 sealed interface LogicNode<out L> {
+    val nodeName: String?
 
     data class And<L>(
-        val children: List<LogicNode<L>>
+        val children: List<LogicNode<L>>,
+        override val nodeName: String? = null
     ) : LogicNode<L>
 
     data class Or<L>(
-        val children: List<LogicNode<L>>
+        val children: List<LogicNode<L>>,
+        override val nodeName: String? = null
     ) : LogicNode<L>
 
     data class Not<L>(
-        val child: LogicNode<L>
+        val child: LogicNode<L>,
+        override val nodeName: String? = null
     ) : LogicNode<L>
 
     /**
@@ -25,13 +29,15 @@ sealed interface LogicNode<out L> {
     data class Branch<L>(
         val payload: L,
         val onTrue: LogicNode<L>,
-        val onFalse: LogicNode<L>
+        val onFalse: LogicNode<L>,
+        override val nodeName: String? = null
     ) : LogicNode<L>
 
     /**
      * 叶子节点，承载具体的业务逻辑判断或规则
      */
     data class Leaf<L>(
-        val payload: L
+        val payload: L,
+        override val nodeName: String? = null
     ) : LogicNode<L>
 }

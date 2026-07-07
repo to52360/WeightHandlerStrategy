@@ -20,9 +20,7 @@ data class CreateDraftRequest(
     @field:JsonPropertyDescription("覆盖已有配置的ID")
     val existingId: String? = null,
     @field:JsonPropertyDescription("所属卡组 ID")
-    val managerId: String? = null,
-    @field:JsonPropertyDescription("节点自定义名称映射（路径键 → 名称），可选。如 {\"$\":\"根节点\",\"$0\":\"左分支\"}")
-    val nodeNames: Map<String, String>? = null
+    val managerId: String? = null
 )
 
 data class PutDraftLeafRequest(
@@ -45,9 +43,7 @@ data class DraftTreeState(
     val leafConfigs: MutableMap<String, EvaluatorLeafConfig>,
     val expectedNodeIds: Set<String>,
     val createdAt: Long,
-    var updatedAt: Long,
-    /** AI 传入的节点自定义名称，commit 时随树一起落盘 */
-    var nodeNames: Map<String, String>? = null
+    var updatedAt: Long
 ) {
     fun getMissingNodeIds(): Set<String> = expectedNodeIds - leafConfigs.keys
 }

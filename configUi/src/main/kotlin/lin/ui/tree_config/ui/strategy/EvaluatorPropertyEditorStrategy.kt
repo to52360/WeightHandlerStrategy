@@ -188,9 +188,9 @@ class EvaluatorPropertyEditorStrategy(
     }
 
     private fun buildHeader(nodeId: String, isBranch: Boolean): List<Node> {
-        val typeLabel = if (isBranch) "Branch 节点" else "Rule 节点"
+        val typeLabel = if (isBranch) "分支配置" else "规则配置"
         val nodes = mutableListOf<Node>(
-            Label("$typeLabel (nodeId: $nodeId)").apply {
+            Label(typeLabel).apply {
                 style = "-fx-font-weight: bold;"
             }
         )

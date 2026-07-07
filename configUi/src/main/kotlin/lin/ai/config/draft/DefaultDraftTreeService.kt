@@ -33,8 +33,7 @@ class DefaultDraftTreeService(
             leafConfigs = ConcurrentHashMap(),
             expectedNodeIds = expectedNodeIds,
             createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            nodeNames = request.nodeNames
+            updatedAt = System.currentTimeMillis()
         )
         drafts[draftId] = state
 
@@ -103,8 +102,7 @@ class DefaultDraftTreeService(
             description = request.description,
             existingId = request.existingId,
             enabled = true,
-            managerId = request.managerId,
-            nodeNames = state.nodeNames
+            managerId = request.managerId
         )
 
         val result = aiConfigGenerationService.saveEvaluatorTree(saveRequest)

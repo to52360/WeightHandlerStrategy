@@ -1,7 +1,6 @@
 package lin.mcp
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import lin.tree_config.bridge.parseNodeNames
 import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.tree_config.db.EvaluatorTreeTemplateEntity
 import lin.ui.tree_config.db.EvaluatorTreeTemplateRepository
@@ -36,11 +35,10 @@ class AiTreeTemplateToolProvider(
                 McpToolResult("Template not found", isError = true)
             } else {
                 val config = result.second!!
-                val names = parseNodeNames(result.first.nodeNames)
                 val response = mapOf(
                     "bindingType" to config.bindingType.name,
                     "bindingIds" to config.bindingIds,
-                    "tree" to config.root.toNamed(names),
+                    "tree" to config.root.toNamed(),
                     "leafConfigs" to config.leafConfigs
                 )
                 McpToolResult(mapper.writeValueAsString(response))

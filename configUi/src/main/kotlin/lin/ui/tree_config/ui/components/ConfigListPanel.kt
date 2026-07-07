@@ -6,7 +6,6 @@ import javafx.scene.layout.FlowPane
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.rule.tree.*
-import lin.tree_config.bridge.parseNodeNames
 import lin.ui.card_group.ui.ActiveManagerHolder
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.components.PaginationBar
@@ -108,9 +107,20 @@ class ConfigListPanel(
                     workbench.updateSelectionState(type, ids, item.enabled)
                 }
                 if (item.config != null) {
-                    val names = parseNodeNames(item.nodeNames)
                     workbench.logicTreeEditor.treeView.root =
-                        TreeModelConverter.toTreeItem(item.config.root, nodeNames = names)
+                        TreeModelConverter.toTreeItem(item.config.root, titleResolver = { p ->
+                            val nodeId = when (p) {
+                                is EvaluatorPayload.Rule -> p.nodeId
+                                is EvaluatorPayload.BranchCondition -> p.nodeId
+                                else -> null
+                            }
+                            if (nodeId != null) {
+                                val leaf = item.config.leafConfigs[nodeId]
+                                leaf?.sourceId ?: nodeId
+                            } else {
+                                p?.toString() ?: "?"
+                            }
+                        })
                     workbench.leafConfigs.clear()
                     workbench.leafConfigs.putAll(item.config.leafConfigs)
                 }

@@ -53,6 +53,29 @@ class HsCardRepository(private val jdbcTemplate: JdbcTemplate) {
         }
         return jdbcTemplate.query(sql, rowMapper, *cardIds.toTypedArray())
     }
+
+    /**
+     * 按 Hearthstone dbfId 批量查询卡牌的 cardId / name / text，返回以 dbfId 为键的 Map。
+     * 炉石卡组代码（deck string）中携带的卡牌标识即 dbfId，因此解析卡组代码时用此方法。
+     * 仅返回在 [hs.cards] 中存在记录的卡（本地库缺卡时不返回），便于按卡组出现顺序重排。
+     */
+    fun findCardMapByDbfIds(dbfIds: List<Int>): Map<Int, CardIdNameText> {
+        if (dbfIds.isEmpty()) return emptyMap()
+        val placeholders = dbfIds.joinToString(",") { "?" }
+        val sql = """
+            SELECT dbfId, cardId, name, text FROM hs.cards
+            WHERE dbfId IN ($placeholders)
+        """.trimIndent()
+        val rowMapper = RowMapper { rs, _ ->
+            val dbfId = rs.getInt("dbfId")
+            dbfId to CardIdNameText(
+                cardId = rs.getString("cardId"),
+                name = rs.getString("name"),
+                text = rs.getString("text")
+            )
+        }
+        return jdbcTemplate.query(sql, rowMapper, *dbfIds.toTypedArray()).toMap()
+    }
 }
 
 data class CardIdNameText(val cardId: String, val name: String, val text: String?)

@@ -88,8 +88,7 @@ class DefaultAiConfigGenerationService(
             description = request.description,
             existingId = request.existingId,
             enabled = request.enabled,
-            managerId = request.managerId,
-            nodeNames = request.nodeNames
+            managerId = request.managerId
         )
         return SaveEvaluatorTreeResult(id = id, validation = validation)
     }

@@ -9,6 +9,7 @@ import lin.mcp.*
 import lin.ui.card_group.db.CardGroupService
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.context.GlobalContext.startKoin
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 /** MCP server 及 ToolProvider，仅 MCP 入口加载，不污染 UI 启动 */
@@ -17,24 +18,23 @@ val mcpModule = module {
     single<CardGroupQueryService> { DefaultCardGroupQueryService(get()) }
     single<AiConfigGenerationService> { DefaultAiConfigGenerationService(get(), get(), get(), get<CardGroupService>()) }
     single<lin.ai.config.draft.DraftTreeService> { lin.ai.config.draft.DefaultDraftTreeService(get(), get(), get()) }
-    single<McpToolProvider> {
-        AiTreeTemplateToolProvider(get(), get(), createTreeConfigMapper())
-    }
-    single<McpToolProvider> {
-        AiTreeConfigToolProvider(get<AiConfigGenerationService>(), get(), createTreeConfigMapper())
-    }
-    single<McpToolProvider> {
-        AiOrthogonalToolProvider(get(), get(), createTreeConfigMapper())
-    }
-    single<McpToolProvider> {
-        CardGroupToolProvider(
-            get<CardGroupQueryService>(),
-            get<CardGroupService>(),
+
+    // 多个 McpToolProvider 必须 bind，否则 single<T> 同名覆盖，getAll 只能拿到最后一个
+    single { AiTreeTemplateToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
+    single {
+        AiTreeConfigToolProvider(
+            get<AiConfigGenerationService>(),
+            get(),
             createTreeConfigMapper()
         )
-    }
-    single<McpToolProvider> { TemplateToolProvider(get(), get(), createTreeConfigMapper()) }
-    single<McpToolProvider> { lin.mcp.AiDraftTreeToolProvider(get(), createTreeConfigMapper()) }
+    } bind McpToolProvider::class
+    single { AiOrthogonalToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
+    single {
+        CardGroupToolProvider(get<CardGroupQueryService>(), get<CardGroupService>(), createTreeConfigMapper())
+    } bind McpToolProvider::class
+    single { TemplateToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
+    single { lin.mcp.AiDraftTreeToolProvider(get(), createTreeConfigMapper()) } bind McpToolProvider::class
+
     single { MyMcpServer(getAll<McpToolProvider>()) }
 }
 

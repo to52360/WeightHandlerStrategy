@@ -48,9 +48,7 @@ data class SaveEvaluatorTreeRequest(
     @field:JsonPropertyDescription("是否启用该配置")
     val enabled: Boolean = true,
     @field:JsonPropertyDescription("所属组的ID")
-    val managerId: String? = null,
-    @field:JsonPropertyDescription("节点自定义名称映射（路径键 → 名称），可选")
-    val nodeNames: Map<String, String>? = null
+    val managerId: String? = null
 )
 
 data class SaveEvaluatorTreeResult(

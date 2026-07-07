@@ -41,7 +41,23 @@ class CreateNewTreeAction : TreeWorkbenchAction {
                 managerId = result.managerId
             )
 
-            val rootItem = TreeItem(LogicNodeWrapper<EvaluatorPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
+            val rootItem = TreeItem(
+                LogicNodeWrapper<EvaluatorPayload>(
+                LogicNodeType.AND,
+                titleResolver = { p ->
+                    val nodeId = when (p) {
+                        is EvaluatorPayload.Rule -> p.nodeId
+                        is EvaluatorPayload.BranchCondition -> p.nodeId
+                        else -> null
+                    }
+                    if (nodeId != null) {
+                        val leaf = workbench.leafConfigs[nodeId]
+                        leaf?.sourceId ?: nodeId
+                    } else {
+                        p?.toString() ?: "?"
+                    }
+                }
+            )).also { it.isExpanded = true }
             workbench.nodeTreeView.root = rootItem
             workbench.updateSelectionState(result.bindingType, result.bindingIds, result.enabled)
             workbench.leafConfigs.clear()
@@ -132,7 +148,6 @@ class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
 
             // ====== 统一使用 EvaluatorTreeValidator（UI 和 MCP 共用同一套验证） ======
             val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
-            val nodeNames = TreeModelConverter.extractCustomNames(rootNode)
             val config = EvaluatorTreeConfig(
                 bindingType = bindingType ?: EvaluatorTreeBindingType.GROUP,
                 bindingIds = bindingIds,
@@ -159,15 +174,13 @@ class SaveTreeAction : TreeWorkbenchAction, KoinComponent {
                 treeConfigService.saveConfig(
                     selectedItem.name, config, null, workbench.getCurrentEnabled(),
                     managerId = selectedItem.managerId,
-                    description = selectedItem.description,
-                    nodeNames = nodeNames
+                    description = selectedItem.description
                 )
             } else {
                 treeConfigService.saveConfig(
                     selectedItem.name, config, selectedItem.id, workbench.getCurrentEnabled(),
                     managerId = selectedItem.managerId,
-                    description = selectedItem.description,
-                    nodeNames = nodeNames
+                    description = selectedItem.description
                 )
             }
 
@@ -218,7 +231,6 @@ class SaveAsTemplateAction : TreeWorkbenchAction, KoinComponent {
             try {
                 val (bindingType, bindingIds) = workbench.getSelectedBindings()
                 val evaluatorNode = TreeModelConverter.fromTreeItem(rootNode) { EvaluatorPayload.Rule("") }
-                val nodeNames = TreeModelConverter.extractCustomNames(rootNode)
                 val config = EvaluatorTreeConfig(
                     bindingType = bindingType ?: EvaluatorTreeBindingType.GROUP,
                     bindingIds = bindingIds.ifEmpty { listOf("TEMPLATE") },
@@ -238,8 +250,7 @@ class SaveAsTemplateAction : TreeWorkbenchAction, KoinComponent {
                     name = name,
                     config = config,
                     description = selectedItem.description,
-                    groupId = null,
-                    nodeNames = nodeNames
+                    groupId = null
                 )
 
                 showInfo("存为模板成功", "已成功另存模板 [$name]")

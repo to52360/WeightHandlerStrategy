@@ -5,7 +5,10 @@ import lin.ui.components.PayloadFactory
 import lin.ui.tree_config.ui.LogicNodeType
 import lin.ui.tree_config.ui.LogicNodeWrapper
 
-class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
+class TreeContextMenuFactory<L>(
+    private val payloadFactory: PayloadFactory<L>,
+    private val titleResolver: ((L?) -> String)? = null
+) {
 
     fun createContextMenu(
         treeItem: TreeItem<LogicNodeWrapper<L>>,
@@ -77,12 +80,10 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
                     // 2. 根据目标节点类型处理已有的子节点
                     when (targetType) {
                         LogicNodeType.LEAF -> {
-                            // LEAF 节点不能有子节点
                             treeItem.children.clear()
                         }
 
                         LogicNodeType.NOT -> {
-                            // NOT 节点最多只能有一个子节点
                             if (treeItem.children.size > 1) {
                                 val first = treeItem.children.first()
                                 treeItem.children.clear()
@@ -91,7 +92,6 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
                         }
 
                         LogicNodeType.BRANCH -> {
-                            // BRANCH 节点强制清空并重建两个占位子节点（onTrue 和 onFalse）
                             treeItem.children.clear()
                             treeItem.children.addAll(
                                 createLeafPlaceholder("true"),
@@ -104,7 +104,7 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
                         }
                     }
 
-                    treeView.refresh()
+                    afterChildrenChanged(treeItem, treeView)
                     // 触发重新选中以刷新右侧面板
                     val selectionModel = treeView.selectionModel
                     if (selectionModel.selectedItem == treeItem) {
@@ -116,12 +116,17 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
         }
         menu.items.add(changeMenu)
 
-        // 非根节点可删除，但 Branch 的直接子节点（onTrue/onFalse）不允许删除，只能通过“更改节点类型”替换
+        // 非根节点可删除，但 Branch 的直接子节点（onTrue/onFalse）不允许删除，只能通过"更改节点类型"替换
         val parentType = treeItem.parent?.value?.type
         if (!isRoot && parentType != LogicNodeType.BRANCH) {
             if (menu.items.isNotEmpty()) menu.items.add(SeparatorMenuItem())
             val delete = MenuItem("删除节点")
-            delete.setOnAction { treeItem.parent.children.remove(treeItem) }
+            delete.setOnAction {
+                val parent = treeItem.parent
+                parent.children.remove(treeItem)
+                parent.value.childrenCount = parent.children.size
+                treeView.refresh()
+            }
             menu.items.add(delete)
         }
         return menu
@@ -134,7 +139,7 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
     ): MenuItem {
         val item = MenuItem(text)
         item.setOnAction {
-            val wrapper = LogicNodeWrapper<L>(type)
+            val wrapper = LogicNodeWrapper<L>(type, titleResolver = titleResolver)
             when (type) {
                 LogicNodeType.LEAF -> wrapper.payload = payloadFactory.createEmptyLeaf()
                 LogicNodeType.BRANCH -> wrapper.payload = payloadFactory.createEmptyBranch()
@@ -149,14 +154,21 @@ class TreeContextMenuFactory<L>(private val payloadFactory: PayloadFactory<L>) {
                 )
             }
             parentItem.children.add(newItem)
+            parentItem.value.childrenCount = parentItem.children.size
             parentItem.isExpanded = true
         }
         return item
     }
 
     private fun createLeafPlaceholder(suffix: String): TreeItem<LogicNodeWrapper<L>> {
-        val wrapper = LogicNodeWrapper<L>(LogicNodeType.LEAF)
+        val wrapper = LogicNodeWrapper<L>(LogicNodeType.LEAF, titleResolver = titleResolver)
         wrapper.payload = payloadFactory.createEmptyLeaf()
         return TreeItem(wrapper).also { it.isExpanded = true }
+    }
+
+    /** 节点类型变更后同步 childrenCount 并刷新 */
+    private fun afterChildrenChanged(treeItem: TreeItem<LogicNodeWrapper<L>>, treeView: TreeView<LogicNodeWrapper<L>>) {
+        treeItem.value.childrenCount = treeItem.children.size
+        treeView.refresh()
     }
 }

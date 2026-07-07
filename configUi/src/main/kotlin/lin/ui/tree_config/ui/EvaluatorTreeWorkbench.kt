@@ -78,7 +78,14 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
         })
 
         // 注册右键菜单的 Behavior
-        val contextMenuFactory = TreeContextMenuFactory(EvaluatorPayloadFactory())
+        val evaluatorTitleResolver: ((EvaluatorPayload?) -> String)? = { p ->
+            when (p) {
+                is EvaluatorPayload.Rule -> p.nodeId
+                is EvaluatorPayload.BranchCondition -> p.nodeId
+                else -> p?.toString() ?: "?"
+            }
+        }
+        val contextMenuFactory = TreeContextMenuFactory(EvaluatorPayloadFactory(), evaluatorTitleResolver)
         logicTreeEditor.addBehavior(object : TreeEditorBehavior<LogicNodeWrapper<EvaluatorPayload>> {
             override fun install(editor: LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>>) {
                 editor.cellInterceptors.add { cell, item, empty ->

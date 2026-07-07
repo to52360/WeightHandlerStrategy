@@ -8,6 +8,5 @@ data class TreeConfigEntity(
     val description: String? = null,// 描述，MI 生成配置时可附带说明
     val configData: String,         // root（树结构）的 JSON 字符串，leafConfigs 已拆到 evaluator_leaf_config 表
     val enabled: Boolean,           // 是否启用
-    val managerId: String? = null,  // 所属管理 ID，null 表示全局共享（如用途标签绑定）
-    val nodeNames: String? = null   // 节点自定义名称 JSON Map（nodeId/路径 → 名称），null 表示全自动推导
+    val managerId: String? = null   // 所属管理 ID，null 表示全局共享（如用途标签绑定）
 )

@@ -9,7 +9,7 @@ import com.github.victools.jsonschema.module.jackson.JacksonModule
 import com.github.victools.jsonschema.module.jackson.JacksonOption
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.LogicNode
-import lin.tree_config.bridge.pathToKey
+import lin.tree_config.bridge.defaultNodeName
 import kotlin.reflect.full.memberProperties
 
 object JsonSchemaUtils {
@@ -127,85 +127,55 @@ data class NamedEvaluatorNode(
 
 /**
  * 将核心领域模型 [LogicNode] 转换为携带语义命名的表现层 DTO。
- * [nodeNames] 为节点自定义名称映射（路径键 → 名称），非空时优先于自动推导名称。
- * 命名完全由节点类型和 payload 自动推导，不污染核心模型。
+ * 命名直接从 LogicNode 的 nodeName 提取，未指定时自动推导。
  */
-fun LogicNode<EvaluatorPayload>.toNamed(nodeNames: Map<String, String> = emptyMap()): NamedEvaluatorNode {
-    return buildNamed(this, nodeNames, mutableListOf())
+fun LogicNode<EvaluatorPayload>.toNamed(): NamedEvaluatorNode {
+    return buildNamed(this)
 }
 
 private fun buildNamed(
-    node: LogicNode<EvaluatorPayload>,
-    nodeNames: Map<String, String>,
-    path: MutableList<Int>
+    node: LogicNode<EvaluatorPayload>
 ): NamedEvaluatorNode {
-    val key = pathToKey(path)
-    val autoName: String
-    val children: List<NamedEvaluatorNode>
+    val autoName = defaultNodeName(node) { payloadNodeId(it) }
+    val children = buildChildren(node)
+    val customName = node.nodeName
 
-    when (node) {
-        is LogicNode.And -> {
-            autoName = "全部满足 (${node.children.size} 个条件)"
-            children = node.children.mapIndexed { i, child ->
-                path.add(i)
-                val n = buildNamed(child, nodeNames, path)
-                path.removeAt(path.lastIndex)
-                n
-            }
-        }
-
-        is LogicNode.Or -> {
-            autoName = "满足任一 (${node.children.size} 个条件)"
-            children = node.children.mapIndexed { i, child ->
-                path.add(i)
-                val n = buildNamed(child, nodeNames, path)
-                path.removeAt(path.lastIndex)
-                n
-            }
-        }
-
-        is LogicNode.Not -> {
-            autoName = "取反"
-            path.add(0)
-            val n = buildNamed(node.child, nodeNames, path)
-            path.removeAt(path.lastIndex)
-            children = listOf(n)
-        }
-
-        is LogicNode.Branch -> {
-            autoName = "分支条件"
-            path.add(0)
-            val t = buildNamed(node.onTrue, nodeNames, path)
-            path.removeAt(path.lastIndex)
-            path.add(1)
-            val f = buildNamed(node.onFalse, nodeNames, path)
-            path.removeAt(path.lastIndex)
-            children = listOf(t, f)
-        }
-
-        is LogicNode.Leaf -> {
-            autoName = payloadNodeId(node.payload)
-            children = emptyList()
-        }
-    }
-
-    val customName = nodeNames[key]
     return NamedEvaluatorNode(
-        type = when (node) {
-            is LogicNode.And -> "AND"
-            is LogicNode.Or -> "OR"
-            is LogicNode.Not -> "NOT"
-            is LogicNode.Branch -> "BRANCH"
-            is LogicNode.Leaf -> "LEAF"
-        },
+        type = nodeTypeName(node),
         name = if (!customName.isNullOrBlank()) customName else autoName,
-        nodeId = when (node) {
-            is LogicNode.Branch -> payloadNodeId(node.payload)
-            is LogicNode.Leaf -> payloadNodeId(node.payload)
-            else -> null
-        },
+        nodeId = nodeIdOrNull(node),
         children = children
     )
+}
+
+private fun buildChildren(
+    node: LogicNode<EvaluatorPayload>
+): List<NamedEvaluatorNode> = when (node) {
+    is LogicNode.And -> node.children.map { buildNamed(it) }
+    is LogicNode.Or -> node.children.map { buildNamed(it) }
+    is LogicNode.Not -> {
+        listOf(buildNamed(node.child))
+    }
+
+    is LogicNode.Branch -> {
+        listOf(buildNamed(node.onTrue), buildNamed(node.onFalse))
+    }
+
+    is LogicNode.Leaf -> emptyList()
+}
+
+private fun nodeTypeName(node: LogicNode<*>): String = when (node) {
+    is LogicNode.And -> "AND"
+    is LogicNode.Or -> "OR"
+    is LogicNode.Not -> "NOT"
+    is LogicNode.Branch -> "BRANCH"
+    is LogicNode.Leaf -> "LEAF"
+}
+
+private fun nodeIdOrNull(node: LogicNode<EvaluatorPayload>): String? = when (node) {
+    is LogicNode.Branch -> payloadNodeId(node.payload)
+    is LogicNode.Leaf -> payloadNodeId(node.payload)
+    else -> null
 }
 
 private fun payloadNodeId(payload: EvaluatorPayload): String = when (payload) {

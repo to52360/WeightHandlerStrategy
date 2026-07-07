@@ -17,7 +17,6 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
                 group_id TEXT,
                 config_data TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                node_names TEXT,
                 FOREIGN KEY (group_id) REFERENCES template_group(id)
             );
         """.trimIndent()
@@ -30,21 +29,19 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
             name = rs.getString("name"),
             description = rs.getString("description"),
             groupId = rs.getString("group_id"),
-            configData = rs.getString("config_data"),
-            nodeNames = rs.getString("node_names")
+            configData = rs.getString("config_data")
         )
     }
 
     fun save(entity: EvaluatorTreeTemplateEntity) {
         val sql = """
-            INSERT INTO evaluator_tree_template (id, name, description, group_id, config_data, node_names)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO evaluator_tree_template (id, name, description, group_id, config_data)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 description = excluded.description,
                 group_id = excluded.group_id,
-                config_data = excluded.config_data,
-                node_names = excluded.node_names
+                config_data = excluded.config_data
         """.trimIndent()
         jdbcTemplate.update(
             sql,
@@ -52,8 +49,7 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
             entity.name,
             entity.description,
             entity.groupId,
-            entity.configData,
-            entity.nodeNames
+            entity.configData
         )
     }
 
@@ -64,10 +60,10 @@ class EvaluatorTreeTemplateRepository(private val jdbcTemplate: JdbcTemplate) {
 
     fun findByGroupId(groupId: String?): List<EvaluatorTreeTemplateEntity> {
         return if (groupId == null) {
-            val sql = "SELECT * FROM evaluator_tree_template WHERE group_id IS NULL ORDER BY name COLLATE NOCASE ASC"
+            val sql = "SELECT * FROM evaluator_tree_template WHERE group_id IS NULL ORDER BY name COLLATE NOCASE "
             jdbcTemplate.query(sql, rowMapper)
         } else {
-            val sql = "SELECT * FROM evaluator_tree_template WHERE group_id = ? ORDER BY name COLLATE NOCASE ASC"
+            val sql = "SELECT * FROM evaluator_tree_template WHERE group_id = ? ORDER BY name COLLATE NOCASE "
             jdbcTemplate.query(sql, rowMapper, groupId)
         }
     }
