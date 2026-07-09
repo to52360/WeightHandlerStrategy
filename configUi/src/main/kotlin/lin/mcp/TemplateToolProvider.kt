@@ -2,9 +2,9 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.ObjectMapper
-import lin.ui.db.OrthogonalTemplateEntity
-import lin.ui.db.OrthogonalTemplateRepository
-import lin.ui.db.TemplateGroupRepository
+import lin.db.OrthogonalTemplateEntity
+import lin.db.OrthogonalTemplateRepository
+import lin.db.TemplateGroupRepository
 import lin.utils.nextShortId
 
 /**
@@ -96,7 +96,7 @@ private data class SaveTemplateInput(
     @field:JsonPropertyDescription("模板名称")
     val name: String,
 
-    @field:JsonPropertyDescription("模板结构 JSON，只存组件引用（数据源ID、算子ID），不存具体参数值")
+    @field:JsonPropertyDescription("模板结构 JSON（字符串类型）。只存组件引用（数据源ID、算子ID），不存具体参数值。【必须传入「序列化后的 JSON 字符串」——即整段 JSON 文本整体作为一个字符串，不要直接传嵌套 JSON 对象】。")
     val contentJson: String,
 
     @field:JsonPropertyDescription("模板描述")

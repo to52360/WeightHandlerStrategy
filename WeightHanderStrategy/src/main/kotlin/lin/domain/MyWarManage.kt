@@ -10,11 +10,13 @@ import lin.bean.CardCombinedConfig
 import lin.bean.ComboCard
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
+import lin.domain.context.baseScore
 import lin.domain.use.tryUseCard
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
 import lin.serviceLoader.weightRule.utils.war.WarStatus
+import lin.utils.database.dao.CardInfoDao
 import lin.warExt.action.activeLocation
 import lin.warExt.action.cleanPlay
 import lin.warExt.action.cleanPlayAll
@@ -28,6 +30,7 @@ import org.koin.core.context.loadKoinModules
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import java.util.concurrent.ConcurrentHashMap
 
 
 /**
@@ -116,6 +119,9 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
     val toDieHandler = ToDieHandler(this)
     override val infoMap: Map<String, CardCombinedConfig>
+    private val baseScoreCache = ConcurrentHashMap<String, Double>()
+    private val cardInfoDao: CardInfoDao by lazy { getKoin().get<CardInfoDao>() }
+
 
     //private val statusReset: StatusReset
     init {
@@ -150,9 +156,14 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
 
     fun parseComboCard(card: Card): ComboCard {
+        // 基础分按需解析：单卡首次出现时查一次静态费用并缓存；不批量加载全库、绝不回退 card.cost
+        val baseScore = baseScoreCache.getOrPut(card.cardId) {
+            cardInfoDao.queryCardCostById(card.cardId)?.let { baseScore(it) } ?: 0.0
+        }
         return ComboCard(
             combinedConfig = infoMap[card.cardId],
-            card = card
+            card = card,
+            baseScore = baseScore
         )
     }
 

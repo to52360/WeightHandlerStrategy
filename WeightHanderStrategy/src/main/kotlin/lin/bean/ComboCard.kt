@@ -19,10 +19,14 @@ typealias ComboRule = (ComboCard) -> Double
  */
 class ComboCard(
     val combinedConfig: CardCombinedConfig? = null,
-    val card: Card
+    val card: Card,
+    val baseScore: Double = 0.0
 ) {
 
     val cardWeightInfo = combinedConfig?.weightInfo
+
+    // 额外分（超模溢价）：原 powerWeight，无配置=0（见 scoring-model/TRACKER.md 三分量模型）
+    val extraScore: Double = cardWeightInfo?.powerWeight ?: 0.0
 
     fun groupIds(): Set<String> = combinedConfig?.groupIds ?: emptySet()
 
@@ -48,7 +52,8 @@ class ComboCard(
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
-    val basePowerWeight = cardWeightInfo?.powerWeight ?: BaseWeight
+    // 静态分值（基础分 + 额外分），用作排序优先级与"是否基础卡"判定
+    val basePowerWeight = baseScore + extraScore
 
 
     var useAfterStrategy: MutableList<UseAfterStrategy>? = cardWeightInfo?.useAfterStrategy

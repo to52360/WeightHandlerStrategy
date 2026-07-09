@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
-import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorTreeConfig
 
 /**
@@ -13,19 +12,52 @@ import lin.rule.tree.EvaluatorTreeConfig
  * 仅聚焦评估树领域（叶子查询 / 校验 / 保存），卡池查询已拆到 CardGroupQueryService。
  */
 interface AiConfigGenerationService {
-    fun listEvaluatorLeafKinds(): List<AiEvaluatorLeafKind>
+    /**
+     * 能力背景（规划前置）。
+     * 返回系统当前真实存在的全部可编排能力，按领域分组，并标注每种能力所需的属性。
+     * AI 必须在编排卡牌分组、构建评估树之前先调用本方法，依据真实 sourceId 与属性规划，
+     * 严禁凭空捏造规则/条件 ID 或属性。正交能力的底层积木细节不在此暴露，见 [list_orthogonal_components]（构造阶段再查）。
+     */
+    fun listCapabilityBackground(): AiCapabilityBackground
 
     fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport
 
     fun saveEvaluatorTree(request: SaveEvaluatorTreeRequest): SaveEvaluatorTreeResult
 }
 
-data class AiEvaluatorLeafKind(
-    val kind: EvaluatorLeafKind,
+/**
+ * 能力背景总览：按领域分组的可编排能力。
+ * 这是 AI 规划阶段（编排分组 / 构建评估树之前）应首先查阅的"现有能力清单"。
+ */
+data class AiCapabilityBackground(
+    /** 预编码规则（Rule.Coded）：有独立守卫，可使用任意评分效应 */
+    val codedRules: List<AiCapabilityEntry>,
+    /** 预编码条件（Condition.Plain）：固定常数得分 */
+    val plainConditions: List<AiCapabilityEntry>,
+    /** 条件树（Condition.Tree）：引用既有条件树配置 */
+    val conditionTrees: List<AiCapabilityEntry>,
+    /** 正交能力指针：背景阶段只需知道两个 builder 的 sourceId，精细积木见 list_orthogonal_components */
+    val orthogonal: AiOrthogonalCapabilityPointer
+)
+
+/**
+ * 单条能力入口：真实存在的 sourceId + 语义描述 + 该能力需要的属性。
+ */
+data class AiCapabilityEntry(
     val sourceId: String,
     val name: String?,
     val desc: String?,
-    val fields: List<AiFieldSpec>
+    val requiredProperties: List<AiFieldSpec>
+)
+
+/**
+ * 正交能力指针（背景阶段粗粒度）。
+ * 不重复 list_orthogonal_components 的精细类型链路与算子参数，仅给出 builder 的 sourceId 与指引。
+ */
+data class AiOrthogonalCapabilityPointer(
+    val conditionBuilderSourceId: String,
+    val ruleBuilderSourceId: String,
+    val note: String
 )
 
 data class AiFieldSpec(

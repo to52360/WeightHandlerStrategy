@@ -4,9 +4,9 @@ import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
 import lin.bean.usePlan.PurposeTagId
 import lin.dao.CardGroupJsonParser
+import lin.db.HsCardRepository
 import lin.ui.card_purpose.db.CardPurposeEntity
 import lin.ui.card_purpose.db.CardPurposeRepository
-import lin.ui.db.HsCardRepository
 import java.time.LocalDate
 
 class CardPurposeStore(

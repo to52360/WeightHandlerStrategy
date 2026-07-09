@@ -1,8 +1,8 @@
 ﻿package lin.ai.config
 
 import lin.dao.CardGroupJsonParser
-import lin.ui.db.CardIdNameText
-import lin.ui.db.HsCardRepository
+import lin.db.CardIdNameText
+import lin.db.HsCardRepository
 
 /**
  * CardGroupQueryService 的默认实现。

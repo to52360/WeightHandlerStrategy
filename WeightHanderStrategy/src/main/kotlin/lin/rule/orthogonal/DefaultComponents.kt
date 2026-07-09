@@ -158,6 +158,30 @@ val GreaterThanOrEqualOp = operator<Int, GteParams>(
     input >= params.threshold
 }
 
+/**
+ * 等于判定算子
+ */
+val EqualOp = operator<Int, GteParams>(
+    id = "equal",
+    name = "等于",
+    description = "判定输入值是否等于指定阈值",
+    categories = setOf(OperatorCategories.NUMBER, OperatorCategories.COMPARE)
+) { input, params ->
+    input == params.threshold
+}
+
+/**
+ * 小于判定算子
+ */
+val LessThanOp = operator<Int, GteParams>(
+    id = "less_than",
+    name = "小于",
+    description = "判定输入值是否小于指定阈值",
+    categories = setOf(OperatorCategories.NUMBER, OperatorCategories.COMPARE)
+) { input, params ->
+    input < params.threshold
+}
+
 data class ContainsRaceParams(
     @lin.rule.parse.RuleField(name = "目标种族", description = "匹配的种族", required = true, dataSource = "card_races")
     val targetRace: CardRaceEnum

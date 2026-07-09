@@ -6,6 +6,10 @@ import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.db.OrthogonalTemplateEntity
+import lin.db.OrthogonalTemplateRepository
+import lin.db.TemplateGroupEntity
+import lin.db.TemplateGroupRepository
 import lin.rule.condition.ConditionMeta
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
@@ -18,8 +22,6 @@ import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.OrthogonalRuleLeafConfig
 import lin.ui.components.TemplateNameDialog
 import lin.ui.condition_tree.ui.components.OrthogonalConditionDialog
-import lin.ui.db.OrthogonalTemplateEntity
-import lin.ui.db.TemplateGroupEntity
 import lin.ui.tree_config.ui.DynamicFieldForm
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -35,8 +37,8 @@ class OrthogonalRuleDialog(
 
     private val dynamicFieldForm by lazy { DynamicFieldForm() }
 
-    private val templateRepo: lin.ui.db.OrthogonalTemplateRepository by inject()
-    private val templateGroupRepo: lin.ui.db.TemplateGroupRepository by inject()
+    private val templateRepo: OrthogonalTemplateRepository by inject()
+    private val templateGroupRepo: TemplateGroupRepository by inject()
 
     private class RuleDataContext(
         val dataSources: List<DataSource<*>>,

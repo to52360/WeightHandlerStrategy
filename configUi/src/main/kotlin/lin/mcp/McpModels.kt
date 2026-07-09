@@ -99,7 +99,7 @@ data class SaveTreeTemplateInput(
     @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("模板名称")
     val name: String,
 
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("评估树骨架 JSON，只存节点类型和引用关系，不存叶子节点的具体参数值")
+    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("评估树骨架 JSON（字符串类型）。只存节点类型和引用关系，不存叶子节点的具体参数值。【必须传入「序列化后的 JSON 字符串」——即整段 JSON 文本整体作为一个字符串，不要直接传嵌套 JSON 对象】。")
     val contentJson: String,
 
     @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("模板描述")

@@ -1,8 +1,8 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
-import lin.domain.context.CostWeight
 import lin.domain.context.NotWeight
+import lin.domain.context.remainingCostPenalty
 import lin.myLog
 
 sealed class CmdPlanner
@@ -84,10 +84,17 @@ class EndWeightResult(
     }
 
     fun findBestCombination() {
-        if (isLessCost()) {//这里还是存在使用负数很离谱的情况
+        if (isLessCost()) {// 预评估快路：无替代组合，直接全收
             this.bestCombination = _canUseCardsByHandler
-            val lessCost = cost - costSum()
-            extWeight -= lessCost * CostWeight
+            // S-0.2: 原 `extWeight -= lessCost * CostWeight` 在 lessCost 大时产生离谱负数并污染
+            // extWeight 通道。改为惩罚上限钳制为不超过本组合自身权重和，避免负分失控；
+            // 最终量纲/是否保留由 Q-3 模型决策定。
+            val lessCost = (cost - costSum()).coerceAtLeast(0)
+            if (bestCombination.isNotEmpty()) {
+                val baseWeightSum = bestCombination.sumOf { it.powerWeight }
+                val penalty = remainingCostPenalty(lessCost).coerceAtMost(baseWeightSum)
+                extWeight -= penalty
+            }
         }
         else {
             this.bestCombination = findStrategy.findBestCombination(_canUseCardsByHandler, cost)

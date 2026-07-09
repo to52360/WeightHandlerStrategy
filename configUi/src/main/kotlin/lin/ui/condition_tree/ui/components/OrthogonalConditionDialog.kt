@@ -2,16 +2,16 @@ package lin.ui.condition_tree.ui.components
 
 import javafx.scene.control.*
 import javafx.scene.layout.VBox
+import lin.db.OrthogonalTemplateEntity
+import lin.db.OrthogonalTemplateRepository
+import lin.db.TemplateGroupEntity
+import lin.db.TemplateGroupRepository
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
 import lin.rule.orthogonal.DataSource
 import lin.rule.orthogonal.Operator
 import lin.rule.orthogonal.Transform
 import lin.ui.components.TemplateNameDialog
-import lin.ui.db.OrthogonalTemplateEntity
-import lin.ui.db.OrthogonalTemplateRepository
-import lin.ui.db.TemplateGroupEntity
-import lin.ui.db.TemplateGroupRepository
 import lin.ui.service.createTreeConfigMapper
 import lin.ui.tree_config.ui.DynamicFieldForm
 import lin.ui.tree_config.ui.components.ConditionConfigPanel

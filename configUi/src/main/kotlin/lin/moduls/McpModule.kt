@@ -30,7 +30,12 @@ val mcpModule = module {
     } bind McpToolProvider::class
     single { AiOrthogonalToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
     single {
-        CardGroupToolProvider(get<CardGroupQueryService>(), get<CardGroupService>(), createTreeConfigMapper())
+        CardGroupToolProvider(
+            get<CardGroupQueryService>(),
+            get<CardGroupService>(),
+            get<lin.db.HsCardRepository>(),
+            createTreeConfigMapper()
+        )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
     single { lin.mcp.AiDraftTreeToolProvider(get(), createTreeConfigMapper()) } bind McpToolProvider::class

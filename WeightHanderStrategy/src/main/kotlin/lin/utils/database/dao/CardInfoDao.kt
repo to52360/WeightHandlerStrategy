@@ -18,4 +18,11 @@ class CardInfoDao {
         val sql = "SELECT race,races FROM cards where cardId = ?"
         return DBConfig.CARD_DB.query(sql, rowMapper, cardId).firstOrNull()
     }
+
+    /** 按 cardId 查单卡静态费用，用于按需解析基础分（首次出现时查一次并缓存，见 scoring-model/TRACKER.md） */
+    fun queryCardCostById(cardId: String): Int? {
+        val rowMapper = RowMapper { rs: ResultSet, _: Int -> rs.getInt("cost") }
+        val sql = "SELECT cost FROM cards where cardId = ?"
+        return DBConfig.CARD_DB.query(sql, rowMapper, cardId).firstOrNull()
+    }
 }

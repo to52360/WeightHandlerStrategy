@@ -22,11 +22,12 @@
 
 ### 分组编排 AI 集成（V1 核心）
 
-| 编号    | 状态   | 任务             | 说明                                                                                                                                                                                                                                                            |
-|-------|------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| T-010 | done | 暴露卡池源文件列表及卡池内容 | 新增 `list_card_group_sources` + `get_card_group_detail` 两个 MCP tool。list 列出所有 .cardgroup 文件的 fileName/enabled/cardCount；get 按 fileName 返回完整卡池详情（cardId + name + text，name/text 从 hs.cards 批量查询）。AI 先列后查，基于指定卡组编排分组。                                            |
-| T-011 | done | 暴露分组方案查询       | 新增 `list_card_groups` MCP tool，直接序列化 `CardGroupService.loadAllManagers()` 结果（id/name/sourceFile/enabled），渐进式先摘要后详情。`CardGroupToolProvider` 新增 `CardGroupService` 注入参数，无新 model。                                                                               |
-| T-012 | done | AI 创建/保存分组方案   | 新增 `save_card_group` MCP tool。AI 提供 sourceFile + bindings[{name,description,cardIds}] + 可选 managerName/existingId；服务端补齐 enabled/binding.id。existingId 非空即更新，为空即新建。cardIds 校验依赖 sourceFile 卡池。`CardGroupBinding` 新增 `description` 字段（领域模型+DB 表+实体+Service 同步）。 |
+| 编号    | 状态   | 任务             | 说明                                                                                                                                                                                                                                                                                                             |
+|-------|------|----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| T-010 | done | 暴露卡池源文件列表及卡池内容 | 新增 `list_card_group_sources` + `get_card_group_detail` 两个 MCP tool。list 列出所有 .cardgroup 文件的 fileName/enabled/cardCount；get 按 fileName 返回完整卡池详情（cardId + name + text，name/text 从 hs.cards 批量查询）。AI 先列后查，基于指定卡组编排分组。                                                                                             |
+| T-011 | done | 暴露分组方案查询       | 新增 `list_card_groups` MCP tool，直接序列化 `CardGroupService.loadAllManagers()` 结果（id/name/sourceFile/enabled），渐进式先摘要后详情。`CardGroupToolProvider` 新增 `CardGroupService` 注入参数，无新 model。                                                                                                                                |
+| T-012 | done | AI 创建/保存分组方案   | 新增 `save_card_group` MCP tool。AI 提供 sourceFile + bindings[{name,description,cardIds}] + 可选 managerName/existingId；服务端补齐 enabled/binding.id。existingId 非空即更新，为空即新建。cardIds 校验依赖 sourceFile 卡池。`CardGroupBinding` 新增 `description` 字段（领域模型+DB 表+实体+Service 同步）。                                                  |
+| T-016 | done | 卡组代码解析导入卡池     | 新增 `parse_hearthstone_deck_code` MCP tool（T-010 延伸增强）。AI 提供炉石 deck string，服务端解码 VarInt 流→查 hs.cards 补全 name/text→可选写 `.cardgroup` 文件。`CardGroupToolProvider` 新增 `HsCardRepository` 注入参数。同时迁移 `lin.ui.db`→`lin.db` 包（HsCardRepository/OrthogonalTemplateRepository/TemplateGroupRepository），消除 DB 层对 UI 命名空间误导。 |
 
 ### 绑定评估树校验增强（V1 核心）
 

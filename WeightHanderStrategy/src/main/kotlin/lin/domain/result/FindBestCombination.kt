@@ -2,7 +2,7 @@ package lin.domain.result
 
 import lin.bean.ComboCard
 import lin.bean.usePlan.CardComboEntry
-import lin.domain.context.CostWeight
+import lin.domain.context.remainingCostPenalty
 
 interface FindBestCombination {
     fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard>
@@ -103,7 +103,7 @@ object DefaultFindBestCombination : FindBestCombination {
 
         fun backtrack(startIndex: Int, currentCost: Int, currentWeight: Double) {
             val remainingCost = ableCost - currentCost
-            val penalty = remainingCost * CostWeight
+            val penalty = remainingCostPenalty(remainingCost)
             val effectiveScore = currentWeight - penalty
 
             if (effectiveScore > maxEffectiveScore) {

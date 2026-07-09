@@ -15,11 +15,19 @@ class AiTreeConfigToolProvider(
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         McpToolHandler(
-            name = "list_evaluator_leaf_kinds",
-            description = "列出 AI 生成评估树可使用的叶子种类（规则、条件、条件树）。对于正交类型，具体组合算子请看 list_orthogonal_components。",
+            name = "list_capability_background",
+            description = """
+                【能力背景 / 规划前置】列出系统当前真实存在的全部可编排能力，按领域分组：
+                codedRules（预编码规则）、plainConditions（预编码条件）、conditionTrees（条件树），
+                每项含 sourceId、name、desc 以及该能力需要的属性 requiredProperties。
+                AI 必须在编排卡牌分组、构建评估树之前先调用本工具，依据真实存在的 sourceId 与属性来规划，
+                严禁凭空捏造规则/条件 ID 或属性字段，否则会在提交时被校验拒绝（幻觉）。
+                正交能力（orthogonal_condition / orthogonal_rule）的底层积木与类型链路不在此展开，
+                构造正交叶子时再调用 list_orthogonal_components 获取精细细节。
+            """.trimIndent(),
             inputSchemaJson = """{"type":"object","properties":{}}""",
             call = {
-                McpToolResult(mapper.writeValueAsString(service.listEvaluatorLeafKinds()))
+                McpToolResult(mapper.writeValueAsString(service.listCapabilityBackground()))
             }
         ),
         McpToolHandler(

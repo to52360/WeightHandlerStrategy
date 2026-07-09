@@ -32,6 +32,8 @@ class DefaultTransformProvider : TransformProvider {
 class DefaultOperatorProvider : OperatorProvider {
     override fun get(): Collection<Operator<*, *>> = listOf(
         GreaterThanOrEqualOp,
-        ContainsRaceOp
+        ContainsRaceOp,
+        EqualOp,
+        LessThanOp
     )
 }

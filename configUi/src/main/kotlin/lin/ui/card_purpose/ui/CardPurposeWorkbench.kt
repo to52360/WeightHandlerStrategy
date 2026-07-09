@@ -9,12 +9,12 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.PurposeTagId
+import lin.db.HsCardRepository
 import lin.ui.ActiveAware
 import lin.ui.card_group.ui.ActiveManagerHolder
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.db.CardPurposeRepository
 import lin.ui.components.PaginationBar
-import lin.ui.db.HsCardRepository
 import lin.utils.addColumn
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject

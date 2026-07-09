@@ -1,10 +1,7 @@
 package lin.mcp
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import lin.ai.config.draft.CommitDraftRequest
-import lin.ai.config.draft.CreateDraftRequest
-import lin.ai.config.draft.DraftTreeService
-import lin.ai.config.draft.PutDraftLeafRequest
+import lin.ai.config.draft.*
 
 /**
  * 负责评估树生成的渐进式/草稿池 MCP 工具暴露。
@@ -39,6 +36,21 @@ class AiDraftTreeToolProvider(
         ) { request ->
             val result = draftTreeService.commitDraft(request.draftId)
             McpToolResult(mapper.writeValueAsString(result), isError = !result.validation.ok)
+        },
+        typedTool<GetDraftStatusRequest>(
+            name = "get_draft_status",
+            description = "查询某个评估树草稿的当前进度，返回已填节点、未填节点和总数。当对话中断或上下文截断后恢复时，用此工具确认草稿还缺哪些叶子需要继续填写。",
+            mapper = mapper
+        ) { request ->
+            val result = draftTreeService.getDraftStatus(request.draftId)
+            if (result == null) {
+                McpToolResult(
+                    mapper.writeValueAsString(mapOf("error" to "草稿不存在或已过期: ${request.draftId}")),
+                    isError = true
+                )
+            } else {
+                McpToolResult(mapper.writeValueAsString(result))
+            }
         }
     )
 }

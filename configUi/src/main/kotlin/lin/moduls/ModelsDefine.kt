@@ -3,6 +3,9 @@
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import lin.config.AppConfig
+import lin.db.HsCardRepository
+import lin.db.OrthogonalTemplateRepository
+import lin.db.TemplateGroupRepository
 import lin.di.infraModule
 import lin.ui.SelectOptionRegistry
 import lin.ui.UiExtension
@@ -25,9 +28,6 @@ import lin.ui.condition_tree.ui.action.ConditionTreeWorkbenchAction
 import lin.ui.condition_tree.ui.action.CreateConditionTreeAction
 import lin.ui.condition_tree.ui.action.DeleteConditionTreeAction
 import lin.ui.condition_tree.ui.action.SaveConditionTreeAction
-import lin.ui.db.HsCardRepository
-import lin.ui.db.OrthogonalTemplateRepository
-import lin.ui.db.TemplateGroupRepository
 import lin.ui.service.EvaluatorTreeResolver
 import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService

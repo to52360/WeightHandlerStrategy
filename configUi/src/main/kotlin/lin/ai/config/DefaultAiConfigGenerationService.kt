@@ -1,6 +1,7 @@
 package lin.ai.config
 
 import lin.rule.condition.PipelineAssembler
+import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.card_group.db.CardGroupService
 import lin.ui.service.TreeConfigService
@@ -20,16 +21,33 @@ class DefaultAiConfigGenerationService(
 ) : AiConfigGenerationService {
     private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
 
-    override fun listEvaluatorLeafKinds(): List<AiEvaluatorLeafKind> {
-        return leafSourceCatalog.loadAll().map { item ->
-            AiEvaluatorLeafKind(
-                kind = item.kind,
-                sourceId = item.sourceId,
-                name = item.name,
-                desc = item.desc,
-                fields = (item.builtInFields + item.fields).map { it.toAiFieldSpec() }
-            )
+    override fun listCapabilityBackground(): AiCapabilityBackground {
+        val all = leafSourceCatalog.loadAll()
+        fun entryOf(item: lin.rule.tree.EvaluatorLeafMeta) = AiCapabilityEntry(
+            sourceId = item.sourceId,
+            name = item.name,
+            desc = item.desc,
+            requiredProperties = (item.builtInFields + item.fields).map { it.toAiFieldSpec() }
+        )
+
+        val orthogonalMetas = all.filter {
+            it.kind is EvaluatorLeafKind.Condition.Orthogonal || it.kind is EvaluatorLeafKind.Rule.Orthogonal
         }
+        val orthConditionId =
+            orthogonalMetas.firstOrNull { it.kind is EvaluatorLeafKind.Condition.Orthogonal }?.sourceId
+                ?: "orthogonal_condition"
+        val orthRuleId = orthogonalMetas.firstOrNull { it.kind is EvaluatorLeafKind.Rule.Orthogonal }?.sourceId
+            ?: "orthogonal_rule"
+        return AiCapabilityBackground(
+            codedRules = all.filter { it.kind is EvaluatorLeafKind.Rule.Coded }.map { entryOf(it) },
+            plainConditions = all.filter { it.kind is EvaluatorLeafKind.Condition.Plain }.map { entryOf(it) },
+            conditionTrees = all.filter { it.kind is EvaluatorLeafKind.Condition.Tree }.map { entryOf(it) },
+            orthogonal = AiOrthogonalCapabilityPointer(
+                conditionBuilderSourceId = orthConditionId,
+                ruleBuilderSourceId = orthRuleId,
+                note = "正交条件/规则的底层积木（DataSource / Transform / ConditionOperator / ScoreOperator 及其类型链路与参数）请调用 list_orthogonal_components 获取。背景规划阶段无需关注其类型细节，构造正交叶子时再查。"
+            )
+        )
     }
 
     override fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport {

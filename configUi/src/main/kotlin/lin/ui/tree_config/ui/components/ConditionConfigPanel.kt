@@ -5,6 +5,7 @@ import javafx.scene.control.Button
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
 import javafx.scene.layout.*
+import lin.db.OrthogonalTemplateEntity
 import lin.rule.orthogonal.DataSource
 import lin.rule.orthogonal.Operator
 import lin.rule.orthogonal.Transform
@@ -31,7 +32,7 @@ class ConditionConfigPanel(
         maxWidth = 380.0
     }
 
-    val templateCombo = ComboBox<lin.ui.db.OrthogonalTemplateEntity>().apply {
+    val templateCombo = ComboBox<OrthogonalTemplateEntity>().apply {
         maxWidth = Double.MAX_VALUE
         promptText = "应用条件模板..."
     }
