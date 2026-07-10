@@ -92,7 +92,7 @@ class EndWeightResult(
             val lessCost = (cost - costSum()).coerceAtLeast(0)
             if (bestCombination.isNotEmpty()) {
                 val baseWeightSum = bestCombination.sumOf { it.powerWeight }
-                val penalty = remainingCostPenalty(lessCost).coerceAtMost(baseWeightSum)
+                val penalty = remainingCostPenalty(lessCost, cost).coerceAtMost(baseWeightSum)
                 extWeight -= penalty
             }
         }

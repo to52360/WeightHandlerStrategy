@@ -3,8 +3,8 @@ package lin.di
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.serviceLoader.module.ModulesInfo
+import lin.serviceLoader.provider.StartupTask
 import lin.utils.serviceLoader.ServiceLoaderUtils
-import lin.utils.startup.StartupTask
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.startKoin
 import org.koin.core.module.dsl.singleOf

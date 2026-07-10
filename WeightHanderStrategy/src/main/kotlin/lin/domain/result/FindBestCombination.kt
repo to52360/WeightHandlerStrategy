@@ -103,7 +103,7 @@ object DefaultFindBestCombination : FindBestCombination {
 
         fun backtrack(startIndex: Int, currentCost: Int, currentWeight: Double) {
             val remainingCost = ableCost - currentCost
-            val penalty = remainingCostPenalty(remainingCost)
+            val penalty = remainingCostPenalty(remainingCost, ableCost)
             val effectiveScore = currentWeight - penalty
 
             if (effectiveScore > maxEffectiveScore) {

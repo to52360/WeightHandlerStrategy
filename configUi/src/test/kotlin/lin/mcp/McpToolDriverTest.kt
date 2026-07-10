@@ -1,13 +1,7 @@
 package lin.mcp
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.SerializationFeature
-import lin.moduls.loadMcpModules
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.springframework.jdbc.core.JdbcTemplate
-import java.nio.file.Files
-import java.nio.file.Path
 
 /**
  * MCP 工具实战验证驱动器（对应 T-102 端到端验证）。
@@ -16,51 +10,9 @@ import java.nio.file.Path
  * 既能暴露真实运行错误（DB 连接、解析异常、校验失败），
  * 又能把每个工具的响应 JSON 打印出来，用于发现 description / 输出字段的歧义。
  *
- * 运行目录为 configUi，因此 DB 相对路径需回退一层指向仓库根。
+ * 环境搭建能力已提取至 [McpTestEnv]，本类只保留验证逻辑。
  */
-class McpToolDriverTest {
-
-    companion object {
-        private lateinit var tools: Map<String, McpToolHandler>
-        private val mapper = ObjectMapper().apply { enable(SerializationFeature.INDENT_OUTPUT) }
-
-        // 本次运行产生的、需在 finally 中清理的资源
-        private var savedFile: Path? = null
-        private var managerId: String? = null
-        private var bindingIds: List<String> = emptyList()
-        private var treeId: String? = null
-        private var codedTreeId: String? = null
-
-        @JvmStatic
-        @org.junit.BeforeClass
-        fun setup() {
-            System.setProperty("hs_cards.db.path", "../hs_cards.db")
-            System.setProperty("database.path", "../weightHandlerStrategy.db")
-            System.setProperty("cardgroup.dir.path", "../data/cardgroup")
-            loadMcpModules()
-            val providers = org.koin.core.context.GlobalContext.get().getAll<McpToolProvider>()
-            tools = providers.flatMap { it.provide() }.associateBy { it.name }
-            println(">>> loaded tools: ${tools.keys.joinToString()}")
-        }
-    }
-
-    private fun call(name: String, json: String = "{}"): McpToolResult {
-        val handler = tools[name] ?: error("tool not found: $name (available: ${tools.keys})")
-        val args = mapper.readValue(json, Map::class.java) as Map<String, Any?>
-        return try {
-            val result = handler.call(args)
-            val pretty = runCatching {
-                mapper.writeValueAsString(mapper.readValue(result.contentJson, Any::class.java))
-            }.getOrElse { result.contentJson }
-            println("===== $name (isError=${result.isError}) =====")
-            println(pretty)
-            result
-        } catch (e: Throwable) {
-            println("===== $name THREW =====")
-            e.printStackTrace()
-            throw e
-        }
-    }
+class McpToolDriverTest : McpTestEnv() {
 
     private val deckCode =
         "AAEBAZ8FBPfQArjFBdaABtK5Bg3YxwKd7ALZ/gL9uAPruQPTvQTi0wSZjgb1lQbt3waS4Aac6Aaf6AYAAA=="
@@ -73,7 +25,7 @@ class McpToolDriverTest {
                 "parse_hearthstone_deck_code",
                 """{"deckCode":"$deckCode","groupName":"verify_deck_1","enabled":true}"""
             )
-                .also { savedFile = Path.of("../data/cardgroup/verify_deck_1.cardgroup") }
+                .also { savedFile = java.nio.file.Path.of("../data/cardgroup/verify_deck_1.cardgroup") }
             call("list_card_group_sources")
             call("list_capability_background")
             call("list_orthogonal_components")
@@ -211,25 +163,5 @@ class McpToolDriverTest {
         } finally {
             cleanup()
         }
-    }
-
-    private fun cleanup() {
-        runCatching {
-            val jdbc = org.koin.core.context.GlobalContext.get().get<JdbcTemplate>()
-            treeId?.let {
-                jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", it)
-                jdbc.update("DELETE FROM tree_config WHERE id = ?", it)
-            }
-            codedTreeId?.let {
-                jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", it)
-                jdbc.update("DELETE FROM tree_config WHERE id = ?", it)
-            }
-            managerId?.let {
-                jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", it)
-                jdbc.update("DELETE FROM card_group_manager WHERE id = ?", it)
-            }
-            savedFile?.let { Files.deleteIfExists(it) }
-            println(">>> cleanup done (treeId=$treeId, managerId=$managerId, savedFile=$savedFile)")
-        }.onFailure { e -> println(">>> cleanup failed: ${e.message}") }
     }
 }

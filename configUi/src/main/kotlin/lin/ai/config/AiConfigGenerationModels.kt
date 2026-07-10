@@ -119,13 +119,20 @@ data class CardGroupDetail(
 )
 
 /**
- * 单张卡牌信息。
+ * 单张卡牌信息（含游戏属性，用于智能分组编排）。
  * cardId 为唯一标识，name 为卡牌名称，text 为卡牌效果描述（可能为 null）。
+ * cost/type/attack/health/race/cardClass 来自 hs.cards 数据库，库中无记录时为 null。
  */
 data class CardGroupCard(
     val cardId: String,
     val name: String,
-    val text: String?
+    val text: String?,
+    val cost: Int? = null,
+    val type: String? = null,
+    val attack: Int? = null,
+    val health: Int? = null,
+    val race: String? = null,
+    val cardClass: String? = null
 )
 
 fun FieldSpec.toAiFieldSpec(): AiFieldSpec {

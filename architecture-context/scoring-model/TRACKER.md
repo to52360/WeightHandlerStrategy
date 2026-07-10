@@ -61,12 +61,12 @@
 
 ## 待决问题（按依赖排序，先决后决）
 
-| #   | 问题                    | 决策方 | 结论                                                                      | 状态           |
-|-----|-----------------------|-----|-------------------------------------------------------------------------|--------------|
-| Q-1 | 基础分 vs 额外分关系：三分量相加    | 已确认 | 基础分恒由静态费用派生（启动期查 `hs_cards.db` 烘焙），额外分=原 `powerWeight`（无配置则 0），两者正交非二选一 | ✅ 待 S-1.x 落地 |
-| Q-2 | `baseScore(cost)` 公式  | 已确认 | `CostWeight * √cost`（凹，1→5 / 5→11.2 / 10→15.8）                          | ✅ 待 S-1.2 落地 |
-| Q-3 | `CostWeight` 与基础分量纲关系 | 用户  | 与 Q-4 联合调参（需真实卡组跑一轮校准）                                                  | 阻塞 S-2.x     |
-| Q-4 | 惩罚非线性映射               | 已确认 | `remainingCostPenalty = CostWeight * √remaining`，与 baseScore 同一套凹变换     | ✅ 待 S-2.2 落地 |
+| #   | 问题                    | 决策方 | 结论                                                                                             | 状态           |
+|-----|-----------------------|-----|------------------------------------------------------------------------------------------------|--------------|
+| Q-1 | 基础分 vs 额外分关系：三分量相加    | 已确认 | 基础分恒由静态费用派生（启动期查 `hs_cards.db` 烘焙），额外分=原 `powerWeight`（无配置则 0），两者正交非二选一                        | ✅ 待 S-1.x 落地 |
+| Q-2 | `baseScore(cost)` 公式  | 已确认 | `CostWeight * √cost`（凹，1→5 / 5→11.2 / 10→15.8）                                                 | ✅ 待 S-1.2 落地 |
+| Q-3 | `CostWeight` 与基础分量纲关系 | 用户  | 与 Q-4 联合调参（需真实卡组跑一轮校准）                                                                         | 阻塞 S-2.x     |
+| Q-4 | 惩罚非线性映射               | 已确认 | `remainingCostPenalty(remaining, total) = CostWeight * √remaining * ratio^β`，引入 totalCost 占比因子 | ✅ S-2.2 已落地  |
 
 ## 任务流程（编排）
 
@@ -125,3 +125,9 @@
   `powerWeight = baseScore + extraScore + extPowerWeight`，`isBaseWeight` 改为 `extraScore==0`；`parseComboCard` 注入
   `baseScore`（兜底 `?:0.0`，绝不用 card.cost）。`ComboDefValue` 增 `baseScore(cost)`、`remainingCostPenalty` 改凹函数。WHS
   编译通过、零 lint。S-1.3 数值合理性待 Q-3 真实卡组校准。
+- **2026-07-09 评分原语改进**：
+  - `baseScore` 由 `CostWeight * √cost` 改为 `CostWeight * cost^α`，新增 `ScoreExponent=0.5` 常量可调凹度。
+  - `remainingCostPenalty` 签名改为 `(remainingCost, totalCost)`，引入占比因子：`CostWeight * √remaining * ratio^β`，新增
+    `PenaltyRatioExponent=0.5` 常量。
+  - 动机：绝对浪费不看占比导致前期/后期惩罚相同不合理（3/10=30% vs 3/5=60% 惩罚一样），加入 `totalCost` 后浪费占比越大惩罚越重；
+    `ScoreExponent`/`PenaltyRatioExponent` 均可在 Q-3 校准时独立调参。

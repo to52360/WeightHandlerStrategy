@@ -1,5 +1,7 @@
 # 任务追踪 - ai-config-validation
 
+> 决策记录见 [DECISIONS.md](./DECISIONS.md)
+
 ## 当前目标
 
 V1 阶段 18 个 MCP 工具已全部暴露（详见 `ai-config-generator/TRACKER.md`）。本阶段聚焦：补全鲁棒性缺口、端到端实战验证、V2
@@ -7,7 +9,7 @@ V1 阶段 18 个 MCP 工具已全部暴露（详见 `ai-config-generator/TRACKER
 
 ## 整体进度
 
-- **当前任务**: T-104（评估） & T-106（待评估，见 Q-1） & 领域内容执行计划（P-1.x~P-3.x 待确认）
+- **当前任务**: T-104（评估） & T-106（待评估，见 Q-1） & 领域内容执行计划（P-1.x~P-3.x 待确认） & T-107/T-108（架构基础设施，已确认设计）
 - **整体状态**: 🔄 进行中
 - **另有**：误实施代码回退清单待执行（见专属段）
 
@@ -33,6 +35,24 @@ V1 阶段 18 个 MCP 工具已全部暴露（详见 `ai-config-generator/TRACKER
 ### 阶段三：领域内容规划（执行计划，待确认）
 
 - [ ] **P-1.x / P-2.x / P-3.x**: 目的 1/2/3 共 9 项子任务，全部 pending，详见「领域内容规划 → 执行计划」段
+
+### 阶段四：架构基础设施（已确认设计，待实施）
+
+- [x] **T-107**: CardConfigBindingTask Step 模式重构 ✅ 2026-07-10 完成
+    - 现状：`execute()` 混合 4 数据源加载 + 2 assembler + Koin 注册，加功能需感知全部模块
+    - 方案：抽取 `ConfigBindingStep` 接口，每数据源独立成 Step（WeightInfoStep / GroupIndexStep / PurposeStep /
+      ComboStep），execute() 仅编排 + 注册
+    - 不碰 ConfigDispatcher（两系统独立：Step 是 N→1 汇聚，ConfigDispatcher 是 1→N 分派）
+    - 验收：`WeightHanderStrategy` 编译通过 + lint 0 错误（等价重构，逻辑未变；`McpToolDriverTest` 后续回归由运行期验证）
+- [ ] **T-108**: MatchState + 使用动作（UseAction）实施
+    - **MatchState**：新类，挂 MyWarManage（同 warStatus 模式），GameLifecycle 管理重置，Koin 注册
+    - **使用动作改名**：UseStrategy → UseAction（UseBeforeAction / UseAfterAction），语义从"策略"拓宽为"出牌时执行的动作"
+    - **RecordPlayAction**：AfterUseAction 的一种，通过 Koin DI 拿 MatchState（不经过 UseDomain 中转），记录 cardId +
+      groupIds
+    - **配置通道**：走 ConfigDispatcher（UseConfig → UseConfigHandler → CardWeightInfo.addUseStrategy），不碰
+      CardConfigBindingTask
+    - **读侧**：新增 `MatchGroupPlayedCountSource` DataSource（正交管道），通过 Koin 注入 MatchState 查询
+    - 验收：`McpToolDriverTest` 跑通 + 新 DataSource 可被 AI 管道引用
 
 ## 挂起暂不处理任务
 
@@ -82,9 +102,9 @@ AI 生成配置 = 只能从**固定能力注册表**组装，不能扩展注册�
 
 ### 执行工作流（用户拍板：不走 MCP 优先，后端直调快迭代）
 
-- **Phase A — 后端直调迭代（主力）**：直接在代码层实现真实规则/条件/正交积木；用 `McpToolDriverTest`(批注:
-  不在这个文件继续走测试,这个文件太大了,先提取封装环境能力代码)（直接调 `McpToolProvider.call`，即模拟 MCP+agent）跑真实卡组数据（
+- **Phase A — 后端直调迭代（主力）**：直接在代码层实现真实规则/条件/正交积木；用测试直调 `McpToolProvider.call` 跑真实卡组数据（
   `AAEBAZ8F...`）验证与细节完善。循环：实现 → test → 看暴露/可生成情况 → 修正。
+    - ✅ 已提取公共环境 `McpTestEnv.kt`，拆出 `DeckSopFullFlowTest.kt` 按 SOP 走完整编组→建树流程（2026-07-09）
 - **Phase B — 真实 MCP server 复跑**：内容稳定后重新 build/redeploy，用真实 `deck-config` server + agent 跑完整
   SOP，确认新能力被暴露、可被正确引用、边界无幻觉。
 - 注意：`list_evaluator_leaf_kinds`→`list_capability_background` 重命名需重新构建部署才在真实 server 生效，Phase B 前需同步。
@@ -96,12 +116,12 @@ AI 生成配置 = 只能从**固定能力注册表**组装，不能扩展注册�
 
 #### 目的 1：编码类 rule/condition 定位与真实内容
 
-| 编号    | 任务             | 内容                                                                                                                                       | 验收                 | 状态      |
-|-------|----------------|------------------------------------------------------------------------------------------------------------------------------------------|--------------------|---------|
-| P-1.1 | 盘点现有编码类能力面     | 查 `DemoRule.kt` / `ConditionDemo.kt` 现有规则/条件、参数类型（`IntValueArg`/`IntsValueArg`）、可访问卡牌上下文（`callCard.card.cost/attack/health/race/type` 等） | 产出能力面清单            | pending |
-| P-1.2 | 设计真实规则/条件集     | 列候选规则（费用阈值加分、费用命中加分、攻防阈值、种族过滤等）与条件（费用上限、种族白名单、类型等），明确参数与卡牌上下文                                                                            | 产出设计清单（含参数 schema） | pending |
-| P-1.3 | 决策落点（先讨论，不预设）  | 讨论：core 的 demos 是验证架构用的，是否保留/重构另说；真实内容**是否**及**落哪**（extWeightHandler 或其他）需先讨论决策，不预设结论                                                    | 决策记录               | pending |
-| P-1.4 | 实现 + 验证（决策后实施） | 完成 P-1.2 设计 + P-1.3 决策后，再实现真实规则/条件并经 `McpToolDriverTest` 验证可被 AI 生成引用。**不急于为跑通 test 而先写真实代码**                                            | test 可生成引用、无崩溃     | pending |
+| 编号    | 任务             | 内容                                                                                                                                       | 验收                 | 状态             |
+|-------|----------------|------------------------------------------------------------------------------------------------------------------------------------------|--------------------|----------------|
+| P-1.1 | 盘点现有编码类能力面     | 查 `DemoRule.kt` / `ConditionDemo.kt` 现有规则/条件、参数类型（`IntValueArg`/`IntsValueArg`）、可访问卡牌上下文（`callCard.card.cost/attack/health/race/type` 等） | 产出能力面清单            | ✅ (2026-07-09) |
+| P-1.2 | 设计真实规则/条件集     | 列候选规则（费用阈值加分、费用命中加分、攻防阈值、种族过滤等）与条件（费用上限、种族白名单、类型等），明确参数与卡牌上下文                                                                            | 产出设计清单（含参数 schema） | pending        |
+| P-1.3 | 决策落点（先讨论，不预设）  | 讨论：core 的 demos 是验证架构用的，是否保留/重构另说；真实内容**是否**及**落哪**（extWeightHandler 或其他）需先讨论决策，不预设结论                                                    | 决策记录               | pending        |
+| P-1.4 | 实现 + 验证（决策后实施） | 完成 P-1.2 设计 + P-1.3 决策后，再实现真实规则/条件并经 `McpToolDriverTest` 验证可被 AI 生成引用。**不急于为跑通 test 而先写真实代码**                                            | test 可生成引用、无崩溃     | pending        |
 
 #### 目的 2：正交积木补齐
 
@@ -157,3 +177,34 @@ AI 生成配置 = 只能从**固定能力注册表**组装，不能扩展注册�
 > 注：本验证在 configUi 模块运行，DB 相对路径通过 `@BeforeClass` 的 `../hs_cards.db`、`../weightHandlerStrategy.db`、
 `../data/cardgroup` 指向仓库根；Maven 用 `mvn -pl configUi test -Dtest=McpToolDriverTest`（WeightHandlerStrategy 已
 `install` 到本地库）。
+
+## 实战验证：SOP 编组→建树（2026-07-09，DeckSopFullFlowTest）
+
+用 `AAEBAZ8F...`（圣契圣骑士，17 张卡）走完整 SOP：
+
+### 卡牌分析
+
+通过 DB 查询补齐 cost/type/attack/health/race 属性后，形成 5 组：
+
+| 分组   | 卡牌                                                        | 费用区间 |
+|------|-----------------------------------------------------------|------|
+| 圣契引擎 | BT_020(1费随从), GDB_726(3费武器), GDB_728(2费随从), TID_077(9费随从) | 1~9  |
+| 神圣法术 | BT_025(2费HOLY), GDB_137(3费HOLY), GDB_138(4费HOLY)          | 2~4  |
+| 过牌   | BOT_909(1费), ETC_418(2费)                                  | 1~2  |
+| 解场   | UNG_961(0费)~WW_336(7费) 共5张                                | 0~7  |
+| 独立随从 | ICC_820(4费亡灵), VAC_507(5费), TID_098(3费纳迦)                 | 3~5  |
+
+### 建树结果
+
+5 组各建评估树（typed_simple_rule(limit=3) + 正交 hand_cards≥1 守卫），全部 commit 成功。
+
+### 缺口（Pn=优先级）
+
+| #    | 缺口                                                  | 影响                                          | Pn                 |
+|------|-----------------------------------------------------|---------------------------------------------|--------------------|
+| G-05 | `get_card_group_detail` 不返回 cost/type/attack/health | AI 无法按卡牌属性智能分组                              | ✅ 已闭环 (2026-07-09) |
+| G-06 | 无 cardId 集合匹配的编码规则（typed/list_simple_rule 只做费用匹配）   | 不能说"这组卡加分" (批注: 卡的基础属性归.cardGroup文件管,不归规则归) | 🔴 P-1             |
+| G-07 | 正交管道无自定义分组筛选 Transform（仅 race_filter）               | 不能"手牌里本分组卡≥2"                               | 🟡 P-2             |
+| G-08 | 正交管道无 current_card DataSource                       | 不能"当前卡是随从则加分"                               | 🟡 P-2             |
+| G-09 | 编码规则仅 2 种                                           | 策略表达力极有限                                    | 🟡 P-1             |
+| G-10 | `equal`/`less_than` 正交算子来自误实施代码未回退                  | 能力面不纯                                       | ⚠️ 回退清单            |
