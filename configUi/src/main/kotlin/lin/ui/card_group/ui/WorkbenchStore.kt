@@ -127,4 +127,9 @@ class WorkbenchStore(private val service: CardGroupService) {
         val idx = state.selectedBindingIndex ?: return
         dispatch(WorkbenchActions.updateBindingOrderWeight(idx, weight))
     }
+
+    fun updateBindingUseAction(actionId: String, enabled: Boolean) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingUseAction(idx, actionId, enabled))
+    }
 }

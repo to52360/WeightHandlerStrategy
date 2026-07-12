@@ -31,6 +31,7 @@ val ruleModule = module {
     // 配置绑定步骤：每个维度独立成 Step，新增维度只需加一行 single 声明
     single<ConfigBindingStep> { WeightInfoStep() }
     single<ConfigBindingStep> { GroupIndexStep() }
+    single<ConfigBindingStep> { GroupBehaviorStep() }
     single<ConfigBindingStep> { PurposeStep() }
     single<ConfigBindingStep> { ComboStep() }
 

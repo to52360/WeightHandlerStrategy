@@ -2,6 +2,7 @@ package lin.serviceLoader.provider
 
 import lin.bean.usePlan.GroupUseOverride
 import lin.config.find.def.BindInfo
+import lin.rule.tree.CardGroupBinding
 
 /**
  * 用于声明需要修改card的信息
@@ -26,10 +27,13 @@ interface BindingCardIdProvider {
  */
 interface CardGroupIndexProvider {
     fun provide(): Map<String, Set<String>>
+}
 
-    /**
-     * 提供分组级行为覆盖（从 Binding 的行为属性读取）。
-     * 默认返回空 Map，由 configUi 侧覆盖实现。
-     */
-    fun provideBindingOverrides(): Map<String, GroupUseOverride> = emptyMap()
+/**
+ * 提供配置侧「分组行为」声明：返回启用 Manager 下的全部 [CardGroupBinding]（含 behaviors 列表）。
+ * 引擎侧按需从 binding.behaviors 中提取 OVERRIDE（出牌覆盖）或 USE_ACTION（使用动作）。
+ * 实现需读取 configUi DB，由 configUi 侧注册为 Koin 单例。
+ */
+interface GroupBehaviorProvider {
+    fun provide(): List<CardGroupBinding> = emptyList()
 }

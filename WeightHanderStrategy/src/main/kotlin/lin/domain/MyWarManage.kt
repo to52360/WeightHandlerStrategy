@@ -132,6 +132,12 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         })
         this.warStatus = warStatus
 
+        val matchState = MatchState()
+        loadKoinModules(module {
+            single { matchState }
+        })
+        registerLifecycle(matchState)
+
         infoMap = getKoin().get(named("weightInfo"))
         loadKoinModules(module {
             single { lifecycleRegisterImpl } bind LifecycleRegister::class

@@ -9,6 +9,7 @@ import lin.db.TemplateGroupRepository
 import lin.di.infraModule
 import lin.ui.SelectOptionRegistry
 import lin.ui.UiExtension
+import lin.ui.card_group.db.CardGroupBehaviorRepository
 import lin.ui.card_group.db.CardGroupRepository
 import lin.ui.card_group.db.CardGroupService
 import lin.ui.card_group.ui.ActiveManagerHolder
@@ -127,7 +128,8 @@ val uiDBModule = module {
         )
     }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
-    single { CardGroupRepository(get()) }
+    single { CardGroupBehaviorRepository(get()) }
+    single { CardGroupRepository(get(), get()) }
     single { CardGroupService(get()) }
     single { CardPurposeRepository(get()) }
     single { HsCardRepository(get()) }

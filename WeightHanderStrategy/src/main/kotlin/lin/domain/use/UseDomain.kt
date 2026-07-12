@@ -19,13 +19,13 @@ class UseDomain(val warManage: MyWarManage) {
         val context = UseContext(card)
         try {
             context.stateChanged = warManage.isChangeByUseSuccess {
-                card.useBeforeStrategy?.executeAction(context, this)
+                card.useBeforeStrategy.executeAction(context, this)
                 if (context.replanRequested) {
                     return@isChangeByUseSuccess null
                 }
                 context.useSucceeded = warManage.tryUseCard(card)
                 myLog.info { "打出$card,使用结果:${context.useSucceeded}" }
-                card.useAfterStrategy?.executeAfterAction(context, this)
+                card.useAfterStrategy.executeAfterAction(context, this)
                 if (context.replanRequested) {
                     return@isChangeByUseSuccess null
                 }

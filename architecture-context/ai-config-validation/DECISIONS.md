@@ -32,7 +32,15 @@
   CardWeightInfo.addUseStrategy），不碰 CardConfigBindingTask。
 - 理由: 配置驱动系统中，状态追踪应声明式 opt-in（通过卡牌配置声明使用动作），而非全量记录。`UseDomain` 职责已成乱麻，不应新增属性做
   MatchState 中转。Koin DI 让动作直接获取所需服务，`UseDomain` 零改动。
-- 替代方案: [已否决] 在 `UseDomain.useCard()` 中全量记录每张牌——记录一切且需给 `UseDomain` 加属性，违反声明式与单一职责。
+- 替代方案: [已否决] 在 `UseDomain.useCard()` / `tryUseCard()` 中全量记录每张牌——记录一切且需给 `UseDomain` 加属性，违反声明式与单一职责。
+  2026-07-10 末用户明确否决此全量方案，确认按本决策（opt-in）落地。
+- 实施记录（2026-07-10）:
+  - `lin.domain.MatchState` 新建（GameLifecycle + RoundLifecycle + KoinComponent）；`recordCardPlayed(ComboCard)` 按 `cardId()` 与
+    `groupIds()` 计入整局累计；`currentTurnPlayedCards` 仅记录本回合打出（墓地不存）。
+  - `lin.domain.use.RecordPlayAction`（`object : UseAfterStrategy, KoinComponent`，`by inject<MatchState>()`，在 `afterExtAction`
+    调 `matchState.recordCardPlayed(context.card)`）。
+  - `MyWarManage.init` 创建并 Koin 注册 `MatchState` + `registerLifecycle(matchState)`。
+  - 接口重命名（`UseStrategy`→`UseAction`）暂缓：沿用现有 `UseAfterStrategy` 名称，`RecordPlayAction` 已实现为 `UseAfterStrategy`，避免大面积无收益改名。
 - 记录时间: 2026-07-10
 
 ### D-3: 读侧 — 正交管道新 DataSource

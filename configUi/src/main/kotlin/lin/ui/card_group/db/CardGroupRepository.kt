@@ -3,7 +3,10 @@ package lin.ui.card_group.db
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 
-class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
+class CardGroupRepository(
+    private val jdbcTemplate: JdbcTemplate,
+    private val behaviorRepository: CardGroupBehaviorRepository
+) {
 
     init {
         initSchema()
@@ -32,7 +35,6 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
                 manager_id      TEXT    NOT NULL,
                 name            TEXT    NOT NULL,
                 card_ids        TEXT    NOT NULL,
-                overrides       TEXT,
                 description     TEXT
             );
             """.trimIndent()
@@ -76,7 +78,8 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
     }
 
     fun deleteManager(id: String) {
-        // 同时清理该 Manager 下的所有 Binding
+        // 同时清理该 Manager 下的所有 Binding 及其行为
+        behaviorRepository.deleteBehaviorsByManager(id)
         jdbcTemplate.update("DELETE FROM card_group_binding WHERE manager_id = ?", id)
         jdbcTemplate.update("DELETE FROM card_group_manager WHERE id = ?", id)
     }
@@ -89,7 +92,6 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
             managerId = rs.getString("manager_id"),
             name = rs.getString("name"),
             cardIds = rs.getString("card_ids"),
-            overrides = rs.getString("overrides"),
             description = rs.getString("description")
         )
     }
@@ -97,16 +99,15 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
     fun saveBinding(entity: CardBindingEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_binding (id, manager_id, name, card_ids, overrides, description)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO card_group_binding (id, manager_id, name, card_ids, description)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name            = excluded.name,
                 card_ids        = excluded.card_ids,
-                overrides       = excluded.overrides,
                 description     = excluded.description
             """.trimIndent(),
             entity.id, entity.managerId, entity.name, entity.cardIds,
-            entity.overrides, entity.description
+            entity.description
         )
     }
 
@@ -123,8 +124,28 @@ class CardGroupRepository(private val jdbcTemplate: JdbcTemplate) {
         )
 
     fun deleteBinding(id: String) {
+        behaviorRepository.deleteBehaviorsByBinding(id)
         jdbcTemplate.update(
             "DELETE FROM card_group_binding WHERE id = ?", id
         )
     }
+
+    // ─────────────────────── 分组行为（委托 CardGroupBehaviorRepository）─────────────────────────────
+
+    fun saveBehavior(entity: CardGroupBehaviorEntity) = behaviorRepository.saveBehavior(entity)
+    fun findBehaviorsByBinding(bindingId: String): List<CardGroupBehaviorEntity> =
+        behaviorRepository.findBehaviorsByBinding(bindingId)
+    fun findBehaviorsByType(behaviorType: String): List<CardGroupBehaviorEntity> =
+        behaviorRepository.findBehaviorsByType(behaviorType)
+    fun deleteBehaviorsByBinding(bindingId: String) = behaviorRepository.deleteBehaviorsByBinding(bindingId)
+    fun deleteBehavior(bindingId: String, behaviorType: String) =
+        behaviorRepository.deleteBehavior(bindingId, behaviorType)
+    fun findBehaviorsByManager(managerId: String, behaviorType: String): List<CardGroupBehaviorEntity> =
+        behaviorRepository.findBehaviorsByManager(managerId, behaviorType)
+    fun deleteBehaviorsByManager(managerId: String) =
+        behaviorRepository.deleteBehaviorsByManager(managerId)
+    fun deleteBehaviorsByManager(managerId: String, behaviorType: String) =
+        behaviorRepository.deleteBehaviorsByManager(managerId, behaviorType)
+    fun replaceBehaviors(bindingId: String, entities: List<CardGroupBehaviorEntity>) =
+        behaviorRepository.replaceBehaviors(bindingId, entities)
 }

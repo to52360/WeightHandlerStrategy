@@ -5,8 +5,7 @@ import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.domain.context.BaseWeight
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
-import lin.domain.use.UseAfterStrategy
-import lin.domain.use.UseBeforeStrategy
+import lin.domain.use.UseStrategy
 
 
 typealias ComboRule = (ComboCard) -> Double
@@ -56,9 +55,15 @@ class ComboCard(
     val basePowerWeight = baseScore + extraScore
 
 
-    var useAfterStrategy: MutableList<UseAfterStrategy>? = cardWeightInfo?.useAfterStrategy
+    // 配置侧声明动作（A1，来自 combinedConfig）与运行期/编码侧动作（A2+B，来自 cardWeightInfo）合并：
+    // A1 经 GroupBehaviorStep 进 CardCombinedConfig.useStrategies（before/after 同一 list，此处按类型分流）；
+    // A2 仍由 UseConfigHandler/编码侧 WeightRule 写 cardWeightInfo；
+    // B（SkillFindStrategy/RuleTreeBinding 运行期注入）写在 cardWeightInfo/本对象上。
+    var useAfterStrategy: MutableList<UseAfterStrategy> =
+        (combinedConfig?.useStrategies.orEmpty().filterIsInstance<UseAfterStrategy>() + cardWeightInfo?.useAfterStrategy.orEmpty()).toMutableList()
 
-    var useBeforeStrategy: MutableList<UseBeforeStrategy>? = cardWeightInfo?.useBeforeStrategy
+    var useBeforeStrategy: MutableList<UseBeforeStrategy> =
+        (combinedConfig?.useStrategies.orEmpty().filterIsInstance<UseBeforeStrategy>() + cardWeightInfo?.useBeforeStrategy.orEmpty()).toMutableList()
     //使用卡牌分组和排序
     var useGroupId: Int = cardWeightInfo?.useGroupId ?: DefUseGroupId
 

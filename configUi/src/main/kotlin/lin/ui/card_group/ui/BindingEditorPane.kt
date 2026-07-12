@@ -11,7 +11,10 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.UseStage
 import lin.dao.CardWeightConfig
+import lin.domain.use.UseActionRegistry
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.findOverride
+import lin.rule.tree.findUseActions
 
 /**
  * 右侧：Binding 详情编辑面板
@@ -112,7 +115,31 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                     )
                 }
 
-                children.addAll(nameRow, behaviorRow)
+                // 使用动作（USE_ACTION）勾选区：选项来自引擎 UseActionRegistry，勾选经 store 写入 binding.behaviors
+                val useActionLabel = Label("使用动作:")
+                val useActionBox = VBox(3.0)
+                val actionCheckMap = linkedMapOf<String, CheckBox>()
+                UseActionRegistry.knownActionIds().forEach { actionId ->
+                    val cb = CheckBox(actionId).apply {
+                        disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
+                    }
+                    cb.selectedProperty().addListener { _, _, newValue ->
+                        if (!isUpdatingFromState) {
+                            val idx = store.state.selectedBindingIndex
+                            if (idx != null && idx >= 0) {
+                                store.updateBindingUseAction(actionId, newValue)
+                            }
+                        }
+                    }
+                    actionCheckMap[actionId] = cb
+                    useActionBox.children.add(cb)
+                }
+                val useActionRow = HBox(10.0).apply {
+                    alignment = Pos.CENTER_LEFT
+                    children.addAll(useActionLabel, useActionBox)
+                }
+
+                children.addAll(nameRow, behaviorRow, useActionRow)
 
                 // ── 行为属性事件绑定 ──
                 bindingNameField.textProperty().addListener { _, _, newValue ->
@@ -151,11 +178,11 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                         val idx = newState.selectedBindingIndex
                         if (idx != null && idx in newState.currentBindings.indices) {
                             val binding = newState.currentBindings[idx]
-                            val stageVal = binding.overrides?.stageOverride?.name
+                            val stageVal = binding.behaviors.findOverride()?.stageOverride?.name
                             if (stageCombo.value != (stageVal ?: "(不覆盖)")) {
                                 stageCombo.value = stageVal ?: "(不覆盖)"
                             }
-                            val replanDisplay = when (binding.overrides?.replanAfterUse) {
+                            val replanDisplay = when (binding.behaviors.findOverride()?.replanAfterUse) {
                                 true -> "是"
                                 false -> "否"
                                 null -> "(不覆盖)"
@@ -163,15 +190,20 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                             if (replanCombo.value != replanDisplay) {
                                 replanCombo.value = replanDisplay
                             }
-                            val weightVal = binding.overrides?.orderWeight
+                            val weightVal = binding.behaviors.findOverride()?.orderWeight
                             val weightStr = weightVal?.toString() ?: ""
                             if (weightField.text != weightStr) {
                                 weightField.text = weightStr
+                            }
+                            actionCheckMap.forEach { (actionId, cb) ->
+                                val selected = binding.behaviors.findUseActions().contains(actionId)
+                                if (cb.isSelected != selected) cb.isSelected = selected
                             }
                         } else {
                             stageCombo.value = null
                             replanCombo.value = null
                             weightField.clear()
+                            actionCheckMap.forEach { (_, cb) -> cb.isSelected = false }
                         }
                     }
                 }
@@ -191,11 +223,11 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 prefWidth = 80.0
             }
             val colStage = TableColumn<CardGroupBinding, String>("阶段覆盖").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.overrides?.stageOverride?.name ?: "-") }
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.behaviors.findOverride()?.stageOverride?.name ?: "-") }
                 prefWidth = 80.0
             }
             val colWeight = TableColumn<CardGroupBinding, String>("排序权重").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.overrides?.orderWeight?.toString() ?: "-") }
+                setCellValueFactory { ReadOnlyStringWrapper(it.value.behaviors.findOverride()?.orderWeight?.toString() ?: "-") }
                 prefWidth = 70.0
             }
             bindingTableView.columns.addAll(colNo, colName, colCardCount, colStage, colWeight)

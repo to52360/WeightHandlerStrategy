@@ -5,6 +5,7 @@ import lin.bean.CardWeightInfo
 import lin.bean.usePlan.CardPurpose
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.GroupUseOverride
+import lin.domain.use.UseStrategy
 import lin.domain.use.plan.ComboAssembler
 import lin.domain.use.plan.UseIntentAssembler
 
@@ -27,6 +28,8 @@ class CardCombinedConfigBuilder {
     val baseInfos = HashMap<String, CardWeightInfo>()
     val groupMap = HashMap<String, MutableSet<String>>()
     val groupOverrides = HashMap<String, GroupUseOverride>()
+    // 配置侧声明的使用动作：cardId → 原始策略列表（含 UseBefore/UseAfter，build 时按类型拆分）
+    val useStrategiesByCardId = HashMap<String, MutableList<UseStrategy>>()
     var cardPurposes: Map<String, CardPurpose> = emptyMap()
     var comboDefinitions: List<ComboPlanDefinition> = emptyList()
 
@@ -34,12 +37,14 @@ class CardCombinedConfigBuilder {
         val useIntentAsm = UseIntentAssembler(cardPurposes, groupMap, groupOverrides)
         val comboAsm = ComboAssembler(groupMap, comboDefinitions)
         return baseInfos.mapValues { (cardId, weightInfo) ->
+            val strategies = useStrategiesByCardId[cardId].orEmpty()
             CardCombinedConfig(
                 weightInfo = weightInfo,
                 groupIds = groupMap[cardId].orEmpty(),
                 useIntent = useIntentAsm.assemble(cardId),
                 comboEntries = comboAsm.entries(cardId),
-                comboUseBindings = comboAsm.bindings(cardId)
+                comboUseBindings = comboAsm.bindings(cardId),
+                useStrategies = strategies
             )
         }
     }

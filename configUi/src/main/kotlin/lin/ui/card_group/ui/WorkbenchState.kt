@@ -3,6 +3,10 @@ package lin.ui.card_group.ui
 import lin.bean.usePlan.GroupUseOverride
 import lin.dao.CardWeightConfig
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.findOverride
+import lin.rule.tree.findUseActions
+import lin.rule.tree.withOverride
+import lin.rule.tree.withUseActions
 import lin.ui.card_group.db.CardManagerEntity
 
 /** 列表项展示模型 */
@@ -114,8 +118,10 @@ object WorkbenchActions {
         if (index in newList.indices) {
             val oldBinding = newList[index]
             val useStage = stage?.let { runCatching { lin.bean.usePlan.UseStage.valueOf(it) }.getOrNull() }
-            val newOverrides = (oldBinding.overrides ?: GroupUseOverride()).copy(stageOverride = useStage)
-            newList[index] = oldBinding.copy(overrides = if (newOverrides.isDefault()) null else newOverrides)
+            val newOverride = (oldBinding.behaviors.findOverride() ?: GroupUseOverride()).copy(stageOverride = useStage)
+            newList[index] = oldBinding.copy(
+                behaviors = oldBinding.behaviors.withOverride(if (newOverride.isDefault()) null else newOverride)
+            )
         }
         state.copy(currentBindings = newList)
     }
@@ -124,8 +130,10 @@ object WorkbenchActions {
         val newList = state.currentBindings.toMutableList()
         if (index in newList.indices) {
             val oldBinding = newList[index]
-            val newOverrides = (oldBinding.overrides ?: GroupUseOverride()).copy(replanAfterUse = replan)
-            newList[index] = oldBinding.copy(overrides = if (newOverrides.isDefault()) null else newOverrides)
+            val newOverride = (oldBinding.behaviors.findOverride() ?: GroupUseOverride()).copy(replanAfterUse = replan)
+            newList[index] = oldBinding.copy(
+                behaviors = oldBinding.behaviors.withOverride(if (newOverride.isDefault()) null else newOverride)
+            )
         }
         state.copy(currentBindings = newList)
     }
@@ -135,8 +143,21 @@ object WorkbenchActions {
         if (index in newList.indices) {
             val oldBinding = newList[index]
             val weightVal = if (weight != 0.0) weight else null
-            val newOverrides = (oldBinding.overrides ?: GroupUseOverride()).copy(orderWeight = weightVal)
-            newList[index] = oldBinding.copy(overrides = if (newOverrides.isDefault()) null else newOverrides)
+            val newOverride = (oldBinding.behaviors.findOverride() ?: GroupUseOverride()).copy(orderWeight = weightVal)
+            newList[index] = oldBinding.copy(
+                behaviors = oldBinding.behaviors.withOverride(if (newOverride.isDefault()) null else newOverride)
+            )
+        }
+        state.copy(currentBindings = newList)
+    }
+
+    fun updateBindingUseAction(index: Int, actionId: String, enabled: Boolean): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            val old = newList[index]
+            val set = old.behaviors.findUseActions().toMutableSet()
+            if (enabled) set.add(actionId) else set.remove(actionId)
+            newList[index] = old.copy(behaviors = old.behaviors.withUseActions(set.toList()))
         }
         state.copy(currentBindings = newList)
     }

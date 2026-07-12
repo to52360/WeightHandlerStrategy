@@ -1,12 +1,12 @@
 package lin.moduls
 
-import lin.bean.usePlan.GroupUseOverride
 import lin.provider.SqliteCardPurposeProvider
 import lin.provider.SqliteComboPlanDefinitionProvider
 import lin.provider.SqliteConditionTreeConfigProvider
 import lin.provider.SqliteTreeConfigProvider
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.*
+import lin.ui.card_group.db.CardGroupBehaviorRepository
 import lin.ui.card_group.db.CardGroupRepository
 import lin.ui.card_group.db.CardGroupService
 import lin.ui.card_purpose.DefaultPurposeTagProvider
@@ -19,17 +19,14 @@ import lin.ui.condition_tree.db.ConditionTreeConfigService
 import lin.ui.condition_tree.db.createConditionTreeConfigMapper
 import lin.ui.service.createTreeConfigMapper
 import lin.ui.tree_config.db.TreeConfigRepository
+import lin.rule.tree.CardGroupBinding
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
 val strategyProviderModule = module {
-    single {
-        CardGroupService(
-            CardGroupRepository(
-                get()
-            )
-        )
-    }
+    single { CardGroupBehaviorRepository(get()) }
+    single { CardGroupRepository(get(), get()) }
+    single { CardGroupService(get()) }
 
     single {
         ComboPlanDefinitionRepository(get())
@@ -50,11 +47,11 @@ val strategyProviderModule = module {
     single<PurposeTagProvider> { DefaultPurposeTagProvider() }
     single { PurposeTagTreeBindingPolicy(get()) }
 
-    single<TreeConfigProvider> {
+        single<TreeConfigProvider> {
         SqliteTreeConfigProvider(
             repository = TreeConfigRepository(get()),
             mapper = createTreeConfigMapper(),
-            groupRepository = CardGroupRepository(get()),
+            groupRepository = CardGroupRepository(get(), get()),
             tagPolicy = get()
         )
     }
@@ -72,7 +69,6 @@ val strategyProviderModule = module {
         val svc = get<CardGroupService>()
         object : CardGroupIndexProvider {
             override fun provide(): Map<String, Set<String>> = svc.loadCardGroupIndex()
-            override fun provideBindingOverrides(): Map<String, GroupUseOverride> = svc.loadBindingOverrides()
         }
     }
 
@@ -80,6 +76,13 @@ val strategyProviderModule = module {
         object : BindingCardIdProvider {
             override fun provide(): Map<String, List<String>> =
                 get<CardGroupService>().loadBindingCardIds()
+        }
+    }
+
+    single<GroupBehaviorProvider> {
+        object : GroupBehaviorProvider {
+            override fun provide(): List<CardGroupBinding> =
+                get<CardGroupService>().loadAll(onlyEnabled = true).flatMap { it.bindings }
         }
     }
 }
@@ -110,15 +113,4 @@ private fun CardGroupService.loadBindingCardIds(): Map<String, List<String>> {
             index[binding.id] = binding.cardIds.toMutableList()
         }
     return index
-}
-
-private fun CardGroupService.loadBindingOverrides(): Map<String, GroupUseOverride> {
-    return loadAll(onlyEnabled = true)
-        .asSequence()
-        .flatMap { it.bindings.asSequence() }
-        .mapNotNull { binding ->
-            val override = binding.overrides ?: return@mapNotNull null
-            if (override.isDefault()) null else binding.id to override
-        }
-        .toMap()
 }
