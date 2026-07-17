@@ -26,8 +26,11 @@ sealed class CardGroupBehavior {
     /** OVERRIDE 行：分组级出牌行为覆盖，对应 [lin.bean.usePlan.GroupUseOverride]。 */
     data class OverrideBehavior(val override: GroupUseOverride) : CardGroupBehavior()
 
-    /** USE_ACTION 行：使用动作标识列表，由引擎 UseActionRegistry 解析为 UseStrategy 对象。 */
-    data class UseActionBehavior(val useActions: List<String>) : CardGroupBehavior()
+    /** USE_ACTION 行：使用动作标识列表 + 动态属性，由引擎 UseActionRegistry 解析为 UseStrategy 对象。 */
+    data class UseActionBehavior(
+        val useActions: List<String>,
+        val extraConfig: Map<String, Any> = emptyMap()
+    ) : CardGroupBehavior()
 }
 
 /**

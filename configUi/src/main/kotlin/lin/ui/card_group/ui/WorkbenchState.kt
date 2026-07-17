@@ -2,7 +2,9 @@ package lin.ui.card_group.ui
 
 import lin.bean.usePlan.GroupUseOverride
 import lin.dao.CardWeightConfig
+import lin.domain.MatchState
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.findExtraConfig
 import lin.rule.tree.findOverride
 import lin.rule.tree.findUseActions
 import lin.rule.tree.withOverride
@@ -156,8 +158,39 @@ object WorkbenchActions {
         if (index in newList.indices) {
             val old = newList[index]
             val set = old.behaviors.findUseActions().toMutableSet()
-            if (enabled) set.add(actionId) else set.remove(actionId)
+            if (enabled) set.add(actionId) else {
+                set.remove(actionId)
+                // 去掉 RECORD_PLAY 时同时清除 stat_dimensions
+                if (actionId == "RECORD_PLAY") {
+                    val currentConfig = old.behaviors.findExtraConfig().toMutableMap()
+                    currentConfig.remove("stat_dimensions")
+                    val useList = set.toList()
+                    newList[index] = old.copy(
+                        behaviors = old.behaviors.withUseActions(useList, currentConfig)
+                    )
+                }
+            }
             newList[index] = old.copy(behaviors = old.behaviors.withUseActions(set.toList()))
+        }
+        state.copy(currentBindings = newList)
+    }
+
+    fun updateBindingStatDimensions(index: Int, dimensions: List<MatchState.StatDimension>): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            val old = newList[index]
+            val currentActions = old.behaviors.findUseActions()
+            val newConfig = old.behaviors.findExtraConfig().toMutableMap()
+            if (dimensions.isEmpty()) {
+                newConfig.remove("stat_dimensions")
+            } else {
+                newConfig["stat_dimensions"] = dimensions.map {
+                    mapOf("key" to it.key.name, "duration" to it.duration.name)
+                }
+            }
+            newList[index] = old.copy(
+                behaviors = old.behaviors.withUseActions(currentActions, newConfig)
+            )
         }
         state.copy(currentBindings = newList)
     }

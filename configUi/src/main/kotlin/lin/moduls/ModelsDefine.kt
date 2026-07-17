@@ -2,7 +2,7 @@
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import lin.config.AppConfig
+import lin.config.PathConfig
 import lin.db.HsCardRepository
 import lin.db.OrthogonalTemplateRepository
 import lin.db.TemplateGroupRepository
@@ -94,7 +94,7 @@ val uiModule = module {
  */
 val dbModule = module {
     single<JdbcTemplate> {
-        val dbPath = AppConfig.databasePath
+        val dbPath = PathConfig.databasePath
         if (!Files.exists(dbPath)) {
             Files.createFile(dbPath)
         }
@@ -106,7 +106,7 @@ val dbModule = module {
             idleTimeout = 30_000
             connectionTimeout = 10_000
             connectionTestQuery = "SELECT 1"
-            connectionInitSql = "ATTACH DATABASE '${AppConfig.hsCardsDbPath.toAbsolutePath()}' AS hs"
+            connectionInitSql = "ATTACH DATABASE '${PathConfig.hsCardsDbPath.toAbsolutePath()}' AS hs"
             poolName = "ConfigUiPool"
         }
         JdbcTemplate(HikariDataSource(config))

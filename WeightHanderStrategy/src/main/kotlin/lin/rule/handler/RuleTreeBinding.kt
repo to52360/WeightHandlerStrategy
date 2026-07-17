@@ -161,11 +161,11 @@ fun evaluateConditionTree(
 fun ComboCard.updateIntent(actions: List<ComboCardAction>) {
     for (intent in actions) {
         intent.useAfterStrategies?.let {
-            this.useAfterStrategy?.addAll(it) ?: { this.useAfterStrategy = it.toMutableList() }
+            this.useAfterStrategy = (this.useAfterStrategy ?: mutableListOf()).apply { addAll(it) }
         }
 
         intent.useBeforeStrategies?.let {
-            this.useBeforeStrategy?.addAll(it) ?: { this.useBeforeStrategy = it.toMutableList() }
+            this.useBeforeStrategy = (this.useBeforeStrategy ?: mutableListOf()).apply { addAll(it) }
         }
 
         intent.useGroupId?.let {

@@ -3,9 +3,6 @@ package lin.bean
 
 import lin.config.CardType
 import lin.domain.context.NotWeight
-import lin.domain.use.UseAfterStrategy
-import lin.domain.use.UseBeforeStrategy
-import lin.domain.use.UseStrategy
 import lin.lifecycle.LifecycleRegister
 
 import lin.rule.tree.EvaluatorInstanceNode
@@ -94,22 +91,8 @@ data class CardWeightInfo(
     }
 
 
-    //使用相关
-    private var _useAfterStrategy: MutableList<UseAfterStrategy>? = null
-    private var _useBeforeStrategy: MutableList<UseBeforeStrategy>? = null
-    val useAfterStrategy: MutableList<UseAfterStrategy>?
-        get() = _useAfterStrategy
-    val useBeforeStrategy: MutableList<UseBeforeStrategy>?
-        get() = _useBeforeStrategy
+    //使用相关：use 策略统一走 combinedConfig（UseConfigHandler 写入），CardWeightInfo 不再持有
 
-    fun addUseStrategy(useStrategy: UseStrategy) {
-        if (useStrategy is UseBeforeStrategy) {
-            _useBeforeStrategy = _useBeforeStrategy.addSafe(useStrategy)
-        }
-        if (useStrategy is UseAfterStrategy) {
-            _useAfterStrategy = _useAfterStrategy.addSafe(useStrategy)
-        }
-    }
     /**
      *  combo相关
      *  最后使用暂时这样,没想到其他方案

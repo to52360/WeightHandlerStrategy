@@ -33,7 +33,7 @@ class SkillFindStrategy : AbsFindStrategy(findRule = { false }), UseAfterStrateg
                 skill.addWeight(UseSkillWeight)
                 extCost = -skill.cost()
                 extWeight = skill.powerWeight
-                skill.useAfterStrategy.addSafe(this)
+                skill.useAfterStrategy = skill.useAfterStrategy.addSafe(this)
                 isNotCalculate = !skill.canUse()
                 skill
             } ?: run { throw IllegalArgumentException("没有英雄技能") }

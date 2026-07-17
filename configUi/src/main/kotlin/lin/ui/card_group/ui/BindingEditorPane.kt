@@ -9,12 +9,9 @@ import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
-import lin.bean.usePlan.UseStage
 import lin.dao.CardWeightConfig
-import lin.domain.use.UseActionRegistry
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.findOverride
-import lin.rule.tree.findUseActions
 
 /**
  * 右侧：Binding 详情编辑面板
@@ -58,11 +55,8 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         }
 
         // 2. 表格与控制栏
-        val bindingNameField = TextField().apply {
-            promptText = "分组名称"
-            // 未选中时禁用
-            disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
-        }
+        val behaviorPane = BehaviorEditorPane(store,
+            bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
 
         val tableBox = VBox(5.0).apply {
             val toolBar = HBox(5.0).apply {
@@ -78,135 +72,6 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                     }
                 }
                 children.addAll(btnAdd, btnRemove)
-            }
-
-            val bindingInfoBox = VBox(5.0).apply {
-                // 第一行：分组名称
-                val nameRow = HBox(10.0).apply {
-                    alignment = Pos.CENTER_LEFT
-                    children.addAll(Label("分组名称:"), bindingNameField)
-                }
-
-                // 第二行：行为属性编辑
-                val stageCombo = ComboBox<String>().apply {
-                    items.setAll(
-                        listOf("(不覆盖)") + UseStage.entries.map { it.name }
-                    )
-                    promptText = "出牌阶段覆盖"
-                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
-                }
-                val replanCombo = ComboBox<String>().apply {
-                    items.setAll("(不覆盖)", "是", "否")
-                    promptText = "出牌后重规划"
-                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
-                }
-                val weightField = TextField().apply {
-                    promptText = "排序权重"
-                    prefWidth = 80.0
-                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
-                }
-
-                val behaviorRow = HBox(10.0).apply {
-                    alignment = Pos.CENTER_LEFT
-                    children.addAll(
-                        Label("阶段覆盖:"), stageCombo,
-                        Label("重规划:"), replanCombo,
-                        Label("排序权重:"), weightField
-                    )
-                }
-
-                // 使用动作（USE_ACTION）勾选区：选项来自引擎 UseActionRegistry，勾选经 store 写入 binding.behaviors
-                val useActionLabel = Label("使用动作:")
-                val useActionBox = VBox(3.0)
-                val actionCheckMap = linkedMapOf<String, CheckBox>()
-                UseActionRegistry.knownActionIds().forEach { actionId ->
-                    val cb = CheckBox(actionId).apply {
-                        disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
-                    }
-                    cb.selectedProperty().addListener { _, _, newValue ->
-                        if (!isUpdatingFromState) {
-                            val idx = store.state.selectedBindingIndex
-                            if (idx != null && idx >= 0) {
-                                store.updateBindingUseAction(actionId, newValue)
-                            }
-                        }
-                    }
-                    actionCheckMap[actionId] = cb
-                    useActionBox.children.add(cb)
-                }
-                val useActionRow = HBox(10.0).apply {
-                    alignment = Pos.CENTER_LEFT
-                    children.addAll(useActionLabel, useActionBox)
-                }
-
-                children.addAll(nameRow, behaviorRow, useActionRow)
-
-                // ── 行为属性事件绑定 ──
-                bindingNameField.textProperty().addListener { _, _, newValue ->
-                    if (!isUpdatingFromState && newValue != null) {
-                        store.updateBindingName(newValue)
-                    }
-                }
-
-                stageCombo.valueProperty().addListener { _, _, newValue ->
-                    if (!isUpdatingFromState && newValue != null) {
-                        val stage = if (newValue == "(不覆盖)") null else newValue
-                        store.updateBindingStageOverride(stage)
-                    }
-                }
-
-                replanCombo.valueProperty().addListener { _, _, newValue ->
-                    if (!isUpdatingFromState && newValue != null) {
-                        val replan = when (newValue) {
-                            "是" -> true
-                            "否" -> false
-                            else -> null
-                        }
-                        store.updateBindingReplanAfterUse(replan)
-                    }
-                }
-
-                weightField.textProperty().addListener { _, _, newValue ->
-                    if (!isUpdatingFromState && newValue != null) {
-                        newValue.toDoubleOrNull()?.let { store.updateBindingOrderWeight(it) }
-                    }
-                }
-
-                // ── 从 State 同步到编辑控件 ──
-                store.stateProperty.addListener { _, oldState, newState ->
-                    if (oldState.currentBindings != newState.currentBindings || oldState.selectedBindingIndex != newState.selectedBindingIndex) {
-                        val idx = newState.selectedBindingIndex
-                        if (idx != null && idx in newState.currentBindings.indices) {
-                            val binding = newState.currentBindings[idx]
-                            val stageVal = binding.behaviors.findOverride()?.stageOverride?.name
-                            if (stageCombo.value != (stageVal ?: "(不覆盖)")) {
-                                stageCombo.value = stageVal ?: "(不覆盖)"
-                            }
-                            val replanDisplay = when (binding.behaviors.findOverride()?.replanAfterUse) {
-                                true -> "是"
-                                false -> "否"
-                                null -> "(不覆盖)"
-                            }
-                            if (replanCombo.value != replanDisplay) {
-                                replanCombo.value = replanDisplay
-                            }
-                            val weightVal = binding.behaviors.findOverride()?.orderWeight
-                            val weightStr = weightVal?.toString() ?: ""
-                            if (weightField.text != weightStr) {
-                                weightField.text = weightStr
-                            }
-                            actionCheckMap.forEach { (actionId, cb) ->
-                                val selected = binding.behaviors.findUseActions().contains(actionId)
-                                if (cb.isSelected != selected) cb.isSelected = selected
-                            }
-                        } else {
-                            stageCombo.value = null
-                            replanCombo.value = null
-                            weightField.clear()
-                            actionCheckMap.forEach { (_, cb) -> cb.isSelected = false }
-                        }
-                    }
-                }
             }
 
             // 初始化表格列
@@ -240,7 +105,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
             }
 
             setVgrow(bindingTableView, Priority.ALWAYS)
-            children.addAll(toolBar, bindingTableView, bindingInfoBox)
+            children.addAll(toolBar, bindingTableView, behaviorPane.node)
         }
 
         // 3. 底部选卡区 (左右两栏 SplitPane)
@@ -316,17 +181,6 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
 
                 if (oldState.selectedCards != newState.selectedCards) {
                     obsSelectedCards.setAll(newState.selectedCards)
-                }
-
-                // 同步当前选中的分组名称到输入框
-                val selectedIdx = newState.selectedBindingIndex
-                if (selectedIdx != null && selectedIdx in newState.currentBindings.indices) {
-                    val currentName = newState.currentBindings[selectedIdx].name
-                    if (bindingNameField.text != currentName) {
-                        bindingNameField.text = currentName
-                    }
-                } else {
-                    bindingNameField.clear()
                 }
             } finally {
                 isUpdatingFromState = false

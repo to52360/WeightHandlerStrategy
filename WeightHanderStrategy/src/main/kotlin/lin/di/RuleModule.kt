@@ -33,6 +33,7 @@ val ruleModule = module {
     single<ConfigBindingStep> { GroupIndexStep() }
     single<ConfigBindingStep> { GroupBehaviorStep() }
     single<ConfigBindingStep> { PurposeStep() }
+    single<ConfigBindingStep> { CardPurposeBehaviorStep() }
     single<ConfigBindingStep> { ComboStep() }
 
     single<StartupTask>(named("cardConfigBinding")) { CardConfigBindingTask(getAll()) }

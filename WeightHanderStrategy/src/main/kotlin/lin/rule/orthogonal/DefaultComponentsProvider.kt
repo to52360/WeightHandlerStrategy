@@ -12,7 +12,9 @@ class DefaultDataSourceProvider : DataSourceProvider {
         MeBoardCardsSource,
         RivalBoardCardsSource,
         BoardCardsSource,
-        HandCardsSource
+        HandCardsSource,
+        MatchGroupPlayedCountsSource(),
+        MatchActivityEventsSource()
     )
 }
 
@@ -22,7 +24,9 @@ class DefaultDataSourceProvider : DataSourceProvider {
 class DefaultTransformProvider : TransformProvider {
     override fun get(): Collection<Transform<*, *>> = listOf(
         RaceFilterTransform,
-        CountProjectionTransform
+        CountProjectionTransform,
+        PickGroupCountTransform,
+        WeightedActivitySumTransform()
     )
 }
 

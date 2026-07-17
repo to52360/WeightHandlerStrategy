@@ -6,8 +6,14 @@ import lin.bean.usePlan.GroupUseOverride
 fun List<CardGroupBehavior>.findOverride(): GroupUseOverride? =
     firstOrNull { it is CardGroupBehavior.OverrideBehavior }?.let { (it as CardGroupBehavior.OverrideBehavior).override }
 
+fun List<CardGroupBehavior>.findUseActionBehavior(): CardGroupBehavior.UseActionBehavior? =
+    firstOrNull { it is CardGroupBehavior.UseActionBehavior } as? CardGroupBehavior.UseActionBehavior
+
 fun List<CardGroupBehavior>.findUseActions(): List<String> =
-    firstOrNull { it is CardGroupBehavior.UseActionBehavior }?.let { (it as CardGroupBehavior.UseActionBehavior).useActions } ?: emptyList()
+    findUseActionBehavior()?.useActions ?: emptyList()
+
+fun List<CardGroupBehavior>.findExtraConfig(): Map<String, Any> =
+    findUseActionBehavior()?.extraConfig ?: emptyMap()
 
 /** 以不可变方式写入/移除 OVERRIDE 行为：override 为 null 或默认值时移除该行。 */
 fun List<CardGroupBehavior>.withOverride(override: GroupUseOverride?): List<CardGroupBehavior> {
@@ -16,9 +22,12 @@ fun List<CardGroupBehavior>.withOverride(override: GroupUseOverride?): List<Card
     else without + CardGroupBehavior.OverrideBehavior(override)
 }
 
-/** 以不可变方式写入/移除 USE_ACTION 行为：列表为空时移除该行。 */
-fun List<CardGroupBehavior>.withUseActions(actions: List<String>): List<CardGroupBehavior> {
+/** 以不可变方式写入/移除 USE_ACTION 行为：actions 和 extraConfig 均为空时移除该行。 */
+fun List<CardGroupBehavior>.withUseActions(
+    actions: List<String>,
+    extraConfig: Map<String, Any> = emptyMap()
+): List<CardGroupBehavior> {
     val without = filter { it !is CardGroupBehavior.UseActionBehavior }
-    return if (actions.isEmpty()) without
-    else without + CardGroupBehavior.UseActionBehavior(actions)
+    return if (actions.isEmpty() && extraConfig.isEmpty()) without
+    else without + CardGroupBehavior.UseActionBehavior(actions, extraConfig)
 }

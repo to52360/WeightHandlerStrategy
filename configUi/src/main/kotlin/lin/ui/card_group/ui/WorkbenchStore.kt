@@ -3,6 +3,7 @@ package lin.ui.card_group.ui
 import javafx.beans.property.SimpleObjectProperty
 
 import lin.dao.CardGroupJsonParser
+import lin.domain.MatchState
 import lin.rule.tree.CardGroupBinding
 import lin.ui.card_group.db.CardGroupService
 import lin.ui.card_group.db.CardManagerEntity
@@ -131,5 +132,10 @@ class WorkbenchStore(private val service: CardGroupService) {
     fun updateBindingUseAction(actionId: String, enabled: Boolean) {
         val idx = state.selectedBindingIndex ?: return
         dispatch(WorkbenchActions.updateBindingUseAction(idx, actionId, enabled))
+    }
+
+    fun updateBindingStatDimensions(dimensions: List<MatchState.StatDimension>) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingStatDimensions(idx, dimensions))
     }
 }

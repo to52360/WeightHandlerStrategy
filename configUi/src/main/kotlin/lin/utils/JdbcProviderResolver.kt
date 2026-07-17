@@ -2,7 +2,7 @@ package lin.utils
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import lin.config.AppConfig
+import lin.config.PathConfig
 import org.koin.core.context.GlobalContext
 import org.springframework.jdbc.core.JdbcTemplate
 
@@ -14,7 +14,7 @@ fun resolveJdbcProvider(): JdbcTemplate {
     return runCatchingLog("Koin容器未启动，使用回退数据源") {
         GlobalContext.get().get<JdbcTemplate>()
     }.getOrElse {
-        val dbPath = AppConfig.databasePath
+        val dbPath = PathConfig.databasePath
         val config = HikariConfig().apply {
             driverClassName = "org.sqlite.JDBC"
             jdbcUrl = "jdbc:sqlite:${dbPath.toAbsolutePath()}"

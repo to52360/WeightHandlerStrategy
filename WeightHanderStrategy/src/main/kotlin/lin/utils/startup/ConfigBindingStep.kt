@@ -2,12 +2,18 @@ package lin.utils.startup
 
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
+import lin.bean.ConfigSlice
+import lin.bean.ConfigSliceScope
+import lin.bean.SliceEntry
 import lin.bean.usePlan.CardPurpose
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.GroupUseOverride
+import lin.bean.usePlan.PurposeTagId
 import lin.domain.use.UseStrategy
 import lin.domain.use.plan.ComboAssembler
 import lin.domain.use.plan.UseIntentAssembler
+import lin.rule.tree.CardGroupBehavior
+import lin.rule.tree.CardGroupBinding
 
 /**
  * 卡牌配置绑定步骤：每步只贡献一类原始数据到 [CardCombinedConfigBuilder]，
@@ -30,10 +36,23 @@ class CardCombinedConfigBuilder {
     val groupOverrides = HashMap<String, GroupUseOverride>()
     // 配置侧声明的使用动作：cardId → 原始策略列表（含 UseBefore/UseAfter，build 时按类型拆分）
     val useStrategiesByCardId = HashMap<String, MutableList<UseStrategy>>()
+
+    /** 给某卡牌追加配置侧声明的使用策略（before/after 混合，build 时按类型拆分到 useStrategies） */
+    fun addStrategiesForCard(cardId: String, strategies: List<UseStrategy>) {
+        useStrategiesByCardId.getOrPut(cardId) { ArrayList() }.addAll(strategies)
+    }
+
     var cardPurposes: Map<String, CardPurpose> = emptyMap()
     var comboDefinitions: List<ComboPlanDefinition> = emptyList()
 
+    // 来源原始数据
+    var groupBehaviors: List<CardGroupBinding> = emptyList()      // group→behaviors（OVERRIDE 用）
+    val slices = mutableListOf<SliceEntry>()                       // 任意 scope 的分片（USE_ACTION 等）
+
     fun build(): Map<String, CardCombinedConfig> {
+        val tagIndex = buildTagIndex()
+        expandGroupBehaviors()
+        expandSlices(tagIndex)
         val useIntentAsm = UseIntentAssembler(cardPurposes, groupMap, groupOverrides)
         val comboAsm = ComboAssembler(groupMap, comboDefinitions)
         return baseInfos.mapValues { (cardId, weightInfo) ->
@@ -44,8 +63,45 @@ class CardCombinedConfigBuilder {
                 useIntent = useIntentAsm.assemble(cardId),
                 comboEntries = comboAsm.entries(cardId),
                 comboUseBindings = comboAsm.bindings(cardId),
-                useStrategies = strategies
+                useStrategies = strategies,
+                purposeTags = cardPurposes[cardId]?.purposeTags ?: emptySet(),
             )
         }
+    }
+
+    /** 展开分组 OVERRIDE 行为 → [groupOverrides]。USE_ACTION 走 slices，不在此处理。 */
+    private fun expandGroupBehaviors() {
+        for (binding in groupBehaviors) {
+            for (behavior in binding.behaviors) {
+                if (behavior is CardGroupBehavior.OverrideBehavior)
+                    groupOverrides[binding.id] = behavior.override
+            }
+        }
+    }
+
+    /** 统一解析所有来源的 [SliceEntry]，按 scope 展开到 cardId → [useStrategiesByCardId]。 */
+    private fun expandSlices(tagIndex: Map<PurposeTagId, Set<String>>) {
+        for (entry in slices) {
+            val cardIds = when (entry.scope) {
+                is ConfigSliceScope.Group -> groupBehaviors
+                    .find { it.id == entry.scope.groupId }?.cardIds.orEmpty()
+                is ConfigSliceScope.Tag -> tagIndex[entry.scope.tagId].orEmpty()
+                is ConfigSliceScope.Card -> listOf(entry.scope.cardId)
+            }
+            val s = entry.slice
+            if (s.useStrategies.isNotEmpty())
+                cardIds.forEach { cardId -> addStrategiesForCard(cardId, s.useStrategies) }
+        }
+    }
+
+    /** 从 [cardPurposes] 预建用途标签→cardIds 反向索引。 */
+    private fun buildTagIndex(): Map<PurposeTagId, Set<String>> {
+        val index = mutableMapOf<PurposeTagId, MutableSet<String>>()
+        cardPurposes.forEach { (cardId, purpose) ->
+            purpose.purposeTags.forEach { tag ->
+                index.getOrPut(tag) { mutableSetOf() }.add(cardId)
+            }
+        }
+        return index.mapValues { it.value.toSet() }
     }
 }

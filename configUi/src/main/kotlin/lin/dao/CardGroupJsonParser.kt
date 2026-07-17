@@ -3,7 +3,7 @@ package lin.dao
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import lin.config.AppConfig.defaultDirPath
+import lin.config.PathConfig
 import lin.db.CardIdNameText
 import lin.rule.build.DynamicFieldOption
 import lin.serviceLoader.provider.SelectOptionProvider
@@ -36,7 +36,7 @@ object CardGroupJsonParser {
      * 返回 Pair<fileName(不含扩展名), CardGroupConfig>。
      */
     fun loadAllCardGroups(
-        dirPath: Path = defaultDirPath
+        dirPath: Path = PathConfig.defaultDirPath
     ): List<Pair<String, CardGroupConfig>> {
         if (!Files.exists(dirPath)) return emptyList()
 
@@ -59,7 +59,7 @@ object CardGroupJsonParser {
     }
 
     /** 仅列出该目录下所有的 .cardgroup 文件名（不含扩展名），不解析文件内容 */
-    fun listAvailableFiles(dirPath: Path = defaultDirPath): List<String> {
+    fun listAvailableFiles(dirPath: Path = PathConfig.defaultDirPath): List<String> {
         if (!Files.exists(dirPath)) return emptyList()
         return Files.list(dirPath).use { stream ->
             stream.filter { it.isRegularFile() && it.fileName.toString().endsWith(".cardgroup") }
@@ -70,7 +70,7 @@ object CardGroupJsonParser {
 
     /**
      * 将卡牌列表（通常来自炉石卡组代码解析得到的 [CardIdNameText]）写成一个 `.cardgroup` JSON 文件。
-     * 文件写入 [dirPath]（默认 [defaultDirPath]，即 app.properties 中的 cardgroup.dir.path），
+     * 文件写入 [dirPath]（默认 [PathConfig.defaultDirPath]，即 app.properties 中的 cardgroup.dir.path），
      * 文件名为 `$groupName.cardgroup`。目录不存在时自动创建。
      * 返回写入的文件路径。
      */
@@ -78,7 +78,7 @@ object CardGroupJsonParser {
         cards: List<CardIdNameText>,
         groupName: String,
         enabled: Boolean = true,
-        dirPath: Path = defaultDirPath
+        dirPath: Path = PathConfig.defaultDirPath
     ): Path {
         if (cards.isEmpty()) {
             throw IllegalArgumentException("卡牌列表为空，无法生成 .cardgroup 文件")
@@ -102,7 +102,7 @@ object CardGroupJsonParser {
      */
     fun loadByFileName(
         fileName: String,
-        dirPath: Path = defaultDirPath
+        dirPath: Path = PathConfig.defaultDirPath
     ): CardGroupConfig? {
         val file = dirPath.resolve("$fileName.cardgroup")
         if (!Files.exists(file)) return null

@@ -22,14 +22,11 @@ class UseConfigHandler : ConfigHandler<CardAttributeConfig> {
         cardConfigs.forEach { config ->
             when (config) {
                 is UseConfig -> {
-                    //使用策略存在重复添加问题
+                    // useGroupId/useGroupOrder 仍经旧链路写 CardWeightInfo（用户暂不删）；
+                    // useStrategyList 不再经 ConfigHandler，改由 ConfigBindingStep(GroupBehaviorStep) 装配进 combinedConfig.useStrategies
                     cardWeightInfos.forEach { info ->
                         config.useGroupId?.let { info.useGroupId = it }
                         config.useGroupOrder?.let { info.useGroupOrder = it }
-                        config.useStrategyList.forEach {
-                            info.addUseStrategy(it)
-                        }
-
                     }
                 }
 

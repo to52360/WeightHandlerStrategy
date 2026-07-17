@@ -123,6 +123,9 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     private val cardInfoDao: CardInfoDao by lazy { getKoin().get<CardInfoDao>() }
 
 
+    val matchState = MatchState()
+    val pipelineCache = PipelineCache()
+
     //private val statusReset: StatusReset
     init {
         val warStatus = WarStatus(this)
@@ -132,11 +135,12 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         })
         this.warStatus = warStatus
 
-        val matchState = MatchState()
         loadKoinModules(module {
             single { matchState }
+            single { pipelineCache }
         })
         registerLifecycle(matchState)
+        registerLifecycle(pipelineCache)
 
         infoMap = getKoin().get(named("weightInfo"))
         loadKoinModules(module {

@@ -2,7 +2,7 @@ package lin.utils
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import lin.config.AppConfig
+import lin.config.PathConfig
 import lin.dao.CardGroupJsonParser
 import lin.db.HsCardRepository
 import org.junit.Assert.assertThrows
@@ -35,7 +35,7 @@ class HearthstoneDeckCodeParserTest {
         val candidates = listOf(
             Path.of("..", "hs_cards.db"),
             Path.of("hs_cards.db"),
-            AppConfig.hsCardsDbPath
+            PathConfig.hsCardsDbPath
         )
         return candidates.firstOrNull { Files.exists(it) }
             ?: error("找不到 hs_cards.db，已尝试候选路径: $candidates")

@@ -1,55 +1,128 @@
 package lin.domain
 
 import lin.bean.ComboCard
+import lin.bean.purposeTagValues
 import lin.domain.WarInfo
 import lin.lifecycle.GameLifecycle
 import lin.lifecycle.RoundLifecycle
-import org.koin.core.component.KoinComponent
 
 /**
  * 跨回合对局状态容器（D-1）。
  *
- * 存储整局累计的打出统计（cardId / groupId 维度），以及本回合打出事件列表。
- * - 整局统计在 [GameLifecycle.start]（对局开始）清空
- * - 本回合列表在 [RoundLifecycle.start]（每回合开始）清空
+ * 通用多维计数器：用 key 前缀区分统计维度（CARD / GROUP / PURPOSE）和周期（GAME / ROUND）。
+ * - gameStats：整局累计，[GameLifecycle.start] 清空
+ * - roundStats：回合累计，[RoundLifecycle.start] 清空
+ * - currentTurnPlayedCards：本回合打出流水
  *
- * 由 [MyWarManage] 创建、Koin 注册，并注册到生命周期。
+ * 读侧通过 [lin.rule.context.RuleEnv.matchState] 访问。
  */
-class MatchState : GameLifecycle, RoundLifecycle, KoinComponent {
+class MatchState : GameLifecycle, RoundLifecycle {
 
-    // 整局累计：cardId -> 打出次数
-    private val cardPlayCount = mutableMapOf<String, Int>()
+    /** 统计维度键 */
+    enum class StatDimensionKey { CARD, GROUP, PURPOSE }
+    /** 统计周期 */
+    enum class StatDuration { GAME, ROUND }
+    /** 一条统计维度声明 */
+    data class StatDimension(val key: StatDimensionKey, val duration: StatDuration)
 
-    // 整局累计：groupId -> 打出次数（一张卡计入其所有所属组）
-    private val groupPlayCount = mutableMapOf<String, Int>()
-
-    // 本回合打出事件列表（cardId 顺序），墓地不在此记录
-    private val currentTurnPlayedCards = mutableListOf<String>()
-
-    fun recordCardPlayed(card: ComboCard) {
-        val cardId = card.cardId()
-        cardPlayCount[cardId] = (cardPlayCount[cardId] ?: 0) + 1
-        card.groupIds().forEach { gid ->
-            groupPlayCount[gid] = (groupPlayCount[gid] ?: 0) + 1
-        }
-        currentTurnPlayedCards += cardId
+    companion object {
+        private const val KEY_CARD = "CARD"
+        private const val KEY_GROUP = "GROUP"
+        private const val KEY_PURPOSE = "PURPOSE"
     }
 
-    fun cardPlayedCount(cardId: String): Int = cardPlayCount[cardId] ?: 0
+    // ── 内部存储 ──
 
-    fun groupPlayedCount(groupId: String): Int = groupPlayCount[groupId] ?: 0
+    private val gameStats = mutableMapOf<String, Int>()
+    private val roundStats = mutableMapOf<String, Int>()
+    private val currentTurnPlayedCards = mutableListOf<String>()
+    /** 整局已打出活动事件（Q-2a）。与维度注册解耦，[recordCardPlayed] 始终追加。 */
+    private val playedEventsList = mutableListOf<MatchActivityEvent>()
+    /** 打出事件版本号（Q-2a 缓存驱动）。每次 [recordCardPlayed] 递增，用于管道缓存失效。 */
+    private var playEventVersion = 0
 
+    /** 当前注册的统计维度（多分组去重并集） */
+    private var currentDimensions = emptyList<StatDimension>()
+    /** 预编译的记录闭包：构造时分派，运行时零分支 */
+    private var recordLogic: (ComboCard) -> Unit = { _ -> }
+
+    // ── 配置：声明统计维度（RecordPlayAction 首次出牌时懒注册） ──
+
+    fun registerDimensions(dimensions: List<StatDimension>) {
+        if (dimensions.isEmpty()) return
+        currentDimensions = (currentDimensions + dimensions).distinct()
+        recordLogic = buildRecordLogic()
+    }
+
+    private fun buildRecordLogic(): (ComboCard) -> Unit {
+        val steps = currentDimensions.map { dim ->
+            val write: (String) -> Unit = when (dim.duration) {
+                StatDuration.GAME  -> { k -> gameStats[k] = (gameStats[k] ?: 0) + 1 }
+                StatDuration.ROUND -> { k -> roundStats[k] = (roundStats[k] ?: 0) + 1 }
+            }
+            when (dim.key) {
+                StatDimensionKey.CARD ->
+                    { card: ComboCard -> write("$KEY_CARD:${card.cardId()}") }
+                StatDimensionKey.GROUP ->
+                    { card: ComboCard -> card.groupIds().forEach { write("$KEY_GROUP:$it") } }
+                StatDimensionKey.PURPOSE ->
+                    { card: ComboCard -> card.purposeTagValues().forEach { write("$KEY_PURPOSE:$it") } }
+            }
+        }
+        return { card -> steps.forEach { it(card) }; currentTurnPlayedCards += card.cardId() }
+    }
+
+    // ── 写入：运行时零分支 ──
+
+    /** 记录一次打出（维度统计 + 事件追加）。事件记录与维度注册解耦，始终执行。 */
+    fun recordCardPlayed(card: ComboCard) {
+        recordLogic(card)
+        playedEventsList += MatchActivityEvent(MatchActivityKind.CARD_PLAYED, card.cardId())
+        playEventVersion++
+    }
+
+    // ── 本局查询（保持兼容） ──
+
+    fun cardPlayedCount(cardId: String): Int = gameStats["$KEY_CARD:$cardId"] ?: 0
+    fun groupPlayedCount(groupId: String): Int = gameStats["$KEY_GROUP:$groupId"] ?: 0
+    fun allGroupPlayCounts(): Map<String, Int> = extractPrefix(gameStats, KEY_GROUP)
     fun currentTurnPlayed(): List<String> = currentTurnPlayedCards.toList()
 
+    // ── 新增查询 ──
+
+    /** 本局累计：purposeTagId 打出次数 */
+    fun purposePlayedCount(tagValue: String): Int = gameStats["$KEY_PURPOSE:$tagValue"] ?: 0
+
+    /** 本回合累计：cardId 打出次数 */
+    fun roundCardPlayedCount(cardId: String): Int = roundStats["$KEY_CARD:$cardId"] ?: 0
+
+    /** 本回合累计：groupId 打出次数 */
+    fun roundGroupPlayedCount(groupId: String): Int = roundStats["$KEY_GROUP:$groupId"] ?: 0
+
+    /** 本局全部打出活动事件（Q-2a 读侧） */
+    fun playedEvents(): List<MatchActivityEvent> = playedEventsList.toList()
+
+    /** 打出事件版本号（Q-2a 缓存驱动：[recordCardPlayed] 时递增）。 */
+    fun playEventVersion(): Int = playEventVersion
+
+    // ── 生命周期 ──
+
     override fun start() {
-        // 对局开始：清空整局累计 + 本回合列表
-        cardPlayCount.clear()
-        groupPlayCount.clear()
+        gameStats.clear()
+        roundStats.clear()
         currentTurnPlayedCards.clear()
+        playedEventsList.clear()
+        playEventVersion = 0
     }
 
     override fun start(warInfo: WarInfo) {
-        // 回合开始：仅清空本回合列表，保留整局累计
+        roundStats.clear()
         currentTurnPlayedCards.clear()
     }
+
+    // ── 工具 ──
+
+    private fun extractPrefix(map: Map<String, Int>, prefix: String): Map<String, Int> =
+        map.filterKeys { it.startsWith("$prefix:") }
+            .mapKeys { it.key.removePrefix("$prefix:") }
 }

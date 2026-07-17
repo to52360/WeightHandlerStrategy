@@ -65,24 +65,27 @@ val strategyProviderModule = module {
         )
     }
 
+    // 共享：一次加载所有启用的绑定，三个 Provider 各自 derive 视图
+    single { get<CardGroupService>().loadAll(onlyEnabled = true).flatMap { it.bindings } }
+
     single<CardGroupIndexProvider> {
-        val svc = get<CardGroupService>()
+        val bindings: List<CardGroupBinding> = get()
         object : CardGroupIndexProvider {
-            override fun provide(): Map<String, Set<String>> = svc.loadCardGroupIndex()
+            override fun provide(): Map<String, Set<String>> = buildCardGroupIndex(bindings)
         }
     }
 
     single<BindingCardIdProvider> {
+        val bindings: List<CardGroupBinding> = get()
         object : BindingCardIdProvider {
-            override fun provide(): Map<String, List<String>> =
-                get<CardGroupService>().loadBindingCardIds()
+            override fun provide(): Map<String, List<String>> = buildBindingCardIds(bindings)
         }
     }
 
     single<GroupBehaviorProvider> {
+        val bindings: List<CardGroupBinding> = get()
         object : GroupBehaviorProvider {
-            override fun provide(): List<CardGroupBinding> =
-                get<CardGroupService>().loadAll(onlyEnabled = true).flatMap { it.bindings }
+            override fun provide(): List<CardGroupBinding> = bindings
         }
     }
 }
@@ -91,26 +94,20 @@ class ConfigUiStrategyProvidersInfo : ModulesInfo {
     override fun loadModules(): Module = strategyProviderModule
 }
 
-private fun CardGroupService.loadCardGroupIndex(): Map<String, Set<String>> {
+private fun buildCardGroupIndex(bindings: List<CardGroupBinding>): Map<String, Set<String>> {
     val index = linkedMapOf<String, MutableSet<String>>()
-    loadAll(onlyEnabled = true)
-        .asSequence()
-        .flatMap { it.bindings.asSequence() }
-        .forEach { binding ->
-            binding.cardIds.forEach { cardId ->
-                index.getOrPut(cardId) { linkedSetOf() }.add(binding.id)
-            }
+    bindings.forEach { binding ->
+        binding.cardIds.forEach { cardId ->
+            index.getOrPut(cardId) { linkedSetOf() }.add(binding.id)
         }
+    }
     return index.mapValues { (_, groupIds) -> groupIds.toSet() }
 }
 
-private fun CardGroupService.loadBindingCardIds(): Map<String, List<String>> {
+private fun buildBindingCardIds(bindings: List<CardGroupBinding>): Map<String, List<String>> {
     val index = linkedMapOf<String, MutableList<String>>()
-    loadAll(onlyEnabled = true)
-        .asSequence()
-        .flatMap { it.bindings.asSequence() }
-        .forEach { binding ->
-            index[binding.id] = binding.cardIds.toMutableList()
-        }
+    bindings.forEach { binding ->
+        index[binding.id] = binding.cardIds.toMutableList()
+    }
     return index
 }

@@ -35,11 +35,11 @@ class CardGroupService(private val repository: CardGroupRepository) {
         val overrideByBinding = repository.findBehaviorsByManager(managerId, GroupBehaviorType.OVERRIDE)
             .associate { it.bindingId to mapper.readValue<GroupUseOverride>(it.payload) }
         val useActionByBinding = repository.findBehaviorsByManager(managerId, GroupBehaviorType.USE_ACTION)
-            .associate { it.bindingId to mapper.readValue<List<String>>(it.payload) }
+            .associate { it.bindingId to parseUseActionPayload(it.payload) }
         return bindingEntities.map { entity ->
             val behaviors = buildList {
                 overrideByBinding[entity.id]?.let { add(CardGroupBehavior.OverrideBehavior(it)) }
-                useActionByBinding[entity.id]?.let { add(CardGroupBehavior.UseActionBehavior(it)) }
+                useActionByBinding[entity.id]?.let { add(it) }
             }
             entity.toDomain(behaviors)
         }
@@ -75,7 +75,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
                     is OverrideBehavior -> if (b.override.isDefault()) null
                         else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.OVERRIDE, mapper.writeValueAsString(b.override))
                     is UseActionBehavior -> if (b.useActions.isEmpty()) null
-                        else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.USE_ACTION, mapper.writeValueAsString(b.useActions))
+                        else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.USE_ACTION, toUseActionPayload(b))
                 }
                 entity?.let { repository.saveBehavior(it) }
             }
@@ -112,7 +112,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
                 is OverrideBehavior -> if (b.override.isDefault()) null
                     else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.OVERRIDE, mapper.writeValueAsString(b.override))
                 is UseActionBehavior -> if (b.useActions.isEmpty()) null
-                    else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.USE_ACTION, mapper.writeValueAsString(b.useActions))
+                    else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.USE_ACTION, toUseActionPayload(b))
             }
             entity?.let { repository.saveBehavior(it) }
         }
@@ -132,10 +132,30 @@ class CardGroupService(private val repository: CardGroupRepository) {
         repository.replaceBehaviors(bindingId, behaviors)
     }
 
-    /** 加载全部 USE_ACTION 行为，聚合成 bindingId → 动作标识列表 */
+    /** 加载全部 USE_ACTION 行为，聚合成 bindingId → UseActionBehavior 列表 */
     fun loadAllUseActions(): Map<String, List<String>> =
         repository.findBehaviorsByType(GroupBehaviorType.USE_ACTION)
-            .associate { it.bindingId to mapper.readValue<List<String>>(it.payload) }
+            .associate { it.bindingId to parseUseActionPayload(it.payload).useActions }
+
+    // ─────────────────────── 序列化工具 ──────────────────────────────────────
+
+    /** 反序列化 USE_ACTION 的 payload，兼容旧格式（纯 List<String>）和新格式（{useActions, extraConfig}）。 */
+    @Suppress("UNCHECKED_CAST")
+    private fun parseUseActionPayload(payload: String): CardGroupBehavior.UseActionBehavior {
+        return try {
+            val map = mapper.readValue<Map<String, Any>>(payload)
+            CardGroupBehavior.UseActionBehavior(
+                useActions = (map["useActions"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                extraConfig = map["extraConfig"] as? Map<String, Any> ?: emptyMap()
+            )
+        } catch (_: Exception) {
+            CardGroupBehavior.UseActionBehavior(useActions = mapper.readValue(payload))
+        }
+    }
+
+    /** 序列化 USE_ACTION 为 JSON payload */
+    private fun toUseActionPayload(b: CardGroupBehavior.UseActionBehavior): String =
+        mapper.writeValueAsString(mapOf("useActions" to b.useActions, "extraConfig" to b.extraConfig))
 
     // ─────────────────────── 转换工具 ──────────────────────────────────────
 
