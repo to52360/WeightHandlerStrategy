@@ -1,12 +1,13 @@
 package lin.mcp
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.ai.config.AiConfigGenerationService
 import lin.ui.service.TreeConfigService
 
 /**
  * 评估树配置 MCP 工具提供者。
- * 专管评估树叶子元数据、正式树查询。
+ * 专管能力背景、评估树查询与删除。
  */
 class AiTreeConfigToolProvider(
     private val service: AiConfigGenerationService,
@@ -30,33 +31,67 @@ class AiTreeConfigToolProvider(
                 McpToolResult(mapper.writeValueAsString(service.listCapabilityBackground()))
             }
         ),
-        McpToolHandler(
-            name = "list_evaluator_trees",
-            description = "列出所有已保存的正式评估树（返回 id/name/bindingType 等摘要），用于检索你想要编辑的目标树。",
-            inputSchemaJson = """{"type":"object","properties":{}}""",
-            call = {
-                val summaries = treeConfigService.loadSummaries()
-                McpToolResult(mapper.writeValueAsString(summaries))
-            }
-        ),
-        typedTool<GetTreeRequest>(
-            name = "get_evaluator_tree",
-            description = "读取某个现有的评估树正式配置。当你想要修改现有树时，可以先调用此工具获取骨架，然后用 create_draft_tree 开启修改流程。",
+
+        // ── evaluator_tree: 评估树列表 + 详情 (合并) ──
+        typedTool<EvaluatorTreeInput>(
+            name = "evaluator_tree",
+            description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：bindingType/bindingIds/tree 拓扑/leafConfigs）。",
             mapper = mapper
         ) { input ->
-            val result = treeConfigService.findById(input.id)
-            if (result?.second == null) {
-                McpToolResult("Tree config not found", isError = true)
-            } else {
-                val config = result.second!!
-                val response = mapOf(
-                    "bindingType" to config.bindingType.name,
-                    "bindingIds" to config.bindingIds,
-                    "tree" to config.root.toNamed(),
-                    "leafConfigs" to config.leafConfigs
-                )
-                McpToolResult(mapper.writeValueAsString(response))
+            when (input.action.uppercase()) {
+                "LIST" -> {
+                    val summaries = treeConfigService.loadSummaries()
+                    McpToolResult(mapper.writeValueAsString(summaries))
+                }
+                "GET" -> {
+                    if (input.id.isNullOrBlank()) {
+                        McpToolResult(mapper.writeValueAsString(mapOf("error" to "action=GET 需要 id 参数")), isError = true)
+                    } else {
+                        val result = treeConfigService.findById(input.id)
+                        if (result?.second == null) {
+                            McpToolResult("树配置不存在", isError = true)
+                        } else {
+                            val config = result.second!!
+                            McpToolResult(mapper.writeValueAsString(mapOf(
+                                "bindingType" to config.bindingType.name,
+                                "bindingIds" to config.bindingIds,
+                                "tree" to config.root.toNamed(),
+                                "leafConfigs" to config.leafConfigs
+                            )))
+                        }
+                    }
+                }
+                else -> McpToolResult(mapper.writeValueAsString(mapOf("error" to "未知 action: ${input.action}，支持 LIST / GET")), isError = true)
             }
+        },
+
+        // ── delete_evaluator_tree (保留) ──
+        typedTool<DeleteTreeInput>(
+            name = "delete_evaluator_tree",
+            description = "删除一棵已保存的评估树（含其叶子配置）。treeId 由 evaluator_tree(action=LIST) 获取。删除不可恢复。无效 ID 返回错误+现有树列表以防幻觉。",
+            mapper = mapper
+        ) { input ->
+            val summaries = treeConfigService.loadSummaries()
+            val target = summaries.firstOrNull { it["id"] == input.treeId }
+            if (target == null) {
+                return@typedTool McpToolResult(
+                    mapper.writeValueAsString(mapOf(
+                        "error" to "树不存在: ${input.treeId}",
+                        "hint" to "检查 treeId 是否正确，以下是当前所有评估树",
+                        "existingTrees" to summaries.map { mapOf("id" to it["id"], "name" to it["name"]) }
+                    )),
+                    isError = true
+                )
+            }
+            treeConfigService.delete(input.treeId)
+            McpToolResult(mapper.writeValueAsString(mapOf("deleted" to true, "treeId" to input.treeId, "treeName" to target["name"])))
         }
     )
 }
+
+private data class EvaluatorTreeInput(
+    @field:JsonPropertyDescription("操作类型：LIST 列出所有树摘要，GET 读取树完整配置（需传 id）")
+    val action: String,
+    @field:JsonPropertyDescription("树 id，仅 action=GET 时需要，由 evaluator_tree(action=LIST) 返回。")
+    val id: String? = null
+)

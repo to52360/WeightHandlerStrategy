@@ -34,6 +34,7 @@ val mcpModule = module {
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
             get<lin.db.HsCardRepository>(),
+            get<lin.ui.service.TreeConfigService>(),
             createTreeConfigMapper()
         )
     } bind McpToolProvider::class

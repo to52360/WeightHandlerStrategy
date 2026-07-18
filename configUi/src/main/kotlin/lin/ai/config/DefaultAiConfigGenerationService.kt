@@ -84,6 +84,22 @@ class DefaultAiConfigGenerationService(
                     }
                 }
             }
+
+            EvaluatorTreeBindingType.CARD -> {
+                val enabledCardIds = cardGroupService.loadAll(onlyEnabled = true)
+                    .flatMap { it.bindings }
+                    .flatMap { it.cardIds }
+                    .toSet()
+                request.config.bindingIds.forEach { cardId ->
+                    if (cardId !in enabledCardIds) {
+                        diagnostics += EvaluatorTreeValidator.ValidationDiagnostic(
+                            "binding_card_not_found",
+                            "绑定的卡牌ID不存在于任何启用的卡池中: $cardId",
+                            "bindingIds"
+                        )
+                    }
+                }
+            }
         }
 
         return ValidationReport(

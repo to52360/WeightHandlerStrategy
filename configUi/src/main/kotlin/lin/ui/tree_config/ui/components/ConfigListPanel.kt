@@ -27,7 +27,7 @@ class ConfigListPanel(
 
     val configListView = ListView<ConfigListItem>()
     private val filterComboBox = ComboBox<String>().apply {
-        items.addAll("全部", "按卡组绑定", "按用途标签绑定")
+        items.addAll("全部", "按卡组绑定", "按用途标签绑定", "按单卡绑定")
         selectionModel.selectFirst()
         maxWidth = Double.MAX_VALUE
     }
@@ -145,6 +145,7 @@ class ConfigListPanel(
         val bindingTypeStr = when (filterType) {
             "按卡组绑定" -> EvaluatorTreeBindingType.GROUP.name
             "按用途标签绑定" -> EvaluatorTreeBindingType.PURPOSE_TAG.name
+            "按单卡绑定" -> EvaluatorTreeBindingType.CARD.name
             else -> null
         }
 
@@ -175,6 +176,7 @@ class ConfigListPanel(
             when (filterType) {
                 "按卡组绑定" -> draftBindingType == EvaluatorTreeBindingType.GROUP
                 "按用途标签绑定" -> draftBindingType == EvaluatorTreeBindingType.PURPOSE_TAG
+                "按单卡绑定" -> draftBindingType == EvaluatorTreeBindingType.CARD
                 else -> true
             }
         }.forEach { configListView.items.add(0, it) }

@@ -161,7 +161,7 @@ class McpToolDriverTest : McpTestEnv() {
 
             assertTrue(true)
         } finally {
-            cleanup()
+            // cleanup()
         }
     }
 }

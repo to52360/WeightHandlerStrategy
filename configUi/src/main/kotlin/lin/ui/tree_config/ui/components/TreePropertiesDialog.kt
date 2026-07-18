@@ -6,6 +6,7 @@ import javafx.scene.layout.GridPane
 import javafx.scene.layout.VBox
 import lin.dao.CardSelectOptionProvider
 import lin.rule.tree.EvaluatorTreeBindingType
+import lin.ui.card_group.db.CardGroupService
 import lin.ui.card_group.ui.ActiveManagerHolder
 import lin.ui.card_purpose.PurposeTagProvider
 import org.koin.core.component.KoinComponent
@@ -29,6 +30,10 @@ class TreePropertiesDialog(
         val managerId: String?
     )
 
+    private val groupCheckItems = mutableMapOf<String, CheckBox>()
+    private val tagCheckItems = mutableMapOf<String, CheckBox>()
+    private val cardCheckItems = mutableMapOf<String, CheckBox>()
+
     init {
         title = "评估树属性"
         headerText = "设置评估树名称、状态与绑定目标"
@@ -36,31 +41,82 @@ class TreePropertiesDialog(
         val dialogPane = this.dialogPane
         dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
 
-        val nameField = TextField(initialName).apply {
-            promptText = "新配置名称"
-        }
+        val nameField = TextField(initialName).apply { promptText = "新配置名称" }
         val descField = TextField().apply {
             promptText = "描述（可选，AI 生成时可附带说明）"
             initialDescription?.let { text = it }
         }
-
-        val enabledCheckBox = CheckBox("启用该评估树").apply {
-            isSelected = initialEnabled
-        }
+        val enabledCheckBox = CheckBox("启用该评估树").apply { isSelected = initialEnabled }
 
         val managerIdSnapshot = initialManagerId
             ?: getKoin().get<ActiveManagerHolder>().activeManagerId
 
         val typeComboBox = ComboBox<String>().apply {
-            items.addAll("绑定到卡组", "绑定到用途标签")
+            items.addAll("绑定到卡组", "绑定到用途标签", "绑定到单卡")
             selectionModel.selectFirst()
         }
 
-        val groupCheckItems = mutableMapOf<String, CheckBox>()
+        // 创建三个绑定面板
+        val groupScrollPane = createGroupPane(managerIdSnapshot)
+        val tagScrollPane = createTagPane()
+        val cardScrollPane = createCardPane()
+
+        // 恢复选择并绑定视图
+        restoreInitialSelection(initialBindingType, initialBindingIds, typeComboBox)
+
+        val bindingBox = VBox(10.0).apply {
+            val pane = when (typeComboBox.selectionModel.selectedItem) {
+                "绑定到卡组" -> groupScrollPane
+                "绑定到单卡" -> cardScrollPane
+                else -> tagScrollPane
+            }
+            children.addAll(typeComboBox, pane)
+        }
+
+        typeComboBox.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
+            if (bindingBox.children.size > 1) {
+                bindingBox.children.removeAt(1)
+            }
+            val pane = when (newValue) {
+                "绑定到卡组" -> groupScrollPane
+                "绑定到单卡" -> cardScrollPane
+                else -> tagScrollPane
+            }
+            bindingBox.children.add(pane)
+        }
+
+        val managerLabel = Label(managerIdSnapshot ?: "全局通用 (未限定卡组)").apply {
+            style = if (managerIdSnapshot != null) "-fx-font-weight: bold; -fx-text-fill: #2196F3;" else "-fx-font-weight: bold; -fx-text-fill: #4CAF50;"
+        }
+
+        val grid = GridPane().apply {
+            hgap = 10.0
+            vgap = 10.0
+            padding = Insets(20.0, 50.0, 10.0, 10.0)
+            add(Label("当前卡组环境:"), 0, 0)
+            add(managerLabel, 1, 0)
+            add(Label("名称:"), 0, 1)
+            add(nameField, 1, 1)
+            add(Label("描述:"), 0, 2)
+            add(descField, 1, 2)
+            add(Label("状态:"), 0, 3)
+            add(enabledCheckBox, 1, 3)
+            add(Label("绑定目标:"), 0, 4)
+            add(bindingBox, 1, 4)
+        }
+
+        dialogPane.content = grid
+
+        val okButton = dialogPane.lookupButton(ButtonType.OK) as Button
+        bindOkButtonValidation(okButton, nameField, typeComboBox)
+        setupResultConverter(nameField, descField, enabledCheckBox, typeComboBox, managerIdSnapshot)
+    }
+
+    private fun createGroupPane(managerId: String?): ScrollPane {
         val groupVBox = VBox(5.0)
         try {
-            val options = if (managerIdSnapshot != null)
-                CardSelectOptionProvider().getOptionsByManager(managerIdSnapshot)
+            val options = if (managerId != null)
+                CardSelectOptionProvider().getOptionsByManager(managerId)
             else
                 CardSelectOptionProvider().getOptions()
             options.forEach { option ->
@@ -71,12 +127,13 @@ class TreePropertiesDialog(
         } catch (e: Exception) {
             System.err.println("加载分组数据失败: ${e.message}")
         }
-        val groupScrollPane = ScrollPane(groupVBox).apply {
+        return ScrollPane(groupVBox).apply {
             isFitToWidth = true
             prefHeight = 150.0
         }
+    }
 
-        val tagCheckItems = mutableMapOf<String, CheckBox>()
+    private fun createTagPane(): ScrollPane {
         val tagVBox = VBox(5.0)
         val tagProvider: PurposeTagProvider by inject()
         tagProvider.tags().forEach { tagDef ->
@@ -84,71 +141,60 @@ class TreePropertiesDialog(
             tagCheckItems[tagDef.id.value] = cb
             tagVBox.children.add(cb)
         }
-        val tagScrollPane = ScrollPane(tagVBox).apply {
+        return ScrollPane(tagVBox).apply {
             isFitToWidth = true
             prefHeight = 150.0
         }
+    }
 
-        // 根据 initialBindingType 恢复选择
-        when (initialBindingType) {
+    private fun createCardPane(): ScrollPane {
+        val cardVBox = VBox(5.0)
+        try {
+            val service = getKoin().get<CardGroupService>()
+            val allCardIds = service.loadAll(onlyEnabled = true)
+                .flatMap { it.bindings }
+                .flatMap { it.cardIds }
+                .distinct()
+            allCardIds.forEach { cardId ->
+                val cb = CheckBox(cardId)
+                cardCheckItems[cardId] = cb
+                cardVBox.children.add(cb)
+            }
+        } catch (e: Exception) {
+            System.err.println("加载卡牌数据失败: ${e.message}")
+        }
+        return ScrollPane(cardVBox).apply {
+            isFitToWidth = true
+            prefHeight = 150.0
+        }
+    }
+
+    private fun restoreInitialSelection(
+        initialType: EvaluatorTreeBindingType?,
+        initialIds: List<String>,
+        typeComboBox: ComboBox<String>
+    ) {
+        when (initialType) {
             EvaluatorTreeBindingType.PURPOSE_TAG -> {
                 typeComboBox.selectionModel.select("绑定到用途标签")
-                initialBindingIds.forEach { id -> tagCheckItems[id]?.isSelected = true }
+                initialIds.forEach { id -> tagCheckItems[id]?.isSelected = true }
             }
 
             EvaluatorTreeBindingType.GROUP -> {
                 typeComboBox.selectionModel.select("绑定到卡组")
-                initialBindingIds.forEach { id -> groupCheckItems[id]?.isSelected = true }
+                initialIds.forEach { id -> groupCheckItems[id]?.isSelected = true }
+            }
+
+            EvaluatorTreeBindingType.CARD -> {
+                typeComboBox.selectionModel.select("绑定到单卡")
+                initialIds.forEach { id -> cardCheckItems[id]?.isSelected = true }
             }
 
             null -> typeComboBox.selectionModel.selectFirst()
         }
+    }
 
-        val bindingBox = VBox(10.0).apply {
-            val pane = if (typeComboBox.selectionModel.selectedItem == "绑定到卡组") groupScrollPane else tagScrollPane
-            children.addAll(typeComboBox, pane)
-        }
-
-        val managerLabel = Label(managerIdSnapshot ?: "全局通用 (未限定卡组)").apply {
-            style =
-                if (managerIdSnapshot != null) "-fx-font-weight: bold; -fx-text-fill: #2196F3;" else "-fx-font-weight: bold; -fx-text-fill: #4CAF50;"
-        }
-
-        typeComboBox.selectionModel.selectedItemProperty().addListener { _, _, newValue ->
-            if (bindingBox.children.size > 1) {
-                bindingBox.children.removeAt(1)
-            }
-            if (newValue == "绑定到卡组") {
-                bindingBox.children.add(groupScrollPane)
-            } else {
-                bindingBox.children.add(tagScrollPane)
-            }
-        }
-
-        val grid = GridPane().apply {
-            hgap = 10.0
-            vgap = 10.0
-            padding = Insets(20.0, 50.0, 10.0, 10.0)
-        }
-
-        grid.add(Label("当前卡组环境:"), 0, 0)
-        grid.add(managerLabel, 1, 0)
-
-        grid.add(Label("名称:"), 0, 1)
-        grid.add(nameField, 1, 1)
-
-        grid.add(Label("描述:"), 0, 2)
-        grid.add(descField, 1, 2)
-
-        grid.add(Label("状态:"), 0, 3)
-        grid.add(enabledCheckBox, 1, 3)
-
-        grid.add(Label("绑定目标:"), 0, 4)
-        grid.add(bindingBox, 1, 4)
-
-        dialogPane.content = grid
-
-        val okButton = dialogPane.lookupButton(ButtonType.OK)
+    private fun bindOkButtonValidation(okButton: Button, nameField: TextField, typeComboBox: ComboBox<String>) {
         okButton.addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
             if (nameField.text.trim().isBlank()) {
                 Alert(Alert.AlertType.WARNING).apply {
@@ -159,31 +205,40 @@ class TreePropertiesDialog(
                 return@addEventFilter
             }
 
-            val isGroup = typeComboBox.selectionModel.selectedItem == "绑定到卡组"
-            val selectedBindingIds = if (isGroup) {
-                groupCheckItems.entries.filter { it.value.isSelected }.map { it.key }
-            } else {
-                tagCheckItems.entries.filter { it.value.isSelected }.map { it.key }
+            val selected = typeComboBox.selectionModel.selectedItem
+            val selectedBindingIds = when (selected) {
+                "绑定到卡组" -> groupCheckItems.entries.filter { it.value.isSelected }.map { it.key }
+                "绑定到单卡" -> cardCheckItems.entries.filter { it.value.isSelected }.map { it.key }
+                else -> tagCheckItems.entries.filter { it.value.isSelected }.map { it.key }
             }
 
             if (selectedBindingIds.isEmpty()) {
                 Alert(Alert.AlertType.WARNING).apply {
                     title = "校验未通过"
-                    headerText = "必须选择至少一个绑定目标（绑定卡组或用途标签）！"
+                    headerText = "必须选择至少一个绑定目标！"
                 }.showAndWait()
                 event.consume()
                 return@addEventFilter
             }
         }
+    }
 
+    private fun setupResultConverter(
+        nameField: TextField,
+        descField: TextField,
+        enabledCheckBox: CheckBox,
+        typeComboBox: ComboBox<String>,
+        managerIdSnapshot: String?
+    ) {
         setResultConverter { buttonType ->
             if (buttonType == ButtonType.OK) {
-                val isGroup = typeComboBox.selectionModel.selectedItem == "绑定到卡组"
-                val (bindingType, bindingIds) = if (isGroup) {
-                    EvaluatorTreeBindingType.GROUP to groupCheckItems.entries.filter { it.value.isSelected }
+                val selected = typeComboBox.selectionModel.selectedItem
+                val (bindingType, bindingIds) = when (selected) {
+                    "绑定到卡组" -> EvaluatorTreeBindingType.GROUP to groupCheckItems.entries.filter { it.value.isSelected }
                         .map { it.key }
-                } else {
-                    EvaluatorTreeBindingType.PURPOSE_TAG to tagCheckItems.entries.filter { it.value.isSelected }
+                    "绑定到单卡" -> EvaluatorTreeBindingType.CARD to cardCheckItems.entries.filter { it.value.isSelected }
+                        .map { it.key }
+                    else -> EvaluatorTreeBindingType.PURPOSE_TAG to tagCheckItems.entries.filter { it.value.isSelected }
                         .map { it.key }
                 }
                 Result(

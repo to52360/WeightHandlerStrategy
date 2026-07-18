@@ -23,6 +23,7 @@ data class CardGroupConfig(
 data class CardWeightConfig(
     val cardId: String,
     val name: String,
+    val weight: Double? = null
 )
 
 object CardGroupJsonParser {

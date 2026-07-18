@@ -114,6 +114,11 @@ data class GetTreeRequest(
     val id: String
 )
 
+data class DeleteTreeInput(
+    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("要删除的评估树 ID，来自 list_evaluator_trees 返回的 id。删除不可恢复。")
+    val treeId: String
+)
+
 /**
  * 评估树节点的表现层 DTO，携带人类可读的语义名称。
  * 用于 MCP tool 响应，让 AI 能理解树拓扑结构。

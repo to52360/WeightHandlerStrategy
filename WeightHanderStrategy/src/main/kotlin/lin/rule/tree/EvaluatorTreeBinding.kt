@@ -8,5 +8,8 @@ enum class EvaluatorTreeBindingType {
     GROUP,
 
     /** 用途标签绑定 */
-    PURPOSE_TAG
+    PURPOSE_TAG,
+
+    /** 直接绑定单卡 */
+    CARD
 }

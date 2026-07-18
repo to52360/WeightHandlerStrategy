@@ -56,6 +56,13 @@ class EvaluatorTreeValidator(
                     "managerId"
                 )
             }
+            if (config.bindingType == EvaluatorTreeBindingType.CARD && config.bindingIds.any { it.trim().isBlank() }) {
+                diagnostics += ValidationDiagnostic(
+                    "card_id_blank",
+                    "卡牌 ID 不能为空",
+                    "bindingIds"
+                )
+            }
             if (config.bindingIds.isEmpty()) {
                 diagnostics += ValidationDiagnostic(
                     "binding_ids_empty",

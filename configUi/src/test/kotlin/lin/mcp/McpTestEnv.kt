@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import lin.moduls.loadMcpModules
 import org.koin.core.context.GlobalContext
 import org.springframework.jdbc.core.JdbcTemplate
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -26,6 +27,9 @@ abstract class McpTestEnv {
         /** 带 pretty-print 的 ObjectMapper */
         val mapper: ObjectMapper = ObjectMapper().apply { enable(SerializationFeature.INDENT_OUTPUT) }
 
+        /** cardgroup 文件目录 */
+        private val cardgroupDir: String by lazy { System.getProperty("cardgroup.dir.path", "../data/cardgroup") }
+
         @JvmStatic
         @org.junit.BeforeClass
         fun setupEnv() {
@@ -38,6 +42,109 @@ abstract class McpTestEnv {
             val providers = GlobalContext.get().getAll<McpToolProvider>()
             tools = providers.flatMap { it.provide() }.associateBy { it.name }
             println(">>> loaded tools: ${tools.keys.joinToString()}")
+        }
+
+        /**
+         * 批量清理指定演练产生的 DB 数据（manager + bindings + trees），**不删 cardgroup 文件**。
+         * 在重新分组时调用，保留 Stage 1 生成的卡池文件。
+         *
+         * @param fileName cardgroup 文件名（不含扩展名），如 "real_libram_deck"
+         * @param managerName card group manager 名称，如 "real_libram_groups"
+         * @param deleteFile 是否同时删除 cardgroup 文件，默认 false（保留卡池）
+         */
+        @JvmStatic
+        fun cleanupAll(fileName: String, managerName: String, deleteFile: Boolean = false) {
+            println(">>> ===== 清理旧数据 ($fileName / $managerName, deleteFile=$deleteFile) =====")
+            var cleaned = 0
+
+            // 1. 可选：删除 cardgroup 文件
+            if (deleteFile) {
+                val cardgroupPath = Path.of(cardgroupDir, "$fileName.cardgroup")
+                if (Files.exists(cardgroupPath)) {
+                    Files.delete(cardgroupPath)
+                    cleaned++
+                    println("   删除文件: $cardgroupPath")
+                }
+                // 删除 .draft 草稿文件
+                try {
+                    Files.list(Path.of(cardgroupDir)).filter {
+                        it.fileName.toString().startsWith("$fileName.") || it.fileName.toString().startsWith("${fileName}_")
+                    }.forEach {
+                        Files.delete(it)
+                        cleaned++
+                        println("   删除文件: $it")
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // 2. 删除 DB 中的 manager + bindings + trees
+            runCatching {
+                val jdbc = GlobalContext.get().get<JdbcTemplate>()
+                val managers = jdbc.queryForList(
+                    "SELECT id FROM card_group_manager WHERE name = ?", managerName
+                )
+                for (row in managers) {
+                    val mgrId = row["id"] as String
+                    // 先删该 manager 下的树
+                    val trees = jdbc.queryForList(
+                        "SELECT id FROM tree_config WHERE manager_id = ?", mgrId
+                    )
+                    for (tree in trees) {
+                        val tid = tree["id"] as String
+                        jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", tid)
+                        jdbc.update("DELETE FROM tree_config WHERE id = ?", tid)
+                        cleaned++
+                        println("   删除 tree_config: $tid")
+                    }
+                    jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mgrId)
+                    jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mgrId)
+                    cleaned++
+                    println("   删除 card_group_manager: $mgrId")
+                }
+                if (managers.isEmpty()) println("   DB 无匹配 manager 记录")
+            }.onFailure { e -> println("   DB 清理失败: ${e.message}") }
+
+            // 3. 额外：按文件名模糊清理可能残留的 manager
+            runCatching {
+                val jdbc = GlobalContext.get().get<JdbcTemplate>()
+                val orphanManagers = jdbc.queryForList(
+                    "SELECT id, name FROM card_group_manager WHERE source_file = ?", "$fileName.cardgroup"
+                )
+                for (row in orphanManagers) {
+                    val mgrId = row["id"] as String
+                    val trees = jdbc.queryForList("SELECT id FROM tree_config WHERE manager_id = ?", mgrId)
+                    for (tree in trees) {
+                        val tid = tree["id"] as String
+                        jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", tid)
+                        jdbc.update("DELETE FROM tree_config WHERE id = ?", tid)
+                    }
+                    jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mgrId)
+                    jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mgrId)
+                    cleaned++
+                    println("   删除孤儿 manager: ${row["name"]} ($mgrId)")
+                }
+            }.onFailure { e -> println("   孤儿 manager 清理失败: ${e.message}") }
+
+            println(">>> 清理完毕，共清理 $cleaned 项")
+        }
+
+        /**
+         * 保存本轮实战演练追踪到的 ID 到文件，便于后续快速清理。
+         */
+        @JvmStatic
+        fun saveTrackedIds(fileName: String, managerName: String, managerId: String?, treeIds: List<String>) {
+            val dir = File(cardgroupDir, ".tracked")
+            dir.mkdirs()
+            val file = File(dir, "$fileName.json")
+            val json = mapper.writeValueAsString(mapOf(
+                "fileName" to fileName,
+                "managerName" to managerName,
+                "managerId" to (managerId ?: ""),
+                "treeIds" to treeIds,
+                "timestamp" to System.currentTimeMillis()
+            ))
+            file.writeText(json)
+            println(">>> ID 追踪已保存: ${file.absolutePath}")
         }
     }
 
@@ -57,6 +164,9 @@ abstract class McpTestEnv {
 
     /** 本次创建的 coded tree config ID */
     protected var codedTreeId: String? = null
+
+    /** 本次创建的所有 tree config ID 列表（用于实战演练追踪） */
+    protected val allTreeIds: MutableList<String> = mutableListOf()
 
     // ── 公共方法 ──
 

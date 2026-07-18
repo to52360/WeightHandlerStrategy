@@ -150,6 +150,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
                 }
 
                 EvaluatorTreeBindingType.GROUP -> s.bindingIds.joinToString(", ")
+                EvaluatorTreeBindingType.CARD -> s.bindingIds.joinToString(", ") { "单卡:$it" }
                 null -> "无绑定"
             }
             statusLabel.text = "当前: ${selectedItem.name} | 状态: $statusStr | 绑定: $bindingsStr"

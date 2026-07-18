@@ -62,6 +62,10 @@ class SqliteTreeConfigProvider(
                     }
                     enabled
                 }
+
+                EvaluatorTreeBindingType.CARD -> {
+                    true
+                }
             }
         }
         return config.copy(bindingIds = filtered)

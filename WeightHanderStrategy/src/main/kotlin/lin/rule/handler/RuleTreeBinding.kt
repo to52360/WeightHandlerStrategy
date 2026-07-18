@@ -45,6 +45,13 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                             listOf(EvaluatorTreeRoot(instance.root))
                         )
                     }
+
+                    EvaluatorTreeBindingType.CARD -> {
+                        configDispatcher.processByType(
+                            instance.bindingIds.map { CardBindingId(it) },
+                            listOf(EvaluatorTreeRoot(instance.root))
+                        )
+                    }
                 }
             }
         }
