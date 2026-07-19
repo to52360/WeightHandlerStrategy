@@ -1,8 +1,12 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
+import lin.bean.groupIds
 import lin.bean.usePlan.CardComboEntry
+import lin.domain.context.ComboDecayFactor
+import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
+import kotlin.math.pow
 
 interface FindBestCombination {
     fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard>
@@ -103,7 +107,7 @@ object DefaultFindBestCombination : FindBestCombination {
 
         fun backtrack(startIndex: Int, currentCost: Int, currentWeight: Double) {
             val remainingCost = ableCost - currentCost
-            val penalty = remainingCostPenalty(remainingCost, ableCost)
+            val penalty = remainingCostPenalty(remainingCost, ableCost) + comboPenalty(currentCombination.size)
             val effectiveScore = currentWeight - penalty
 
             if (effectiveScore > maxEffectiveScore) {
@@ -118,6 +122,11 @@ object DefaultFindBestCombination : FindBestCombination {
                     val comboBonus = evaluateNewComboBonus(bindings.entries)
                     if (comboBonus.isNaN()) continue
 
+                    // 基础分组合累加衰减：第 i 张卡的 baseScore 乘以 λ^(currentCombination.size)
+                    val decay = ComboDecayFactor.pow(currentCombination.size.toDouble())
+                    val cardIncrementalWeight =
+                        (card.baseScore * decay) + card.extraScore + card.extPowerWeight + comboBonus
+
                     // 前进
                     currentCombination.add(card)
                     applyCardState(bindings.entries, bindings.groupIds)
@@ -125,7 +134,7 @@ object DefaultFindBestCombination : FindBestCombination {
                     backtrack(
                         startIndex = i + 1,
                         currentCost = currentCost + card.cost(),
-                        currentWeight = currentWeight + card.powerWeight + comboBonus
+                        currentWeight = currentWeight + cardIncrementalWeight
                     )
 
                     // 回溯

@@ -61,12 +61,13 @@
 
 ## 待决问题（按依赖排序，先决后决）
 
-| #   | 问题                    | 决策方 | 结论                                                                                             | 状态           |
-|-----|-----------------------|-----|------------------------------------------------------------------------------------------------|--------------|
-| Q-1 | 基础分 vs 额外分关系：三分量相加    | 已确认 | 基础分恒由静态费用派生（启动期查 `hs_cards.db` 烘焙），额外分=原 `powerWeight`（无配置则 0），两者正交非二选一                        | ✅ 待 S-1.x 落地 |
-| Q-2 | `baseScore(cost)` 公式  | 已确认 | `CostWeight * √cost`（凹，1→5 / 5→11.2 / 10→15.8）                                                 | ✅ 待 S-1.2 落地 |
-| Q-3 | `CostWeight` 与基础分量纲关系 | 用户  | 与 Q-4 联合调参（需真实卡组跑一轮校准）                                                                         | 阻塞 S-2.x     |
-| Q-4 | 惩罚非线性映射               | 已确认 | `remainingCostPenalty(remaining, total) = CostWeight * √remaining * ratio^β`，引入 totalCost 占比因子 | ✅ S-2.2 已落地  |
+| #   | 问题                                                    | 决策方 | 结论                                                                                                                                                                                                                    | 状态                         |
+|-----|---------------------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------|
+| Q-1 | 基础分 vs 额外分关系：三分量相加                        | 已确认 | 基础分恒由静态费用派生（启动期查 `hs_cards.db` 烘焙），额外分=原 `powerWeight`（无配置则 0），两者正交非二选一                                                                                                          | ✅ 待 S-1.x 落地             |
+| Q-2 | `baseScore(cost)` 公式                                  | 已确认 | `CostWeight * √cost`（凹，1→5 / 5→11.2 / 10→15.8）                                                                                                                                                                      | ✅ 待 S-1.2 落地             |
+| Q-3 | `CostWeight` 与基础分量纲关系                           | 用户   | 与 Q-4 联合调参（需真实卡组跑一轮校准）                                                                                                                                                                                 | 阻塞 S-2.x                   |
+| Q-4 | 惩罚非线性映射                                          | 已确认 | `remainingCostPenalty(remaining, total) = CostWeight * √remaining * ratio^β`，引入 totalCost 占比因子                                                                                                                   | ✅ S-2.2 已落地              |
+| Q-5 | `baseScore` 接入 `powerWeight` 对出牌决策排序的实际影响 | 用户   | **尚未评估**：`baseScore` 经 `basePowerWeight` 已并入 `powerWeight`，成为 `canUse()`/`isBaseWeight()`/最终排序依据。改动前需先确认波及范围（高费卡基础分抬升是否导致排序/出牌倾向偏移、与 `BaseWeight` 旧语义的交互等） | 🔶 待评估（2026-07-19 提出） |
 
 ## 任务流程（编排）
 
@@ -131,3 +132,11 @@
     `PenaltyRatioExponent=0.5` 常量。
   - 动机：绝对浪费不看占比导致前期/后期惩罚相同不合理（3/10=30% vs 3/5=60% 惩罚一样），加入 `totalCost` 后浪费占比越大惩罚越重；
     `ScoreExponent`/`PenaltyRatioExponent` 均可在 Q-3 校准时独立调参。
+- **2026-07-19 接入确认 + 影响待评估**：代码核查确认 `baseScore` 已正确接入权重——`MyWarManage.parseComboCard` 按 cardId
+  查静态费用算
+  `baseScore` 注入 `ComboCard`；`basePowerWeight = baseScore + extraScore`，
+  `powerWeight = basePowerWeight + extPowerWeight`，故
+  `baseScore` 已通过 `basePowerWeight` 参与最终出牌决策排序，并被 `canUse()`/`isBaseWeight()` 用作判定依据（所有
+  `ComboCard` 构造均经
+  `parseComboCard` 唯一入口，无漏接）。 **但此变动对出牌决策的实际影响用户尚未评估**，已在 `ComboCard.powerWeight` 与
+  `baseScore` 字段加注释 标注 ⚠️；新增待决项 **Q-5** 跟踪影响评估（改动前需先确认波及范围）。

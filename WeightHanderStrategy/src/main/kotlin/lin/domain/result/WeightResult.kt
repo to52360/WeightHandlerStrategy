@@ -2,6 +2,7 @@ package lin.domain.result
 
 import lin.bean.ComboCard
 import lin.domain.context.NotWeight
+import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
 import lin.myLog
 
@@ -92,7 +93,8 @@ class EndWeightResult(
             val lessCost = (cost - costSum()).coerceAtLeast(0)
             if (bestCombination.isNotEmpty()) {
                 val baseWeightSum = bestCombination.sumOf { it.powerWeight }
-                val penalty = remainingCostPenalty(lessCost, cost).coerceAtMost(baseWeightSum)
+                val totalPenalty = remainingCostPenalty(lessCost, cost) + comboPenalty(bestCombination.size)
+                val penalty = totalPenalty.coerceAtMost(baseWeightSum)
                 extWeight -= penalty
             }
         }

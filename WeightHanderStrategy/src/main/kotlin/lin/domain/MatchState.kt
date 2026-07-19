@@ -1,8 +1,8 @@
 package lin.domain
 
 import lin.bean.ComboCard
+import lin.bean.groupIds
 import lin.bean.purposeTagValues
-import lin.domain.WarInfo
 import lin.lifecycle.GameLifecycle
 import lin.lifecycle.RoundLifecycle
 

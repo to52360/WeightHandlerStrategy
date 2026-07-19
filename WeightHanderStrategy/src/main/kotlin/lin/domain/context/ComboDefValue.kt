@@ -18,15 +18,24 @@ val UseSkillWeight: Double get() = EngineConfig.useSkillWeight
 
 val ScoreExponent: Double get() = EngineConfig.scoreExponent
 val PenaltyRatioExponent: Double get() = EngineConfig.penaltyRatioExponent
+val PenaltyWeight: Double get() = EngineConfig.penaltyWeight
+val ComboCardWeight: Double get() = EngineConfig.comboCardWeight
+val ComboDecayFactor: Double get() = EngineConfig.comboDecayFactor
 
 // 基础分原语：由静态费用派生
 fun baseScore(cost: Int): Double = CostWeight * cost.toDouble().pow(ScoreExponent)
 
-// 剩余法力惩罚原语
+// 剩余法力惩罚原语：使用解耦后的 PenaltyWeight (使 PenaltyWeight < CostWeight，防止低费单卡负分)
 fun remainingCostPenalty(remainingCost: Int, totalCost: Int): Double {
     if (totalCost <= 0) return 0.0
     val ratio = remainingCost.toDouble() / totalCost.toDouble()
-    return CostWeight * sqrt(remainingCost.toDouble()) * ratio.pow(PenaltyRatioExponent)
+    return PenaltyWeight * sqrt(remainingCost.toDouble()) * ratio.pow(PenaltyRatioExponent)
+}
+
+// 组合非线性复杂性惩罚：(n-1)^1.5 * ComboCardWeight，防止多卡垃圾堆砌
+fun comboPenalty(cardsCount: Int): Double {
+    if (cardsCount <= 1) return 0.0
+    return (cardsCount - 1).toDouble().pow(1.5) * ComboCardWeight
 }
 
 // 等待/动画时序 (millis)

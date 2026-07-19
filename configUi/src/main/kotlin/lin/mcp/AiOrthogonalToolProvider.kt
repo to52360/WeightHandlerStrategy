@@ -30,6 +30,52 @@ class AiOrthogonalToolProvider(
             inputSchemaJson = """{"type":"object","properties":{}}""",
             call = {
                 val payload = mapOf(
+                    "orthogonal_leaf_json_templates" to mapOf(
+                        "description" to "调用 put_draft_leaf 填充叶子节点时，ORTHOGONAL_CONDITION 与 ORTHOGONAL_RULE 的正确 Polymorphic JSON 结构模板",
+                        "ORTHOGONAL_CONDITION" to mapOf(
+                            "leafConfig" to mapOf(
+                                "ORTHOGONAL_CONDITION" to mapOf(
+                                    "nodeId" to "r1",
+                                    "sourceId" to "orthogonal_condition",
+                                    "guardCondition" to mapOf(
+                                        "PipelineRef" to mapOf(
+                                            "sourceId" to "<DataSourceId>",
+                                            "transforms" to listOf(
+                                                mapOf(
+                                                    "transformId" to "<TransformId>",
+                                                    "args" to emptyMap<String, Any>()
+                                                )
+                                            ),
+                                            "operatorId" to "<OperatorId>",
+                                            "operatorArgs" to mapOf("threshold" to 4),
+                                            "refId" to "r1"
+                                        )
+                                    ),
+                                    "scoreEffect" to mapOf("ConstantScore" to mapOf("value" to 8.0)),
+                                    "args" to emptyMap<String, Any>(),
+                                    "guardMissBehavior" to "SCORE"
+                                )
+                            )
+                        ),
+                        "ORTHOGONAL_RULE" to mapOf(
+                            "leafConfig" to mapOf(
+                                "ORTHOGONAL_RULE" to mapOf(
+                                    "nodeId" to "r2",
+                                    "sourceId" to "orthogonal_rule",
+                                    "scoreEffect" to mapOf(
+                                        "SourceScore" to mapOf(
+                                            "sourceId" to "<DataSourceId>",
+                                            "operatorId" to "<OperatorId>",
+                                            "operatorArgs" to emptyMap<String, Any>(),
+                                            "missValue" to 0.0
+                                        )
+                                    ),
+                                    "args" to emptyMap<String, Any>(),
+                                    "guardMissBehavior" to "SCORE"
+                                )
+                            )
+                        )
+                    ),
                     "shared_pipeline_nodes" to mapOf(
                         "description" to "条件管道和打分管道共用的前置数据提供节点。DataSource 用于指定 sourceId，Transforms 用于数据加工。",
                         "dataSources" to assembler.allDataSources().map {

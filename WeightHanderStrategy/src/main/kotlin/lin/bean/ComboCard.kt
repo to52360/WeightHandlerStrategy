@@ -17,10 +17,18 @@ typealias ComboRule = (ComboCard) -> Double
  *
  * todo-future 1.为了快速实现,弄了个上帝类出来,有空再重构 2.为了方便使用弄了很多方法(应该用扩展方法去扩展)
  *
+ * 防重复提醒：新增读取入口前，先全局搜 `fun ComboCard.xxx` 与 `ComboCard.xxx()` 是否已有实现。
+ * 同一入口禁止同时保留「成员方法 + 扩展函数」两份——Kotlin 中成员方法会 shadow 同名扩展，
+ * 触发 "extension is shadowed by a member" 警告（详见 ComboCard-Config-Access.md 的配置访问边界）。
+ * 跨领域高频读取应放 ComboCardConfigAccess.kt 扩展；跨包消费 / 需特定可空语义才放成员方法。
+ *
  */
 class ComboCard(
     val combinedConfig: CardCombinedConfig? = null,
     val card: Card,
+    // 基础分：由卡牌费用派生（baseScore(cost)），经 MyWarManage.parseComboCard 注入；
+    // 已接入权重：basePowerWeight = baseScore + extraScore，powerWeight = basePowerWeight + extPowerWeight。勿重复加接。
+    // 影响评估跟踪见 architecture-context/scoring-model/TRACKER.md 待决项 Q-5（baseScore 接入权重对出牌决策的影响，🔶 待评估）。
     val baseScore: Double = 0.0
 ) {
 
@@ -28,8 +36,6 @@ class ComboCard(
 
     // 额外分（超模溢价）：原 powerWeight，无配置=0（见 scoring-model/TRACKER.md 三分量模型）
     val extraScore: Double = cardWeightInfo?.powerWeight ?: 0.0
-
-    fun groupIds(): Set<String> = combinedConfig?.groupIds ?: emptySet()
 
     fun useIntent() = combinedConfig?.useIntent
 
@@ -48,8 +54,6 @@ class ComboCard(
         get() = cardWeightInfo?.changeComboRule
 
     //基础信息
-    fun hasGroup(groupId: String): Boolean = groupId in groupIds()
-    fun hasAnyGroup(groupIds: Collection<String>): Boolean = groupIds.any { it in this.groupIds() }
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
@@ -78,7 +82,11 @@ class ComboCard(
     //同组优先级
     var useGroupOrder: Double = basePowerWeight
 
-    // 出牌权重 可能作为权重优先级
+    // 出牌权重（最终决策依据）：powerWeight = basePowerWeight + extPowerWeight。
+    // 其中 basePowerWeight = baseScore + extraScore，故 baseScore（费用派生基础分）已通过 basePowerWeight
+    // 参与最终出牌决策排序，并被 canUse() / isBaseWeight() 用作判定依据。
+    // ⚠️ 此变动（baseScore 接入权重）对出牌决策的实际影响尚未评估，改动前需先确认波及范围。
+    // 影响评估跟踪见 architecture-context/scoring-model/TRACKER.md 待决项 Q-5（🔶 待评估）。
     val powerWeight: Double
         get() = basePowerWeight + extPowerWeight
     var extPowerWeight: Double = BaseWeight

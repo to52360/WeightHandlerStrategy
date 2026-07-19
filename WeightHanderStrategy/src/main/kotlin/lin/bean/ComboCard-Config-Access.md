@@ -54,6 +54,10 @@ CardConfigBindingTask.execute()
 
 新增配置时不要继续给 `ComboCard` 本体加镜像字段或镜像方法：
 
-1. **跨领域高频读取** → `ComboCardConfigAccess.kt` 扩展函数
-2. **单领域消费** → 对应领域目录的内部扩展（如 `ComboCardUsePlanAccess.kt`）
+1. **跨领域高频读取** → `ComboCardConfigAccess.kt` 扩展函数（如 `groupIds()`、`hasGroup()`、`hasAnyGroup()`）
+2. **跨包消费 / 需要特定可空语义** → 直接作为 `ComboCard` 成员方法（如 `useIntent()` 返回 `UseIntent?`、
+   `comboUseBindings()`），避免 `internal` 扩展被成员方法 shadow 的警告
 3. **运行时可变状态** → 才放回 `ComboCard` 本体
+
+> 注意：不要对同一读取入口同时保留「成员方法 + 扩展函数」两份实现，Kotlin 中成员方法会 shadow 同名扩展，
+> 并触发 "extension is shadowed by a member" 警告。新增读取前先全局搜索确认尚无同名实现。

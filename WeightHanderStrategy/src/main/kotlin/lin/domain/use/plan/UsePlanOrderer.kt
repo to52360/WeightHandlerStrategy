@@ -1,6 +1,7 @@
 package lin.domain.use.plan
 
 import lin.bean.ComboCard
+import lin.bean.hasAnyGroup
 import lin.bean.usePlan.MustUseGroupBefore
 import lin.bean.usePlan.UseIntent
 import lin.bean.usePlan.UseStage
