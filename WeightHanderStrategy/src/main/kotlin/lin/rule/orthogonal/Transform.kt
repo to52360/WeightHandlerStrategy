@@ -18,8 +18,7 @@ interface Transform<In : Any, Out : Any> {
     val outputType: KType
     val fields: List<FieldSpec>
 
-    context(env: RuleEnv)
-    fun transform(input: In, context: RuleContext, args: Map<String, Any> = emptyMap()): Out
+    fun transform(input: In, context: RuleContext, env: RuleEnv, args: Map<String, Any> = emptyMap()): Out
 }
 
 /**
@@ -30,7 +29,7 @@ inline fun <reified In : Any, reified Out : Any> transform(
     name: String,
     description: String = "",
     fields: List<FieldSpec> = emptyList(),
-    crossinline transformer: context(RuleEnv) RuleContext.(In, Map<String, Any>) -> Out
+    crossinline transformer: RuleContext.(RuleEnv, In, Map<String, Any>) -> Out
 ): Transform<In, Out> = object : Transform<In, Out> {
     override val id = id
     override val name = name
@@ -39,9 +38,8 @@ inline fun <reified In : Any, reified Out : Any> transform(
     override val outputType: KType = typeOf<Out>()
     override val fields = fields
 
-    context(env: RuleEnv)
-    override fun transform(input: In, context: RuleContext, args: Map<String, Any>): Out {
-        return context.transformer(input, args)
+    override fun transform(input: In, context: RuleContext, env: RuleEnv, args: Map<String, Any>): Out {
+        return context.transformer(env, input, args)
     }
 }
 
@@ -54,7 +52,7 @@ inline fun <reified In : Any, reified Out : Any, reified P : Any> transform(
     name: String,
     description: String = "",
     paramSpecs: List<FieldSpec>? = null,
-    crossinline transformer: context(RuleEnv) RuleContext.(In, P) -> Out
+    crossinline transformer: RuleContext.(RuleEnv, In, P) -> Out
 ): Transform<In, Out> {
     val resolvedSpecs = paramSpecs ?: FieldParser.parse(P::class)
     return object : Transform<In, Out> {
@@ -65,10 +63,9 @@ inline fun <reified In : Any, reified Out : Any, reified P : Any> transform(
         override val outputType: KType = typeOf<Out>()
         override val fields = resolvedSpecs
 
-        context(env: RuleEnv)
-        override fun transform(input: In, context: RuleContext, args: Map<String, Any>): Out {
+        override fun transform(input: In, context: RuleContext, env: RuleEnv, args: Map<String, Any>): Out {
             val parameter = lin.rule.parse.mapToRuleArgs(args, P::class)
-            return context.transformer(input, parameter)
+            return context.transformer(env, input, parameter)
         }
     }
 }

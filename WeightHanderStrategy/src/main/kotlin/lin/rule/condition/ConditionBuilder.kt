@@ -7,7 +7,7 @@ import lin.rule.parse.FieldConstraint
 import lin.rule.parse.FieldSpec
 import lin.rule.parse.FieldType
 
-typealias ConditionLogic = context(RuleEnv) RuleContext.() -> Boolean
+typealias ConditionLogic = RuleContext.(RuleEnv) -> Boolean
 
 typealias ConditionFactory<T> = (T) -> ConditionLogic
 

@@ -146,7 +146,7 @@ class ScoreCompiler(
 
     private fun compileScoreEffect(leafConfig: EvaluatorLeafConfig): RuleLogic {
         val logic = compileScoreEffectLogic(leafConfig)
-        return { RuleResult.Continue(score = logic(this)) }
+        return { env -> RuleResult.Continue(score = logic(this, env)) }
     }
 
     private fun compileScoreEffectLogic(leafConfig: EvaluatorLeafConfig): ScoreLogic {
@@ -194,10 +194,10 @@ class ScoreCompiler(
             throw IllegalArgumentException("评分效应 [${effect.operatorId}] 校验失败: ${validation.errors.joinToString { it.message }}")
         }
         val parameter = lin.rule.parse.mapToRuleArgs(effect.operatorArgs, operator.parameterType)
-        return {
-            var currentVal: Any = source.resolve(this)
+        return { env ->
+            var currentVal: Any = source.resolve(this, env)
             for ((transform, args) in transformInstances) {
-                currentVal = transform.transform(currentVal, this, args)
+                currentVal = transform.transform(currentVal, this, env, args)
             }
             operator.score(currentVal, parameter)
         }
@@ -220,11 +220,11 @@ class LeafLogicAssembler(
         val missValue = (leafConfig as Scoreable).scoreEffect.missValue
         val guardMissBehavior = leafConfig.guardMissBehavior
 
-        return {
-            val guardPassed = guardLogic == null || invokeCondition(guardLogic, this)
+        return { env ->
+            val guardPassed = guardLogic == null || guardLogic(this, env)
             when {
                 guardPassed -> {
-                    when (val res = invokeRule(scoreLogic, this)) {
+                    when (val res = scoreLogic(this, env)) {
                         is RuleResult.Continue -> EvalOutcome.Matched(res.score, res.modifyCard)
                     }
                 }
@@ -249,7 +249,7 @@ class LeafLogicAssembler(
 
 // ── 工具 ──
 
-private typealias ScoreLogic = context(RuleEnv) RuleContext.() -> Double
+private typealias ScoreLogic = RuleContext.(RuleEnv) -> Double
 
 private fun validate(
     contextName: String, id: String, args: Map<String, Any?>, fields: List<lin.rule.parse.FieldSpec>
@@ -262,14 +262,4 @@ private fun validate(
     }
 }
 
-// ── context receiver 桥接 ──
 
-context(env: RuleEnv)
-internal fun invokeCondition(logic: ConditionLogic, context: RuleContext): Boolean {
-    return logic(env, context)
-}
-
-context(env: RuleEnv)
-internal fun invokeRule(logic: RuleLogic, context: RuleContext): RuleResult {
-    return logic(env, context)
-}

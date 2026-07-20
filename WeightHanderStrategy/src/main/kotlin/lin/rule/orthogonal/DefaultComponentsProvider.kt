@@ -9,12 +9,20 @@ import lin.serviceLoader.provider.TransformProvider
  */
 class DefaultDataSourceProvider : DataSourceProvider {
     override fun get(): Collection<DataSource<*>> = listOf(
+        WarViewSource,
         MeBoardCardsSource,
         RivalBoardCardsSource,
         BoardCardsSource,
         HandCardsSource,
-        MatchGroupPlayedCountsSource(),
-        MatchActivityEventsSource()
+        HandComboCardsSource,
+        MeComboCardsSource,
+        MyGraveyardCardsSource,
+        MyHeroHealthSource,
+        MyManaCrystalSource,
+        EvaluatingCardSource,
+        MatchGroupPlayedCountsSource,
+        MatchActivityEventsSource,
+        MatchTurnCountSource
     )
 }
 
@@ -23,8 +31,20 @@ class DefaultDataSourceProvider : DataSourceProvider {
  */
 class DefaultTransformProvider : TransformProvider {
     override fun get(): Collection<Transform<*, *>> = listOf(
+        ExcessDamageTransform,
+        AcceptableAttackTransform,
+        RivalCardsFromViewTransform,
+        MeCardsFromViewTransform,
         RaceFilterTransform,
+        CardTypeFilterTransform,
+        GroupFilterTransform,
+        PurposeFilterTransform,
+        TauntFilterTransform,
         CountProjectionTransform,
+        SumAttackTransform,
+        SumHealthTransform,
+        EvaluatingCardCostTransform,
+        ToCardsTransform,
         PickGroupCountTransform,
         WeightedActivitySumTransform()
     )
@@ -36,8 +56,17 @@ class DefaultTransformProvider : TransformProvider {
 class DefaultOperatorProvider : OperatorProvider {
     override fun get(): Collection<Operator<*, *>> = listOf(
         GreaterThanOrEqualOp,
-        ContainsRaceOp,
+        GreaterThanOp,
+        LessThanOrEqualOp,
+        LessThanOp,
         EqualOp,
-        LessThanOp
+        NotEqualOp,
+        IsEmptyOp,
+        IsNotEmptyOp,
+        IsCardTypeOp,
+        CardRaceMatchOp,
+        CardBelongsToGroupOp,
+        CardHasPurposeTagOp,
+        ContainsRaceOp
     )
 }

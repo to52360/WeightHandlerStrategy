@@ -19,8 +19,7 @@ interface DataSource<out T : Any> {
     val categories: Set<String>
     val outputType: KType
 
-    context(env: RuleEnv)
-    fun resolve(context: RuleContext): T
+    fun resolve(context: RuleContext, env: RuleEnv): T
 }
 
 /**
@@ -31,7 +30,7 @@ inline fun <reified T : Any> dataSource(
     name: String,
     description: String = "",
     categories: Set<String> = emptySet(),
-    crossinline resolver: context(RuleEnv) RuleContext.() -> T
+    crossinline resolver: RuleContext.(RuleEnv) -> T
 ): DataSource<T> = object : DataSource<T> {
     override val id = id
     override val name = name
@@ -39,8 +38,7 @@ inline fun <reified T : Any> dataSource(
     override val categories = categories
     override val outputType: KType = typeOf<T>()
 
-    context(env: RuleEnv)
-    override fun resolve(context: RuleContext): T {
-        return context.resolver()
+    override fun resolve(context: RuleContext, env: RuleEnv): T {
+        return context.resolver(env)
     }
 }

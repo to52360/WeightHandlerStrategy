@@ -7,18 +7,20 @@ import lin.domain.PipelineCache
 import lin.domain.WarInfo
 
 /**
- * 规则执行上下文
- * 封装了出牌的基本信息，并为未来的"决策推演层（Inference Engine）"预留入口
+ * 规则执行上下文：仅封装当前决策目标（正在评估的卡牌）。
+ * 战场状态归 [RuleEnv.warInfo]，不在 Context 中持有。
+ * 为未来的"决策推演层（Inference Engine）"预留入口。
  */
 data class RuleContext(
-    val callCard: ComboCard,
-    val warInfo: WarInfo)
+    val callCard: ComboCard
+)
 
 /**
  * RuleEnv 的默认实现
- * 直接从 MyWarManage 计算 WarView 快照 + 透传 MatchState + PipelineCache
+ * 直接从 MyWarManage 透传 WarInfo + 计算 WarView 快照 + 透传 MatchState + PipelineCache
  */
 class WarInfoEnv(private val warManage: MyWarManage) : RuleEnv {
+    override fun warInfo(): WarInfo = warManage
     override fun warView(): WarView = warManage.toWarView()
     override fun matchState(): MatchState = warManage.matchState
     override fun pipelineCache(): PipelineCache = warManage.pipelineCache

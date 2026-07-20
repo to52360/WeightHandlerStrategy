@@ -61,34 +61,32 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
      * 调用权重规则
      */
     private fun processWeight(weightResult: EndWeightResult) {
-        with(WarInfoEnv(warManage)) {
-            weightResult.canUseCards.forEach { comboCard ->
-                val calWeight = weightEvaluator(comboCard, warManage)
-                if (calWeight != NotWeight) {
-                    if (calWeight == UnUseWeight) {
-                        comboCard.unUse()
-                    } else {
-                        comboCard.addWeight(calWeight)
-                    }
+        val ruleEnv = WarInfoEnv(warManage)
+        weightResult.canUseCards.forEach { comboCard ->
+            val calWeight = weightEvaluator(comboCard, warManage, ruleEnv)
+            if (calWeight != NotWeight) {
+                if (calWeight == UnUseWeight) {
+                    comboCard.unUse()
+                } else {
+                    comboCard.addWeight(calWeight)
                 }
-                weightResult.processWeightAfter(comboCard)
             }
+            weightResult.processWeightAfter(comboCard)
         }
     }
 
     /**
      * 单入口编排函数：先条件树求值，后 legacy handler 链。
-     * 需在 [RuleEnv] 作用域内调用（由 processWeight 中的 [with(WarInfoEnv)] 提供）。
      */
-    context(ruleEnv: RuleEnv)
     private fun weightEvaluator(
         comboCard: ComboCard,
         warManage: MyWarManage,
+        ruleEnv: RuleEnv,
     ): Double {
         var total = 0.0
 
         // 1. 条件树求值（新系统）
-        val treeResult = evaluateCardRoots(comboCard, warManage)
+        val treeResult = evaluateCardRoots(comboCard, warManage, ruleEnv)
         if (treeResult.pruned) {
             return UnUseWeight
         }

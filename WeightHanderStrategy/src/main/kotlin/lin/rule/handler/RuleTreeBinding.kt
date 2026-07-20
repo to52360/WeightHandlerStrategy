@@ -67,18 +67,18 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
  * 对一张卡牌的所有意图评估根节点执行条件树求值。
  * 需要在 [RuleEnv] 作用域内调用（例如 `with(WarInfoEnv(warManage))`）。
  */
-context(ruleEnv: RuleEnv)
 fun evaluateCardRoots(
     card: ComboCard,
     warManage: MyWarManage,
+    ruleEnv: RuleEnv,
 ): RuleResult.Accumulate {
     var totalScore = 0.0
     val collectedActions = mutableListOf<ComboCardAction>()
 
     card.intentEvaluatorRoots()?.let { roots ->
-        val context = RuleContext(card, warManage)
+        val context = RuleContext(card)
         for (root in roots) {
-            val res = evaluateConditionTree(root, context, collectedActions)
+            val res = evaluateConditionTree(root, context, ruleEnv, collectedActions)
             if (res is EvalOutcome.Pruned) return RuleResult.Accumulate(totalScore, collectedActions, pruned = true)
             when (res) {
                 is EvalOutcome.Matched -> totalScore += res.score
@@ -94,15 +94,15 @@ fun evaluateCardRoots(
 /**
  * 面向 AST 条件树的组合求值与意图收集器
  */
-context(ruleEnv: RuleEnv)
 fun evaluateConditionTree(
     node: EvaluatorInstanceNode,
     context: RuleContext,
+    ruleEnv: RuleEnv,
     collectedActions: MutableList<ComboCardAction>
 ): EvalOutcome {
     return when (node) {
         is EvaluatorInstanceNode.RuleNode -> {
-            val outcome = node.leafLogic(context)
+            val outcome = node.leafLogic(context, ruleEnv)
             if (outcome is EvalOutcome.Matched && outcome.modifyCard != null) {
                 collectedActions.add(outcome.modifyCard)
             }
@@ -113,7 +113,7 @@ fun evaluateConditionTree(
             var totalScore = 0.0
             var anyMatched = false
             for (child in node.children) {
-                val res = evaluateConditionTree(child, context, collectedActions)
+                val res = evaluateConditionTree(child, context, ruleEnv, collectedActions)
                 if (res is EvalOutcome.Pruned) return EvalOutcome.Pruned
                 when (res) {
                     is EvalOutcome.Matched -> {
@@ -131,7 +131,7 @@ fun evaluateConditionTree(
         is EvaluatorInstanceNode.OrNode -> {
             for (child in node.children) {
                 val localActions = mutableListOf<ComboCardAction>()
-                val res = evaluateConditionTree(child, context, localActions)
+                val res = evaluateConditionTree(child, context, ruleEnv, localActions)
                 if (res is EvalOutcome.Matched) {
                     collectedActions.addAll(localActions)
                     return res
@@ -144,7 +144,7 @@ fun evaluateConditionTree(
 
         is EvaluatorInstanceNode.NotNode -> {
             val localActions = mutableListOf<ComboCardAction>()
-            val res = evaluateConditionTree(node.child, context, localActions)
+            val res = evaluateConditionTree(node.child, context, ruleEnv, localActions)
             when (res) {
                 is EvalOutcome.Matched -> EvalOutcome.Skipped(score = 0.0)
                 is EvalOutcome.Skipped -> EvalOutcome.Matched(score = 0.0)
@@ -153,10 +153,10 @@ fun evaluateConditionTree(
         }
 
         is EvaluatorInstanceNode.BranchNode -> {
-            if (node.condition(context)) {
-                evaluateConditionTree(node.onTrue, context, collectedActions)
+            if (node.condition(context, ruleEnv)) {
+                evaluateConditionTree(node.onTrue, context, ruleEnv, collectedActions)
             } else {
-                evaluateConditionTree(node.onFalse, context, collectedActions)
+                evaluateConditionTree(node.onFalse, context, ruleEnv, collectedActions)
             }
         }
     }

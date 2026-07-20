@@ -31,7 +31,7 @@ fun getArmor(card: Card?) = card?.armor ?: 0
 
 fun WarInfo.hero() = war.me.playArea.hero
 
-fun WarInfo.meBlood() = hero()!!.blood()
+fun WarInfo.meBlood() = hero()?.blood() ?: 0
 fun WarInfo.getHandCards(): List<Card> {
     return war.me.handArea.cards
 }

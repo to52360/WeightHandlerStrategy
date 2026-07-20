@@ -18,13 +18,17 @@ object OrthogonalCategoryCatalog {
     val HERO = OrthogonalCategory("HERO", "英雄状态", "涉及血量、护甲、武器、技能状态等")
     val GAME_STATE = OrthogonalCategory("GAME_STATE", "对局全局", "涉及当前回合数、水晶数、对局阶段等")
     val MANA = OrthogonalCategory("MANA", "法力水晶", "涉及剩余水晶、最大水晶、本回合花费等")
+    val CARD = OrthogonalCategory("CARD", "卡牌", "涉及具体卡牌实体、卡牌列表等")
+    val GRAVEYARD = OrthogonalCategory("GRAVEYARD", "墓地", "涉及墓地中已阵亡/打出的卡牌")
 
     private val allCategories = mutableMapOf(
         HAND.id to HAND,
         BOARD.id to BOARD,
         HERO.id to HERO,
         GAME_STATE.id to GAME_STATE,
-        MANA.id to MANA
+        MANA.id to MANA,
+        CARD.id to CARD,
+        GRAVEYARD.id to GRAVEYARD
     )
 
     fun register(category: OrthogonalCategory) {

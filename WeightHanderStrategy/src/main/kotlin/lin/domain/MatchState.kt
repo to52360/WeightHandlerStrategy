@@ -105,6 +105,8 @@ class MatchState : GameLifecycle, RoundLifecycle {
     /** 打出事件版本号（Q-2a 缓存驱动：[recordCardPlayed] 时递增）。 */
     fun playEventVersion(): Int = playEventVersion
 
+    private var turnCount = 0
+
     // ── 生命周期 ──
 
     override fun start() {
@@ -113,12 +115,17 @@ class MatchState : GameLifecycle, RoundLifecycle {
         currentTurnPlayedCards.clear()
         playedEventsList.clear()
         playEventVersion = 0
+        turnCount = 0
     }
 
     override fun start(warInfo: WarInfo) {
         roundStats.clear()
         currentTurnPlayedCards.clear()
+        turnCount++
     }
+
+    /** 当前对局真实回合数（整局累计，不受 10 水晶上限限制） */
+    fun turnCount(): Int = turnCount
 
     // ── 工具 ──
 

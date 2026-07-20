@@ -10,10 +10,10 @@ import lin.rule.score.ScoreEffect
 import lin.rule.tree.EvaluatorLeafConfig
 import kotlin.reflect.KClass
 
-typealias RuleLogic = context(RuleEnv) RuleContext.() -> RuleResult
+typealias RuleLogic = RuleContext.(RuleEnv) -> RuleResult
 
 /** 叶子节点求值闭包：返回 [EvalOutcome] 三态，由守卫结果 + rule 评分组合而成 */
-typealias LeafLogic = context(RuleEnv) RuleContext.() -> EvalOutcome
+typealias LeafLogic = RuleContext.(RuleEnv) -> EvalOutcome
 
 typealias RuleFactory<T> = (EvaluatorLeafConfig, T) -> RuleLogic
 

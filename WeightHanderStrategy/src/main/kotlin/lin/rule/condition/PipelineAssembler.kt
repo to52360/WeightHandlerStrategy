@@ -114,11 +114,11 @@ class PipelineAssembler(
             throw IllegalArgumentException("Invalid arguments for Operator [${ref.operatorId}]: ${e.message}", e)
         }
 
-        return { // context(RuleEnv) RuleContext.() -> Boolean
-            var currentVal: Any = source.resolve(this)
+        return { env -> // RuleContext.(RuleEnv) -> Boolean
+            var currentVal: Any = source.resolve(this, env)
 
             for ((transform, args) in transformInstances) {
-                currentVal = transform.transform(currentVal, this, args)
+                currentVal = transform.transform(currentVal, this, env, args)
             }
 
             operator.evaluate(currentVal, parsedOperatorParameter)
