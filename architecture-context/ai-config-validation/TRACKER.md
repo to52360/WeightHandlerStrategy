@@ -33,6 +33,11 @@
   - `delete_evaluator_tree(treeId)` — 删单棵树，无效 ID 返回错误+现有树列表防幻觉
 - [x] **T-119 ✅ (2026-07-17)**: MCP 工具合并优化 — 22→17 工具。
   - 5 组 list+get 对按 action 合并：`card_pool`、`card_group`、`template_browse`、`tree_template`、`evaluator_tree`
+- [x] **T-130 ✅ (2026-07-22)**: 闭包层分段内容哈希管道缓存机制。
+  - `PipelineAssembler.assemble` 装配期拼装内容哈希 `sourceKey` 与分段 `stepKeys`
+  - 闭包运行时调 `env.cache(key)`，无组件侵入，实现跨 Ref 与共享前缀缓存复用
+  - 增加 `PipelineAssemblerCacheTest.kt` 单元测试覆盖
+
   - 遵循优化提示词 §4 合并规则 + §5 不隐藏能力原则
 
 ## 挂起暂不处理任务

@@ -45,6 +45,11 @@ class ScorePanel(
     }
     val sourceOpArgsContainer = VBox(5.0)
     val sourceMissField = TextField("0.0")
+    val crossCardCheckBox = javafx.scene.control.CheckBox("跨卡复用缓存 (crossCard)").apply {
+        isSelected = false
+        tooltip =
+            javafx.scene.control.Tooltip("开启后对于不依赖评估手牌(callCard)的全局事件/局势评分管道，在同回合多手牌评估时启用跨卡缓存")
+    }
 
     val scorePipelineEditor = OrthogonalPipelineEditor(
         allTransforms = allTransforms,
@@ -86,6 +91,8 @@ class ScorePanel(
         add(sourceOpArgsContainer, 1, 3)
         add(Label("未命中分数:"), 0, 4)
         add(sourceMissField, 1, 4)
+        add(Label("缓存优化:"), 0, 5)
+        add(crossCardCheckBox, 1, 5)
     }
 
     init {

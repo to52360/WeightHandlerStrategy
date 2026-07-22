@@ -1,9 +1,7 @@
 package lin.rule.condition
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import lin.rule.orthogonal.DataSource
-import lin.rule.orthogonal.Operator
-import lin.rule.orthogonal.Transform
+import lin.rule.orthogonal.*
 import lin.rule.parse.SpecValidator
 import lin.rule.parse.ValidationError
 import lin.rule.parse.ValidationResult
@@ -117,14 +115,45 @@ class PipelineAssembler(
             throw IllegalArgumentException("Invalid arguments for Operator [${ref.operatorId}]: ${e.message}", e)
         }
 
+        val cacheKeys = PipelineCacheKeys.build(ref.sourceId, ref.transforms)
+
         return { env -> // RuleContext.(RuleEnv) -> Boolean
-            var currentVal: Any = source.resolve(this, env)
+            val output = evaluatePipelineOutput(
+                env = env,
+                source = source,
+                transformInstances = transformInstances,
+                cacheKeys = cacheKeys,
+                crossCard = ref.crossCard
+            )
+            operator.evaluate(output, parsedOperatorParameter)
+        }
+    }
 
-            for ((transform, args) in transformInstances) {
-                currentVal = transform.transform(currentVal, args)
+    companion object {
+        fun canonicalArgsString(args: Map<String, Any>): String {
+            if (args.isEmpty()) return ""
+            return args.entries
+                .sortedBy { it.key }
+                .joinToString(separator = ",", prefix = "{", postfix = "}") { (k, v) ->
+                    "$k:${canonicalValueString(v)}"
+                }
+        }
+
+        private fun canonicalValueString(value: Any?): String {
+            return when (value) {
+                null -> "null"
+                is Map<*, *> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    canonicalArgsString(value as Map<String, Any>)
+                }
+
+                is List<*> -> value.joinToString(separator = ",", prefix = "[", postfix = "]") {
+                    canonicalValueString(it)
+                }
+
+                else -> value.toString()
             }
-
-            operator.evaluate(currentVal, parsedOperatorParameter)
         }
     }
 }
+

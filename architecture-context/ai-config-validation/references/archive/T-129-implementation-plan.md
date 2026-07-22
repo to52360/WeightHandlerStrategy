@@ -85,10 +85,10 @@ val MatchActivityEventsSource = dataSource<Map<MatchActivityKind, List<Card>>>(
 
 ```kotlin
 val WeightedActivitySumTransform = transform<
-    Map<MatchActivityKind, List<Card>>,
-    Int,
-    WeightedActivitySumParams
->(
+        Map<MatchActivityKind, List<Card>>,
+        Int,
+        WeightedActivitySumParams
+        >(
     id = "weighted_activity_sum",
     name = "活动加权求和",
     description = "按事件类型与卡牌ID匹配对局活动事件，累计加权求和得到贡献值"

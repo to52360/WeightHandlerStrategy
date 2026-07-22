@@ -5,7 +5,9 @@ import lin.rule.build.RuleLogic
 import lin.rule.condition.*
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
+import lin.rule.orthogonal.PipelineCacheKeys
 import lin.rule.orthogonal.Transform
+import lin.rule.orthogonal.evaluatePipelineOutput
 import lin.rule.parse.extractPrefixedArgs
 import lin.rule.registry.RuleRegistry
 import lin.rule.score.ScoreEffect
@@ -194,12 +196,18 @@ class ScoreCompiler(
             throw IllegalArgumentException("评分效应 [${effect.operatorId}] 校验失败: ${validation.errors.joinToString { it.message }}")
         }
         val parameter = lin.rule.parse.mapToRuleArgs(effect.operatorArgs, operator.parameterType)
+
+        val cacheKeys = PipelineCacheKeys.build(effect.sourceId, effect.transforms)
+
         return { env ->
-            var currentVal: Any = source.resolve(this, env)
-            for ((transform, args) in transformInstances) {
-                currentVal = transform.transform(currentVal, args)
-            }
-            operator.score(currentVal, parameter)
+            val output = evaluatePipelineOutput(
+                env = env,
+                source = source,
+                transformInstances = transformInstances,
+                cacheKeys = cacheKeys,
+                crossCard = effect.crossCard
+            )
+            operator.score(output, parameter)
         }
     }
 }

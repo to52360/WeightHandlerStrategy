@@ -21,6 +21,7 @@ sealed interface ConditionPayload {
         val transforms: List<TransformCall> = emptyList(),
         val operatorId: String,
         val operatorArgs: Map<String, Any> = emptyMap(),
+        val crossCard: Boolean = false,
         override val refId: String
     ) : ConditionPayload {
         override val args: Map<String, Any> get() = emptyMap()

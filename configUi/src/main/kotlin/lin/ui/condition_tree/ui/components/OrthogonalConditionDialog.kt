@@ -101,6 +101,7 @@ class OrthogonalConditionDialog(
             if (ds != null) {
                 panel.dataSourceCombo.selectionModel.select(ds)
                 panel.pipelineEditor.loadTransforms(ref.transforms)
+                panel.crossCardCheckBox.isSelected = ref.crossCard
 
                 val op = dataContext.allOperators.firstOrNull { it.id == ref.operatorId }
                 if (op != null) {
@@ -210,6 +211,7 @@ class OrthogonalConditionDialog(
                     transforms = panel.pipelineEditor.getTransformCalls(),
                     operatorId = op.id,
                     operatorArgs = HashMap(uiState.argsMap),
+                    crossCard = panel.crossCardCheckBox.isSelected,
                     refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
                 )
 
@@ -267,6 +269,7 @@ class OrthogonalConditionDialog(
                     transforms = panel.pipelineEditor.getTransformCalls(),
                     operatorId = op.id,
                     operatorArgs = HashMap(uiState.argsMap),
+                    crossCard = panel.crossCardCheckBox.isSelected,
                     refId = "${ds.id}_${op.id}_${UUID.randomUUID().toString().substring(0, 4)}"
                 )
             } else {

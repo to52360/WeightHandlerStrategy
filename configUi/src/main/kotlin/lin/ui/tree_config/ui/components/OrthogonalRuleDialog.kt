@@ -213,6 +213,7 @@ class OrthogonalRuleDialog(
                     }
                 }
                 scorePanel.sourceMissField.text = existing.missValue.toString()
+                scorePanel.crossCardCheckBox.isSelected = existing.crossCard
             }
         }
 
@@ -281,11 +282,12 @@ class OrthogonalRuleDialog(
                         transforms = scorePanel.scorePipelineEditor.getTransformCalls(),
                         operatorId = op.id,
                         operatorArgs = HashMap(uiState.scoreArgsMap),
+                        crossCard = scorePanel.crossCardCheckBox.isSelected,
                         missValue = scorePanel.sourceMissField.text.toDoubleOrNull() ?: 0.0
                     )
                 } else {
                     // 未完整配置时使用空 SourceScore，OK 按钮验证会拦截
-                    ScoreEffect.SourceScore("", emptyList(), "", emptyMap(), 0.0)
+                    ScoreEffect.SourceScore("", emptyList(), "", emptyMap(), false, 0.0)
                 }
             }
 

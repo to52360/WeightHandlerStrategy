@@ -33,6 +33,7 @@ sealed interface ScoreEffect {
         val transforms: List<TransformCall> = emptyList(),
         val operatorId: String,
         val operatorArgs: Map<String, Any> = emptyMap(),
+        val crossCard: Boolean = false,
         override val missValue: Double = 0.0
     ) : ScoreEffect
 }

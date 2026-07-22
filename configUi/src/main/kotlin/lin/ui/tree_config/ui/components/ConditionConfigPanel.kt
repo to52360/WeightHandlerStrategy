@@ -47,6 +47,12 @@ class ConditionConfigPanel(
         isDisable = true
     }
 
+    val crossCardCheckBox = javafx.scene.control.CheckBox("跨卡复用缓存 (crossCard)").apply {
+        isSelected = false
+        tooltip =
+            javafx.scene.control.Tooltip("开启后对于不依赖评估手牌(callCard)的全局事件/局势管道，在同回合多手牌评估时启用跨卡缓存")
+    }
+
     val paramsContainer = VBox(6.0)
 
     private val grid = GridPane().apply {
@@ -68,6 +74,8 @@ class ConditionConfigPanel(
         add(operatorCombo, 1, 2)
         add(Label("算子参数:"), 0, 3)
         add(paramsContainer, 1, 3)
+        add(Label("缓存优化:"), 0, 4)
+        add(crossCardCheckBox, 1, 4)
     }
 
     // 右侧转换器管道链面板

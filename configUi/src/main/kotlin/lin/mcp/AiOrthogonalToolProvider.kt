@@ -113,6 +113,7 @@ class AiOrthogonalToolProvider(
                                         ),
                                         "operatorId" to "<OperatorId>",
                                         "operatorArgs" to mapOf("threshold" to 4),
+                                        "crossCard" to false,
                                         "refId" to "r1"
                                     )
                                 ),
@@ -132,6 +133,7 @@ class AiOrthogonalToolProvider(
                                         "sourceId" to "<DataSourceId>",
                                         "operatorId" to "<OperatorId>",
                                         "operatorArgs" to emptyMap<String, Any>(),
+                                        "crossCard" to false,
                                         "missValue" to 0.0
                                     )
                                 ),
@@ -139,7 +141,8 @@ class AiOrthogonalToolProvider(
                                 "guardMissBehavior" to "SCORE"
                             )
                         )
-                    )
+                    ),
+                    "crossCard_instruction" to "crossCard (Boolean, 默认 false): 只有对于不依赖评估目标手牌(callCard)的全局事件或局势管道，填入 true 才能在同回合多手牌评估时启用评估级内容哈希缓存复用。"
                 ),
                 "type_compatibility_map" to typeCompatibilityMap,
                 "shared_pipeline_nodes" to mapOf(

@@ -12,12 +12,8 @@ interface RuleEnv {
     fun matchState(): MatchState
 
     /**
-     * 评估级缓存：同一评估内多规则树共享，评估结束随 RuleEnv 回收。
-     * 由组件闭包按需调用，cacheKey 由组件自己拼。
-     *
-     * ⚠️ 临时基础设施：当前仅 WarViewSource 使用。MatchActivityEventsSource 已改为
-     * 引用返回（Map<Kind, List<Card>>），不再需要缓存。后续其他 Source 逐步改为
-     * 引用返回后，本方法可废弃。
+     * 评估级缓存：同一评估周期（单次决策 pass）内共享，随 RuleEnv 回收。
+     * 由 [lin.rule.condition.PipelineAssembler] 闭包层按需自动调用，用于基于内容哈希的 Source 与 Transform 分段缓存。
      */
     fun <T> cache(key: String, compute: () -> T): T
 }
