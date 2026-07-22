@@ -3,7 +3,6 @@ package lin.rule.context
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.cardExt.cardList.canHurt
 import lin.domain.MatchState
-import lin.domain.PipelineCache
 import lin.domain.WarInfo
 
 interface RuleEnv {
@@ -11,8 +10,16 @@ interface RuleEnv {
     fun warInfo(): WarInfo
     fun warView(): WarView
     fun matchState(): MatchState
-    /** 管道执行缓存（Q-2a 性能优化）。新对局时自动清空。 */
-    fun pipelineCache(): PipelineCache
+
+    /**
+     * 评估级缓存：同一评估内多规则树共享，评估结束随 RuleEnv 回收。
+     * 由组件闭包按需调用，cacheKey 由组件自己拼。
+     *
+     * ⚠️ 临时基础设施：当前仅 WarViewSource 使用。MatchActivityEventsSource 已改为
+     * 引用返回（Map<Kind, List<Card>>），不再需要缓存。后续其他 Source 逐步改为
+     * 引用返回后，本方法可废弃。
+     */
+    fun <T> cache(key: String, compute: () -> T): T
 }
 
 data class SideSnapshot(

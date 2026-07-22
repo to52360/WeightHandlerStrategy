@@ -3,7 +3,6 @@ package lin.rule.context
 import lin.bean.ComboCard
 import lin.domain.MatchState
 import lin.domain.MyWarManage
-import lin.domain.PipelineCache
 import lin.domain.WarInfo
 
 /**
@@ -17,11 +16,16 @@ data class RuleContext(
 
 /**
  * RuleEnv 的默认实现
- * 直接从 MyWarManage 透传 WarInfo + 计算 WarView 快照 + 透传 MatchState + PipelineCache
+ * 直接从 MyWarManage 透传 WarInfo + 计算 WarView 快照 + 透传 MatchState
  */
 class WarInfoEnv(private val warManage: MyWarManage) : RuleEnv {
+    private val evalCache = mutableMapOf<String, Any?>()
+
     override fun warInfo(): WarInfo = warManage
     override fun warView(): WarView = warManage.toWarView()
     override fun matchState(): MatchState = warManage.matchState
-    override fun pipelineCache(): PipelineCache = warManage.pipelineCache
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <T> cache(key: String, compute: () -> T): T =
+        evalCache.getOrPut(key) { compute() } as T
 }

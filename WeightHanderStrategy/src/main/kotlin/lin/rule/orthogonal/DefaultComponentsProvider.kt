@@ -46,7 +46,7 @@ class DefaultTransformProvider : TransformProvider {
         EvaluatingCardCostTransform,
         ToCardsTransform,
         PickGroupCountTransform,
-        WeightedActivitySumTransform()
+        WeightedActivitySumTransform
     )
 }
 

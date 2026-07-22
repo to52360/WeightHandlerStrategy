@@ -2,10 +2,8 @@ package lin.rule.orthogonal
 
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.ComboCard
-import lin.domain.MatchActivityEvent
 import lin.domain.MatchActivityKind
 import lin.rule.context.WarView
-import lin.rule.context.toWarView
 import lin.warExt.my.attack.getGraveyardCards
 import lin.warExt.my.base.getHandCards
 import lin.warExt.my.base.getPlayCards
@@ -22,7 +20,7 @@ val WarViewSource = dataSource<WarView>(
     description = "获取当前对局战场的全局局势视图快照（包含我方/敌方随从快照、血量、溢出伤害及可承受攻击上限）",
     categories = setOf(OrthogonalCategoryCatalog.BOARD.id, OrthogonalCategoryCatalog.GAME_STATE.id)
 ) { env ->
-    env.warInfo().toWarView()
+    env.warView()
 }
 
 // ==========================================
@@ -165,25 +163,28 @@ val MatchGroupPlayedCountsSource = dataSource<Map<String, Int>>(
 }
 
 /**
- * 对局活动事件数据源（Q-2a）：输出 List<MatchActivityEvent>（打出事件 + 墓地事件）。
- * 无参：打出事件从 MatchState.playedEvents() 读取，墓地事件从 getGraveyardCards() 转换。
+ * 对局活动事件数据源（Q-2a）：输出 Map<MatchActivityKind, List<Card>>（打出事件与墓地事件）。
+ * 无参：从 MatchState.playedCards() 与 getGraveyardCards() 引用合成 Map 返回，零元素创建。
  *
- * ⚠️ 关联 @defect D-002：本 DataSource 混合两种事件输出，导致下游 WeightedActivitySumTransform
- * 不得不用 when 分派事件类型。多数据源重构时应拆为 played_activity_events / graveyard_activity_events
- * 两个独立 DataSource（详见 DECISIONS.md D-8）。
+ * ⚠️ 关联 @defect D-002（部分解决）：Source 已改为 Map<Kind, List<Card>> 引用返回，
+ * 不再合并创建对象。但 Transform 仍内嵌事件类型匹配判定（按 kind 分派遍历），
+ * 完整重构方向是拆为 played_events / graveyard_events 两个独立 Source + 独立管道。
+ * 触发条件不变：再有 Transform 内嵌匹配判定的同类案例出现时启动完整拆分。
  */
-val MatchActivityEventsSource = dataSource<List<MatchActivityEvent>>(
+// @defect D-002（部分解决）：Source 已改为 Map<Kind, List<Card>> 引用返回，
+// 不再合并创建对象。但 Transform 仍内嵌事件类型匹配判定（按 kind 分派遍历），
+// 完整重构方向是拆为 played_events / graveyard_events 两个独立 Source + 独立管道。
+// 触发条件不变：再有 Transform 内嵌匹配判定的同类案例出现时启动完整拆分。
+val MatchActivityEventsSource = dataSource<Map<MatchActivityKind, List<Card>>>(
     id = "match_activity_events",
     name = "对局活动事件",
-    description = "获取本局已打出卡牌的活动事件与墓地卡牌事件，输出事件类型与对应卡牌ID",
+    description = "获取本局已打出卡牌与墓地卡牌，按事件类型分组返回卡牌列表引用",
     categories = setOf(OrthogonalCategoryCatalog.GAME_STATE.id)
 ) { env ->
-    buildList {
-        addAll(env.matchState().playedEvents())
-        addAll(env.warInfo().getGraveyardCards().map { card ->
-            MatchActivityEvent(MatchActivityKind.CARD_GRAVEYARD, card.cardId)
-        })
-    }
+    mapOf(
+        MatchActivityKind.CARD_PLAYED to env.matchState().playedCards(),
+        MatchActivityKind.CARD_GRAVEYARD to env.warInfo().getGraveyardCards()
+    )
 }
 
 /**

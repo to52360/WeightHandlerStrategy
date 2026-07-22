@@ -12,24 +12,24 @@ fun ConditionNode.compile(
 
         is LogicNode.And -> {
             val compiledChildren = children.map { it.compile(leafBuilder) }
-            val logic: ConditionLogic = {
-                compiledChildren.all { logic -> logic(this) }
+            val logic: ConditionLogic = { env ->
+                compiledChildren.all { logic -> logic(this, env) }
             }
             logic
         }
 
         is LogicNode.Or -> {
             val compiledChildren = children.map { it.compile(leafBuilder) }
-            val logic: ConditionLogic = {
-                compiledChildren.any { logic -> logic(this) }
+            val logic: ConditionLogic = { env ->
+                compiledChildren.any { logic -> logic(this, env) }
             }
             logic
         }
 
         is LogicNode.Not -> {
             val compiledChild = child.compile(leafBuilder)
-            val logic: ConditionLogic = {
-                !compiledChild(this)
+            val logic: ConditionLogic = { env ->
+                !compiledChild(this, env)
             }
             logic
         }
@@ -38,8 +38,8 @@ fun ConditionNode.compile(
             val conditionLogic = leafBuilder(payload)
             val trueLogic = onTrue.compile(leafBuilder)
             val falseLogic = onFalse.compile(leafBuilder)
-            val logic: ConditionLogic = {
-                if (conditionLogic(this)) trueLogic(this) else falseLogic(this)
+            val logic: ConditionLogic = { env ->
+                if (conditionLogic(this, env)) trueLogic(this, env) else falseLogic(this, env)
             }
             logic
         }

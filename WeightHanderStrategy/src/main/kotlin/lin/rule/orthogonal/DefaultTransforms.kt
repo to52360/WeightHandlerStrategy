@@ -6,16 +6,11 @@ import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
 import lin.bean.ComboCard
 import lin.bean.groupIds
 import lin.bean.purposeTagValues
-import lin.domain.MatchActivityEvent
 import lin.domain.MatchActivityKind
-import lin.rule.context.RuleContext
-import lin.rule.context.RuleEnv
+import lin.myLog
 import lin.rule.context.WarView
-import lin.rule.parse.FieldParser
-import lin.rule.parse.FieldSpec
-import lin.rule.parse.mapToRuleArgs
-import kotlin.reflect.KType
-import kotlin.reflect.typeOf
+import kotlin.system.measureNanoTime
+
 
 // ==========================================
 // 默认转换器 (Transforms)
@@ -38,7 +33,7 @@ val RaceFilterTransform = transform<List<Card>, List<Card>, RaceFilterParams>(
     id = "race_filter",
     name = "种族过滤器",
     description = "按指定的种族过滤随从卡牌"
-) { env, input, params ->
+) { input, params ->
     if (params.race == CardRaceEnum.UNKNOWN || params.race == CardRaceEnum.ALL) {
         input
     } else {
@@ -63,7 +58,7 @@ val CardTypeFilterTransform = transform<List<Card>, List<Card>, CardTypeFilterPa
     id = "card_type_filter",
     name = "卡牌类型过滤器",
     description = "按卡牌类型（随从/法术/武器等）过滤卡牌列表"
-) { env, input, params ->
+) { input, params ->
     input.filter { it.cardType == params.cardType }
 }
 
@@ -83,7 +78,7 @@ val GroupFilterTransform = transform<List<ComboCard>, List<ComboCard>, GroupFilt
     id = "group_filter",
     name = "分组过滤器",
     description = "按指定的策略分组 ID 过滤 ComboCard 列表"
-) { env, input, params ->
+) { input, params ->
     input.filter { params.groupId in it.groupIds() }
 }
 
@@ -103,7 +98,7 @@ val PurposeFilterTransform = transform<List<ComboCard>, List<ComboCard>, Purpose
     id = "purpose_filter",
     name = "用途标签过滤器",
     description = "按指定的战术用途标签过滤 ComboCard 列表"
-) { env, input, params ->
+) { input, params ->
     input.filter { params.purposeTag in it.purposeTagValues() }
 }
 
@@ -114,7 +109,7 @@ val CountProjectionTransform = transform<List<*>, Int>(
     id = "count_projection",
     name = "计数投影器",
     description = "计算集合中元素的数量"
-) { env, input, _ ->
+) { input, _ ->
     input.size
 }
 
@@ -125,7 +120,7 @@ val SumAttackTransform = transform<List<Card>, Int>(
     id = "sum_attack",
     name = "攻击力求和器",
     description = "计算卡牌列表中所有卡牌的累计攻击力总和"
-) { env, input, _ ->
+) { input, _ ->
     input.sumOf { it.atc }
 }
 
@@ -136,7 +131,7 @@ val SumHealthTransform = transform<List<Card>, Int>(
     id = "sum_health",
     name = "生命值求和器",
     description = "计算卡牌列表中所有卡牌的累计生命值/血量总和"
-) { env, input, _ ->
+) { input, _ ->
     input.sumOf { it.blood() }
 }
 
@@ -147,7 +142,7 @@ val EvaluatingCardCostTransform = transform<ComboCard, Int>(
     id = "evaluating_card_cost",
     name = "动态费用提取器",
     description = "提取当前评估卡牌在手牌中的动态实时消耗费用"
-) { env, input, _ ->
+) { input, _ ->
     input.cost()
 }
 
@@ -158,7 +153,7 @@ val TauntFilterTransform = transform<List<Card>, List<Card>>(
     id = "taunt_filter",
     name = "嘲讽随从过滤器",
     description = "从随从列表中过滤出所有具备嘲讽属性的随从"
-) { env, input, _ ->
+) { input, _ ->
     input.filter { it.isTaunt }
 }
 
@@ -169,7 +164,7 @@ val ExcessDamageTransform = transform<WarView, Int>(
     id = "excess_damage",
     name = "提取突破嘲讽溢出伤害",
     description = "从战场局势快照 WarView 中提取敌方突破我方嘲讽随从后造成的总溢出压迫伤害"
-) { env, input, _ ->
+) { input, _ ->
     input.excessDamage
 }
 
@@ -180,7 +175,7 @@ val AcceptableAttackTransform = transform<WarView, Int>(
     id = "acceptable_attack",
     name = "提取可承受攻击上限",
     description = "从战场局势快照 WarView 中提取我方当前可承受的敌方随从攻击力上限"
-) { env, input, _ ->
+) { input, _ ->
     input.ableAtcSum
 }
 
@@ -191,7 +186,7 @@ val RivalCardsFromViewTransform = transform<WarView, List<Card>>(
     id = "rival_cards_from_view",
     name = "提取视图敌方随从",
     description = "从战场局势快照 WarView 中提取敌方战场随从列表"
-) { env, input, _ ->
+) { input, _ ->
     input.rival.cards
 }
 
@@ -202,7 +197,7 @@ val MeCardsFromViewTransform = transform<WarView, List<Card>>(
     id = "me_cards_from_view",
     name = "提取视图我方随从",
     description = "从战场局势快照 WarView 中提取我方战场随从列表"
-) { env, input, _ ->
+) { input, _ ->
     input.me.cards
 }
 
@@ -213,7 +208,7 @@ val ToCardsTransform = transform<List<ComboCard>, List<Card>>(
     id = "to_cards",
     name = "投影为Card",
     description = "将 ComboCard 列表投影为其底层的 Card 列表，桥接 ComboCard 级与 Card 级管道"
-) { env, input, _ ->
+) { input, _ ->
     input.map { it.card }
 }
 
@@ -233,7 +228,7 @@ val PickGroupCountTransform = transform<Map<String, Int>, Int, PickGroupCountPar
     id = "pick_group_count",
     name = "选取分组计数",
     description = "从分组打出计数 Map 中选取指定分组的累计打出次数"
-) { env, input, params ->
+) { input, params ->
     input[params.groupId] ?: 0
 }
 
@@ -258,41 +253,38 @@ data class WeightedActivitySumParams(
 /**
  * 活动加权求和转换器（Q-2a）：按事件类型和 cardId 匹配，对匹配事件累计权重。
  *
- * ⚠️ 临时方案（@defect D-002）—— 职责混合，待多数据源重构
- * - 当前混合三职责：加权求和（Transform）+ 事件类型匹配判定（Operator）+ 缓存管理（横切关注点）
+ * ⚠️ 临时方案（@defect D-002 部分解决）—— 职责混合，待多数据源重构
+ * - 当前混合职责：加权求和（Transform）+ 事件类型匹配判定（Operator），缓存职责已归引用化 Source/评估级 Map
  * - 正确方向：拆为多 DataSource（played_activity_events / graveyard_activity_events 独立输出），
  *   匹配判定交独立 Operator，本 Transform 只对已匹配事件求和
- * - 关联组件：MatchActivityEventsSource（DefaultDataSources.kt）当前混合两种事件输出，需同步拆分
- * - 触发重构：再有 Transform 内嵌事件匹配判定+缓存的同类案例出现时一并重构
+ * - 关联组件：MatchActivityEventsSource（DefaultDataSources.kt）已改为 Map<Kind, List<Card>> 引用返回
+ * - 触发重构：再有 Transform 内嵌事件匹配判定的同类案例出现时一并重构
  * - 详见架构上下文 ai-config-validation/DECISIONS.md D-8
  */
-// @defect D-002 begin: 临时方案，职责混合（求和+匹配+缓存），待多数据源重构
-class WeightedActivitySumTransform : Transform<List<MatchActivityEvent>, Int> {
-    override val id: String = "weighted_activity_sum"
-    override val name: String = "活动加权求和"
-    override val description: String = "按事件类型与卡牌ID匹配对局活动事件，累计加权求和得到贡献值"
-    override val inputType: KType = typeOf<List<MatchActivityEvent>>()
-    override val outputType: KType = typeOf<Int>()
-    override val fields: List<FieldSpec> = FieldParser.parse(WeightedActivitySumParams::class)
-
-    override fun transform(
-        input: List<MatchActivityEvent>,
-        context: RuleContext,
-        env: RuleEnv,
-        args: Map<String, Any>
-    ): Int {
-        val params = mapToRuleArgs(args, WeightedActivitySumParams::class)
-        val version = env.matchState().playEventVersion()
-        val cacheKey = "weighted_activity_sum:${params.hashCode()}:$version"
-        return env.pipelineCache().getOrCompute(cacheKey) {
-            input.sumOf { event ->
-                val matched = when (event.kind) {
-                    MatchActivityKind.CARD_PLAYED -> event.cardId in params.playedCardIds
-                    MatchActivityKind.CARD_GRAVEYARD -> event.cardId in params.graveyardCardIds
-                }
-                if (matched) params.weightPerEvent else 0
-            }
+val WeightedActivitySumTransform = transform<
+        Map<MatchActivityKind, List<Card>>,
+        Int,
+        WeightedActivitySumParams
+        >(
+    id = "weighted_activity_sum",
+    name = "活动加权求和",
+    description = "按事件类型与卡牌ID匹配对局活动事件，累计加权求和得到贡献值"
+) { input, params ->
+    val played = input[MatchActivityKind.CARD_PLAYED].orEmpty()
+    val graveyard = input[MatchActivityKind.CARD_GRAVEYARD].orEmpty()
+    var sum = 0
+    val elapsedNanos = measureNanoTime {
+        for (card in played) {
+            if (card.cardId in params.playedCardIds) sum += params.weightPerEvent
+        }
+        for (card in graveyard) {
+            if (card.cardId in params.graveyardCardIds) sum += params.weightPerEvent
         }
     }
+    if (elapsedNanos > 1_000_000) { // 超过 1ms (1,000,000 ns) 慢执行才记录
+        myLog.warn {
+            "[SlowPerf] WeightedActivitySumTransform: ${elapsedNanos / 1000.0} µs (played=${played.size}, graveyard=${graveyard.size}, sum=$sum)"
+        }
+    }
+    sum
 }
-// @defect D-002 end

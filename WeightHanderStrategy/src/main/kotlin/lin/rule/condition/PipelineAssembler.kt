@@ -67,7 +67,7 @@ class PipelineAssembler(
         @Suppress("UNCHECKED_CAST")
         val operator = operators[ref.operatorId] as? Operator<Any, Any>
         if (operator == null) {
-            errors += lin.rule.parse.ValidationError(
+            errors += ValidationError(
                 ref.operatorId,
                 "PIPELINE_UNKNOWN_OPERATOR",
                 "Operator not found: ${ref.operatorId}"
@@ -95,14 +95,17 @@ class PipelineAssembler(
             throw IllegalArgumentException("PipelineRef [${ref.refId}] 校验失败: ${validation.errors.joinToString { it.message }}")
         }
 
-        val source = dataSources[ref.sourceId]!!
-        var currentType: KType = source.outputType
+        @Suppress("UNCHECKED_CAST")
+        val rawSource = dataSources[ref.sourceId] as DataSource<Any>
+        val source: DataSource<Any> = rawSource
+        var currentType: KType = rawSource.outputType
 
         val transformInstances = ref.transforms.map { call ->
             @Suppress("UNCHECKED_CAST")
-            val transform = transforms[call.transformId] as Transform<Any, Any>
-            currentType = transform.outputType
-            transform to call.args
+            val raw = transforms[call.transformId] as Transform<Any, Any>
+            currentType = raw.outputType
+            val wrapped = raw
+            wrapped to call.args
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -118,7 +121,7 @@ class PipelineAssembler(
             var currentVal: Any = source.resolve(this, env)
 
             for ((transform, args) in transformInstances) {
-                currentVal = transform.transform(currentVal, this, env, args)
+                currentVal = transform.transform(currentVal, args)
             }
 
             operator.evaluate(currentVal, parsedOperatorParameter)

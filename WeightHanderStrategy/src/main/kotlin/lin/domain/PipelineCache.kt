@@ -9,6 +9,8 @@ import lin.lifecycle.GameLifecycle
  * 实现 [GameLifecycle]，整局开始时清空所有缓存条目。
  *
  * 后续 Q-2b 等场景可复用：各自写入侧暴露版本号，消费侧组合版本号作为缓存键。
+ *
+ * 注意：正交组件评估级缓存使用 [lin.rule.context.RuleEnv.cache]，不与本类共享实例（本类为整局生命周期）。
  */
 class PipelineCache : GameLifecycle {
 

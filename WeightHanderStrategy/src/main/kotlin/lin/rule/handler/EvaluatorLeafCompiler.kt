@@ -197,7 +197,7 @@ class ScoreCompiler(
         return { env ->
             var currentVal: Any = source.resolve(this, env)
             for ((transform, args) in transformInstances) {
-                currentVal = transform.transform(currentVal, this, env, args)
+                currentVal = transform.transform(currentVal, args)
             }
             operator.score(currentVal, parameter)
         }

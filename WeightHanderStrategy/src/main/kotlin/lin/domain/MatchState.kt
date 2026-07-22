@@ -1,5 +1,6 @@
 package lin.domain
 
+import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.ComboCard
 import lin.bean.groupIds
 import lin.bean.purposeTagValues
@@ -36,6 +37,9 @@ class MatchState : GameLifecycle, RoundLifecycle {
     private val gameStats = mutableMapOf<String, Int>()
     private val roundStats = mutableMapOf<String, Int>()
     private val currentTurnPlayedCards = mutableListOf<String>()
+
+    /** 整局已打出卡牌 Card 引用存储（T-129 引用化 Source 消费） */
+    private val playedCardsList = mutableListOf<Card>()
     /** 整局已打出活动事件（Q-2a）。与维度注册解耦，[recordCardPlayed] 始终追加。 */
     private val playedEventsList = mutableListOf<MatchActivityEvent>()
     /** 打出事件版本号（Q-2a 缓存驱动）。每次 [recordCardPlayed] 递增，用于管道缓存失效。 */
@@ -78,6 +82,7 @@ class MatchState : GameLifecycle, RoundLifecycle {
     fun recordCardPlayed(card: ComboCard) {
         recordLogic(card)
         playedEventsList += MatchActivityEvent(MatchActivityKind.CARD_PLAYED, card.cardId())
+        playedCardsList += card.card
         playEventVersion++
     }
 
@@ -99,6 +104,13 @@ class MatchState : GameLifecycle, RoundLifecycle {
     /** 本回合累计：groupId 打出次数 */
     fun roundGroupPlayedCount(groupId: String): Int = roundStats["$KEY_GROUP:$groupId"] ?: 0
 
+    /**
+     * 本局已打出卡牌列表（引用返回，零拷贝）。
+     *
+     * 注：返回内部 List 直接引用以避免防御性拷贝，调用方只读不写。
+     */
+    fun playedCards(): List<Card> = playedCardsList
+
     /** 本局全部打出活动事件（Q-2a 读侧） */
     fun playedEvents(): List<MatchActivityEvent> = playedEventsList.toList()
 
@@ -113,6 +125,7 @@ class MatchState : GameLifecycle, RoundLifecycle {
         gameStats.clear()
         roundStats.clear()
         currentTurnPlayedCards.clear()
+        playedCardsList.clear()
         playedEventsList.clear()
         playEventVersion = 0
         turnCount = 0
