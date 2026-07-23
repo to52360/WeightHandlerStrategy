@@ -6,8 +6,6 @@ import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
 import javafx.scene.control.TextField
 import javafx.scene.layout.HBox
-import lin.bean.usePlan.UseStage
-import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.findOverride
 
 /**
@@ -21,7 +19,7 @@ class OverridePane(
     val node: HBox
 
     private val stageCombo = ComboBox<String>().apply {
-        items.setAll(listOf("(不覆盖)") + UseStage.entries.map { it.name })
+        items.setAll(BehaviorDisplayMappers.allStageLabels())
         promptText = "出牌阶段覆盖"
         disableProperty().bind(disableWhen)
     }
@@ -39,7 +37,7 @@ class OverridePane(
     private var isUpdatingFromState = false
 
     init {
-        node = HBox(10.0).apply {
+        node = HBox(15.0).apply {
             alignment = Pos.CENTER_LEFT
             children.addAll(
                 Label("阶段覆盖:"), stageCombo,
@@ -51,7 +49,7 @@ class OverridePane(
         // ── 编辑 → State ──
         stageCombo.valueProperty().addListener { _, _, newValue ->
             if (!isUpdatingFromState && newValue != null) {
-                val stage = if (newValue == "(不覆盖)") null else newValue
+                val stage = BehaviorDisplayMappers.labelToStageName(newValue)
                 store.updateBindingStageOverride(stage)
             }
         }
@@ -76,8 +74,9 @@ class OverridePane(
                 isUpdatingFromState = true
                 try {
                     val stageVal = binding.behaviors.findOverride()?.stageOverride?.name
-                    if (stageCombo.value != (stageVal ?: "(不覆盖)")) {
-                        stageCombo.value = stageVal ?: "(不覆盖)"
+                    val stageLabel = BehaviorDisplayMappers.stageToLabel(stageVal)
+                    if (stageCombo.value != stageLabel) {
+                        stageCombo.value = stageLabel
                     }
                     val replanDisplay = when (binding.behaviors.findOverride()?.replanAfterUse) {
                         true -> "是"; false -> "否"; null -> "(不覆盖)"

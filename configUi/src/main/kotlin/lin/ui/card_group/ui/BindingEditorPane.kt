@@ -88,8 +88,11 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 prefWidth = 80.0
             }
             val colStage = TableColumn<CardGroupBinding, String>("阶段覆盖").apply {
-                setCellValueFactory { ReadOnlyStringWrapper(it.value.behaviors.findOverride()?.stageOverride?.name ?: "-") }
-                prefWidth = 80.0
+                setCellValueFactory {
+                    val stageName = it.value.behaviors.findOverride()?.stageOverride?.name
+                    ReadOnlyStringWrapper(if (stageName != null) BehaviorDisplayMappers.stageToLabel(stageName) else "-")
+                }
+                prefWidth = 120.0
             }
             val colWeight = TableColumn<CardGroupBinding, String>("排序权重").apply {
                 setCellValueFactory { ReadOnlyStringWrapper(it.value.behaviors.findOverride()?.orderWeight?.toString() ?: "-") }

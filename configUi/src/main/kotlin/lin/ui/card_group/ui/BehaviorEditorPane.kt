@@ -1,15 +1,17 @@
 package lin.ui.card_group.ui
 
 import javafx.beans.value.ObservableBooleanValue
+import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.Label
+import javafx.scene.control.Separator
 import javafx.scene.control.TextField
 import javafx.scene.layout.HBox
 import javafx.scene.layout.VBox
 
 /**
  * 行为编辑面板：编排各行为 type 的子面板。
- * 新增行为类型 = 新建 Pane 类 + 在此文件加一行 children.add 。
+ * 采用了具有清晰边界与分类隔离的卡片面板布局。
  */
 class BehaviorEditorPane(
     private val store: WorkbenchStore,
@@ -18,7 +20,8 @@ class BehaviorEditorPane(
     val node: VBox
 
     private val nameField = TextField().apply {
-        promptText = "分组名称"
+        promptText = "输入分组名称"
+        prefWidth = 200.0
         disableProperty().bind(disableWhen)
     }
 
@@ -29,13 +32,30 @@ class BehaviorEditorPane(
     private var isUpdatingFromState = false
 
     init {
-        val nameRow = HBox(10.0).apply {
-            alignment = Pos.CENTER_LEFT
-            children.addAll(Label("分组名称:"), nameField)
+        val titleLabel = Label("选定分组行为参数配置").apply {
+            style = "-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #212529;"
         }
 
-        node = VBox(5.0).apply {
-            children.addAll(nameRow, overridePane.node, useActionPane.node)
+        val nameRow = HBox(10.0).apply {
+            alignment = Pos.CENTER_LEFT
+            children.addAll(
+                Label("分组名称:").apply { style = "-fx-font-weight: bold;" },
+                nameField
+            )
+        }
+
+        node = VBox(10.0).apply {
+            padding = Insets(12.0)
+            style =
+                "-fx-background-color: #ffffff; -fx-border-color: #ced4da; -fx-border-radius: 6; -fx-background-radius: 6;"
+            children.addAll(
+                titleLabel,
+                nameRow,
+                Separator(),
+                overridePane.node,
+                Separator(),
+                useActionPane.node
+            )
         }
 
         // 通用：分组名称编辑 → Store
