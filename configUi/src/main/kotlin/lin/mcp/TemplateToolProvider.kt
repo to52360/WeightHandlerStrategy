@@ -13,18 +13,16 @@ import lin.utils.nextShortId
  */
 class TemplateToolProvider(
     private val groupRepo: TemplateGroupRepository,
-    private val orthogonalRepo: OrthogonalTemplateRepository,
-    private val mapper: ObjectMapper
+    private val orthogonalRepo: OrthogonalTemplateRepository
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         // ── template_browse: 模板分组 + 模板列表 (合并) ──
         typedTool<TemplateBrowseInput>(
             name = "template_browse",
-            description = "浏览正交模板。支持 action=GROUPS（列出所有模板分组）和 action=TEMPLATES（按类型/分组查询模板列表，type 为 CONDITION 或 RULE，不指定返回全部）。",
-            mapper = mapper
+            description = "浏览正交模板。支持 action=GROUPS（列出所有模板分组）和 action=TEMPLATES（按类型/分组查询模板列表，type 为 CONDITION 或 RULE，不指定返回全部）。"
         ) { input ->
             when (input.action.uppercase()) {
-                "GROUPS" -> McpToolResult(mapper.writeValueAsString(groupRepo.findAll()))
+                "GROUPS" -> mcpSuccess(groupRepo.findAll())
                 "TEMPLATES" -> {
                     val types = if (input.type != null) listOf(input.type) else listOf("CONDITION", "RULE")
                     val templates = types.flatMap { t ->
@@ -32,28 +30,24 @@ class TemplateToolProvider(
                             .filter { input.groupId == null || it.groupId == input.groupId }
                             .map { it.toSummary(t) }
                     }
-                    McpToolResult(mapper.writeValueAsString(templates))
+                    mcpSuccess(templates)
                 }
-                else -> McpToolResult(mapper.writeValueAsString(mapOf("error" to "未知 action: ${input.action}，支持 GROUPS / TEMPLATES")), isError = true)
+                else -> mcpError("未知 action: ${input.action}，支持 GROUPS / TEMPLATES")
             }
         },
 
         // ── save_template (保留) ──
         typedTool<SaveTemplateInput>(
             name = "save_template",
-            description = "将当前的正交条件或规则配置沉淀为可复用模板。type 为 CONDITION 或 RULE。只需提供结构（引用了哪些数据源和算子类型），不需要保存具体参数值。",
-            mapper = mapper
+            description = "将当前的正交条件或规则配置沉淀为可复用模板。type 为 CONDITION 或 RULE。只需提供结构（引用了哪些数据源和算子类型），不需要保存具体参数值。"
         ) { input ->
             val type = input.type.uppercase()
             if (type !in setOf("CONDITION", "RULE")) {
-                return@typedTool McpToolResult(
-                    mapper.writeValueAsString(mapOf("error" to "type must be CONDITION or RULE, got: ${input.type}")),
-                    isError = true
-                )
+                return@typedTool mcpError("type must be CONDITION or RULE, got: ${input.type}")
             }
             val entity = OrthogonalTemplateEntity(id = nextShortId(), name = input.name, description = input.description, groupId = input.groupId, type = type, contentJson = input.contentJson)
             orthogonalRepo.save(entity)
-            McpToolResult(mapper.writeValueAsString(mapOf("id" to entity.id, "name" to entity.name, "type" to entity.type)))
+            mcpSuccess(mapOf("id" to entity.id, "name" to entity.name, "type" to entity.type))
         }
     )
 

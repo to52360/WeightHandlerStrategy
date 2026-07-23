@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.ai.config.CardGroupQueryService
 import lin.dao.CardGroupJsonParser
+import lin.dao.CardWeightConfig
 import lin.db.HsCardRepository
 import lin.rule.tree.CardGroupBinding
 import lin.ui.card_group.db.CardGroupService
@@ -20,104 +21,108 @@ class CardGroupToolProvider(
     private val sourceService: CardGroupQueryService,
     private val groupService: CardGroupService,
     private val cardRepo: HsCardRepository,
-    private val treeConfigService: TreeConfigService,
-    private val mapper: ObjectMapper
+    private val treeConfigService: TreeConfigService
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         // ── card_pool: 卡池文件列表 + 详情 (合并) ──
         typedTool<CardPoolInput>(
             name = "card_pool",
-            description = "查询卡池文件。支持 action=LIST（列出所有 .cardgroup 文件摘要）和 action=GET（读取单个文件的完整卡牌详情：cardId/name/text/cost/type）。",
-            mapper = mapper
+            description = "查询卡池文件。支持 action=LIST（列出所有 .cardgroup 文件摘要）和 action=GET（读取单个文件的完整卡牌详情：cardId/name/text/cost/type）。"
         ) { input ->
             when (input.action.uppercase()) {
-                "LIST" -> McpToolResult(mapper.writeValueAsString(sourceService.listCardGroupSources()))
+                "LIST" -> mcpSuccess(sourceService.listCardGroupSources())
                 "GET" -> {
-                    if (input.fileName.isNullOrBlank()) {
-                        McpToolResult(mapper.writeValueAsString(mapOf("error" to "action=GET 需要 fileName 参数")), isError = true)
-                    } else {
-                        val detail = sourceService.getCardGroupDetail(input.fileName)
-                        if (detail == null) {
-                            McpToolResult(mapper.writeValueAsString(mapOf("error" to "卡池不存在: ${input.fileName}")), isError = true)
-                        } else {
-                            McpToolResult(mapper.writeValueAsString(detail))
-                        }
-                    }
+                    if (input.fileName.isNullOrBlank()) return@typedTool mcpError("action=GET 需要 fileName 参数")
+                    val detail = sourceService.getCardGroupDetail(input.fileName)
+                        ?: return@typedTool mcpError("卡池不存在: ${input.fileName}")
+                    mcpSuccess(detail)
                 }
-                else -> McpToolResult(mapper.writeValueAsString(mapOf("error" to "未知 action: ${input.action}，支持 LIST / GET")), isError = true)
+
+                else -> mcpError("未知 action: ${input.action}，支持 LIST / GET")
             }
         },
 
         // ── card_group: 分组方案列表 + 详情 (合并) ──
         typedTool<CardGroupInput>(
             name = "card_group",
-            description = "查询卡牌分组方案。支持 action=LIST（列出所有方案的 id/name/sourceFile/enabled 摘要）和 action=GET（读取某个方案的完整信息，含所有 binding 条目的 id/name/cardIds）。",
-            mapper = mapper
+            description = "查询卡牌分组方案。支持 action=LIST（列出所有方案的 id/name/sourceFile/enabled 摘要）和 action=GET（读取某个方案的完整信息，含所有 binding 条目的 id/name/cardIds）。"
         ) { input ->
             when (input.action.uppercase()) {
-                "LIST" -> McpToolResult(mapper.writeValueAsString(groupService.loadAllManagers()))
+                "LIST" -> mcpSuccess(groupService.loadAllManagers())
                 "GET" -> {
-                    if (input.managerId.isNullOrBlank()) {
-                        McpToolResult(mapper.writeValueAsString(mapOf("error" to "action=GET 需要 managerId 参数")), isError = true)
-                    } else {
-                        val manager = groupService.loadAllManagers().firstOrNull { it.id == input.managerId }
-                        if (manager == null) {
-                            McpToolResult(mapper.writeValueAsString(mapOf("error" to "方案不存在: ${input.managerId}")), isError = true)
-                        } else {
-                            val bindings = groupService.loadBindings(input.managerId).map { b ->
-                                mapOf("id" to b.id, "name" to b.name, "description" to b.description, "cardIds" to b.cardIds)
-                            }
-                            McpToolResult(mapper.writeValueAsString(mapOf(
-                                "id" to manager.id, "name" to manager.name,
-                                "sourceFile" to manager.sourceFile, "enabled" to manager.enabled,
-                                "bindings" to bindings
-                            )))
-                        }
+                    if (input.managerId.isNullOrBlank()) return@typedTool mcpError("action=GET 需要 managerId 参数")
+                    val manager = groupService.loadAllManagers().firstOrNull { it.id == input.managerId }
+                        ?: return@typedTool mcpError("方案不存在: ${input.managerId}")
+                    val bindings = groupService.loadBindings(input.managerId).map { b ->
+                        mapOf(
+                            "id" to b.id,
+                            "name" to b.name,
+                            "description" to b.description,
+                            "cardIds" to b.cardIds
+                        )
                     }
+                    mcpSuccess(
+                        mapOf(
+                            "id" to manager.id, "name" to manager.name,
+                            "sourceFile" to manager.sourceFile, "enabled" to manager.enabled,
+                            "bindings" to bindings
+                        )
+                    )
                 }
-                else -> McpToolResult(mapper.writeValueAsString(mapOf("error" to "未知 action: ${input.action}，支持 LIST / GET")), isError = true)
+
+                else -> mcpError("未知 action: ${input.action}")
             }
         },
 
         // ── save_card_group (保留) ──
         typedTool<SaveCardGroupInput>(
             name = "save_card_group",
-            description = "创建或更新卡牌分组方案。existingId 非空时更新已有方案；为空时新建。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。",
-            mapper = mapper
+            description = "创建或更新卡牌分组方案。existingId 非空时更新已有方案；为空时新建。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。"
         ) { input ->
             val cardPool = CardGroupJsonParser.loadByFileName(input.sourceFile)
-                ?: return@typedTool McpToolResult(
-                    mapper.writeValueAsString(mapOf("error" to "sourceFile not found: ${input.sourceFile}")),
-                    isError = true
-                )
+                ?: return@typedTool mcpError("sourceFile not found: ${input.sourceFile}")
             val validCardIds = cardPool.cards.map { it.cardId }.toSet()
             input.bindings.forEachIndexed { i, bi ->
                 val invalidIds = bi.cardIds.filter { it !in validCardIds }
                 if (invalidIds.isNotEmpty()) {
-                    return@typedTool McpToolResult(
-                        mapper.writeValueAsString(mapOf("error" to "bindings[$i] contains cardIds not in sourceFile '${input.sourceFile}': $invalidIds")),
-                        isError = true
-                    )
+                    return@typedTool mcpError("bindings[$i] contains cardIds not in sourceFile '${input.sourceFile}': $invalidIds")
                 }
             }
             val managerName = input.managerName?.takeIf { it.isNotBlank() } ?: input.sourceFile
             val existingId = input.existingId?.takeIf { it.isNotBlank() }
             val bindings = input.bindings.map { bi ->
-                CardGroupBinding(id = nextShortId(), managerId = "", name = bi.name, cardIds = bi.cardIds, description = bi.description)
+                CardGroupBinding(
+                    id = nextShortId(),
+                    managerId = "",
+                    name = bi.name,
+                    cardIds = bi.cardIds,
+                    description = bi.description
+                )
             }
-            val managerId = groupService.saveManager(name = managerName, sourceFile = input.sourceFile, enabled = true, bindings = bindings, existingId = existingId)
-            McpToolResult(mapper.writeValueAsString(mapOf("managerId" to managerId, "managerName" to managerName, "bindingIds" to bindings.map { it.id })))
+            val managerId = groupService.saveManager(
+                name = managerName,
+                sourceFile = input.sourceFile,
+                enabled = true,
+                bindings = bindings,
+                existingId = existingId
+            )
+            mcpSuccess(
+                mapOf(
+                    "managerId" to managerId,
+                    "managerName" to managerName,
+                    "bindingIds" to bindings.map { it.id }
+                )
+            )
         },
 
         // ── delete_card_group (保留) ──
         typedTool<DeleteCardGroupInput>(
             name = "delete_card_group",
-            description = "删除一个卡牌分组方案及其所有绑定条目和关联的评估树。managerId 由 card_group(action=LIST) 获取。删除不可恢复，返回被删内容清单。",
-            mapper = mapper
+            description = "删除一个卡牌分组方案及其所有绑定条目和关联的评估树。managerId 由 card_group(action=LIST) 获取。删除不可恢复，返回被删内容清单。"
         ) { input ->
             val allManagers = groupService.loadAllManagers()
             val manager = allManagers.firstOrNull { it.id == input.managerId }
-                ?: return@typedTool McpToolResult(mapper.writeValueAsString(mapOf("error" to "方案不存在: ${input.managerId}")), isError = true)
+                ?: return@typedTool mcpError("方案不存在: ${input.managerId}")
             val bindings = groupService.loadBindings(input.managerId)
             val bindingNames = bindings.map { it.name }
             val allTreeSummaries = treeConfigService.loadSummaries()
@@ -125,18 +130,19 @@ class CardGroupToolProvider(
             val treeNames = linkedTrees.map { it["name"] as? String ?: "" }
             linkedTrees.forEach { tree -> treeConfigService.delete(tree["id"] as String) }
             groupService.deleteManager(input.managerId)
-            McpToolResult(mapper.writeValueAsString(mapOf(
-                "deleted" to true, "managerId" to input.managerId, "managerName" to manager.name,
-                "deletedBindings" to bindingNames, "deletedTrees" to treeNames,
-                "totalDeleted" to (1 + bindings.size + linkedTrees.size)
-            )))
+            mcpSuccess(
+                mapOf(
+                    "deleted" to true, "managerId" to input.managerId, "managerName" to manager.name,
+                    "deletedBindings" to bindingNames, "deletedTrees" to treeNames,
+                    "totalDeleted" to (1 + bindings.size + linkedTrees.size)
+                )
+            )
         },
 
         // ── parse_hearthstone_deck_code (保留) ──
         typedTool<ParseDeckCodeInput>(
             name = "parse_hearthstone_deck_code",
-            description = "解析炉石卡组代码（deck string）为卡牌列表（cardId/名称/效果）。传 groupName 可把卡池直接写成 data/cardgroup/<groupName>.cardgroup 文件，供 card_pool / save_card_group 使用。",
-            mapper = mapper
+            description = "解析炉石卡组代码（deck string）为卡牌列表（cardId/名称/效果）。传 groupName 可把卡池直接写成 data/cardgroup/<groupName>.cardgroup 文件，供 card_pool / save_card_group 使用。"
         ) { input ->
             runCatching {
                 val deck = HearthstoneDeckCodeParser.decode(input.deckCode)
@@ -144,15 +150,65 @@ class CardGroupToolProvider(
                 val savedFile = input.groupName?.takeIf { it.isNotBlank() }?.let { name ->
                     CardGroupJsonParser.saveCardGroup(cards, name, input.enabled ?: true).fileName.toString()
                 }
-                McpToolResult(mapper.writeValueAsString(mapOf(
-                    "format" to deck.format, "heroes" to deck.heroes,
-                    "totalCardsInCode" to deck.cards.size, "parsedCount" to cards.size,
-                    "parsedCards" to cards.map { mapOf("cardId" to it.cardId, "name" to it.name, "text" to it.text) },
-                    "savedFile" to savedFile
-                )))
+                mcpSuccess(
+                    mapOf(
+                        "format" to deck.format, "heroes" to deck.heroes,
+                        "totalCardsInCode" to deck.cards.size, "parsedCount" to cards.size,
+                        "parsedCards" to cards.map {
+                            mapOf(
+                                "cardId" to it.cardId,
+                                "name" to it.name,
+                                "text" to it.text
+                            )
+                        },
+                        "savedFile" to savedFile
+                    )
+                )
             }.getOrElse { e ->
-                McpToolResult(mapper.writeValueAsString(mapOf("error" to "解析失败: ${e.message}")), isError = true)
+                mcpError("解析失败: ${e.message}")
             }
+        },
+
+        // ── save_card_pool_weights (卡牌权重与换牌权重更新设置工具) ──
+        typedTool<SaveCardPoolWeightsInput>(
+            name = "save_card_pool_weights",
+            description = "为指定 .cardgroup 卡池文件更新或设置单卡的静态出牌权重 weight 与开局换牌权重 changeWeight。更新时会保留原卡池中的其他卡牌，仅增量更新或追加传入单卡的权重配置。"
+        ) { input ->
+            if (input.fileName.isBlank()) return@typedTool mcpError("fileName 参数不能为空")
+            if (input.cards.isEmpty()) return@typedTool mcpError("cards 列表不能为空")
+
+            val existingConfig = CardGroupJsonParser.loadByFileName(input.fileName)
+            // 以原卡池配置为基准保留原有卡牌，实现增量修补与更新
+            val updatedCardMap = (existingConfig?.cards ?: emptyList())
+                .associateBy { it.cardId }
+                .toMutableMap()
+
+            for (item in input.cards) {
+                val oldItem = updatedCardMap[item.cardId]
+                val cardName = item.name ?: oldItem?.name ?: cardRepo.findName(item.cardId) ?: item.cardId
+                updatedCardMap[item.cardId] = CardWeightConfig(
+                    cardId = item.cardId,
+                    name = cardName,
+                    weight = item.weight ?: oldItem?.weight,
+                    changeWeight = item.changeWeight ?: oldItem?.changeWeight
+                )
+            }
+
+            val finalConfigs = updatedCardMap.values.toList()
+            val savedPath = CardGroupJsonParser.saveCardGroupConfigs(
+                configs = finalConfigs,
+                groupName = input.fileName,
+                enabled = input.enabled ?: existingConfig?.enabled ?: true
+            )
+            mcpSuccess(
+                mapOf(
+                    "saved" to true,
+                    "fileName" to input.fileName,
+                    "savedPath" to savedPath.toString(),
+                    "totalCardCount" to finalConfigs.size,
+                    "updatedCardCount" to input.cards.size
+                )
+            )
         }
     )
 }
@@ -202,6 +258,26 @@ private data class ParseDeckCodeInput(
     val groupName: String? = null,
     @field:JsonPropertyDescription("写入文件时是否启用，默认 true。")
     val enabled: Boolean? = true
+)
+
+private data class SaveCardPoolWeightsInput(
+    @field:JsonPropertyDescription("卡池文件名（不含 .cardgroup 后缀），如 real_libram_deck")
+    val fileName: String,
+    @field:JsonPropertyDescription("需要更新权重的单卡列表。每张卡可指定 cardId, name, weight(静态出牌权重), changeWeight(开局换牌权重)。未包含的既有卡牌将予以保留。")
+    val cards: List<CardWeightItemInput>,
+    @field:JsonPropertyDescription("文件是否启用，缺省保持原文件状态或默认 true")
+    val enabled: Boolean? = null
+)
+
+private data class CardWeightItemInput(
+    @field:JsonPropertyDescription("卡牌 ID，如 BT_020")
+    val cardId: String,
+    @field:JsonPropertyDescription("卡牌名称（可选）")
+    val name: String? = null,
+    @field:JsonPropertyDescription("静态出牌权重 weight（可选）")
+    val weight: Double? = null,
+    @field:JsonPropertyDescription("开局换牌权重 changeWeight（可选，正数偏好保留，负数偏好换掉，如 15.0 或 -100.0）")
+    val changeWeight: Double? = null
 )
 
 private data class DeleteCardGroupInput(

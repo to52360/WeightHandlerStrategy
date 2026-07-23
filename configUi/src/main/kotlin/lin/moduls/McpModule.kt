@@ -20,26 +20,24 @@ val mcpModule = module {
     single<lin.ai.config.draft.DraftTreeService> { lin.ai.config.draft.DefaultDraftTreeService(get(), get(), get()) }
 
     // 多个 McpToolProvider 必须 bind，否则 single<T> 同名覆盖，getAll 只能拿到最后一个
-    single { AiTreeTemplateToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
+    single { AiTreeTemplateToolProvider(get(), get()) } bind McpToolProvider::class
     single {
         AiTreeConfigToolProvider(
             get<AiConfigGenerationService>(),
-            get(),
-            createTreeConfigMapper()
+            get()
         )
     } bind McpToolProvider::class
-    single { AiOrthogonalToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
+    single { AiOrthogonalToolProvider(get(), get()) } bind McpToolProvider::class
     single {
         CardGroupToolProvider(
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
             get<lin.db.HsCardRepository>(),
-            get<lin.ui.service.TreeConfigService>(),
-            createTreeConfigMapper()
+            get<lin.ui.service.TreeConfigService>()
         )
     } bind McpToolProvider::class
-    single { TemplateToolProvider(get(), get(), createTreeConfigMapper()) } bind McpToolProvider::class
-    single { lin.mcp.AiDraftTreeToolProvider(get(), createTreeConfigMapper()) } bind McpToolProvider::class
+    single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
+    single { lin.mcp.AiDraftTreeToolProvider(get()) } bind McpToolProvider::class
 
     single { MyMcpServer(getAll<McpToolProvider>()) }
 }

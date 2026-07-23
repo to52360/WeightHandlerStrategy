@@ -132,7 +132,9 @@ data class CardGroupCard(
     val attack: Int? = null,
     val health: Int? = null,
     val race: String? = null,
-    val cardClass: String? = null
+    val cardClass: String? = null,
+    val weight: Double? = null,
+    val changeWeight: Double? = null
 )
 
 fun FieldSpec.toAiFieldSpec(): AiFieldSpec {

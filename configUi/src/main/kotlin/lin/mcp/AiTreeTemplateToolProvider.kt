@@ -13,55 +13,52 @@ import lin.utils.nextShortId
  */
 class AiTreeTemplateToolProvider(
     private val treeTemplateRepo: EvaluatorTreeTemplateRepository,
-    private val treeTemplateService: EvaluatorTreeTemplateService,
-    private val mapper: ObjectMapper
+    private val treeTemplateService: EvaluatorTreeTemplateService
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         // ── tree_template: 模板列表 + 详情 (合并) ──
         typedTool<TreeTemplateInput>(
             name = "tree_template",
-            description = "查询评估树模板。支持 action=LIST（列出所有模板 id/name/description 摘要）和 action=GET（读取模板完整骨架：树拓扑+叶子配置字典，可作为 create_draft_tree 的起点）。",
-            mapper = mapper
+            description = "查询评估树模板。支持 action=LIST（列出所有模板 id/name/description 摘要）和 action=GET（读取模板完整骨架：树拓扑+叶子配置字典，可作为 create_draft_tree 的起点）。"
         ) { input ->
             when (input.action.uppercase()) {
                 "LIST" -> {
                     val templates = treeTemplateRepo.findAll().map { it.toSummary() }
-                    McpToolResult(mapper.writeValueAsString(templates))
+                    mcpSuccess(templates)
                 }
                 "GET" -> {
                     if (input.id.isNullOrBlank()) {
-                        McpToolResult(mapper.writeValueAsString(mapOf("error" to "action=GET 需要 id 参数")), isError = true)
+                        mcpError("action=GET 需要 id 参数")
                     } else {
                         val result = treeTemplateService.findById(input.id)
                         if (result?.second == null) {
-                            McpToolResult("模板不存在", isError = true)
+                            mcpError("模板不存在")
                         } else {
                             val config = result.second!!
-                            McpToolResult(mapper.writeValueAsString(mapOf(
+                            mcpSuccess(mapOf(
                                 "bindingType" to config.bindingType.name,
                                 "bindingIds" to config.bindingIds,
                                 "tree" to config.root.toNamed(),
                                 "leafConfigs" to config.leafConfigs
-                            )))
+                            ))
                         }
                     }
                 }
-                else -> McpToolResult(mapper.writeValueAsString(mapOf("error" to "未知 action: ${input.action}，支持 LIST / GET")), isError = true)
+                else -> mcpError("未知 action: ${input.action}，支持 LIST / GET")
             }
         },
 
         // ── save_evaluator_tree_template (保留) ──
         typedTool<SaveTreeTemplateInput>(
             name = "save_evaluator_tree_template",
-            description = "将当前生成的评估树沉淀为可复用模板。只需提供树骨架结构（叶子节点类型和引用关系），具体参数值不需要保存。",
-            mapper = mapper
+            description = "将当前生成的评估树沉淀为可复用模板。只需提供树骨架结构（叶子节点类型和引用关系），具体参数值不需要保存。"
         ) { input ->
             val entity = EvaluatorTreeTemplateEntity(
                 id = nextShortId(), name = input.name, description = input.description,
                 groupId = input.groupId, configData = input.contentJson
             )
             treeTemplateRepo.save(entity)
-            McpToolResult(mapper.writeValueAsString(mapOf("id" to entity.id, "name" to entity.name)))
+            mcpSuccess(mapOf("id" to entity.id, "name" to entity.name))
         }
     )
 

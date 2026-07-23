@@ -15,13 +15,8 @@
 
 ## 任务列表
 
-### 阶段一与基础设施（已完成，已归档）
-- [x] **T-101 ~ T-105, T-107 ~ T-109, T-113**: 阶段一 V1 收尾与架构基础设施全部完成 (归档批次: 2026-07-13 / 2026-07-16)
-
-### 阶段二：V2 范围规划 (批注:暂时挂起)
-- [ ] **T-110**: Combo 编排 MCP 暴露规划（对应 T-022，需先梳理 ComboPlanDefinition 与评估树引用关系）
-- [ ] **T-111**: 用途标签 MCP 暴露规划（对应 T-023，评估 PURPOSE_TAG 绑定类型 AI 可操作性）
-- [ ] **T-112**: 配置生命周期管理评估（delete/disable/clone 是否暴露，还是保持 UI-only）
+### 阶段一与阶段二：基础设施与 V2 范围规划（已完成/已迁移归档）
+- [x] **T-101 ~ T-105, T-107 ~ T-113**: 阶段一 V1 收尾、架构基础设施及阶段二 V2 MCP 暴露规划（T-110~T-112 已迁移至独立 Topic [mcp-feature-exposure](file:///g:/liw_work/jiaoBen/Deck-Plugin-Market/architecture-context/mcp-feature-exposure/TRACKER.md)） (归档批次: 2026-07-13 / 2026-07-16 / 2026-07-23)
 
 ### 阶段三：架构与代码级重构任务（新梳理）
 - [ ] **T-115**: 设计真实的动态推演条件与纯打分节点（去除伪属性匹配需求，专注 GameState 与 ScoreAction 的组件补齐）

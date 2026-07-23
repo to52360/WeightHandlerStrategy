@@ -1,4 +1,4 @@
-﻿package lin.ai.config
+package lin.ai.config
 
 import lin.dao.CardGroupJsonParser
 import lin.db.CardDetail
@@ -39,7 +39,9 @@ class DefaultCardGroupQueryService(
                 attack = info?.attack,
                 health = info?.health,
                 race = info?.race,
-                cardClass = info?.cardClass
+                cardClass = info?.cardClass,
+                weight = weight.weight,
+                changeWeight = weight.changeWeight
             )
         }
         return CardGroupDetail(fileName = fileName, cards = cards)

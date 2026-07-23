@@ -23,7 +23,8 @@ data class CardGroupConfig(
 data class CardWeightConfig(
     val cardId: String,
     val name: String,
-    val weight: Double? = null
+    val weight: Double? = null,
+    val changeWeight: Double? = null
 )
 
 object CardGroupJsonParser {
@@ -70,26 +71,50 @@ object CardGroupJsonParser {
     }
 
     /**
-     * 将卡牌列表（通常来自炉石卡组代码解析得到的 [CardIdNameText]）写成一个 `.cardgroup` JSON 文件。
-     * 文件写入 [dirPath]（默认 [PathConfig.defaultDirPath]，即 app.properties 中的 cardgroup.dir.path），
-     * 文件名为 `$groupName.cardgroup`。目录不存在时自动创建。
-     * 返回写入的文件路径。
+     * 将卡牌列表写成一个 `.cardgroup` JSON 文件。
+     * 文件写入 [dirPath]，文件名为 `$groupName.cardgroup`。目录不存在时自动创建。
+     * 支持传入默认的 [weight]（静态权重）和 [changeWeight]（换牌权重）。
      */
     fun saveCardGroup(
         cards: List<CardIdNameText>,
         groupName: String,
         enabled: Boolean = true,
-        dirPath: Path = PathConfig.defaultDirPath
+        dirPath: Path = PathConfig.defaultDirPath,
+        defaultWeight: Double? = null,
+        defaultChangeWeight: Double? = null
     ): Path {
         if (cards.isEmpty()) {
             throw IllegalArgumentException("卡牌列表为空，无法生成 .cardgroup 文件")
+        }
+        val weightConfigs = cards.map {
+            CardWeightConfig(
+                cardId = it.cardId,
+                name = it.name,
+                weight = defaultWeight,
+                changeWeight = defaultChangeWeight
+            )
+        }
+        return saveCardGroupConfigs(weightConfigs, groupName, enabled, dirPath)
+    }
+
+    /**
+     * 直接保存 [CardWeightConfig] 列表为 `.cardgroup` 文件。
+     */
+    fun saveCardGroupConfigs(
+        configs: List<CardWeightConfig>,
+        groupName: String,
+        enabled: Boolean = true,
+        dirPath: Path = PathConfig.defaultDirPath
+    ): Path {
+        if (configs.isEmpty()) {
+            throw IllegalArgumentException("卡牌配置列表为空，无法生成 .cardgroup 文件")
         }
         if (!Files.exists(dirPath)) {
             Files.createDirectories(dirPath)
         }
         val config = CardGroupConfig(
             enabled = enabled,
-            cards = cards.map { CardWeightConfig(cardId = it.cardId, name = it.name) }
+            cards = configs
         )
         val file = dirPath.resolve("$groupName.cardgroup")
         Files.writeString(file, mapper.writeValueAsString(config))

@@ -21,8 +21,7 @@ data class ListOrthogonalInput(
  */
 class AiOrthogonalToolProvider(
     private val assembler: PipelineAssembler,
-    private val scoreOperatorRegistry: ScoreOperatorRegistry,
-    private val mapper: ObjectMapper
+    private val scoreOperatorRegistry: ScoreOperatorRegistry
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<ListOrthogonalInput>(
@@ -37,8 +36,7 @@ class AiOrthogonalToolProvider(
 
                 【类型链路强兼容】前一个节点的 outputType 必须兼容后一个节点的 inputType，否则提交流程会被 PIPELINE_TYPE_MISMATCH 拒绝。
                 例如：DataSource「hand_cards」(output=List<Card>) -> Transform「count_projection」(input=List<*>, output=Int) -> Operator「gte」(input=Int)。
-            """.trimIndent(),
-            mapper = mapper
+            """.trimIndent()
         ) { input ->
             val targetOut = input.targetOutputType
             val targetIn = input.targetInputType
@@ -191,7 +189,7 @@ class AiOrthogonalToolProvider(
                     }
                 )
             )
-            McpToolResult(mapper.writeValueAsString(payload))
+            mcpSuccess(payload)
         }
     )
 }

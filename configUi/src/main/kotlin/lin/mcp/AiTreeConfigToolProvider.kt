@@ -11,8 +11,7 @@ import lin.ui.service.TreeConfigService
  */
 class AiTreeConfigToolProvider(
     private val service: AiConfigGenerationService,
-    private val treeConfigService: TreeConfigService,
-    private val mapper: ObjectMapper
+    private val treeConfigService: TreeConfigService
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         McpToolHandler(
@@ -28,63 +27,52 @@ class AiTreeConfigToolProvider(
             """.trimIndent(),
             inputSchemaJson = """{"type":"object","properties":{}}""",
             call = {
-                McpToolResult(mapper.writeValueAsString(service.listCapabilityBackground()))
+                mcpSuccess(service.listCapabilityBackground())
             }
         ),
 
         // ── evaluator_tree: 评估树列表 + 详情 (合并) ──
         typedTool<EvaluatorTreeInput>(
             name = "evaluator_tree",
-            description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：bindingType/bindingIds/tree 拓扑/leafConfigs）。",
-            mapper = mapper
+            description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：bindingType/bindingIds/tree 拓扑/leafConfigs）。"
         ) { input ->
             when (input.action.uppercase()) {
                 "LIST" -> {
                     val summaries = treeConfigService.loadSummaries()
-                    McpToolResult(mapper.writeValueAsString(summaries))
+                    mcpSuccess(summaries)
                 }
                 "GET" -> {
                     if (input.id.isNullOrBlank()) {
-                        McpToolResult(mapper.writeValueAsString(mapOf("error" to "action=GET 需要 id 参数")), isError = true)
+                        mcpError("action=GET 需要 id 参数")
                     } else {
                         val result = treeConfigService.findById(input.id)
                         if (result?.second == null) {
-                            McpToolResult("树配置不存在", isError = true)
+                            mcpError("树配置不存在")
                         } else {
                             val config = result.second!!
-                            McpToolResult(mapper.writeValueAsString(mapOf(
+                            mcpSuccess(mapOf(
                                 "bindingType" to config.bindingType.name,
                                 "bindingIds" to config.bindingIds,
                                 "tree" to config.root.toNamed(),
                                 "leafConfigs" to config.leafConfigs
-                            )))
+                            ))
                         }
                     }
                 }
-                else -> McpToolResult(mapper.writeValueAsString(mapOf("error" to "未知 action: ${input.action}，支持 LIST / GET")), isError = true)
+                else -> mcpError("未知 action: ${input.action}，支持 LIST / GET")
             }
         },
 
         // ── delete_evaluator_tree (保留) ──
         typedTool<DeleteTreeInput>(
             name = "delete_evaluator_tree",
-            description = "删除一棵已保存的评估树（含其叶子配置）。treeId 由 evaluator_tree(action=LIST) 获取。删除不可恢复。无效 ID 返回错误+现有树列表以防幻觉。",
-            mapper = mapper
+            description = "删除一棵已保存的评估树（含其叶子配置）。treeId 由 evaluator_tree(action=LIST) 获取。删除不可恢复。无效 ID 返回错误+现有树列表以防幻觉。"
         ) { input ->
             val summaries = treeConfigService.loadSummaries()
             val target = summaries.firstOrNull { it["id"] == input.treeId }
-            if (target == null) {
-                return@typedTool McpToolResult(
-                    mapper.writeValueAsString(mapOf(
-                        "error" to "树不存在: ${input.treeId}",
-                        "hint" to "检查 treeId 是否正确，以下是当前所有评估树",
-                        "existingTrees" to summaries.map { mapOf("id" to it["id"], "name" to it["name"]) }
-                    )),
-                    isError = true
-                )
-            }
+                ?: return@typedTool mcpError("树不存在: ${input.treeId}。当前存在的树列表: ${summaries.map { mapOf("id" to it["id"], "name" to it["name"]) }}")
             treeConfigService.delete(input.treeId)
-            McpToolResult(mapper.writeValueAsString(mapOf("deleted" to true, "treeId" to input.treeId, "treeName" to target["name"])))
+            mcpSuccess(mapOf("deleted" to true, "treeId" to input.treeId, "treeName" to target["name"]))
         }
     )
 }

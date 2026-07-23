@@ -41,9 +41,7 @@
 
 - [ ] **T-221**: `toggle_evaluator_tree_status` MCP 工具实现（支持快速启用/禁用评估树配置，无需物理删除）
 - [ ] **T-222**: `clone_evaluator_tree` 与 `clone_card_group` MCP 工具实现（支持基于现有配置一键克隆副本，方便渐进式微调）
-- [ ] **T-223**: `deck_code_import` MCP 工具实现（集成 `HearthstoneDeckCodeParser`，支持传入炉石卡组代码 AAECA...
-  自动解析卡牌并一键生成卡组分组草稿）
-- [ ] **T-224**: 评估树与分组配置导入导出 MCP 工具实现（支持配置 JSON Bundle 的备份与恢复）
+- [ ] **T-223**: 评估树与分组配置导入导出 MCP 工具实现（支持配置 JSON Bundle 的备份与恢复）
 
 ### 阶段四：工具收敛合并与 SOP 指南同步
 

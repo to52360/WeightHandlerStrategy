@@ -60,6 +60,22 @@ data class McpToolResult(
     val isError: Boolean = false
 )
 
+val mcpMapper: ObjectMapper by lazy {
+    com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+}
+
+/**
+ * 显式响应工具函数：构造成功的 MCP 响应
+ */
+fun mcpSuccess(data: Any): McpToolResult =
+    McpToolResult(mcpMapper.writeValueAsString(data), isError = false)
+
+/**
+ * 显式响应工具函数：构造失败的 MCP 业务错误响应
+ */
+fun mcpError(message: String): McpToolResult =
+    McpToolResult(mcpMapper.writeValueAsString(mapOf("error" to message)), isError = true)
+
 /**
  * 声明式 typed tool 工厂：自动将 raw args Map 反序列化为 I，handler 只关心业务逻辑。
  * inputSchemaJson 由 victools 根据入参类型自动生成。
@@ -67,7 +83,6 @@ data class McpToolResult(
 inline fun <reified I> typedTool(
     name: String,
     description: String,
-    mapper: ObjectMapper,
     crossinline handler: (I) -> McpToolResult
 ): McpToolHandler = McpToolHandler(
     name = name,
@@ -75,14 +90,15 @@ inline fun <reified I> typedTool(
     inputSchemaJson = JsonSchemaUtils.generateSchemaJson(I::class.java),
     call = { rawArgs ->
         try {
-            val typedInput = mapper.convertValue(rawArgs, I::class.java)
+            val typedInput = mcpMapper.convertValue(rawArgs, I::class.java)
             handler(typedInput)
         } catch (e: IllegalArgumentException) {
-            // 捕获 Jackson 的转换异常（如必填参数缺失、类型不匹配）以及 Kotlin 的 require() 校验异常
-            McpToolResult(
-                contentJson = mapper.writeValueAsString(mapOf("error" to "Input validation failed: ${e.message}")),
-                isError = true
-            )
+            // 反序列化格式/类型错误
+            mcpError("Input validation failed: ${e.message}")
+        } catch (e: Throwable) {
+            // 程序底层未捕获 Exception：记录日志并显式通知
+            lin.myLog.error(e) { "MCP Tool [$name] 触发未捕获程序内部 Exception" }
+            mcpError("Internal server error (${e.javaClass.simpleName}): ${e.message}")
         }
     }
 )
