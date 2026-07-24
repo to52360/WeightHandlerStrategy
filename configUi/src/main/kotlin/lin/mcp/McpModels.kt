@@ -1,6 +1,7 @@
 package lin.mcp
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.victools.jsonschema.generator.OptionPreset
 import com.github.victools.jsonschema.generator.SchemaGenerator
 import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder
@@ -10,6 +11,8 @@ import com.github.victools.jsonschema.module.jackson.JacksonOption
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.LogicNode
 import lin.tree_config.bridge.defaultNodeName
+import lin.ui.service.createTreeConfigMapper
+import lin.utils.json.registerLogicNodeMixin
 import kotlin.reflect.full.memberProperties
 
 object JsonSchemaUtils {
@@ -61,7 +64,7 @@ data class McpToolResult(
 )
 
 val mcpMapper: ObjectMapper by lazy {
-    com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+    createTreeConfigMapper()
 }
 
 /**

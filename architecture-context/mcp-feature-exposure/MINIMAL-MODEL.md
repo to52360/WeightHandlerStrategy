@@ -16,7 +16,8 @@
 | **AiTreeTemplateToolProvider**             | `AiTreeTemplateToolProvider.kt`  | `tree_template`, `save_evaluator_tree_template`                                | `TreeTemplateService`                                           |
 | **TemplateToolProvider**                   | `TemplateToolProvider.kt`        | `template_browse`, `save_template`                                             | `LeafTemplateService`                                           |
 | **AiDraftTreeToolProvider**                | `AiDraftTreeToolProvider.kt`     | `create_draft_tree`, `put_draft_leaf`, `commit_draft_tree`, `get_draft_status` | `DraftTreeService`                                              |
-| *(待新增)* **ComboPlanToolProvider**       | `ComboPlanToolProvider.kt`       | `combo_plan`, `save_combo_plan`, `delete_combo_plan`                           | `ComboPlanDefinitionRepository`, `ComboPlanStore`               |
+| **ComboPlanToolProvider**                  | `ComboPlanToolProvider.kt`       | `combo_plan`                                                                   | `ComboPlanDefinitionRepository`, `CardGroupService`, `HsCardRepository`, `TreeConfigService` |
+| **ComboPlanManagementToolProvider**        | `ComboPlanManagementToolProvider.kt` | `save_combo_plan`, `delete_combo_plan`                                         | `ComboPlanDefinitionRepository`, `CardGroupService`, `HsCardRepository` |
 | *(待新增)* **PurposeTagToolProvider**      | `PurposeTagToolProvider.kt`      | `purpose_tag`, `save_purpose_tag_rule`                                         | `PurposeTagFinder`, `PurposeTagIntentRuleRepository`            |
 | *(待新增)* **ConfigLifecycleToolProvider** | `ConfigLifecycleToolProvider.kt` | `toggle_evaluator_tree_status`, `clone_evaluator_tree`, `deck_code_import`     | `TreeConfigService`, `HearthstoneDeckCodeParser`                |
 

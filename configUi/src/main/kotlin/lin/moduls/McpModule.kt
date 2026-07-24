@@ -24,6 +24,7 @@ val mcpModule = module {
     single {
         AiTreeConfigToolProvider(
             get<AiConfigGenerationService>(),
+            get(),
             get()
         )
     } bind McpToolProvider::class
@@ -38,6 +39,20 @@ val mcpModule = module {
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
     single { lin.mcp.AiDraftTreeToolProvider(get()) } bind McpToolProvider::class
+    single {
+        ComboPlanToolProvider(
+            get(),
+            get<CardGroupService>(),
+            get<lin.db.HsCardRepository>(),
+            get<lin.ui.service.TreeConfigService>()
+        )
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.ComboPlanManagementToolProvider(
+            get(),
+            get<CardGroupService>()
+        )
+    } bind McpToolProvider::class
 
     single { MyMcpServer(getAll<McpToolProvider>()) }
 }

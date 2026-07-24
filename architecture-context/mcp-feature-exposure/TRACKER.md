@@ -23,11 +23,11 @@
 
 ### 阶段一：Combo 战术编排 MCP 工具链暴露 (Combo Plan MCP Exposure)
 
-- [ ] **T-201**: ComboPlan 领域元数据探查与 DTO 契约设计（梳理 `ComboPlanDefinition`、`ComboItem` 数据结构与 json 序列化）
-- [ ] **T-202**: `combo_plan` MCP 工具实现（支持 `action=LIST` 列出所有 Combo 方案摘要与 `action=GET` 获取指定 Combo
+- [x] **T-201**: ComboPlan 领域元数据探查与 DTO 契约设计（梳理 `ComboPlanDefinition`、`ComboItem` 数据结构与 json 序列化）
+- [x] **T-202**: `combo_plan` MCP 工具实现（支持 `action=LIST` 列出所有 Combo 方案摘要与 `action=GET` 获取指定 Combo
   依赖卡牌与步骤序列）
-- [ ] **T-203**: `save_combo_plan` 与 `delete_combo_plan` MCP 工具实现（支持 AI 动态创建、修补及删除 Combo 战术方案）
-- [ ] **T-204**: 评估树与 ComboPlan 绑定引用关系暴露（在评估树正交组件或绑定中暴露 Combo 引用探查接口）
+- [x] **T-203**: `save_combo_plan` 与 `delete_combo_plan` MCP 工具实现（支持 AI 动态创建、修补及删除 Combo 战术方案）
+- [x] **T-204**: 评估树与 ComboPlan 绑定引用关系暴露（在评估树正交组件或绑定中暴露 Combo 引用探查接口）
 
 ### 阶段二：用途标签 (Purpose Tag) MCP 工具链暴露
 
@@ -57,3 +57,4 @@
 |-------|----------------------------------------------------|--------------------------------------|
 | Q-201 | 是否需要暴露底层 SQLite 任意 SQL 查询 MCP 工具     | 人类确认场景需要高度自由度调试时评估 |
 | Q-202 | 是否暴露实时对局推演沙盒 (Game Simulation Sandbox) | 端到端评估树评估效率瓶颈突显时启动   |
+| Q-203 | `ComboPlanDefinition` 多重职责拆分评估（既负责回合内出牌打分与顺序编排，又兼顾起手换牌留牌组合加权） | 进行出牌/换牌领域模型解耦重构时评估 |

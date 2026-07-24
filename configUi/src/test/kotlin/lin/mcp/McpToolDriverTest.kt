@@ -26,7 +26,7 @@ class McpToolDriverTest : McpTestEnv() {
                 """{"deckCode":"$deckCode","groupName":"verify_deck_1","enabled":true}"""
             )
                 .also { savedFile = java.nio.file.Path.of("../data/cardgroup/verify_deck_1.cardgroup") }
-            call("list_card_group_sources")
+            call("card_pool", """{"action":"LIST"}""")
             call("list_capability_background")
             call("list_orthogonal_components")
 
@@ -45,16 +45,31 @@ class McpToolDriverTest : McpTestEnv() {
                     @Suppress("UNCHECKED_CAST")
                     bindingIds = (m["bindingIds"] as? List<*>)?.map { it.toString() } ?: emptyList()
                 }
-            call("list_card_groups")
+            call("card_group", """{"action":"LIST"}""")
 
             // G-04 验证：能查到已有分组的绑定条目 ID（bindingIds 来源）
             if (managerId != null) {
-                call("get_card_group_manager", """{"managerId":"$managerId"}""")
+                call("card_group", """{"action":"GET","managerId":"$managerId"}""")
             }
 
             // ── Stage 3: 参考模板与存量配置 ──
-            call("list_evaluator_trees")
-            call("list_evaluator_tree_templates")
+            call("evaluator_tree", """{"action":"LIST"}""")
+            call("tree_template", """{"action":"LIST"}""")
+            call("combo_plan", """{"action":"LIST"}""")
+            if (managerId != null && bindingIds.isNotEmpty()) {
+                val createdPlanResp = call(
+                    "save_combo_plan",
+                    """{
+                      "managerId":"$managerId",
+                      "coreGroupIds":["${bindingIds.first()}"],
+                      "score":3.5,
+                      "relation":"SCORE_ONLY"
+                    }"""
+                )
+                val createdPlanId = mapper.readValue(createdPlanResp.contentJson, Map::class.java)["id"] as String
+                call("combo_plan", """{"action":"GET","id":"$createdPlanId"}""")
+                call("delete_combo_plan", """{"id":"$createdPlanId"}""")
+            }
 
             // ── Stage 4: 渐进式生成 ──
             val root =

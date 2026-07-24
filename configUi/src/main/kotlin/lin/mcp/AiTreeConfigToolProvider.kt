@@ -1,8 +1,8 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import com.fasterxml.jackson.databind.ObjectMapper
 import lin.ai.config.AiConfigGenerationService
+import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
 import lin.ui.service.TreeConfigService
 
 /**
@@ -11,7 +11,8 @@ import lin.ui.service.TreeConfigService
  */
 class AiTreeConfigToolProvider(
     private val service: AiConfigGenerationService,
-    private val treeConfigService: TreeConfigService
+    private val treeConfigService: TreeConfigService,
+    private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
         McpToolHandler(
@@ -34,7 +35,7 @@ class AiTreeConfigToolProvider(
         // ── evaluator_tree: 评估树列表 + 详情 (合并) ──
         typedTool<EvaluatorTreeInput>(
             name = "evaluator_tree",
-            description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：bindingType/bindingIds/tree 拓扑/leafConfigs）。"
+            description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：managerId/bindingType/bindingIds/tree 拓扑/leafConfigs/associatedComboPlans）。"
         ) { input ->
             when (input.action.uppercase()) {
                 "LIST" -> {
@@ -49,12 +50,30 @@ class AiTreeConfigToolProvider(
                         if (result?.second == null) {
                             mcpError("树配置不存在")
                         } else {
+                            val entity = result.first!!
                             val config = result.second!!
+                            val managerId = entity.managerId
+                            val associatedComboPlans = if (!managerId.isNullOrBlank()) {
+                                comboPlanDefinitionRepository.findByManagerId(managerId).map { plan ->
+                                    mapOf(
+                                        "id" to plan.id,
+                                        "relation" to plan.relation,
+                                        "score" to plan.score,
+                                        "coreGroupIds" to plan.coreGroupIdSet().toList(),
+                                        "depGroupIds" to plan.depGroupIdSet().toList(),
+                                        "coreMutex" to plan.coreMutex,
+                                        "mustAdjacent" to plan.mustAdjacent
+                                    )
+                                }
+                            } else emptyList()
+
                             mcpSuccess(mapOf(
+                                "managerId" to managerId,
                                 "bindingType" to config.bindingType.name,
                                 "bindingIds" to config.bindingIds,
                                 "tree" to config.root.toNamed(),
-                                "leafConfigs" to config.leafConfigs
+                                "leafConfigs" to config.leafConfigs,
+                                "associatedComboPlans" to associatedComboPlans
                             ))
                         }
                     }
