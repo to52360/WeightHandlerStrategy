@@ -7,7 +7,6 @@ import lin.ai.config.DefaultCardGroupQueryService
 import lin.di.infraModule
 import lin.mcp.*
 import lin.ui.card_group.db.CardGroupService
-import lin.ui.service.createTreeConfigMapper
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -16,7 +15,15 @@ import org.koin.dsl.module
 val mcpModule = module {
 
     single<CardGroupQueryService> { DefaultCardGroupQueryService(get()) }
-    single<AiConfigGenerationService> { DefaultAiConfigGenerationService(get(), get(), get(), get<CardGroupService>()) }
+    single<AiConfigGenerationService> {
+        DefaultAiConfigGenerationService(
+            get(),
+            get(),
+            get(),
+            get<CardGroupService>(),
+            get()
+        )
+    }
     single<lin.ai.config.draft.DraftTreeService> { lin.ai.config.draft.DefaultDraftTreeService(get(), get(), get()) }
 
     // 多个 McpToolProvider 必须 bind，否则 single<T> 同名覆盖，getAll 只能拿到最后一个
@@ -51,6 +58,14 @@ val mcpModule = module {
         lin.mcp.ComboPlanManagementToolProvider(
             get(),
             get<CardGroupService>()
+        )
+    } bind McpToolProvider::class
+    single {
+        PurposeTagToolProvider(
+            get(),
+            get(),
+            get<lin.ui.card_purpose.db.CardPurposeRepository>(),
+            get<lin.ui.service.TreeConfigService>()
         )
     } bind McpToolProvider::class
 

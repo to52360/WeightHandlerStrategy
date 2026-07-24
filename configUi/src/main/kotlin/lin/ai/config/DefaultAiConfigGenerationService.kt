@@ -4,6 +4,8 @@ import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorLeafKind
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.card_group.db.CardGroupService
+import lin.ui.card_purpose.DefaultPurposeTagProvider
+import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.service.TreeConfigService
 import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
 import lin.ui.tree_config.validation.EvaluatorTreeValidator
@@ -17,7 +19,8 @@ class DefaultAiConfigGenerationService(
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
     private val treeConfigService: TreeConfigService,
     pipelineAssembler: PipelineAssembler,
-    private val cardGroupService: CardGroupService
+    private val cardGroupService: CardGroupService,
+    private val purposeTagProvider: PurposeTagProvider = DefaultPurposeTagProvider()
 ) : AiConfigGenerationService {
     private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
 
@@ -62,11 +65,16 @@ class DefaultAiConfigGenerationService(
         // T-013: MCP-only 绑定类型感知校验
         when (request.config.bindingType) {
             EvaluatorTreeBindingType.PURPOSE_TAG -> {
-                diagnostics += EvaluatorTreeValidator.ValidationDiagnostic(
-                    "binding_purpose_tag_unavailable",
-                    "用途标签(PURPOSE_TAG)绑定类型 V1 暂不可用",
-                    "bindingType"
-                )
+                val availableTags = purposeTagProvider.tags().map { it.id.value }.toSet()
+                request.config.bindingIds.forEach { tagId ->
+                    if (tagId !in availableTags) {
+                        diagnostics += EvaluatorTreeValidator.ValidationDiagnostic(
+                            "binding_purpose_tag_not_found",
+                            "绑定的用途标签不存在: $tagId。当前可用标签: $availableTags",
+                            "bindingIds"
+                        )
+                    }
+                }
             }
 
             EvaluatorTreeBindingType.GROUP -> {

@@ -11,7 +11,7 @@ data class CreateDraftRequest(
     val name: String,
     @field:JsonPropertyDescription("评估树的拓扑逻辑骨架")
     val root: EvaluatorNode,
-    @field:JsonPropertyDescription("绑定的目标类型（GROUP, PURPOSE_TAG(暂无工具支持) 或 CARD）")
+    @field:JsonPropertyDescription("绑定的目标类型（GROUP, PURPOSE_TAG 或 CARD）")
     val bindingType: EvaluatorTreeBindingType,
     @field:JsonPropertyDescription(
         """绑定的目标 ID 列表。

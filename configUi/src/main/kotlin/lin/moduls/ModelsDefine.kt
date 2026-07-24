@@ -1,7 +1,9 @@
-﻿package lin.moduls
+package lin.moduls
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import lin.bean.usePlan.DefaultPurposeTagIntentRuleProvider
+import lin.bean.usePlan.PurposeTagIntentRuleProvider
 import lin.config.PathConfig
 import lin.db.HsCardRepository
 import lin.db.OrthogonalTemplateRepository
@@ -57,6 +59,7 @@ val serviceModule = module {
 
     // 用途标签目录与显示
     single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    single<PurposeTagIntentRuleProvider> { DefaultPurposeTagIntentRuleProvider() }
     single { PurposeTagTreeBindingPolicy(get()) }
 
     // 全局卡组选择状态

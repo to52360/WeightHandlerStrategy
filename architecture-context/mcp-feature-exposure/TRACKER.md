@@ -14,8 +14,8 @@
 
 ## 整体进度
 
-- **当前任务**: 架构任务规划完成，等待开始阶段一实施
-- **整体状态**: ⏸️ 规划已完成（暂不实施，待用户指令开启实施）
+- **当前任务**: 阶段二（用途标签 MCP 工具链暴露）已完成，等待开启阶段三
+- **整体状态**: 🔄 阶段二实施完成
 
 ---
 
@@ -31,11 +31,12 @@
 
 ### 阶段二：用途标签 (Purpose Tag) MCP 工具链暴露
 
-- [ ] **T-211**: PurposeTag 元数据与意图规则 DTO 设计（梳理 `PurposeTagId`、`PurposeTagIntentRule` 的
+- [x] **T-211**: PurposeTag 元数据与意图规则 DTO 设计（梳理 `PurposeTagId`、`PurposeTagIntentRule` 的
   stage/orderWeight/replan/priority 字段）
-- [ ] **T-212**: `purpose_tag` MCP 工具实现（支持 `action=LIST` 列出全部标签与 `action=GET` 读取特定标签的意图推导规则）
-- [ ] **T-213**: `save_purpose_tag_rule` MCP 工具实现（支持 AI 动态配置或修正用途标签到打分意图的规则映射）
-- [ ] **T-214**: 评估树草稿与落库全流程补齐 `bindingType=PURPOSE_TAG` 支持（消除 `CreateDraftRequest` 中的“暂无工具支持”限制）
+- [x] **T-212**: `purpose_tag` MCP 工具实现（支持 `action=LIST` 列出全部标签与 `action=GET` 读取特定标签的意图推导规则与关联树/卡牌）
+- [x] **T-213**: (已取消/CANCELED) `save_purpose_tag_rule` MCP 工具（读写比 100:1，硬编码 Provider 已满足全场景需求，不建
+  DB 表）
+- [x] **T-214**: 评估树草稿与落库全流程补齐 `bindingType=PURPOSE_TAG` 支持（消除 `CreateDraftRequest` 中的“暂无工具支持”限制与解封校验）
 
 ### 阶段三：配置生命周期管理与高级操作 (Lifecycle & Utility Operations)
 
