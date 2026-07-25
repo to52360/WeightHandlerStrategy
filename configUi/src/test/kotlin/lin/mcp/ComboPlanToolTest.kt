@@ -1,11 +1,9 @@
 package lin.mcp
 
-import lin.ui.combo_plan.db.ComboPlanDefinitionEntity
-import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanDefinitionEntity
+import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.koin.core.context.GlobalContext

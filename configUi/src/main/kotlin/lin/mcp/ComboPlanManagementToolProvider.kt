@@ -2,9 +2,9 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.ComboRelation
-import lin.ui.card_group.db.CardGroupService
-import lin.ui.combo_plan.db.ComboPlanDefinitionEntity
-import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
+import lin.repository.card_group.CardGroupService
+import lin.repository.combo_plan.ComboPlanDefinitionEntity
+import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.utils.nextShortId
 
 private data class SaveComboPlanInput(

@@ -1,10 +1,9 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import com.fasterxml.jackson.databind.ObjectMapper
+import lin.repository.tree_config.EvaluatorTreeTemplateEntity
+import lin.repository.tree_config.EvaluatorTreeTemplateRepository
 import lin.ui.service.EvaluatorTreeTemplateService
-import lin.ui.tree_config.db.EvaluatorTreeTemplateEntity
-import lin.ui.tree_config.db.EvaluatorTreeTemplateRepository
 import lin.utils.nextShortId
 
 /**

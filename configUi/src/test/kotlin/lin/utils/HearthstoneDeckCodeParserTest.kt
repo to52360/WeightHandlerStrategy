@@ -4,7 +4,7 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import lin.config.PathConfig
 import lin.dao.CardGroupJsonParser
-import lin.db.HsCardRepository
+import lin.repository.HsCardRepository
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.springframework.jdbc.core.JdbcTemplate

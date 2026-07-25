@@ -2,11 +2,11 @@ package lin.provider
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.myLog
+import lin.repository.card_group.CardGroupRepository
+import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.serviceLoader.provider.TreeConfigProvider
-
-import lin.ui.tree_config.db.TreeConfigRepository
 import lin.utils.runCatchingLog
 
 /**
@@ -19,7 +19,7 @@ import lin.utils.runCatchingLog
 class SqliteTreeConfigProvider(
     private val repository: TreeConfigRepository,
     private val mapper: ObjectMapper,
-    private val groupRepository: lin.ui.card_group.db.CardGroupRepository,
+    private val groupRepository: CardGroupRepository,
     private val tagPolicy: lin.ui.card_purpose.PurposeTagTreeBindingPolicy
 ) : TreeConfigProvider {
     override fun findById(id: String): EvaluatorTreeConfig? {

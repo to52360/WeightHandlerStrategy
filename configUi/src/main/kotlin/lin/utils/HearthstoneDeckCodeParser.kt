@@ -1,8 +1,8 @@
 package lin.utils
 
 import lin.dao.CardGroupJsonParser
-import lin.db.CardIdNameText
-import lin.db.HsCardRepository
+import lin.repository.CardIdNameText
+import lin.repository.HsCardRepository
 import java.nio.file.Path
 import java.util.*
 

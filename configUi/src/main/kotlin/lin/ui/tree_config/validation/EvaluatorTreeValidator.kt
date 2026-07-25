@@ -1,13 +1,12 @@
 package lin.ui.tree_config.validation
 
+import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.PipelineAssembler
 import lin.rule.parse.SpecValidator
 import lin.rule.score.ScoreEffect
 import lin.rule.tree.*
 import lin.ui.tree_config.bridge.leafKind
-
-import lin.ui.tree_config.db.EvaluatorLeafSourceCatalog
 
 /**
  * 评估树配置的统一验证器，同时服务 UI 手动保存和 AI/MCP 自动保存两条路径。

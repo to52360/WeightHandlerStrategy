@@ -2,9 +2,9 @@ package lin.ui.components
 
 import javafx.scene.control.*
 import javafx.scene.layout.VBox
-import lin.db.OrthogonalTemplateEntity
-import lin.db.TemplateGroupEntity
-import lin.db.TemplateGroupRepository
+import lin.repository.OrthogonalTemplateEntity
+import lin.repository.TemplateGroupEntity
+import lin.repository.TemplateGroupRepository
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 

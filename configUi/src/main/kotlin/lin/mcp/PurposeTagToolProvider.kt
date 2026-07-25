@@ -2,9 +2,9 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.PurposeTagIntentRuleProvider
+import lin.repository.card_purpose.CardPurposeRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.card_purpose.PurposeTagProvider
-import lin.ui.card_purpose.db.CardPurposeRepository
 import lin.ui.service.TreeConfigService
 
 private data class PurposeTagQueryInput(

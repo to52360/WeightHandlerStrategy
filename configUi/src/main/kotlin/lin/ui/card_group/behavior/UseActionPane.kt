@@ -1,0 +1,86 @@
+package lin.ui.card_group.behavior
+
+import javafx.beans.value.ObservableBooleanValue
+import javafx.geometry.Pos
+import javafx.scene.control.CheckBox
+import javafx.scene.control.Label
+import javafx.scene.layout.HBox
+import javafx.scene.layout.VBox
+import lin.domain.use.UseActionRegistry
+import lin.rule.tree.findExtraConfig
+import lin.rule.tree.findUseActions
+import lin.ui.card_group.WorkbenchStore
+
+/**
+ * USE_ACTION 类型行为编辑面板：使用动作勾选 + stat_dimensions 多选框。
+ * 自包含 UI 构造、编辑→State、State→UI 双向同步。
+ */
+class UseActionPane(
+    private val store: WorkbenchStore,
+    disableWhen: ObservableBooleanValue
+) {
+    val node: VBox
+
+    private val actionCheckMap = linkedMapOf<String, CheckBox>()
+    private val statDimsPane = StatDimensionsPane(store, disableWhen)
+
+    private var isUpdatingFromState = false
+
+    init {
+        val actionCheckBoxesRow = HBox(15.0).apply {
+            alignment = Pos.CENTER_LEFT
+        }
+
+        UseActionRegistry.knownActionIds().forEach { actionId ->
+            val labelText = BehaviorDisplayMappers.actionToLabel(actionId)
+            val cb = CheckBox(labelText).apply { disableProperty().bind(disableWhen) }
+            cb.selectedProperty().addListener { _, _, newValue ->
+                if (!isUpdatingFromState) {
+                    store.updateBindingUseAction(actionId, newValue)
+                }
+                if (actionId == "RECORD_PLAY") {
+                    statDimsPane.isVisible = newValue
+                }
+            }
+            actionCheckMap[actionId] = cb
+            actionCheckBoxesRow.children.add(cb)
+        }
+
+        val useActionRow = HBox(10.0).apply {
+            alignment = Pos.CENTER_LEFT
+            children.addAll(
+                Label("使用动作:").apply { style = "-fx-font-weight: bold;" },
+                actionCheckBoxesRow
+            )
+        }
+
+        node = VBox(8.0).apply {
+            children.addAll(useActionRow, statDimsPane.node)
+        }
+
+        // ── State → UI ──
+        store.stateProperty.addListener { _, _, _ ->
+            val idx = store.state.selectedBindingIndex
+            val bindings = store.state.currentBindings
+            if (idx != null && idx in bindings.indices) {
+                val binding = bindings[idx]
+                isUpdatingFromState = true
+                try {
+                    actionCheckMap.forEach { (actionId, cb) ->
+                        val selected = binding.behaviors.findUseActions().contains(actionId)
+                        if (cb.isSelected != selected) cb.isSelected = selected
+                    }
+                    statDimsPane.syncFromConfig(binding.behaviors.findExtraConfig())
+                    statDimsPane.isVisible = binding.behaviors.findUseActions().contains("RECORD_PLAY")
+                } finally { isUpdatingFromState = false }
+            } else {
+                isUpdatingFromState = true
+                try {
+                    actionCheckMap.forEach { (_, cb) -> cb.isSelected = false }
+                    statDimsPane.clearSelection()
+                    statDimsPane.isVisible = false
+                } finally { isUpdatingFromState = false }
+            }
+        }
+    }
+}

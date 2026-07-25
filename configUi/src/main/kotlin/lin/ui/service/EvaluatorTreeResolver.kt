@@ -1,9 +1,9 @@
 package lin.ui.service
 
+import lin.repository.tree_config.TreeConfigEntity
+import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
-import lin.ui.tree_config.db.TreeConfigEntity
-import lin.ui.tree_config.db.TreeConfigRepository
 
 /**
  * 策略解析运行上下文

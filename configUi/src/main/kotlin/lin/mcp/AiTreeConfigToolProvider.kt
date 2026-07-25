@@ -2,7 +2,7 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.ai.config.AiConfigGenerationService
-import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.service.TreeConfigService
 
 /**

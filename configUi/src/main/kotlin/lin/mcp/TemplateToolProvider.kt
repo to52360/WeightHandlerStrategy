@@ -1,10 +1,9 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import com.fasterxml.jackson.databind.ObjectMapper
-import lin.db.OrthogonalTemplateEntity
-import lin.db.OrthogonalTemplateRepository
-import lin.db.TemplateGroupRepository
+import lin.repository.OrthogonalTemplateEntity
+import lin.repository.OrthogonalTemplateRepository
+import lin.repository.TemplateGroupRepository
 import lin.utils.nextShortId
 
 /**

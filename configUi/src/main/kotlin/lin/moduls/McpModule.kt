@@ -6,7 +6,7 @@ import lin.ai.config.DefaultAiConfigGenerationService
 import lin.ai.config.DefaultCardGroupQueryService
 import lin.di.infraModule
 import lin.mcp.*
-import lin.ui.card_group.db.CardGroupService
+import lin.repository.card_group.CardGroupService
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -40,7 +40,7 @@ val mcpModule = module {
         CardGroupToolProvider(
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
-            get<lin.db.HsCardRepository>(),
+            get<lin.repository.HsCardRepository>(),
             get<lin.ui.service.TreeConfigService>()
         )
     } bind McpToolProvider::class
@@ -50,7 +50,7 @@ val mcpModule = module {
         ComboPlanToolProvider(
             get(),
             get<CardGroupService>(),
-            get<lin.db.HsCardRepository>(),
+            get<lin.repository.HsCardRepository>(),
             get<lin.ui.service.TreeConfigService>()
         )
     } bind McpToolProvider::class
@@ -64,7 +64,7 @@ val mcpModule = module {
         PurposeTagToolProvider(
             get(),
             get(),
-            get<lin.ui.card_purpose.db.CardPurposeRepository>(),
+            get<lin.repository.card_purpose.CardPurposeRepository>(),
             get<lin.ui.service.TreeConfigService>()
         )
     } bind McpToolProvider::class

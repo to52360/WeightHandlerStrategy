@@ -1,8 +1,8 @@
 package lin.ui.components
 
 import javafx.scene.layout.VBox
-import lin.ui.tree_config.ui.LogicNodeType
-import lin.ui.tree_config.ui.LogicNodeWrapper
+import lin.ui.tree_config.LogicNodeType
+import lin.ui.tree_config.LogicNodeWrapper
 
 /**
  * 属性面板编辑器策略。

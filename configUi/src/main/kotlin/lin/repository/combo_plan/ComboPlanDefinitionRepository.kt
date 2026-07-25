@@ -1,0 +1,96 @@
+package lin.repository.combo_plan
+
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.RowMapper
+
+class ComboPlanDefinitionRepository(private val jdbcTemplate: JdbcTemplate) {
+
+    init {
+        initSchema()
+    }
+
+    private fun initSchema() {
+        val sql = """
+            CREATE TABLE IF NOT EXISTS combo_plan_definition (
+                manager_id      TEXT    NOT NULL DEFAULT '',
+                id              TEXT    PRIMARY KEY,
+                core_group_ids  TEXT    NOT NULL,
+                dep_group_ids   TEXT    NOT NULL,
+                score           REAL    NOT NULL,
+                core_mutex      INTEGER NOT NULL DEFAULT 1,
+                relation        TEXT    NOT NULL,
+                must_adjacent   INTEGER NOT NULL DEFAULT 0
+            );
+        """.trimIndent()
+        jdbcTemplate.execute(sql)
+        jdbcTemplate.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cpd_manager_id ON combo_plan_definition(manager_id)"
+        )
+    }
+
+    private val rowMapper = RowMapper { rs, _ ->
+        ComboPlanDefinitionEntity(
+            managerId = rs.getString("manager_id"),
+            id = rs.getString("id"),
+            coreGroupIds = rs.getString("core_group_ids"),
+            depGroupIds = rs.getString("dep_group_ids"),
+            score = rs.getDouble("score"),
+            coreMutex = rs.getInt("core_mutex") == 1,
+            relation = rs.getString("relation"),
+            mustAdjacent = rs.getInt("must_adjacent") == 1
+        )
+    }
+
+    fun save(entity: ComboPlanDefinitionEntity) {
+        val sql = """
+            INSERT INTO combo_plan_definition (manager_id, id, core_group_ids, dep_group_ids, score, core_mutex, relation, must_adjacent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                manager_id      = excluded.manager_id,
+                core_group_ids  = excluded.core_group_ids,
+                dep_group_ids   = excluded.dep_group_ids,
+                score           = excluded.score,
+                core_mutex      = excluded.core_mutex,
+                relation        = excluded.relation,
+                must_adjacent   = excluded.must_adjacent
+        """.trimIndent()
+        jdbcTemplate.update(
+            sql,
+            entity.managerId,
+            entity.id,
+            entity.coreGroupIds,
+            entity.depGroupIds,
+            entity.score,
+            if (entity.coreMutex) 1 else 0,
+            entity.relation,
+            if (entity.mustAdjacent) 1 else 0
+        )
+    }
+
+    fun findAll(): List<ComboPlanDefinitionEntity> {
+        val sql = "SELECT * FROM combo_plan_definition"
+        return jdbcTemplate.query(sql, rowMapper)
+    }
+
+    fun findById(id: String): ComboPlanDefinitionEntity? {
+        val sql = "SELECT * FROM combo_plan_definition WHERE id = ?"
+        return jdbcTemplate.query(sql, rowMapper, id).firstOrNull()
+    }
+
+    fun deleteById(id: String) {
+        val sql = "DELETE FROM combo_plan_definition WHERE id = ?"
+        jdbcTemplate.update(sql, id)
+    }
+
+    fun findByManagerIds(managerIds: Set<String>): List<ComboPlanDefinitionEntity> {
+        if (managerIds.isEmpty()) return emptyList()
+        val placeholders = managerIds.joinToString(",") { "?" }
+        val sql = "SELECT * FROM combo_plan_definition WHERE manager_id IN ($placeholders)"
+        return jdbcTemplate.query(sql, rowMapper, *managerIds.toTypedArray())
+    }
+
+    fun findByManagerId(managerId: String): List<ComboPlanDefinitionEntity> {
+        val sql = "SELECT * FROM combo_plan_definition WHERE manager_id = ?"
+        return jdbcTemplate.query(sql, rowMapper, managerId)
+    }
+}

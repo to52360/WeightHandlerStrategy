@@ -2,11 +2,11 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.ComboRelation
-import lin.db.HsCardRepository
+import lin.repository.HsCardRepository
+import lin.repository.card_group.CardGroupService
+import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
-import lin.ui.card_group.db.CardGroupService
-import lin.ui.combo_plan.db.ComboPlanDefinitionRepository
 
 private data class ComboPlanInput(
     @field:JsonPropertyDescription("操作类型：LIST（列出所有 Combo 方案摘要），GET（读取指定 Combo 的详细依赖与步骤）。有效值仅限：LIST, GET")
