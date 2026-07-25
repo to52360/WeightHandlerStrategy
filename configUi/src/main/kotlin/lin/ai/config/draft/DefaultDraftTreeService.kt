@@ -5,6 +5,7 @@ import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorTreeConfig
+import lin.ui.service.TreeConfigService
 import lin.ui.tree_config.validation.EvaluatorTreeValidator
 import lin.utils.nextShortId
 import java.util.concurrent.ConcurrentHashMap
@@ -12,7 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
 class DefaultDraftTreeService(
     leafSourceCatalog: EvaluatorLeafSourceCatalog,
     pipelineAssembler: PipelineAssembler,
-    private val aiConfigGenerationService: AiConfigGenerationService
+    private val aiConfigGenerationService: AiConfigGenerationService,
+    private val treeConfigService: TreeConfigService
 ) : DraftTreeService {
 
     private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
@@ -23,14 +25,28 @@ class DefaultDraftTreeService(
 
     override fun createDraft(request: CreateDraftRequest): DraftCreationResult {
         lazyEvict()
-
         val draftId = nextShortId()
-        val expectedNodeIds = validator.collectReferencedLeafNodeIds(request.root)
+
+        // cloneFrom: 以已有配置为蓝本，预填全部叶子节点
+        val (effectiveRoot, preFillLeafConfigs) = if (request.cloneFrom != null) {
+            val (_, config) = treeConfigService.findById(request.cloneFrom)
+                ?: throw IllegalArgumentException("要克隆的树配置不存在: ${request.cloneFrom}")
+            if (config == null) throw IllegalArgumentException("要克隆的树配置解析失败: ${request.cloneFrom}")
+            config.root to config.leafConfigs
+        } else {
+            val root = request.root
+                ?: throw IllegalArgumentException("root 不能为空（非克隆模式请提供 root，克隆模式请提供 cloneFrom）")
+            root to emptyMap()
+        }
+
+        val expectedNodeIds = validator.collectReferencedLeafNodeIds(effectiveRoot)
+        val leafConfigs = ConcurrentHashMap<String, EvaluatorLeafConfig>()
+        leafConfigs.putAll(preFillLeafConfigs)
 
         val state = DraftTreeState(
             draftId = draftId,
-            skeletonRequest = request,
-            leafConfigs = ConcurrentHashMap(),
+            skeletonRequest = request.copy(root = effectiveRoot),
+            leafConfigs = leafConfigs,
             expectedNodeIds = expectedNodeIds,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
@@ -92,7 +108,7 @@ class DefaultDraftTreeService(
         val fullConfig = EvaluatorTreeConfig(
             bindingType = request.bindingType,
             bindingIds = request.bindingIds,
-            root = request.root,
+            root = request.root!!,
             leafConfigs = state.leafConfigs
         )
 

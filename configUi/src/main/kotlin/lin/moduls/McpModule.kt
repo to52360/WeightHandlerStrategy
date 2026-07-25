@@ -24,7 +24,14 @@ val mcpModule = module {
             get()
         )
     }
-    single<lin.ai.config.draft.DraftTreeService> { lin.ai.config.draft.DefaultDraftTreeService(get(), get(), get()) }
+    single<lin.ai.config.draft.DraftTreeService> {
+        lin.ai.config.draft.DefaultDraftTreeService(
+            get(),
+            get(),
+            get(),
+            get()
+        )
+    }
 
     // 多个 McpToolProvider 必须 bind，否则 single<T> 同名覆盖，getAll 只能拿到最后一个
     single { AiTreeTemplateToolProvider(get(), get()) } bind McpToolProvider::class

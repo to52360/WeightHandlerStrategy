@@ -9,8 +9,8 @@ import lin.rule.tree.EvaluatorTreeBindingType
 data class CreateDraftRequest(
     @field:JsonPropertyDescription("评估树的名称")
     val name: String,
-    @field:JsonPropertyDescription("评估树的拓扑逻辑骨架")
-    val root: EvaluatorNode,
+    @field:JsonPropertyDescription("评估树的拓扑逻辑骨架。cloneFrom 非空时可省略（使用克隆源配置的骨架）。")
+    val root: EvaluatorNode? = null,
     @field:JsonPropertyDescription("绑定的目标类型（GROUP, PURPOSE_TAG 或 CARD）")
     val bindingType: EvaluatorTreeBindingType,
     @field:JsonPropertyDescription(
@@ -28,7 +28,9 @@ data class CreateDraftRequest(
         """所属卡组 manager 的 id（GROUP 绑定时【必填】）。
         取值来自 list_card_groups 返回的 id，或 save_card_group 响应的 managerId。注意它不同于 bindingIds 里的绑定条目 id。PURPOSE_TAG 或 CARD 绑定时留空。"""
     )
-    val managerId: String? = null
+    val managerId: String? = null,
+    @field:JsonPropertyDescription("克隆已有评估树的 id（由 evaluator_tree(action=LIST) 获取）。非空时将以该配置为蓝本创建草稿，所有叶子节点参数预填，missingNodeIds 为空，可直接 commit 或 put_draft_leaf 覆盖差异节点。")
+    val cloneFrom: String? = null
 )
 
 data class PutDraftLeafRequest(

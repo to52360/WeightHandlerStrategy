@@ -76,18 +76,57 @@ class CardGroupToolProvider(
         // ── save_card_group (保留) ──
         typedTool<SaveCardGroupInput>(
             name = "save_card_group",
-            description = "创建或更新卡牌分组方案。existingId 非空时更新已有方案；为空时新建。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。"
+            description = "创建或更新卡牌分组方案。existingId 非空时更新已有方案；为空时新建。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。\n\n【克隆模式】若提供 cloneFrom（已有方案 id），将以该方案为蓝本创建副本（含所有 binding 与 behavior），managerName 缺省时自动加「副本」后缀。"
         ) { input ->
-            val cardPool = CardGroupJsonParser.loadByFileName(input.sourceFile)
-                ?: return@typedTool mcpError("sourceFile not found: ${input.sourceFile}")
+            // ── clone mode ──
+            if (input.cloneFrom != null) {
+                val sourceManager = groupService.loadAllManagers().firstOrNull { it.id == input.cloneFrom }
+                    ?: return@typedTool mcpError("要克隆的方案不存在: ${input.cloneFrom}")
+                val sourceBindings = groupService.loadBindings(input.cloneFrom)
+                val effectiveSourceFile = input.sourceFile?.takeIf { it.isNotBlank() } ?: sourceManager.sourceFile
+                val managerName = input.managerName?.takeIf { it.isNotBlank() }
+                    ?: "${sourceManager.name} 副本"
+
+                val clonedBindings = sourceBindings.map { b ->
+                    CardGroupBinding(
+                        id = nextShortId(),
+                        managerId = "",
+                        name = b.name,
+                        cardIds = b.cardIds,
+                        description = b.description,
+                        behaviors = b.behaviors
+                    )
+                }
+
+                val managerId = groupService.saveManager(
+                    name = managerName,
+                    sourceFile = effectiveSourceFile,
+                    enabled = true,
+                    bindings = clonedBindings,
+                    existingId = null
+                )
+                return@typedTool mcpSuccess(
+                    mapOf(
+                        "managerId" to managerId,
+                        "managerName" to managerName,
+                        "bindingIds" to clonedBindings.map { it.id },
+                        "clonedFrom" to input.cloneFrom
+                    )
+                )
+            }
+
+            // ── original create/update logic ──
+            val sourceFile = input.sourceFile ?: return@typedTool mcpError("sourceFile 不能为空")
+            val cardPool = CardGroupJsonParser.loadByFileName(sourceFile)
+                ?: return@typedTool mcpError("sourceFile not found: $sourceFile")
             val validCardIds = cardPool.cards.map { it.cardId }.toSet()
             input.bindings.forEachIndexed { i, bi ->
                 val invalidIds = bi.cardIds.filter { it !in validCardIds }
                 if (invalidIds.isNotEmpty()) {
-                    return@typedTool mcpError("bindings[$i] contains cardIds not in sourceFile '${input.sourceFile}': $invalidIds")
+                    return@typedTool mcpError("bindings[$i] contains cardIds not in sourceFile '$sourceFile': $invalidIds")
                 }
             }
-            val managerName = input.managerName?.takeIf { it.isNotBlank() } ?: input.sourceFile
+            val managerName = input.managerName?.takeIf { it.isNotBlank() } ?: sourceFile
             val existingId = input.existingId?.takeIf { it.isNotBlank() }
             val bindings = input.bindings.map { bi ->
                 CardGroupBinding(
@@ -100,7 +139,7 @@ class CardGroupToolProvider(
             }
             val managerId = groupService.saveManager(
                 name = managerName,
-                sourceFile = input.sourceFile,
+                sourceFile = sourceFile,
                 enabled = true,
                 bindings = bindings,
                 existingId = existingId
@@ -182,14 +221,14 @@ class CardGroupToolProvider(
                 .associateBy { it.cardId }
                 .toMutableMap()
 
-            for (item in input.cards) {
-                val oldItem = updatedCardMap[item.cardId]
-                val cardName = item.name ?: oldItem?.name ?: cardRepo.findName(item.cardId) ?: item.cardId
-                updatedCardMap[item.cardId] = CardWeightConfig(
-                    cardId = item.cardId,
+            for ((cardId, name, weight, changeWeight) in input.cards) {
+                val oldItem = updatedCardMap[cardId]
+                val cardName = name ?: oldItem?.name ?: cardRepo.findName(cardId) ?: cardId
+                updatedCardMap[cardId] = CardWeightConfig(
+                    cardId = cardId,
                     name = cardName,
-                    weight = item.weight ?: oldItem?.weight,
-                    changeWeight = item.changeWeight ?: oldItem?.changeWeight
+                    weight = weight ?: oldItem?.weight,
+                    changeWeight = changeWeight ?: oldItem?.changeWeight
                 )
             }
 
@@ -231,14 +270,16 @@ private data class CardGroupInput(
 // ── 保留的 input 数据类 ──
 
 private data class SaveCardGroupInput(
-    @field:JsonPropertyDescription(".cardgroup 文件名（不含扩展名），卡池来源。")
-    val sourceFile: String,
-    @field:JsonPropertyDescription("方案名称，缺省使用 sourceFile。")
+    @field:JsonPropertyDescription(".cardgroup 文件名（不含扩展名），卡池来源。cloneFrom 非空时可省略。")
+    val sourceFile: String? = null,
+    @field:JsonPropertyDescription("方案名称，缺省使用 sourceFile。cloneFrom 非空且不提供时自动加 \"副本\" 后缀。")
     val managerName: String? = null,
-    @field:JsonPropertyDescription("已有方案的 id（由 card_group(action=LIST) 获取），非空则更新该方案。")
+    @field:JsonPropertyDescription("已有方案的 id（由 card_group(action=LIST) 获取），非空则更新该方案。与 cloneFrom 互斥。")
     val existingId: String? = null,
-    @field:JsonPropertyDescription("分组列表")
-    val bindings: List<SaveCardGroupBindingInput> = emptyList()
+    @field:JsonPropertyDescription("分组列表。cloneFrom 非空时忽略此字段（使用克隆源的 binding）。")
+    val bindings: List<SaveCardGroupBindingInput> = emptyList(),
+    @field:JsonPropertyDescription("克隆已有分组方案的 id（由 card_group(action=LIST) 获取）。非空时将以该方案为蓝本创建副本，含所有 binding 与 behavior。")
+    val cloneFrom: String? = null
 )
 
 private data class SaveCardGroupBindingInput(
