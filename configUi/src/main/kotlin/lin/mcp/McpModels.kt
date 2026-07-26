@@ -1,7 +1,6 @@
 package lin.mcp
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.victools.jsonschema.generator.OptionPreset
 import com.github.victools.jsonschema.generator.SchemaGenerator
 import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder
@@ -12,7 +11,6 @@ import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.LogicNode
 import lin.tree_config.bridge.defaultNodeName
 import lin.ui.service.createTreeConfigMapper
-import lin.utils.json.registerLogicNodeMixin
 import kotlin.reflect.full.memberProperties
 
 object JsonSchemaUtils {
@@ -80,6 +78,14 @@ fun mcpError(message: String): McpToolResult =
     McpToolResult(mcpMapper.writeValueAsString(mapOf("error" to message)), isError = true)
 
 /**
+ * MCP tool 输入参数校验失败的专用异常（如 action 非法、必填参数缺失）。
+ * 在 [typedTool] 的 call lambda 内被统一捕获并转为 [mcpError] 业务错误响应，
+ * 借此消除各 provider 中重复定义的仅承载错误消息的 ErrorAction sealed 子类型，
+ * 让每个领域 sealed 只聚焦于真正的业务分支（List/Get/...）。
+ */
+class McpBadInput(message: String) : RuntimeException(message)
+
+/**
  * 声明式 typed tool 工厂：自动将 raw args Map 反序列化为 I，handler 只关心业务逻辑。
  * inputSchemaJson 由 victools 根据入参类型自动生成。
  */
@@ -95,6 +101,9 @@ inline fun <reified I> typedTool(
         try {
             val typedInput = mcpMapper.convertValue(rawArgs, I::class.java)
             handler(typedInput)
+        } catch (e: McpBadInput) {
+            // 输入参数校验失败（action 非法 / 必填参数缺失）：直接转为业务错误响应
+            mcpError(e.message ?: "bad input")
         } catch (e: IllegalArgumentException) {
             // 反序列化格式/类型错误
             mcpError("Input validation failed: ${e.message}")

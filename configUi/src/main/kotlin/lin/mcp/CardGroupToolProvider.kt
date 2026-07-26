@@ -28,16 +28,13 @@ class CardGroupToolProvider(
             name = "card_pool",
             description = "查询卡池文件。支持 action=LIST（列出所有 .cardgroup 文件摘要）和 action=GET（读取单个文件的完整卡牌详情：cardId/name/text/cost/type）。"
         ) { input ->
-            when (input.action.uppercase()) {
-                "LIST" -> mcpSuccess(sourceService.listCardGroupSources())
-                "GET" -> {
-                    if (input.fileName.isNullOrBlank()) return@typedTool mcpError("action=GET 需要 fileName 参数")
-                    val detail = sourceService.getCardGroupDetail(input.fileName)
-                        ?: return@typedTool mcpError("卡池不存在: ${input.fileName}")
+            when (val query = input.toQuery()) {
+                is CardPoolQuery.ListAction -> mcpSuccess(sourceService.listCardGroupSources())
+                is CardPoolQuery.GetAction -> {
+                    val detail = sourceService.getCardGroupDetail(query.fileName)
+                        ?: return@typedTool mcpError("卡池不存在: ${query.fileName}")
                     mcpSuccess(detail)
                 }
-
-                else -> mcpError("未知 action: ${input.action}，支持 LIST / GET")
             }
         },
 
@@ -46,13 +43,12 @@ class CardGroupToolProvider(
             name = "card_group",
             description = "查询卡牌分组方案。支持 action=LIST（列出所有方案的 id/name/sourceFile/enabled 摘要）和 action=GET（读取某个方案的完整信息，含所有 binding 条目的 id/name/cardIds）。"
         ) { input ->
-            when (input.action.uppercase()) {
-                "LIST" -> mcpSuccess(groupService.loadAllManagers())
-                "GET" -> {
-                    if (input.managerId.isNullOrBlank()) return@typedTool mcpError("action=GET 需要 managerId 参数")
-                    val manager = groupService.loadAllManagers().firstOrNull { it.id == input.managerId }
-                        ?: return@typedTool mcpError("方案不存在: ${input.managerId}")
-                    val bindings = groupService.loadBindings(input.managerId).map { b ->
+            when (val query = input.toQuery()) {
+                is CardGroupQuery.ListAction -> mcpSuccess(groupService.loadAllManagers())
+                is CardGroupQuery.GetAction -> {
+                    val manager = groupService.loadAllManagers().firstOrNull { it.id == query.managerId }
+                        ?: return@typedTool mcpError("方案不存在: ${query.managerId}")
+                    val bindings = groupService.loadBindings(query.managerId).map { b ->
                         mapOf(
                             "id" to b.id,
                             "name" to b.name,
@@ -68,8 +64,6 @@ class CardGroupToolProvider(
                         )
                     )
                 }
-
-                else -> mcpError("未知 action: ${input.action}")
             }
         },
 
@@ -253,19 +247,55 @@ class CardGroupToolProvider(
 
 // ── 合并后的 input 数据类 ──
 
+private sealed interface CardPoolQuery {
+    data object ListAction : CardPoolQuery
+    data class GetAction(val fileName: String) : CardPoolQuery
+}
+
 private data class CardPoolInput(
     @field:JsonPropertyDescription("操作类型：LIST 列出所有卡池文件摘要，GET 读取单个文件详情（需传 fileName）")
     val action: String,
     @field:JsonPropertyDescription("卡池文件名（不含扩展名），仅 action=GET 时需要。")
     val fileName: String? = null
-)
+) {
+    fun toQuery(): CardPoolQuery = when (action.uppercase()) {
+        "GET" -> {
+            val fileName = fileName
+            if (fileName.isNullOrBlank()) throw McpBadInput("action=GET 需要 fileName 参数") else CardPoolQuery.GetAction(
+                fileName
+            )
+        }
+
+        "LIST" -> CardPoolQuery.ListAction
+        else -> throw McpBadInput("未知 action: $action，支持 LIST / GET")
+    }
+}
+
+private sealed interface CardGroupQuery {
+    data object ListAction : CardGroupQuery
+    data class GetAction(val managerId: String) : CardGroupQuery
+}
 
 private data class CardGroupInput(
     @field:JsonPropertyDescription("操作类型：LIST 列出所有方案摘要，GET 读取方案详情（需传 managerId）")
     val action: String,
     @field:JsonPropertyDescription("方案 id，仅 action=GET 时需要，由 card_group(action=LIST) 返回。")
     val managerId: String? = null
-)
+) {
+    fun toQuery(): CardGroupQuery = when (action.uppercase()) {
+        "GET" -> {
+            val managerId = managerId
+            if (managerId.isNullOrBlank()) throw McpBadInput("action=GET 需要 managerId 参数") else CardGroupQuery.GetAction(
+                managerId
+            )
+        }
+
+        "LIST" -> CardGroupQuery.ListAction
+        else -> throw McpBadInput("未知 action: $action")
+    }
+}
+
+// ── 保留的 input 数据类 ──
 
 // ── 保留的 input 数据类 ──
 

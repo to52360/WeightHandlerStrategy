@@ -37,48 +37,45 @@ class AiTreeConfigToolProvider(
             name = "evaluator_tree",
             description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：managerId/bindingType/bindingIds/tree 拓扑/leafConfigs/associatedComboPlans）。"
         ) { input ->
-            when (input.action.uppercase()) {
-                "LIST" -> {
-                    val summaries = treeConfigService.loadSummaries()
-                    mcpSuccess(summaries)
+            when (val query = input.toQuery()) {
+                is EvaluatorTreeQuery.ListAction -> {
+                    mcpSuccess(treeConfigService.loadSummaries())
                 }
-                "GET" -> {
-                    if (input.id.isNullOrBlank()) {
-                        mcpError("action=GET 需要 id 参数")
-                    } else {
-                        val result = treeConfigService.findById(input.id)
-                        if (result?.second == null) {
-                            mcpError("树配置不存在")
-                        } else {
-                            val entity = result.first!!
-                            val config = result.second!!
-                            val managerId = entity.managerId
-                            val associatedComboPlans = if (!managerId.isNullOrBlank()) {
-                                comboPlanDefinitionRepository.findByManagerId(managerId).map { plan ->
-                                    mapOf(
-                                        "id" to plan.id,
-                                        "relation" to plan.relation,
-                                        "score" to plan.score,
-                                        "coreGroupIds" to plan.coreGroupIdSet().toList(),
-                                        "depGroupIds" to plan.depGroupIdSet().toList(),
-                                        "coreMutex" to plan.coreMutex,
-                                        "mustAdjacent" to plan.mustAdjacent
-                                    )
-                                }
-                            } else emptyList()
 
-                            mcpSuccess(mapOf(
+                is EvaluatorTreeQuery.GetAction -> {
+                    val result = treeConfigService.findById(query.id)
+                    if (result?.second == null) {
+                        mcpError("树配置不存在")
+                    } else {
+                        val entity = result.first!!
+                        val config = result.second!!
+                        val managerId = entity.managerId
+                        val associatedComboPlans = if (!managerId.isNullOrBlank()) {
+                            comboPlanDefinitionRepository.findByManagerId(managerId).map { plan ->
+                                mapOf(
+                                    "id" to plan.id,
+                                    "relation" to plan.relation,
+                                    "score" to plan.score,
+                                    "coreGroupIds" to plan.coreGroupIdSet().toList(),
+                                    "depGroupIds" to plan.depGroupIdSet().toList(),
+                                    "coreMutex" to plan.coreMutex,
+                                    "mustAdjacent" to plan.mustAdjacent
+                                )
+                            }
+                        } else emptyList()
+
+                        mcpSuccess(
+                            mapOf(
                                 "managerId" to managerId,
                                 "bindingType" to config.bindingType.name,
                                 "bindingIds" to config.bindingIds,
                                 "tree" to config.root.toNamed(),
                                 "leafConfigs" to config.leafConfigs,
                                 "associatedComboPlans" to associatedComboPlans
-                            ))
-                        }
+                            )
+                        )
                     }
                 }
-                else -> mcpError("未知 action: ${input.action}，支持 LIST / GET")
             }
         },
 
@@ -96,9 +93,29 @@ class AiTreeConfigToolProvider(
     )
 }
 
+/**
+ * 评估树查询的 sealed 域模型：用编译期类型区分 LIST / GET，
+ * GET 分支的 [Get.id] 为非空 String，消除原 input 中 id 的伪可选可空。
+ * 扁平 JSON 载体仍是 [EvaluatorTreeInput]，由 [toQuery] 在边界转换。
+ */
+private sealed interface EvaluatorTreeQuery {
+    data object ListAction : EvaluatorTreeQuery
+    data class GetAction(val id: String) : EvaluatorTreeQuery
+}
+
 private data class EvaluatorTreeInput(
     @field:JsonPropertyDescription("操作类型：LIST 列出所有树摘要，GET 读取树完整配置（需传 id）")
     val action: String,
     @field:JsonPropertyDescription("树 id，仅 action=GET 时需要，由 evaluator_tree(action=LIST) 返回。")
     val id: String? = null
-)
+) {
+    fun toQuery(): EvaluatorTreeQuery = when (action.uppercase()) {
+        "GET" -> {
+            val id = id
+            if (id.isNullOrBlank()) throw McpBadInput("action=GET 需要 id 参数") else EvaluatorTreeQuery.GetAction(id)
+        }
+
+        "LIST" -> EvaluatorTreeQuery.ListAction
+        else -> throw McpBadInput("未知 action: $action，支持 LIST / GET")
+    }
+}

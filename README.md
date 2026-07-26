@@ -27,7 +27,8 @@
 权重按照评分树,再通过评分选出最优组合
 2.大概计算规则  
 组权重由weightHandlerStrategy.db配置  
-总权重由combo权重(表combo_info)+组权重(表weight_group+WeightCondition)+单卡权重决定
+总权重由combo权重 (表combo_info)+组权重 (表weight_group)+单卡权重决定（条件规则经 condition_tree_config / tree_config
+评估树配置驱动）
 
 ## 问题
 

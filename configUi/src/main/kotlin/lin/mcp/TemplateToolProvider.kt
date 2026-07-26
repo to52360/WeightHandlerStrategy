@@ -20,18 +20,17 @@ class TemplateToolProvider(
             name = "template_browse",
             description = "浏览正交模板。支持 action=GROUPS（列出所有模板分组）和 action=TEMPLATES（按类型/分组查询模板列表，type 为 CONDITION 或 RULE，不指定返回全部）。"
         ) { input ->
-            when (input.action.uppercase()) {
-                "GROUPS" -> mcpSuccess(groupRepo.findAll())
-                "TEMPLATES" -> {
-                    val types = if (input.type != null) listOf(input.type) else listOf("CONDITION", "RULE")
+            when (val query = input.toQuery()) {
+                is TemplateBrowseQuery.Groups -> mcpSuccess(groupRepo.findAll())
+                is TemplateBrowseQuery.Templates -> {
+                    val types = if (query.type != null) listOf(query.type) else listOf("CONDITION", "RULE")
                     val templates = types.flatMap { t ->
                         orthogonalRepo.findAllByType(t)
-                            .filter { input.groupId == null || it.groupId == input.groupId }
+                            .filter { query.groupId == null || it.groupId == query.groupId }
                             .map { it.toSummary(t) }
                     }
                     mcpSuccess(templates)
                 }
-                else -> mcpError("未知 action: ${input.action}，支持 GROUPS / TEMPLATES")
             }
         },
 
@@ -55,6 +54,15 @@ class TemplateToolProvider(
     )
 }
 
+/**
+ * 模板浏览的 sealed 域模型：GROUPS / TEMPLATES 编译期区分。
+ * TEMPLATES 的 type/groupId 仍为可空（可选过滤，业务本质）。
+ */
+private sealed interface TemplateBrowseQuery {
+    data object Groups : TemplateBrowseQuery
+    data class Templates(val type: String?, val groupId: String?) : TemplateBrowseQuery
+}
+
 private data class TemplateBrowseInput(
     @field:JsonPropertyDescription("操作类型：GROUPS 列出所有模板分组，TEMPLATES 按类型/分组查询模板列表。")
     val action: String,
@@ -62,7 +70,13 @@ private data class TemplateBrowseInput(
     val type: String? = null,
     @field:JsonPropertyDescription("模板分组 ID，仅 action=TEMPLATES 时有效。")
     val groupId: String? = null
-)
+) {
+    fun toQuery(): TemplateBrowseQuery = when (action.uppercase()) {
+        "GROUPS" -> TemplateBrowseQuery.Groups
+        "TEMPLATES" -> TemplateBrowseQuery.Templates(type, groupId)
+        else -> throw McpBadInput("未知 action: $action，支持 GROUPS / TEMPLATES")
+    }
+}
 
 private data class SaveTemplateInput(
     @field:JsonPropertyDescription("模板类型：CONDITION 或 RULE。")

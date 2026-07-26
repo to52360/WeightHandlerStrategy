@@ -8,6 +8,15 @@ import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 
+/**
+ * Combo 查询的 sealed 域模型：编译期区分 LIST / GET。
+ * LIST 的 managerId 仍为可空（可选过滤，业务本质），GET 的 id 编译期非空。
+ */
+private sealed interface ComboPlanQuery {
+    data class ListAction(val managerId: String?) : ComboPlanQuery
+    data class GetAction(val id: String) : ComboPlanQuery
+}
+
 private data class ComboPlanInput(
     @field:JsonPropertyDescription("操作类型：LIST（列出所有 Combo 方案摘要），GET（读取指定 Combo 的详细依赖与步骤）。有效值仅限：LIST, GET")
     val action: String,
@@ -17,7 +26,17 @@ private data class ComboPlanInput(
 
     @field:JsonPropertyDescription("卡组/管理器 ID，仅 action=LIST 时可选，用于按卡组过滤")
     val managerId: String? = null
-)
+) {
+    fun toQuery(): ComboPlanQuery = when (action.uppercase()) {
+        "LIST" -> ComboPlanQuery.ListAction(managerId)
+        "GET" -> {
+            val id = id
+            if (id.isNullOrBlank()) throw McpBadInput("action=GET 需要 id 参数") else ComboPlanQuery.GetAction(id)
+        }
+
+        else -> throw McpBadInput("未知 action: $action，支持 LIST / GET")
+    }
+}
 
 /** 分组引用关系（包含组 ID 集合与解析后的组名列表） */
 data class ComboPlanGroupRef(
@@ -98,10 +117,9 @@ class ComboPlanToolProvider(
                 以及 action=GET（读取指定 Combo 的完整依赖卡牌分组信息与时序出牌步骤 sequence）。
             """.trimIndent()
         ) { input ->
-            when (input.action.uppercase()) {
-                "LIST" -> handleList(input.managerId)
-                "GET" -> handleGet(input.id)
-                else -> mcpError("未知 action: ${input.action}，支持 LIST / GET")
+            when (val query = input.toQuery()) {
+                is ComboPlanQuery.ListAction -> handleList(query.managerId)
+                is ComboPlanQuery.GetAction -> handleGet(query.id)
             }
         }
     )

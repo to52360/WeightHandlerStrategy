@@ -7,13 +7,30 @@ import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.service.TreeConfigService
 
+private sealed interface PurposeTagQuery {
+    data object ListAction : PurposeTagQuery
+    data class GetAction(val tagId: String) : PurposeTagQuery
+}
+
 private data class PurposeTagQueryInput(
     @field:JsonPropertyDescription("操作类型：LIST（列出所有用途标签摘要与匹配优先级），GET（读取特定用途标签的意图推导规则、关联卡牌与绑定该 Tag 的评估树）。有效值仅限：LIST, GET")
     val action: String,
 
     @field:JsonPropertyDescription("用途标签 ID（如 SAVE_LIFE, CLEAN, FINISH, GREED, VALUE, EXTRA_COST）。action=GET 时必填。")
     val tagId: String? = null
-)
+) {
+    fun toQuery(): PurposeTagQuery = when (action.uppercase().trim()) {
+        "LIST" -> PurposeTagQuery.ListAction
+        "GET" -> {
+            val tagId = tagId
+            if (tagId.isNullOrBlank()) throw McpBadInput("action=GET 需要 tagId 参数") else PurposeTagQuery.GetAction(
+                tagId
+            )
+        }
+
+        else -> throw McpBadInput("不支持的 action: [$action]。有效值仅限：LIST, GET")
+    }
+}
 
 /** 用途标签关联卡牌信息 */
 data class PurposeTagCardInfoDto(
@@ -74,10 +91,9 @@ class PurposeTagToolProvider(
                 以及 action=GET（读取特定 tagId 的意图规则细节、拥有该标签的卡牌清单及绑定该标签的评估树）。
             """.trimIndent()
         ) { input ->
-            when (input.action.uppercase().trim()) {
-                "LIST" -> handleList()
-                "GET" -> handleGet(input)
-                else -> mcpError("不支持的 action: [${input.action}]。有效值仅限：LIST, GET")
+            when (val query = input.toQuery()) {
+                is PurposeTagQuery.ListAction -> handleList()
+                is PurposeTagQuery.GetAction -> handleGet(query.tagId)
             }
         }
     )
@@ -107,8 +123,8 @@ class PurposeTagToolProvider(
         return mcpSuccess(summaries)
     }
 
-    private fun handleGet(input: PurposeTagQueryInput): McpToolResult {
-        val targetTagId = input.tagId?.trim()
+    private fun handleGet(targetTagId: String): McpToolResult {
+        val targetTagId = targetTagId.trim()
         val availableTags = tagProvider.tags()
         val availableTagIds = availableTags.map { it.id.value }
 
