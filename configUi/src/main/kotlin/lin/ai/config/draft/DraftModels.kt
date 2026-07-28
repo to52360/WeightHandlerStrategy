@@ -9,7 +9,7 @@ import lin.rule.tree.EvaluatorTreeBindingType
 data class CreateDraftRequest(
     @field:JsonPropertyDescription("评估树的名称")
     val name: String,
-    @field:JsonPropertyDescription("评估树的拓扑逻辑骨架。cloneFrom 非空时可省略（使用克隆源配置的骨架）。")
+    @field:JsonPropertyDescription("评估树的拓扑逻辑骨架。与 cloneFrom 互斥：从零创建模式必填；提供 cloneFrom 时留空（使用克隆源的骨架）。")
     val root: EvaluatorNode? = null,
     @field:JsonPropertyDescription("绑定的目标类型（GROUP, PURPOSE_TAG 或 CARD）")
     val bindingType: EvaluatorTreeBindingType,
@@ -29,9 +29,31 @@ data class CreateDraftRequest(
         取值来自 list_card_groups 返回的 id，或 save_card_group 响应的 managerId。注意它不同于 bindingIds 里的绑定条目 id。PURPOSE_TAG 或 CARD 绑定时留空。"""
     )
     val managerId: String? = null,
-    @field:JsonPropertyDescription("克隆已有评估树的 id（由 evaluator_tree(action=LIST) 获取）。非空时将以该配置为蓝本创建草稿，所有叶子节点参数预填，missingNodeIds 为空，可直接 commit 或 put_draft_leaf 覆盖差异节点。")
+    @field:JsonPropertyDescription("克隆已有评估树的 id（由 evaluator_tree(action=LIST) 获取）。与 root 互斥：提供 cloneFrom 时 root 留空。非空时以该配置为蓝本创建草稿，叶子节点参数预填，missingNodeIds 为空，可直接 commit 或用 put_draft_leaf 覆盖差异节点。")
     val cloneFrom: String? = null
-)
+) {
+    fun toQuery(): DraftCreationQuery {
+        val cloneFrom = cloneFrom
+        return if (cloneFrom != null) {
+            if (root != null) throw IllegalArgumentException("root 与 cloneFrom 互斥，不可同时提供")
+            DraftCreationQuery.CloneDraft(cloneFrom)
+        } else {
+            DraftCreationQuery.NewDraft(
+                root ?: throw IllegalArgumentException("root 不能为空（非克隆模式请提供 root，克隆模式请提供 cloneFrom）")
+            )
+        }
+    }
+}
+
+/**
+ * 草稿创建意图的 sealed 域模型：用编译期类型区分「从零创建」与「克隆」，
+ * 消除 [CreateDraftRequest.root] / [CreateDraftRequest.cloneFrom] 的伪可选可空。
+ * 扁平 JSON 载体仍是 [CreateDraftRequest]，由 [CreateDraftRequest.toQuery] 在边界转换。
+ */
+sealed interface DraftCreationQuery {
+    data class NewDraft(val root: EvaluatorNode) : DraftCreationQuery
+    data class CloneDraft(val configId: String) : DraftCreationQuery
+}
 
 data class PutDraftLeafRequest(
     @field:JsonPropertyDescription("草稿 ID")

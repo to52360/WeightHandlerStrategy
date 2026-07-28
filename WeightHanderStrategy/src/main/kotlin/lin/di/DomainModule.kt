@@ -1,9 +1,7 @@
 package lin.di
 
 import club.xiaojiawei.hsscriptcardsdk.status.WAR
-import lin.domain.MyWarManage
-import lin.domain.WarInfo
-import lin.domain.WeightHandlerDomain
+import lin.domain.*
 import lin.domain.combo.*
 import lin.domain.combo.ComboParse.Companion.BEFORE
 import lin.domain.combo.ComboParse.Companion.CHANGE
@@ -49,6 +47,12 @@ private val utilsModule = module {
     singleOf(::CleanWarUtils)
 }
 
+private val executionModule = module {
+    //每次解析得到独立实例：每个 ComboDomain 持有自己的类加载器上下文与递归栈控制器
+    factory { ClassLoaderScope() }
+    factory { ComboCycleController() }
+}
+
 val domainModule = module {
-    includes(mainModule, comBoInfoModule, findStrategyModule, utilsModule)
+    includes(mainModule, comBoInfoModule, findStrategyModule, utilsModule, executionModule)
 }

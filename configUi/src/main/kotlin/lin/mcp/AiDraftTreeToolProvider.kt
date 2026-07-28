@@ -12,7 +12,17 @@ class AiDraftTreeToolProvider(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<CreateDraftRequest>(
             name = "create_draft_tree",
-            description = "创建一个评估树草稿骨架。由于评估树 JSON 结构极大，必须采用渐进式生成：先用此工具建立拓扑逻辑骨架，它会返回 draftId 以及预期需要填写的 missingNodeIds。如果有不满意的拓扑，不需要修改，直接用这个工具重新创建一个新的即可。\n\n【克隆模式】若提供 cloneFrom（已有树配置 id，由 evaluator_tree(action=LIST) 获取），将以该配置为蓝本创建草稿：所有叶子节点参数预填，missingNodeIds 为空，可直接 commit 原样克隆；也可用 put_draft_leaf 覆盖差异节点再提交。\n\n后续请使用 put_draft_leaf 工具逐个填充叶子节点。"
+            description = """创建一个评估树草稿骨架。评估树 JSON 结构极大，必须采用渐进式生成：
+                                1. 用此工具建立拓扑骨架，返回 draftId 和 missingNodeIds
+                                2. 用 put_draft_leaf 逐个填充叶子节点
+                                3. 全部填完后用 commit_draft_tree 提交
+                                
+                                拓扑不满意时无需修改，重新创建一个新草稿即可。
+                                
+                                【两种互斥模式】
+                                - 从零创建：提供 root（拓扑骨架）
+                                - 克隆已有树：提供 cloneFrom（已有配置 id），叶子参数预填，可直接 commit 或用 put_draft_leaf 覆盖差异节点
+                            """
         ) { request ->
             val result = draftTreeService.createDraft(request)
             mcpSuccess(result)

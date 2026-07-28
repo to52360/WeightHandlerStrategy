@@ -70,7 +70,11 @@ class CardGroupToolProvider(
         // ── save_card_group (保留) ──
         typedTool<SaveCardGroupInput>(
             name = "save_card_group",
-            description = "创建或更新卡牌分组方案。existingId 非空时更新已有方案；为空时新建。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。\n\n【克隆模式】若提供 cloneFrom（已有方案 id），将以该方案为蓝本创建副本（含所有 binding 与 behavior），managerName 缺省时自动加「副本」后缀。"
+            description = """创建或更新卡牌分组方案。
+- 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案，为空则新建
+- 克隆模式：提供 cloneFrom，以该方案为蓝本创建副本，含所有 binding 与 behavior，managerName 缺省自动加「副本」后缀
+
+两种模式互斥。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。"""
         ) { input ->
             // ── clone mode ──
             if (input.cloneFrom != null) {
@@ -300,7 +304,7 @@ private data class CardGroupInput(
 // ── 保留的 input 数据类 ──
 
 private data class SaveCardGroupInput(
-    @field:JsonPropertyDescription(".cardgroup 文件名（不含扩展名），卡池来源。cloneFrom 非空时可省略。")
+    @field:JsonPropertyDescription("卡池来源文件名（不含扩展名）。正常模式必填；克隆模式下可省略（缺省使用克隆源的 sourceFile，也可显式覆盖）。")
     val sourceFile: String? = null,
     @field:JsonPropertyDescription("方案名称，缺省使用 sourceFile。cloneFrom 非空且不提供时自动加 \"副本\" 后缀。")
     val managerName: String? = null,
@@ -308,7 +312,7 @@ private data class SaveCardGroupInput(
     val existingId: String? = null,
     @field:JsonPropertyDescription("分组列表。cloneFrom 非空时忽略此字段（使用克隆源的 binding）。")
     val bindings: List<SaveCardGroupBindingInput> = emptyList(),
-    @field:JsonPropertyDescription("克隆已有分组方案的 id（由 card_group(action=LIST) 获取）。非空时将以该方案为蓝本创建副本，含所有 binding 与 behavior。")
+    @field:JsonPropertyDescription("克隆已有分组方案的 id（由 card_group(action=LIST) 获取）。与 existingId 互斥；提供 cloneFrom 时 sourceFile/bindings 可省略。非空时以该方案为蓝本创建副本，含所有 binding 与 behavior。")
     val cloneFrom: String? = null
 )
 

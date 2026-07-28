@@ -18,7 +18,6 @@ import lin.domain.use.plan.UsePlanBuilder
 import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
 import lin.serviceLoader.findCombo.SkillFindStrategy
-import lin.utils.serviceLoader.JarClassLoader
 import lin.warExt.my.base.getCost
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -38,21 +37,19 @@ class ComboDomain : KoinComponent {
     private lateinit var weightHandlerDomain: WeightHandlerDomain
     private val usePlanBuilder = get<UsePlanBuilder>()
 
-    private val classLoader = JarClassLoader(parent = javaClass.classLoader).classLoader() ?: run {
-        myLog.warn { "没有获取到类加载器" }
-        javaClass.classLoader
-    }
     private val useDomain = get<UseDomain>()
     private val findComboStrategyList = getKoin().getAll<FindComboStrategy>().sortedBy { it.priority() }
     private val findPlanner = get<FindPlanner>()
     private val skillFindStrategy = get<SkillFindStrategy>()
+    private val classLoaderScope = get<ClassLoaderScope>()
+    private val cycleController = get<ComboCycleController>()
 
     //存储策略分组
     init {
         myLog.info {
             "ComboDao初始化"
         }
-        threadContext {
+        classLoaderScope.withContext {
 
             //不能移动,需要线程上下文
             warManage = get<MyWarManage>()
@@ -63,33 +60,17 @@ class ComboDomain : KoinComponent {
         }
     }
 
-    private inline fun threadContext(runnable: () -> Unit) {
-        val threadClassLoader = Thread.currentThread().contextClassLoader
-        try {
-            Thread.currentThread().contextClassLoader = classLoader
-            runnable()
-        } catch (t: Throwable) {
-            myLog.error(t) { "全局错误捕获" }
-            throw t
-        } finally {
-            Thread.currentThread().contextClassLoader = threadClassLoader
-        }
-    }
-    private var stackNum = 0
-
     private fun executeEnvironment(runnable: () -> Unit) {
-        //重置状态
-        stackNum = 0
-        //生命周期
-        threadContext {
-            //战场环境处理
+        //重置递归栈状态
+        cycleController.reset()
+        //生命周期 + 战场环境处理（在线程上下文类加载器下执行）
+        classLoaderScope.withContext {
             warManage.executeEnvironment {
                 runnable()
             }
         }
 
     }
-
 
 
     /**
@@ -138,7 +119,7 @@ class ComboDomain : KoinComponent {
      * 该方法会循环调用
      */
     private fun findAndUse() {
-        findAndUseTransaction {
+        cycleController.transaction {
             var weightPlanner: CmdPlanner = ContinuePlanner
             for (findComboStrategy in findComboStrategyList) {
                 weightPlanner = when (weightPlanner) {
@@ -148,8 +129,7 @@ class ComboDomain : KoinComponent {
                 }
             }
             if (weightPlanner is ResultPlanner) {
-                val weightResult = weightPlanner.weightResult
-                when (weightResult) {
+                when (val weightResult = weightPlanner.weightResult) {
                     is EndWeightResult -> {
                         myLog.info { "找到需要使用的卡牌:${weightResult.bestCombination}" }
                         executeUseCard(weightResult)
@@ -166,17 +146,8 @@ class ComboDomain : KoinComponent {
     }
 
     /**
-     * 查询和使用的事务
+     * 查询和使用的事务（递归栈控制委托给 [ComboCycleController]）
      */
-    private inline fun findAndUseTransaction(runnable: () -> Unit) {
-        if (stackNum == MaxStackNum) {
-            log.warn { "栈过深" }
-            return
-        } else
-            stackNum++
-
-        runnable()
-    }
 
 
 
@@ -251,7 +222,7 @@ class ComboDomain : KoinComponent {
 
 
     fun executeChangeCard(cards: HashSet<Card>) {
-        threadContext {
+        classLoaderScope.withContext {
             if (BaseData.enableChangeWeight) {
                 val changeWeightResult = ChangeWeightResult(cards, warManage.parseComboCards(cards.toList()))
                 changeWeightResult.processChangeCard()
@@ -266,7 +237,7 @@ class ComboDomain : KoinComponent {
     fun executeDiscoverChooseCard(vararg cards: Card): Int {
         var index = 0
         try {
-            threadContext {
+            classLoaderScope.withContext {
                 index = weightHandlerDomain.executeDiscoverChooseCard(*cards)
             }
             return index

@@ -4,6 +4,7 @@ import lin.ai.config.*
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorLeafConfig
+import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.ui.service.TreeConfigService
 import lin.ui.tree_config.validation.EvaluatorTreeValidator
@@ -25,18 +26,22 @@ class DefaultDraftTreeService(
 
     override fun createDraft(request: CreateDraftRequest): DraftCreationResult {
         lazyEvict()
+        // 条件必填边界校验：GROUP 绑定时 managerId 必填，缺失即非法输入（与 root 的非克隆必填校验同一风格）
+        if (request.bindingType == EvaluatorTreeBindingType.GROUP && request.managerId.isNullOrBlank()) {
+            throw IllegalArgumentException("bindingType=GROUP 时 managerId 必填（取值来自 list_card_groups 或 save_card_group 响应的 managerId）")
+        }
         val draftId = nextShortId()
 
-        // cloneFrom: 以已有配置为蓝本，预填全部叶子节点
-        val (effectiveRoot, preFillLeafConfigs) = if (request.cloneFrom != null) {
-            val (_, config) = treeConfigService.findById(request.cloneFrom)
-                ?: throw IllegalArgumentException("要克隆的树配置不存在: ${request.cloneFrom}")
-            if (config == null) throw IllegalArgumentException("要克隆的树配置解析失败: ${request.cloneFrom}")
-            config.root to config.leafConfigs
-        } else {
-            val root = request.root
-                ?: throw IllegalArgumentException("root 不能为空（非克隆模式请提供 root，克隆模式请提供 cloneFrom）")
-            root to emptyMap()
+        // 边界转换：消除 root/cloneFrom 的伪可选可空，互斥在编译期由 sealed 保证
+        val (effectiveRoot, preFillLeafConfigs) = when (val query = request.toQuery()) {
+            is DraftCreationQuery.CloneDraft -> {
+                val (_, config) = treeConfigService.findById(query.configId)
+                    ?: throw IllegalArgumentException("要克隆的树配置不存在: ${query.configId}")
+                if (config == null) throw IllegalArgumentException("要克隆的树配置解析失败: ${query.configId}")
+                config.root to config.leafConfigs
+            }
+
+            is DraftCreationQuery.NewDraft -> query.root to emptyMap()
         }
 
         val expectedNodeIds = validator.collectReferencedLeafNodeIds(effectiveRoot)
