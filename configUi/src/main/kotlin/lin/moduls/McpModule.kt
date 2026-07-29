@@ -52,7 +52,7 @@ val mcpModule = module {
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
-    single { lin.mcp.AiDraftTreeToolProvider(get()) } bind McpToolProvider::class
+    single { lin.mcp.AiDraftTreeToolProvider(get(), get<CardGroupService>()) } bind McpToolProvider::class
     single {
         ComboPlanToolProvider(
             get(),

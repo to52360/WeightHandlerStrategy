@@ -144,6 +144,10 @@ class DefaultDraftTreeService(
         )
     }
 
+    override fun abandonDraft(draftId: String): Boolean {
+        return drafts.remove(draftId) != null
+    }
+
     /**
      * 惰性清理过期草稿，防止内存轻微泄漏
      */

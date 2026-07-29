@@ -2,6 +2,7 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.ai.config.CardGroupQueryService
+import lin.config.PathConfig
 import lin.dao.CardGroupJsonParser
 import lin.dao.CardWeightConfig
 import lin.repository.HsCardRepository
@@ -10,6 +11,7 @@ import lin.rule.tree.CardGroupBinding
 import lin.ui.service.TreeConfigService
 import lin.utils.HearthstoneDeckCodeParser
 import lin.utils.nextShortId
+import java.nio.file.Files
 
 /**
  * 卡池与分组域 MCP 工具提供者。
@@ -115,6 +117,7 @@ class CardGroupToolProvider(
 
             // ── original create/update logic ──
             val sourceFile = input.sourceFile ?: return@typedTool mcpError("sourceFile 不能为空")
+            if (input.bindings.isEmpty()) return@typedTool mcpError("bindings 不能为空，至少需要一个分组绑定条目")
             val cardPool = CardGroupJsonParser.loadByFileName(sourceFile)
                 ?: return@typedTool mcpError("sourceFile not found: $sourceFile")
             val validCardIds = cardPool.cards.map { it.cardId }.toSet()
@@ -214,8 +217,9 @@ class CardGroupToolProvider(
             if (input.cards.isEmpty()) return@typedTool mcpError("cards 列表不能为空")
 
             val existingConfig = CardGroupJsonParser.loadByFileName(input.fileName)
+                ?: return@typedTool mcpError("卡池文件不存在: ${input.fileName}.cardgroup。请先用 parse_hearthstone_deck_code 创建卡池文件，或检查文件名是否正确。可用 card_pool(action=\"LIST\") 查看已有卡池。")
             // 以原卡池配置为基准保留原有卡牌，实现增量修补与更新
-            val updatedCardMap = (existingConfig?.cards ?: emptyList())
+            val updatedCardMap = existingConfig.cards
                 .associateBy { it.cardId }
                 .toMutableMap()
 
@@ -234,7 +238,7 @@ class CardGroupToolProvider(
             val savedPath = CardGroupJsonParser.saveCardGroupConfigs(
                 configs = finalConfigs,
                 groupName = input.fileName,
-                enabled = input.enabled ?: existingConfig?.enabled ?: true
+                enabled = input.enabled ?: existingConfig.enabled
             )
             mcpSuccess(
                 mapOf(
@@ -243,6 +247,37 @@ class CardGroupToolProvider(
                     "savedPath" to savedPath.toString(),
                     "totalCardCount" to finalConfigs.size,
                     "updatedCardCount" to input.cards.size
+                )
+            )
+        },
+
+        // ── delete_card_pool (卡池文件删除) ──
+        typedTool<DeleteCardPoolInput>(
+            name = "delete_card_pool",
+            description = "删除一个 .cardgroup 卡池文件。删除前会检查依赖项：如果存在任何卡牌分组方案（card_group）引用此卡池文件，则拒绝删除并列出所有依赖方。"
+        ) { input ->
+            if (input.fileName.isBlank()) return@typedTool mcpError("fileName 参数不能为空")
+            val file = PathConfig.defaultDirPath.resolve("${input.fileName}.cardgroup")
+            if (!Files.exists(file)) return@typedTool mcpError("卡池文件不存在: ${input.fileName}.cardgroup")
+
+            // 检查依赖项：是否有 card_group 引用此卡池
+            val dependents = groupService.loadAllManagers().filter { it.sourceFile == input.fileName }
+            if (dependents.isNotEmpty()) {
+                val depInfo = dependents.joinToString("\n") { mgr ->
+                    "  - ${mgr.name} (id=${mgr.id})"
+                }
+                return@typedTool mcpError(
+                    "无法删除 ${input.fileName}.cardgroup，以下卡牌分组方案依赖此卡池:\n$depInfo\n" +
+                            "请先删除这些方案（delete_card_group）或将其 sourceFile 改为其他卡池后重试。"
+                )
+            }
+
+            Files.delete(file)
+            mcpSuccess(
+                mapOf(
+                    "deleted" to true,
+                    "fileName" to input.fileName,
+                    "filePath" to file.toString()
                 )
             )
         }
@@ -357,4 +392,9 @@ private data class CardWeightItemInput(
 private data class DeleteCardGroupInput(
     @field:JsonPropertyDescription("要删除的方案 id，由 card_group(action=LIST) 获取。删除不可恢复。")
     val managerId: String
+)
+
+private data class DeleteCardPoolInput(
+    @field:JsonPropertyDescription("要删除的卡池文件名（不含 .cardgroup 后缀），由 card_pool(action=LIST) 获取。")
+    val fileName: String
 )

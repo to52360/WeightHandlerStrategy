@@ -36,4 +36,10 @@ interface DraftTreeService {
      * 5. 查询草稿状态
      */
     fun getDraftStatus(draftId: String): DraftStatusResult?
+
+    /**
+     * 6. 废弃草稿（主动清理不再需要的草稿，如绑定校验失败后放弃）。
+     * @return true 表示存在并已删除，false 表示草稿不存在或已过期
+     */
+    fun abandonDraft(draftId: String): Boolean
 }

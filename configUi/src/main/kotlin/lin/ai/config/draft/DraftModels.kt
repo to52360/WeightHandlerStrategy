@@ -9,7 +9,18 @@ import lin.rule.tree.EvaluatorTreeBindingType
 data class CreateDraftRequest(
     @field:JsonPropertyDescription("评估树的名称")
     val name: String,
-    @field:JsonPropertyDescription("评估树的拓扑逻辑骨架。与 cloneFrom 互斥：从零创建模式必填；提供 cloneFrom 时留空（使用克隆源的骨架）。")
+    @field:JsonPropertyDescription(
+        """评估树的拓扑逻辑骨架。与 cloneFrom 互斥：从零创建模式必填；提供 cloneFrom 时留空（使用克隆源的骨架）。
+        
+【JSON 格式要求—WRAPPER_OBJECT 多态】系统使用 Jackson WRAPPER_OBJECT 序列化，五种节点的 key 分别是: "AndNode" / "OrNode" / "NotNode" / "BranchNode" / "Leaf"。每个节点的 payload 是 "Rule" 或 "BranchCondition" 包裹的含 nodeId 对象。
+        
+示例:
+- 单叶子: {"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}
+- AND(两个子): {"AndNode":{"children":[{"Leaf":{"payload":{"Rule":{"nodeId":"a"}}}},{"Leaf":{"payload":{"Rule":{"nodeId":"b"}}}}]}}
+- OR: {"OrNode":{"children":[...]}}
+- NOT: {"NotNode":{"child":{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}}}
+- Branch: {"BranchNode":{"payload":{"BranchCondition":{"nodeId":"c1"}},"onTrue":{...},"onFalse":{...}}}"""
+    )
     val root: EvaluatorNode? = null,
     @field:JsonPropertyDescription("绑定的目标类型（GROUP, PURPOSE_TAG 或 CARD）")
     val bindingType: EvaluatorTreeBindingType,
@@ -71,6 +82,11 @@ data class CommitDraftRequest(
 
 data class GetDraftStatusRequest(
     @field:JsonPropertyDescription("草稿 ID")
+    val draftId: String
+)
+
+data class AbandonDraftRequest(
+    @field:JsonPropertyDescription("要废弃的草稿 ID")
     val draftId: String
 )
 
