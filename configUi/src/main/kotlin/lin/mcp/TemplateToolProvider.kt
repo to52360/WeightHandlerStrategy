@@ -15,10 +15,10 @@ class TemplateToolProvider(
     private val orthogonalRepo: OrthogonalTemplateRepository
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
-        // ── template_browse: 模板分组 + 模板列表 (合并) ──
+        // ── orthogonal_template: 正交模板分组 + 模板列表 (合并) ──
         typedTool<TemplateBrowseInput>(
-            name = "template_browse",
-            description = "浏览正交模板。支持 action=GROUPS（列出所有模板分组）和 action=TEMPLATES（按类型/分组查询模板列表，type 为 CONDITION 或 RULE，不指定返回全部）。"
+            name = "orthogonal_template",
+            description = "浏览正交模板（叶子级）。支持 action=GROUPS（列出所有模板分组）和 action=TEMPLATES（按类型/分组查询模板列表，type 为 CONDITION 或 RULE，不指定返回全部）。"
         ) { input ->
             when (val query = input.toQuery()) {
                 is TemplateBrowseQuery.Groups -> mcpSuccess(groupRepo.findAll())
@@ -34,10 +34,10 @@ class TemplateToolProvider(
             }
         },
 
-        // ── save_template (保留) ──
+        // ── save_orthogonal_template (保留) ──
         typedTool<SaveTemplateInput>(
-            name = "save_template",
-            description = "将当前的正交条件或规则配置沉淀为可复用模板。type 为 CONDITION 或 RULE。只需提供结构（引用了哪些数据源和算子类型），不需要保存具体参数值。"
+            name = "save_orthogonal_template",
+            description = "将当前的正交条件或规则配置沉淀为可复用模板（叶子级）。type 为 CONDITION 或 RULE。只需提供结构（引用了哪些数据源和算子类型），不需要保存具体参数值。"
         ) { input ->
             val type = input.type.uppercase()
             if (type !in setOf("CONDITION", "RULE")) {

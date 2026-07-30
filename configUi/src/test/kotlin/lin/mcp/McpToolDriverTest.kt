@@ -179,4 +179,30 @@ class McpToolDriverTest : McpTestEnv() {
             // cleanup()
         }
     }
+
+    @Test
+    fun testStringifiedRootInCreateDraftTree() {
+        val rootStr = mapper.writeValueAsString(
+            mapOf(
+                "OrNode" to mapOf(
+                    "children" to listOf(
+                        mapOf("Leaf" to mapOf("payload" to mapOf("Rule" to mapOf("nodeId" to "r1"))))
+                    )
+                )
+            )
+        )
+        val args = mapOf(
+            "name" to "test_stringified_root",
+            "root" to rootStr,
+            "bindingType" to "CARD",
+            "bindingIds" to listOf("BT_020")
+        )
+        val resp = call("create_draft_tree", mapper.writeValueAsString(args))
+        org.junit.Assert.assertFalse(
+            "create_draft_tree 应成功解析 String 类型的 root: ${resp.contentJson}",
+            resp.isError
+        )
+        val draftId = mapper.readValue(resp.contentJson, Map::class.java)["draftId"] as String
+        call("abandon_draft", """{"draftId":"$draftId"}""")
+    }
 }

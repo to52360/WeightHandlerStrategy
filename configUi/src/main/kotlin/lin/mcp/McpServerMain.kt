@@ -1,4 +1,4 @@
-﻿package lin.mcp
+package lin.mcp
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper
@@ -7,19 +7,46 @@ import io.modelcontextprotocol.server.transport.StdioServerTransportProvider
 import io.modelcontextprotocol.spec.McpSchema
 import lin.moduls.loadMcpModules
 import org.koin.core.context.GlobalContext
+import java.io.PrintStream
+
+/**
+ * MCP 专属 stdout 智能过滤流。
+ * 自动识别并拦截所有非 JSON-RPC 杂质（如 JVM 警告、Logback/HikariCP 调试日志），将杂质送往 System.err，
+ * 仅透传真正的 JSON-RPC 报文至真正的 stdout，确保 stdio 传输通道绝对干净。
+ */
+private class McpStdoutFilterStream(
+    private val realStdout: PrintStream,
+    private val errStream: PrintStream
+) : PrintStream(realStdout, true, "UTF-8") {
+
+    override fun write(b: ByteArray, off: Int, len: Int) {
+        if (len <= 0) return
+        val str = String(b, off, len, Charsets.UTF_8).trimStart()
+        if (str.startsWith("{") || str.startsWith("[")) {
+            realStdout.write(b, off, len)
+            realStdout.flush()
+        } else {
+            errStream.write(b, off, len)
+            errStream.flush()
+        }
+    }
+}
 
 /**
  * configUi 模块下的 MCP 独立入口。
  * 唯一职责：启动 MCP server。
- * 不感知任何 domain 类，不加载 UI 模块。
  */
-
 fun main() {
+    val realStdout = System.out
+    val realStderr = System.err
+
+    // 安装防污染拦截器
+    System.setOut(McpStdoutFilterStream(realStdout, realStderr))
+
     loadMcpModules()
     val koin = GlobalContext.get()
     koin.get<MyMcpServer>().start()
 }
-
 
 /**
  * MCP server 装配器。

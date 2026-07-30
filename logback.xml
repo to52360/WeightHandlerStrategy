@@ -10,6 +10,7 @@
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%file:%line] %-5level %msg%n"/>
     <!--CONSOLE-->
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
         <layout class="ch.qos.logback.classic.PatternLayout">
             <pattern>
                 ${log_pattern_console}

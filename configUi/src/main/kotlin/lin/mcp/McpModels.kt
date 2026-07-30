@@ -85,6 +85,32 @@ fun mcpError(message: String): McpToolResult =
  */
 class McpBadInput(message: String) : RuntimeException(message)
 
+inline fun <reified I> normalizeRawArgs(rawArgs: Map<String, Any?>): Map<String, Any?> {
+    val stringProps = try {
+        (I::class as? kotlin.reflect.KClass<*>)?.memberProperties
+            ?.filter { prop -> prop.returnType.classifier == String::class }
+            ?.map { it.name }
+            ?.toSet() ?: emptySet()
+    } catch (_: Throwable) {
+        emptySet()
+    }
+
+    val result = rawArgs.toMutableMap()
+    for ((key, value) in rawArgs) {
+        if (value is String && key !in stringProps) {
+            val trimmed = value.trim()
+            if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+                try {
+                    result[key] = mcpMapper.readValue(trimmed, Any::class.java)
+                } catch (_: Throwable) {
+                    // Ignore parse error, keep original value
+                }
+            }
+        }
+    }
+    return result
+}
+
 /**
  * 声明式 typed tool 工厂：自动将 raw args Map 反序列化为 I，handler 只关心业务逻辑。
  * inputSchemaJson 由 victools 根据入参类型自动生成。
@@ -99,7 +125,8 @@ inline fun <reified I> typedTool(
     inputSchemaJson = JsonSchemaUtils.generateSchemaJson(I::class.java),
     call = { rawArgs ->
         try {
-            val typedInput = mcpMapper.convertValue(rawArgs, I::class.java)
+            val normalizedArgs = normalizeRawArgs<I>(rawArgs)
+            val typedInput = mcpMapper.convertValue(normalizedArgs, I::class.java)
             handler(typedInput)
         } catch (e: McpBadInput) {
             // 输入参数校验失败（action 非法 / 必填参数缺失）：直接转为业务错误响应

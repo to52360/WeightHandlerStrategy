@@ -60,6 +60,10 @@ class ComboPlanManagementToolProvider(
                 return@typedTool mcpError("coreGroupIds 核心分组 ID 列表不能为空，必须包含至少一个有效分组 ID")
             }
 
+            if (input.depGroupIds.isEmpty()) {
+                return@typedTool mcpError("depGroupIds 依赖分组 ID 列表不能为空！Combo 方案必须包含核心组与依赖组才能构成协同加分或时序关联。")
+            }
+
             val validBindingIds = manager.bindings.map { b -> b.id }.toSet()
             val invalidCoreIds = input.coreGroupIds.filterNot { it in validBindingIds }
             val invalidDepIds = input.depGroupIds.filterNot { it in validBindingIds }

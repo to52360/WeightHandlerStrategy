@@ -38,7 +38,6 @@ class WeightConditionEngine(private val scriptDir: Path) {
                 try {
                     val strategy = loadStrategy(scriptFile)
                     newStrategies[strategy.id()] = strategy
-                    println("Loaded strategy: ${scriptFile.fileName} (ID=${strategy.id()})")
                 } catch (e: Exception) {
                     System.err.println("Failed to load ${scriptFile.fileName}: ${e.message}")
                 }
@@ -73,7 +72,7 @@ class WeightConditionEngine(private val scriptDir: Path) {
                         if (fileName.toString().endsWith(".cardstrategy.kts")) {
                             // 避免频繁重载
                             if (Instant.now().isAfter(lastReload.plusSeconds(2))) {
-                                println("Reloading strategies due to change in $fileName")
+                                System.err.println("Reloading strategies due to change in $fileName")
                                 reloadStrategies()
                             }
                         }
