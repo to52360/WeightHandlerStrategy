@@ -2,12 +2,16 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.ai.config.CardGroupQueryService
+import lin.bean.usePlan.GroupUseOverride
+import lin.bean.usePlan.UseStage
 import lin.config.PathConfig
 import lin.dao.CardGroupJsonParser
 import lin.dao.CardWeightConfig
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
+import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.findOverride
 import lin.ui.service.TreeConfigService
 import lin.utils.HearthstoneDeckCodeParser
 import lin.utils.nextShortId
@@ -55,7 +59,8 @@ class CardGroupToolProvider(
                             "id" to b.id,
                             "name" to b.name,
                             "description" to b.description,
-                            "cardIds" to b.cardIds
+                            "cardIds" to b.cardIds,
+                            "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name
                         )
                     }
                     mcpSuccess(
@@ -73,10 +78,15 @@ class CardGroupToolProvider(
         typedTool<SaveCardGroupInput>(
             name = "save_card_group",
             description = """创建或更新卡牌分组方案。
-- 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案，为空则新建
+- 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案，为空则自动按 managerName/sourceFile 覆盖更新已有方案
 - 克隆模式：提供 cloneFrom，以该方案为蓝本创建副本，含所有 binding 与 behavior，managerName 缺省自动加「副本」后缀
 
-两种模式互斥。bindings 中 name 为分组名、cardIds 必须来自 sourceFile 对应卡池。方案 id 由 card_group(action=LIST) 获取。"""
+【恢复/修改上下文最佳实践】
+在任何重启任务或续接对话的场景中，强烈建议先调用 `card_group(action="LIST")` 获取已有的 managerId，并调用 `card_group(action="GET", managerId="...")` 探查现有分组及其 bindingIds；如需更新则传入 existingId。若未传 existingId 但 managerName/sourceFile 相同，系统也会自动覆盖同名方案，不会产生多余重复项。
+
+bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 PurposeTag 默认推导）：
+- RESOURCE(资源) / SETUP(铺场) / CLEAR(解场) / DEFEND(防御) / COMBO(斩杀) / GENERAL(常规) / END(回合结束)
+- 典型场景：莱妮莎/奥尔多侍从/斩星巨刃等引擎牌设 SETUP，使其优先于常规 GENERAL 阶段打出。"""
         ) { input ->
             // ── clone mode ──
             if (input.cloneFrom != null) {
@@ -130,12 +140,30 @@ class CardGroupToolProvider(
             val managerName = input.managerName?.takeIf { it.isNotBlank() } ?: sourceFile
             val existingId = input.existingId?.takeIf { it.isNotBlank() }
             val bindings = input.bindings.map { bi ->
+                val behaviors = buildList {
+                    bi.stageOverride?.takeIf { it.isNotBlank() }?.let { stage ->
+                        try {
+                            add(
+                                CardGroupBehavior.OverrideBehavior(
+                                    GroupUseOverride(
+                                        stageOverride = UseStage.valueOf(
+                                            stage
+                                        )
+                                    )
+                                )
+                            )
+                        } catch (_: IllegalArgumentException) {
+                            throw McpBadInput("bindings[${bi.name}] stageOverride 无效: '$stage'，支持: ${UseStage.entries.joinToString { it.name }}")
+                        }
+                    }
+                }
                 CardGroupBinding(
                     id = nextShortId(),
                     managerId = "",
                     name = bi.name,
                     cardIds = bi.cardIds,
-                    description = bi.description
+                    description = bi.description,
+                    behaviors = behaviors
                 )
             }
             val managerId = groupService.saveManager(
@@ -149,7 +177,16 @@ class CardGroupToolProvider(
                 mapOf(
                     "managerId" to managerId,
                     "managerName" to managerName,
-                    "bindingIds" to bindings.map { it.id }
+                    "bindingIds" to bindings.map { it.id },
+                    "bindings" to bindings.map { b ->
+                        mapOf(
+                            "id" to b.id,
+                            "name" to b.name,
+                            "description" to b.description,
+                            "cardIds" to b.cardIds,
+                            "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name
+                        )
+                    }
                 )
             )
         },
@@ -181,11 +218,13 @@ class CardGroupToolProvider(
         // ── parse_hearthstone_deck_code (保留) ──
         typedTool<ParseDeckCodeInput>(
             name = "parse_hearthstone_deck_code",
-            description = "解析炉石卡组代码（deck string）为卡牌列表（cardId/名称/效果）。传 groupName 可把卡池直接写成 data/cardgroup/<groupName>.cardgroup 文件，供 card_pool / save_card_group 使用。"
+            description = "解析炉石卡组代码（deck string）为卡牌列表（cardId/name/text/cost/type/attack/health/race/cardClass）。传 groupName 可把卡池直接写成 data/cardgroup/<groupName>.cardgroup 文件，供 card_pool / save_card_group 使用。返回的 parsedCards 已含完整游戏属性，无需再二次调用 card_pool GET 探查费用/类型。"
         ) { input ->
             runCatching {
                 val deck = HearthstoneDeckCodeParser.decode(input.deckCode)
                 val cards = HearthstoneDeckCodeParser.parseToCards(input.deckCode, cardRepo)
+                // 补全游戏属性（cost/type/attack/health/race/cardClass），避免调用方必须二次调 card_pool GET
+                val detailMap = cardRepo.findCardDetailsByIds(cards.map { it.cardId }).associateBy { it.cardId }
                 val savedFile = input.groupName?.takeIf { it.isNotBlank() }?.let { name ->
                     CardGroupJsonParser.saveCardGroup(cards, name, input.enabled ?: true).fileName.toString()
                 }
@@ -193,11 +232,18 @@ class CardGroupToolProvider(
                     mapOf(
                         "format" to deck.format, "heroes" to deck.heroes,
                         "totalCardsInCode" to deck.cards.size, "parsedCount" to cards.size,
-                        "parsedCards" to cards.map {
+                        "parsedCards" to cards.map { c ->
+                            val d = detailMap[c.cardId]
                             mapOf(
-                                "cardId" to it.cardId,
-                                "name" to it.name,
-                                "text" to it.text
+                                "cardId" to c.cardId,
+                                "name" to c.name,
+                                "text" to c.text,
+                                "cost" to d?.cost,
+                                "type" to d?.type,
+                                "attack" to d?.attack,
+                                "health" to d?.health,
+                                "race" to d?.race,
+                                "cardClass" to d?.cardClass
                             )
                         },
                         "savedFile" to savedFile
@@ -357,7 +403,9 @@ private data class SaveCardGroupBindingInput(
     @field:JsonPropertyDescription("该分组包含的卡牌 ID 列表")
     val cardIds: List<String>,
     @field:JsonPropertyDescription("分组说明")
-    val description: String? = null
+    val description: String? = null,
+    @field:JsonPropertyDescription("可选：覆盖分组的默认出牌阶段，接受 UseStage 枚举值（RESOURCE/SETUP/CLEAR/DEFEND/COMBO/GENERAL/END）。SETUP 阶段的牌优先于 GENERAL。不提供则走 PurposeTag 默认推导。")
+    val stageOverride: String? = null
 )
 
 private data class ParseDeckCodeInput(

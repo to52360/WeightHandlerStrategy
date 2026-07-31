@@ -1,11 +1,12 @@
 package lin.repository.card_group
 
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
 
-private val mapper = jacksonObjectMapper()
+private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
 /** 对应 DB 表 card_group_manager 的行记录 */
 data class CardManagerEntity(

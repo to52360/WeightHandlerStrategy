@@ -1,5 +1,6 @@
 package lin.repository.card_group
 
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import lin.bean.usePlan.GroupUseOverride
@@ -13,7 +14,7 @@ import java.util.*
 
 class CardGroupService(private val repository: CardGroupRepository) {
 
-    private val mapper = jacksonObjectMapper()
+    private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     // ─────────────────────── Manager ───────────────────────────────────────
 
@@ -51,7 +52,15 @@ class CardGroupService(private val repository: CardGroupRepository) {
         bindings: List<CardGroupBinding>,
         existingId: String? = null
     ): String {
-        val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
+        val allManagers = repository.findAllManagers()
+        val id = existingId
+            ?: allManagers.firstOrNull { it.name == name || it.sourceFile == sourceFile }?.id
+            ?: UUID.randomUUID().toString().substring(0, 8)
+
+        // 清理同名/同源文件的重复 Manager
+        allManagers.filter { (it.name == name || it.sourceFile == sourceFile) && it.id != id }
+            .forEach { repository.deleteManager(it.id) }
+
         repository.saveManager(CardManagerEntity(id = id, name = name, sourceFile = sourceFile, enabled = enabled))
 
         // 整体替换该 Manager 下的 Binding（行为覆盖/使用动作已迁到 card_group_behavior 表）

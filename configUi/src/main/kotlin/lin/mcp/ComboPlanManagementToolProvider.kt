@@ -17,7 +17,7 @@ private data class SaveComboPlanInput(
     @field:JsonPropertyDescription("核心卡牌分组 ID 列表（绑定条目 id，来自 card_group(action=GET) 的 bindings.id），至少包含一个")
     val coreGroupIds: List<String>,
 
-    @field:JsonPropertyDescription("依赖卡牌分组 ID 列表（绑定条目 id），可为空集合")
+    @field:JsonPropertyDescription("依赖卡牌分组 ID 列表（绑定条目 id），不能为空。Combo 方案必须包含核心组与依赖组才能构成协同")
     val depGroupIds: List<String> = emptyList(),
 
     @field:JsonPropertyDescription("Combo 额外权重/加分（如 3.0，负值如 -2.0 可表达软惩罚）")

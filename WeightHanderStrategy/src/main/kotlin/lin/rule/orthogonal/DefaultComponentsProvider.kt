@@ -22,7 +22,8 @@ class DefaultDataSourceProvider : DataSourceProvider {
         EvaluatingCardSource,
         MatchGroupPlayedCountsSource,
         MatchActivityEventsSource,
-        MatchTurnCountSource
+        MatchTurnCountSource,
+        MyWeaponSource
     )
 }
 
@@ -46,7 +47,8 @@ class DefaultTransformProvider : TransformProvider {
         EvaluatingCardCostTransform,
         ToCardsTransform,
         PickGroupCountTransform,
-        WeightedActivitySumTransform
+        WeightedActivitySumTransform,
+        ComboCardCostFilterTransform
     )
 }
 

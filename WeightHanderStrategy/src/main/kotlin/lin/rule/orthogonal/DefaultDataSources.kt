@@ -198,3 +198,15 @@ val MatchTurnCountSource = dataSource<Int>(
 ) { env ->
     env.matchState().turnCount()
 }
+
+/**
+ * 我方已装备武器数据源：输出 List<Card> 当前英雄已装备的武器卡牌列表（未装备时为空列表）
+ */
+val MyWeaponSource = dataSource<List<Card>>(
+    id = "my_weapon",
+    name = "我方装备的武器",
+    description = "获取我方当前英雄已装备的武器卡牌列表（未装备时为空列表）",
+    categories = setOf(OrthogonalCategoryCatalog.BOARD.id, OrthogonalCategoryCatalog.CARD.id)
+) { env ->
+    listOfNotNull(env.warInfo().war.me.playArea.weapon)
+}

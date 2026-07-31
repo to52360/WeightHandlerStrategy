@@ -288,3 +288,24 @@ val WeightedActivitySumTransform = transform<
     }
     sum
 }
+
+
+data class ComboCardCostFilterParams(
+    @lin.rule.parse.RuleField(
+        name = "目标动态费用",
+        description = "用于过滤的目标动态费用数值（如 0 费）",
+        required = true
+    )
+    val cost: Int
+)
+
+/**
+ * 动态费用过滤器：按动态消耗费用过滤 List<ComboCard>（如筛选 currentCost == 0 的手牌/圣契）
+ */
+val ComboCardCostFilterTransform = transform<List<ComboCard>, List<ComboCard>, ComboCardCostFilterParams>(
+    id = "combo_card_cost_filter",
+    name = "动态费用过滤器",
+    description = "按当前手牌中的动态实时消耗费用过滤 ComboCard 列表（如筛选 currentCost == 0 的卡牌）"
+) { input, params ->
+    input.filter { it.cost() == params.cost }
+}
