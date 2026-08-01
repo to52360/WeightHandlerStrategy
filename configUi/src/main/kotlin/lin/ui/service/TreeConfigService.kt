@@ -111,8 +111,8 @@ class TreeConfigService(
         return repository.countAll(bindingType)
     }
 
-    fun loadSummaries(): List<Map<String, Any?>> {
-        return repository.findAll().map {
+    fun loadSummaries(managerId: String? = null, limit: Int? = null): List<Map<String, Any?>> {
+        return repository.findSummaries(managerId, limit).map {
             mapOf(
                 "id" to it.id,
                 "name" to it.name,

@@ -44,6 +44,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
+                <configuration>
+                    <!-- JDK 18+ file.encoding 默认 UTF-8，但 stdout/stderr 仍走平台编码（Windows GBK）导致中文乱码，显式指定 -->
+                    <argLine>-Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8</argLine>
+                </configuration>
                 <dependencies>
                     <dependency>
                         <groupId>org.apache.maven.surefire</groupId>

@@ -35,11 +35,16 @@ class AiTreeConfigToolProvider(
         // ── evaluator_tree: 评估树列表 + 详情 (合并) ──
         typedTool<EvaluatorTreeInput>(
             name = "evaluator_tree",
-            description = "查询评估树。支持 action=LIST（列出所有已保存树的 id/name/bindingType 摘要）和 action=GET（读取某棵树的完整配置：managerId/bindingType/bindingIds/tree 拓扑/leafConfigs/associatedComboPlans）。"
+            description = "查询评估树。支持 action=LIST（列出已保存树的 id/name/bindingType 摘要，可传 managerId 按卡组过滤，不传则返回全部且最多 50 条）和 action=GET（读取某棵树的完整配置：managerId/bindingType/bindingIds/tree 拓扑/leafConfigs/associatedComboPlans）。"
         ) { input ->
             when (val query = input.toQuery()) {
                 is EvaluatorTreeQuery.ListAction -> {
-                    mcpSuccess(treeConfigService.loadSummaries())
+                    mcpSuccess(
+                        treeConfigService.loadSummaries(
+                            managerId = query.managerId,
+                            limit = if (query.managerId.isNullOrBlank()) DEFAULT_TREE_LIST_LIMIT else null
+                        )
+                    )
                 }
 
                 is EvaluatorTreeQuery.GetAction -> {
@@ -99,15 +104,17 @@ class AiTreeConfigToolProvider(
  * 扁平 JSON 载体仍是 [EvaluatorTreeInput]，由 [toQuery] 在边界转换。
  */
 private sealed interface EvaluatorTreeQuery {
-    data object ListAction : EvaluatorTreeQuery
+    data class ListAction(val managerId: String?) : EvaluatorTreeQuery
     data class GetAction(val id: String) : EvaluatorTreeQuery
 }
 
 private data class EvaluatorTreeInput(
-    @field:JsonPropertyDescription("操作类型：LIST 列出所有树摘要，GET 读取树完整配置（需传 id）")
+    @field:JsonPropertyDescription("操作类型：LIST 列出树摘要，GET 读取树完整配置（需传 id）")
     val action: String,
     @field:JsonPropertyDescription("树 id，仅 action=GET 时需要，由 evaluator_tree(action=LIST) 返回。")
-    val id: String? = null
+    val id: String? = null,
+    @field:JsonPropertyDescription("卡组/管理器 ID，仅 action=LIST 时可选，按卡组过滤（含全局共享树）。不传则返回全部，最多 50 条。")
+    val managerId: String? = null
 ) {
     fun toQuery(): EvaluatorTreeQuery = when (action.uppercase()) {
         "GET" -> {
@@ -115,7 +122,10 @@ private data class EvaluatorTreeInput(
             if (id.isNullOrBlank()) throw McpBadInput("action=GET 需要 id 参数") else EvaluatorTreeQuery.GetAction(id)
         }
 
-        "LIST" -> EvaluatorTreeQuery.ListAction
+        "LIST" -> EvaluatorTreeQuery.ListAction(managerId)
         else -> throw McpBadInput("未知 action: $action，支持 LIST / GET")
     }
 }
+
+/** LIST 无 managerId 过滤时的返回条数上限 */
+private const val DEFAULT_TREE_LIST_LIMIT = 50

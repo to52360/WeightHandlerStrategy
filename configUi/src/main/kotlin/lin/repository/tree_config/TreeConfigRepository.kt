@@ -104,6 +104,25 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
         return jdbcTemplate.query(sql, rowMapper)
     }
 
+    /**
+     * 摘要列表查询：支持按 managerId 过滤（含全局共享）和条数上限。
+     * managerId=null 表示列出全部；limit=null 表示不限制条数。
+     */
+    fun findSummaries(managerId: String?, limit: Int? = null): List<TreeConfigEntity> {
+        val params = mutableListOf<Any>()
+        var sql = "SELECT * FROM tree_config"
+        if (!managerId.isNullOrBlank()) {
+            sql += " WHERE (manager_id = ? OR manager_id IS NULL)"
+            params.add(managerId)
+        }
+        sql += " ORDER BY name COLLATE NOCASE ASC"
+        if (limit != null) {
+            sql += " LIMIT ?"
+            params.add(limit)
+        }
+        return jdbcTemplate.query(sql, rowMapper, *params.toTypedArray())
+    }
+
     fun countAll(bindingType: String? = null): Int {
         var sql = "SELECT COUNT(*) FROM tree_config"
         val params = mutableListOf<Any>()

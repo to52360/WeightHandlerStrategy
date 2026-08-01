@@ -62,10 +62,14 @@ class McpToolDriverTest : McpTestEnv() {
                     """{
                       "managerId":"$managerId",
                       "coreGroupIds":["${bindingIds.first()}"],
+                      "depGroupIds":["${bindingIds.first()}"],
                       "score":3.5,
                       "relation":"SCORE_ONLY"
                     }"""
                 )
+                if (createdPlanResp.isError) {
+                    throw AssertionError("save_combo_plan 失败（应为校验通过）：${createdPlanResp.contentJson}")
+                }
                 val createdPlanId = mapper.readValue(createdPlanResp.contentJson, Map::class.java)["id"] as String
                 call("combo_plan", """{"action":"GET","id":"$createdPlanId"}""")
                 call("delete_combo_plan", """{"id":"$createdPlanId"}""")

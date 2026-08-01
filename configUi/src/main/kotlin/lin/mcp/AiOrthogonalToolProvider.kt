@@ -1,10 +1,19 @@
 package lin.mcp
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.ai.config.toAiFieldSpec
+import lin.rule.condition.ConditionPayload
 import lin.rule.condition.PipelineAssembler
+import lin.rule.orthogonal.TransformCall
+import lin.rule.parse.FieldSpec
+import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperatorRegistry
+import lin.rule.tree.EvaluatorLeafConfig
+import lin.rule.tree.GuardMissBehavior
+import lin.rule.tree.OrthogonalConditionLeafConfig
+import lin.rule.tree.OrthogonalRuleLeafConfig
 
 data class ListOrthogonalInput(
     @field:JsonPropertyDescription("可选。按输出类型精准过滤数据源或转换器（如 'Int'、'Card'、'WarView'、'ComboCard'）")
@@ -23,6 +32,43 @@ class AiOrthogonalToolProvider(
     private val assembler: PipelineAssembler,
     private val scoreOperatorRegistry: ScoreOperatorRegistry
 ) : McpToolProvider {
+
+    /**
+     * 叶子模板序列化器：基于 [mcpMapper]（已注册 EvaluatorLeafConfig 多态 mixin）配 NON_NULL，
+     * 省略可选 null 字段，保持示例结构干净。
+     */
+    private val templateMapper: ObjectMapper = mcpMapper.copy()
+        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+
+    /**
+     * 由领域 [EvaluatorLeafConfig] 实例经 [mcpMapper] 多态(WRAPPER_OBJECT)序列化生成叶子模板 Map。
+     * 替代手写 JSON 结构，确保模板与领域模型字段同源（单一事实来源），
+     * 字段增删/改名由编译器保障同步，而非靠人肉维护 mapOf。
+     */
+    private fun leafTemplate(instance: EvaluatorLeafConfig): Map<String, Any> {
+        val json = templateMapper.writeValueAsString(instance)
+        @Suppress("UNCHECKED_CAST")
+        return templateMapper.readValue(json, Map::class.java) as Map<String, Any>
+    }
+
+    /** 终端算子 DTO 序列化：统一 ConditionOperator 与 ScoreOperator 的展示结构（两者元数据字段一致）。 */
+    private fun <T> operatorRows(
+        ops: Collection<T>,
+        idOf: (T) -> String,
+        nameOf: (T) -> String,
+        descOf: (T) -> String,
+        typeOf: (T) -> String,
+        specsOf: (T) -> List<FieldSpec>
+    ): List<Map<String, Any>> = ops.map {
+        mapOf(
+            "id" to idOf(it),
+            "name" to nameOf(it),
+            "description" to descOf(it),
+            "inputType" to typeOf(it),
+            "fields" to specsOf(it).map { f -> f.toAiFieldSpec() }
+        )
+    }
+
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<ListOrthogonalInput>(
             name = "list_orthogonal_components",
@@ -94,49 +140,40 @@ class AiOrthogonalToolProvider(
 
             val payload = mapOf(
                 "orthogonal_leaf_json_templates" to mapOf(
-                    "description" to "调用 put_draft_leaf 填充叶子节点时，ORTHOGONAL_CONDITION 与 ORTHOGONAL_RULE 的正确 Polymorphic JSON 结构模板",
+                    "description" to "调用 put_draft_leaf 填充叶子节点时，ORTHOGONAL_CONDITION 与 ORTHOGONAL_RULE 的正确 Polymorphic JSON 结构模板。guardMissBehavior 取值：SCORE=守卫未命中时给 missValue 兜底分继续评估（默认）；PRUNE=剪枝终止整棵评估树。",
                     "ORTHOGONAL_CONDITION" to mapOf(
-                        "leafConfig" to mapOf(
-                            "ORTHOGONAL_CONDITION" to mapOf(
-                                "nodeId" to "r1",
-                                "sourceId" to "orthogonal_condition",
-                                "guardCondition" to mapOf(
-                                    "PipelineRef" to mapOf(
-                                        "sourceId" to "<DataSourceId>",
-                                        "transforms" to listOf(
-                                            mapOf(
-                                                "transformId" to "<TransformId>",
-                                                "args" to emptyMap<String, Any>()
-                                            )
-                                        ),
-                                        "operatorId" to "<OperatorId>",
-                                        "operatorArgs" to mapOf("threshold" to 4),
-                                        "crossCard" to false,
-                                        "refId" to "r1"
-                                    )
+                        "leafConfig" to leafTemplate(
+                            OrthogonalConditionLeafConfig(
+                                nodeId = "r1",
+                                sourceId = "orthogonal_condition",
+                                guardCondition = ConditionPayload.PipelineRef(
+                                    sourceId = "<DataSourceId>",
+                                    transforms = listOf(TransformCall("<TransformId>")),
+                                    operatorId = "<OperatorId>",
+                                    operatorArgs = mapOf("threshold" to 4),
+                                    crossCard = false,
+                                    refId = "r1"
                                 ),
-                                "scoreEffect" to mapOf("ConstantScore" to mapOf("value" to 8.0)),
-                                "args" to emptyMap<String, Any>(),
-                                "guardMissBehavior" to "SCORE"
+                                scoreEffect = ScoreEffect.ConstantScore(value = 8.0),
+                                args = emptyMap(),
+                                guardMissBehavior = GuardMissBehavior.SCORE
                             )
                         )
                     ),
                     "ORTHOGONAL_RULE" to mapOf(
-                        "leafConfig" to mapOf(
-                            "ORTHOGONAL_RULE" to mapOf(
-                                "nodeId" to "r2",
-                                "sourceId" to "orthogonal_rule",
-                                "scoreEffect" to mapOf(
-                                    "SourceScore" to mapOf(
-                                        "sourceId" to "<DataSourceId>",
-                                        "operatorId" to "<OperatorId>",
-                                        "operatorArgs" to emptyMap<String, Any>(),
-                                        "crossCard" to false,
-                                        "missValue" to 0.0
-                                    )
+                        "leafConfig" to leafTemplate(
+                            OrthogonalRuleLeafConfig(
+                                nodeId = "r2",
+                                sourceId = "orthogonal_rule",
+                                scoreEffect = ScoreEffect.SourceScore(
+                                    sourceId = "<DataSourceId>",
+                                    operatorId = "<OperatorId>",
+                                    operatorArgs = emptyMap(),
+                                    crossCard = false,
+                                    missValue = 0.0
                                 ),
-                                "args" to emptyMap<String, Any>(),
-                                "guardMissBehavior" to "SCORE"
+                                args = emptyMap(),
+                                guardMissBehavior = GuardMissBehavior.SCORE
                             )
                         )
                     ),
@@ -166,27 +203,25 @@ class AiOrthogonalToolProvider(
                 ),
                 "terminal_condition_operators" to mapOf(
                     "description" to "条件终端算子。供 OrthogonalCondition 结尾布尔判定使用。",
-                    "conditionOperators" to filteredConditionOps.map {
-                        mapOf(
-                            "id" to it.id,
-                            "name" to it.name,
-                            "description" to it.description,
-                            "inputType" to it.inputType.toString(),
-                            "fields" to it.paramSpecs.map { f -> f.toAiFieldSpec() }
-                        )
-                    }
+                    "conditionOperators" to operatorRows(
+                        filteredConditionOps,
+                        idOf = { it.id },
+                        nameOf = { it.name },
+                        descOf = { it.description },
+                        typeOf = { it.inputType.toString() },
+                        specsOf = { it.paramSpecs }
+                    )
                 ),
                 "terminal_score_operators" to mapOf(
                     "description" to "评分终端算子。供 OrthogonalRule 的 ScoreEffect.SourceScore 映射得分使用。",
-                    "scoreOperators" to filteredScoreOps.map {
-                        mapOf(
-                            "id" to it.id,
-                            "name" to it.name,
-                            "description" to it.description,
-                            "inputType" to it.inputType.toString(),
-                            "fields" to it.paramSpecs.map { f -> f.toAiFieldSpec() }
-                        )
-                    }
+                    "scoreOperators" to operatorRows(
+                        filteredScoreOps,
+                        idOf = { it.id },
+                        nameOf = { it.name },
+                        descOf = { it.description },
+                        typeOf = { it.inputType.toString() },
+                        specsOf = { it.paramSpecs }
+                    )
                 )
             )
             mcpSuccess(payload)
