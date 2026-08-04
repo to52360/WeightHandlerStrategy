@@ -19,7 +19,7 @@ val ruleModule = module {
         RuleInfoRegister(infos, get())
     }
 
-    single<UsePlanBuilder> { UsePlanBuilder() }
+    single<UsePlanBuilder> { UsePlanBuilder(get()) }
 
     // 🌟 先注册配置组装，后注册规则树绑定，保证 StartupTask 执行顺序
     single<GuardCompiler> {

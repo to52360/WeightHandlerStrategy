@@ -2,6 +2,7 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.ai.config.CardGroupQueryService
+import lin.bean.usePlan.ConditionalStageOverride
 import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.UseStage
 import lin.config.PathConfig
@@ -60,7 +61,14 @@ class CardGroupToolProvider(
                             "name" to b.name,
                             "description" to b.description,
                             "cardIds" to b.cardIds,
-                            "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name
+                            "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name,
+                            "conditionalStage" to b.behaviors.findOverride()?.conditionalStage?.let { cs ->
+                                mapOf(
+                                    "conditionId" to cs.conditionId,
+                                    "stage" to cs.stage.name,
+                                    "elseStage" to cs.elseStage?.name
+                                )
+                            }
                         )
                     }
                     mcpSuccess(
@@ -86,7 +94,11 @@ class CardGroupToolProvider(
 
 bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 PurposeTag 默认推导）：
 - RESOURCE(资源) / SETUP(铺场) / CLEAR(解场) / DEFEND(防御) / COMBO(斩杀) / GENERAL(常规) / END(回合结束)
-- 典型场景：莱妮莎/奥尔多侍从/斩星巨刃等引擎牌设 SETUP，使其优先于常规 GENERAL 阶段打出。"""
+- 典型场景：莱妮莎/奥尔多侍从/斩星巨刃等引擎牌设 SETUP，使其优先于常规 GENERAL 阶段打出。
+bindings 可选条件化阶段（dynamic-ordering）：
+- conditionalStageConditionId + conditionalStageStage（+ 可选 conditionalStageElseStage）：条件树命中→该阶段，未命中→elseStage（缺省沿用默认推导）
+- 典型场景：过牌与增幅牌的顺序随手牌/场面动态反转（如手牌少且场面好时增幅牌提前 SETUP，压力大且无解牌时过牌提前 RESOURCE）
+- 注意：conditionalStageConditionId 的 condition_tree 需先经 condition_tree(action=SAVE) 创建；阈值参数写在条件树管道叶子里。"""
         ) { input ->
             // ── clone mode ──
             if (input.cloneFrom != null) {
@@ -152,20 +164,39 @@ bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 P
             }
             val bindings = input.bindings.map { bi ->
                 val behaviors = buildList {
-                    bi.stageOverride?.takeIf { it.isNotBlank() }?.let { stage ->
+                    val conditionalStage = bi.conditionalStageConditionId?.takeIf { it.isNotBlank() }?.let { cid ->
+                        val stageName = bi.conditionalStageStage?.takeIf { it.isNotBlank() }
+                            ?: throw McpBadInput("bindings[${bi.name}] 提供 conditionalStageConditionId 时必须同时提供 conditionalStageStage")
+                        val stage = try {
+                            UseStage.valueOf(stageName)
+                        } catch (_: IllegalArgumentException) {
+                            throw McpBadInput("bindings[${bi.name}] conditionalStageStage 无效: '$stageName'，支持: ${UseStage.entries.joinToString { it.name }}")
+                        }
+                        val elseStage = bi.conditionalStageElseStage?.takeIf { it.isNotBlank() }?.let {
+                            try {
+                                UseStage.valueOf(it)
+                            } catch (_: IllegalArgumentException) {
+                                throw McpBadInput("bindings[${bi.name}] conditionalStageElseStage 无效: '$it'，支持: ${UseStage.entries.joinToString { it.name }}")
+                            }
+                        }
+                        ConditionalStageOverride(conditionId = cid, stage = stage, elseStage = elseStage)
+                    }
+                    val stageOverride = bi.stageOverride?.takeIf { it.isNotBlank() }?.let { stage ->
                         try {
-                            add(
-                                CardGroupBehavior.OverrideBehavior(
-                                    GroupUseOverride(
-                                        stageOverride = UseStage.valueOf(
-                                            stage
-                                        )
-                                    )
-                                )
-                            )
+                            UseStage.valueOf(stage)
                         } catch (_: IllegalArgumentException) {
                             throw McpBadInput("bindings[${bi.name}] stageOverride 无效: '$stage'，支持: ${UseStage.entries.joinToString { it.name }}")
                         }
+                    }
+                    if (stageOverride != null || conditionalStage != null) {
+                        add(
+                            CardGroupBehavior.OverrideBehavior(
+                                GroupUseOverride(
+                                    stageOverride = stageOverride,
+                                    conditionalStage = conditionalStage
+                                )
+                            )
+                        )
                     }
                 }
                 CardGroupBinding(
@@ -195,7 +226,14 @@ bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 P
                             "name" to b.name,
                             "description" to b.description,
                             "cardIds" to b.cardIds,
-                            "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name
+                            "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name,
+                            "conditionalStage" to b.behaviors.findOverride()?.conditionalStage?.let { cs ->
+                                mapOf(
+                                    "conditionId" to cs.conditionId,
+                                    "stage" to cs.stage.name,
+                                    "elseStage" to cs.elseStage?.name
+                                )
+                            }
                         )
                     }
                 )
@@ -416,7 +454,13 @@ private data class SaveCardGroupBindingInput(
     @field:JsonPropertyDescription("分组说明")
     val description: String? = null,
     @field:JsonPropertyDescription("可选：覆盖分组的默认出牌阶段，接受 UseStage 枚举值（RESOURCE/SETUP/CLEAR/DEFEND/COMBO/GENERAL/END）。SETUP 阶段的牌优先于 GENERAL。不提供则走 PurposeTag 默认推导。")
-    val stageOverride: String? = null
+    val stageOverride: String? = null,
+    @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树 id（condition_tree(action=LIST) 获取）。提供时启用动态排序：条件树命中 → conditionalStageStage，未命中 → conditionalStageElseStage（缺省沿用默认推导）。与 stageOverride 可同时提供。")
+    val conditionalStageConditionId: String? = null,
+    @field:JsonPropertyDescription("条件化阶段命中时用的出牌阶段（UseStage 枚举值），需与 conditionalStageConditionId 同时提供。")
+    val conditionalStageStage: String? = null,
+    @field:JsonPropertyDescription("可选：条件化阶段未命中时用的出牌阶段（UseStage 枚举值），缺省沿用默认推导。需与 conditionalStageConditionId 同时提供。")
+    val conditionalStageElseStage: String? = null
 )
 
 private data class ParseDeckCodeInput(

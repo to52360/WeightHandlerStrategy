@@ -1,9 +1,6 @@
 package lin.bean
 
-import lin.bean.usePlan.CardComboEntry
-import lin.bean.usePlan.CardComboUseBinding
-import lin.bean.usePlan.PurposeTagId
-import lin.bean.usePlan.UseIntent
+import lin.bean.usePlan.*
 import lin.domain.use.UseStrategy
 
 
@@ -22,4 +19,6 @@ class CardCombinedConfig(
     val useStrategies: List<UseStrategy> = emptyList(),
     // 用途标签：唯一来源是 PurposeStep（从 CardPurposeProvider 加载）。启动期透传，运行期只读。
     val purposeTags: Set<PurposeTagId> = emptySet(),
+    // 条件化阶段覆盖：唯一来源是 GroupBehaviorStep（OverrideBehavior.conditionalStage 透传）。启动期透传，运行期只读。
+    val conditionalStage: ConditionalStageOverride? = null,
 )

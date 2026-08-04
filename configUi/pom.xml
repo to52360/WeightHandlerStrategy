@@ -17,6 +17,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.code.style>official</kotlin.code.style>
         <kotlin.compiler.jvmTarget>21</kotlin.compiler.jvmTarget>
+        <!-- configUi 测试依赖真实 DB（McpTestEnv 连 ../weightHandlerStrategy.db），默认跳过执行，避免写库 + 加速构建；需要时 -DskipTests=false -->
+        <skipTests>true</skipTests>
     </properties>
 
     <repositories>

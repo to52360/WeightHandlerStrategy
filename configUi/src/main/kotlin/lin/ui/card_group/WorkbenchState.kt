@@ -1,5 +1,6 @@
 package lin.ui.card_group
 
+import lin.bean.usePlan.ConditionalStageOverride
 import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.UseStage
 import lin.dao.CardWeightConfig
@@ -142,6 +143,19 @@ object WorkbenchActions {
             val oldBinding = newList[index]
             val weightVal = if (weight != 0.0) weight else null
             val newOverride = (oldBinding.behaviors.findOverride() ?: GroupUseOverride()).copy(orderWeight = weightVal)
+            newList[index] = oldBinding.copy(
+                behaviors = oldBinding.behaviors.withOverride(if (newOverride.isDefault()) null else newOverride)
+            )
+        }
+        state.copy(currentBindings = newList)
+    }
+
+    fun updateBindingConditionalStage(index: Int, conditionalStage: ConditionalStageOverride?): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            val oldBinding = newList[index]
+            val newOverride = (oldBinding.behaviors.findOverride() ?: GroupUseOverride())
+                .copy(conditionalStage = conditionalStage)
             newList[index] = oldBinding.copy(
                 behaviors = oldBinding.behaviors.withOverride(if (newOverride.isDefault()) null else newOverride)
             )

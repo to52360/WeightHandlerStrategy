@@ -68,6 +68,7 @@ class DeckFlowStage1_ParseTest : McpTestEnv() {
         // 保存追踪信息
         saveTrackedIds(FILE_NAME, MANAGER_NAME, managerId, allTreeIds)
 
-        // 注意：不调用 cleanup()，保留数据供 Stage 2 使用
+        // 注意：不显式调用 cleanup()（Stage2 开头 cleanupAll 重建同名数据，不依赖本 Stage 产物）；
+        // 兜底清理由 McpTestEnv.tearDownCleanup (@After) 自动执行，避免残留垃圾数据
     }
 }

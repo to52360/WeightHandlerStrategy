@@ -179,6 +179,30 @@ val AcceptableAttackTransform = transform<WarView, Int>(
     input.ableAtcSum
 }
 
+data class PressureFactorParams(
+    @lin.rule.parse.RuleField(
+        name = "压力系数",
+        description = "归一化缩放系数（默认 10，等价旧 WarStatus.excessDamageFactor 的 *10）",
+        required = false
+    )
+    val k: Int = 10
+)
+
+/**
+ * 压力因子转换器：输入 WarView，输出相对压力因子 excessDamage * K / ableAtcSum。
+ *
+ * 还原旧 WarStatus.excessDamageFactor 的相对压力语义——溢出伤害除以可承受上限（随水晶/血量动态），
+ * 而非绝对值比较（30 血能扛 15 攻时溢出 5 不算压力，绝对值判定会误判）。
+ */
+val PressureFactorTransform = transform<WarView, Int, PressureFactorParams>(
+    id = "pressure_factor",
+    name = "场面压力因子",
+    description = "归一化场面压力：溢出伤害 * K / 可承受攻击上限（相对压力，阈值随水晶/血量动态变化）"
+) { input, params ->
+    if (input.ableAtcSum == 0) input.excessDamage * params.k
+    else input.excessDamage * params.k / input.ableAtcSum
+}
+
 /**
  * 敌方战场随从提取器：输入 WarView 局势快照，输出 List<Card>
  */

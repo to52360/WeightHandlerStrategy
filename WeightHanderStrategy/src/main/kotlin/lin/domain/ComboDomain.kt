@@ -17,6 +17,7 @@ import lin.domain.use.order.UseOrderPlanner
 import lin.domain.use.plan.UsePlanBuilder
 import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
+import lin.rule.context.WarInfoEnv
 import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.warExt.my.base.getCost
 import org.koin.core.component.KoinComponent
@@ -92,7 +93,8 @@ class ComboDomain : KoinComponent {
 
         val bestCombos = UsePlanOrderer.order(
             usePlanBuilder.build(
-            DefaultFindBestCombination.findBestCombination(moreTryCard, warManage.getCost())
+                DefaultFindBestCombination.findBestCombination(moreTryCard, warManage.getCost()),
+                WarInfoEnv(warManage)
             )
         )
         //todo 还会存在打不出的情况
@@ -190,7 +192,8 @@ class ComboDomain : KoinComponent {
          * [MyWarManage.parseCombo]
          */
         val bestCombinationCombo =
-            UsePlanOrderer.order(usePlanBuilder.build(bestCombination))
+            //todo-future 需要额外创建WarInfoEnv,评估已经有一个
+            UsePlanOrderer.order(usePlanBuilder.build(bestCombination, WarInfoEnv(warManage)))
 
         myLog.info {
             val finalWeight = bestCombinationCombo.sumOf { it.powerWeight }

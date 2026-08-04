@@ -1,5 +1,6 @@
 package lin.ui.tree_config
 
+import javafx.application.Platform
 import javafx.geometry.Pos
 import javafx.scene.control.Button
 import javafx.scene.control.Label
@@ -92,8 +93,13 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
             override fun install(editor: LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>>) {
                 editor.cellInterceptors.add { cell, item, empty ->
                     if (!empty && item != null && cell.treeItem != null) {
-                        cell.contextMenu =
-                            contextMenuFactory.createContextMenu(cell.treeItem, logicTreeEditor.treeView)
+                        // runLater 延迟设置：规避 JavaFX cell 复用时 setContextMenu NPE（MenuItem.getParentMenu() null）
+                        Platform.runLater {
+                            if (cell.treeItem != null) {
+                                cell.contextMenu =
+                                    contextMenuFactory.createContextMenu(cell.treeItem, logicTreeEditor.treeView)
+                            }
+                        }
                     }
                 }
             }

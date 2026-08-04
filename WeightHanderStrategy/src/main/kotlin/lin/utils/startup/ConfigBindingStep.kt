@@ -2,7 +2,6 @@ package lin.utils.startup
 
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
-import lin.bean.ConfigSlice
 import lin.bean.ConfigSliceScope
 import lin.bean.SliceEntry
 import lin.bean.usePlan.CardPurpose
@@ -65,6 +64,8 @@ class CardCombinedConfigBuilder {
                 comboUseBindings = comboAsm.bindings(cardId),
                 useStrategies = strategies,
                 purposeTags = cardPurposes[cardId]?.purposeTags ?: emptySet(),
+                conditionalStage = groupMap[cardId].orEmpty()
+                    .firstNotNullOfOrNull { groupOverrides[it]?.conditionalStage },
             )
         }
     }

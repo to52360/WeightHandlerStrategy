@@ -62,6 +62,24 @@ class DefaultOrthogonalComponentsTest {
     }
 
     @Test
+    fun testPressureFactorTransform() {
+        val mockWarInfo = createMockWarInfo(
+            rivalPlayCards = listOf(
+                createMockCard(cardId = "R1", cardType = CardTypeEnum.MINION, atc = 3, health = 3),
+                createMockCard(cardId = "R2", cardType = CardTypeEnum.MINION, atc = 4, health = 3)
+            )
+        )
+        val context = RuleContext(ComboCard(card = createMockCard()))
+        val env = fakeRuleEnv(mockWarInfo)
+        val warView = WarViewSource.resolve(context, env)
+
+        // 我方无嘲讽 → excessDamage = rivalSumAtc = 7；mock 默认 ableAtcSum = 0
+        // ableAtcSum == 0 → pressure = excessDamage * K（等价旧 WarStatus.excessDamageFactor 的 ableAtcSum==0 分支）
+        assertEquals(70, PressureFactorTransform.transform(warView, emptyMap()))
+        assertEquals(7, PressureFactorTransform.transform(warView, mapOf("k" to 1)))
+    }
+
+    @Test
     fun testOperators() {
         val spellCard = createMockCard(cardType = CardTypeEnum.SPELL)
         val minionCard = createMockCard(cardType = CardTypeEnum.MINION)

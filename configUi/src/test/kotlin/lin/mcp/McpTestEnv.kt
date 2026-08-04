@@ -3,6 +3,7 @@ package lin.mcp
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import lin.moduls.loadMcpModules
+import org.junit.After
 import org.koin.core.context.GlobalContext
 import org.springframework.jdbc.core.JdbcTemplate
 import java.io.File
@@ -194,25 +195,38 @@ abstract class McpTestEnv {
 
     /**
      * 清理本次测试产生的 DB 记录和文件。
-     * 应在 @Test 方法的 finally 块中调用。
+     * 可在 @Test 的 finally 块显式调用，也可依赖 [tearDownCleanup] @After 兜底（两者幂等）。
+     * managerId 级联删除其下全部树/bindings（覆盖 allTreeIds 等分散记录的遗漏）。
      */
     fun cleanup() {
         runCatching {
             val jdbc = GlobalContext.get().get<JdbcTemplate>()
-            treeId?.let {
-                jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", it)
-                jdbc.update("DELETE FROM tree_config WHERE id = ?", it)
+            // 1. 按追踪 id 删树（兼容 managerId 未设置时的孤儿树）
+            listOfNotNull(treeId, codedTreeId).distinct().forEach { id ->
+                jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", id)
+                jdbc.update("DELETE FROM tree_config WHERE id = ?", id)
             }
-            codedTreeId?.let {
-                jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", it)
-                jdbc.update("DELETE FROM tree_config WHERE id = ?", it)
-            }
-            managerId?.let {
-                jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", it)
-                jdbc.update("DELETE FROM card_group_manager WHERE id = ?", it)
+            // 2. manager 级联删除（全部关联树 + bindings）
+            managerId?.let { mid ->
+                jdbc.update(
+                    "DELETE FROM evaluator_leaf_config WHERE config_id IN (SELECT id FROM tree_config WHERE manager_id = ?)",
+                    mid
+                )
+                jdbc.update("DELETE FROM tree_config WHERE manager_id = ?", mid)
+                jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mid)
+                jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mid)
             }
             savedFile?.let { Files.deleteIfExists(it) }
             println(">>> cleanup done (treeId=$treeId, codedTreeId=$codedTreeId, managerId=$managerId, savedFile=$savedFile)")
         }.onFailure { e -> println(">>> cleanup failed: ${e.message}") }
+    }
+
+    /**
+     * 兜底清理：测试方法结束后自动清理本次追踪的 DB 记录与文件（含异常路径）。
+     * JUnit 保证 @After 即使测试失败也会执行；与测试内 finally 的 cleanup() 幂等兼容。
+     */
+    @After
+    fun tearDownCleanup() {
+        cleanup()
     }
 }

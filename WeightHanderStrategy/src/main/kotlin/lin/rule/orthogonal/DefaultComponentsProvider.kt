@@ -34,6 +34,7 @@ class DefaultTransformProvider : TransformProvider {
     override fun get(): Collection<Transform<*, *>> = listOf(
         ExcessDamageTransform,
         AcceptableAttackTransform,
+        PressureFactorTransform,
         RivalCardsFromViewTransform,
         MeCardsFromViewTransform,
         RaceFilterTransform,

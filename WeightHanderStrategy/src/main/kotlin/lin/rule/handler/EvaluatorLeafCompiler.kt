@@ -120,6 +120,17 @@ class GuardCompiler(
             conditionRegistry.build(newPayload)
         }
     }
+
+    /**
+     * 编译裸条件树（排序侧 conditionalStage 复用）：按 id 查条件树，叶子自带参数直接编译。
+     * 与评估树 leafConfig 的 args 注入无关——条件树叶子 PipelineRef 自带 operatorArgs（阈值写在树配置里）。
+     */
+    fun compileTree(conditionTreeId: String): ConditionLogic {
+        val conditionTree = conditionTreeProviders
+            .firstNotNullOfOrNull { it.findById(conditionTreeId) }
+            ?: error("Condition tree config not found: conditionTreeId=$conditionTreeId")
+        return conditionTree.root.compile(conditionRegistry)
+    }
 }
 
 // ── 评分编译 ──

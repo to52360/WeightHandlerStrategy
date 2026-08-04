@@ -42,6 +42,18 @@ data class CardPurpose(
 }
 
 /**
+ * 条件化阶段覆盖：运行期条件命中时使用 [stage]，未命中回落 [elseStage]（null = 沿用默认推导）。
+ *
+ * 条件引用 condition_tree_config 的 id（复用评估条件树：正交管道叶子 + And/Or/Branch 组合）。
+ * 运行期由 UsePlanBuilder 用 RuleEnv 求值，产出动态 UseIntent；UsePlanOrderer 纯函数排序器不感知。
+ */
+data class ConditionalStageOverride(
+    val conditionId: String,
+    val stage: UseStage,
+    val elseStage: UseStage? = null
+)
+
+/**
  * 分组级使用配置重载（per groupId）。
  *
  * 所有字段可空，null 表示"不覆盖"该维度，启动期合并时保留下层默认值。
@@ -51,7 +63,8 @@ data class CardPurpose(
 data class GroupUseOverride(
     val stageOverride: UseStage? = null,
     val replanAfterUse: Boolean? = null,
-    val orderWeight: Double? = null
+    val orderWeight: Double? = null,
+    val conditionalStage: ConditionalStageOverride? = null
 ) {
     @JsonIgnore
     fun isDefault(): Boolean = this == EMPTY
