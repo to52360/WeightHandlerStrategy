@@ -29,6 +29,7 @@ class DefaultPurposeTagProvider : PurposeTagProvider {
         PurposeTagDef(PurposeTagId.GREED, "成长/贪婪"),
         PurposeTagDef(PurposeTagId.FINISH, "斩杀/收尾"),
         PurposeTagDef(PurposeTagId.VALUE, "普通价值"),
-        PurposeTagDef(PurposeTagId.EXTRA_COST, "额外费用")
+        PurposeTagDef(PurposeTagId.EXTRA_COST, "额外费用"),
+        PurposeTagDef(PurposeTagId.DRAW_CARD, "过牌")
     )
 }

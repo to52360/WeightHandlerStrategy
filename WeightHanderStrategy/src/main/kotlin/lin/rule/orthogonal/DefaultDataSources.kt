@@ -166,12 +166,12 @@ val MatchGroupPlayedCountsSource = dataSource<Map<String, Int>>(
  * 对局活动事件数据源（Q-2a）：输出 Map<MatchActivityKind, List<Card>>（打出事件与墓地事件）。
  * 无参：从 MatchState.playedCards() 与 getGraveyardCards() 引用合成 Map 返回，零元素创建。
  *
- * ⚠️ 关联 @defect D-002（部分解决）：Source 已改为 Map<Kind, List<Card>> 引用返回，
+ * ⚠️ 关联 @defect ai-config-validation/D-002（部分解决）：Source 已改为 Map<Kind, List<Card>> 引用返回，
  * 不再合并创建对象。但 Transform 仍内嵌事件类型匹配判定（按 kind 分派遍历），
  * 完整重构方向是拆为 played_events / graveyard_events 两个独立 Source + 独立管道。
  * 触发条件不变：再有 Transform 内嵌匹配判定的同类案例出现时启动完整拆分。
  */
-// @defect D-002（部分解决）：Source 已改为 Map<Kind, List<Card>> 引用返回，
+// @defect ai-config-validation/D-002（部分解决）：Source 已改为 Map<Kind, List<Card>> 引用返回，
 // 不再合并创建对象。但 Transform 仍内嵌事件类型匹配判定（按 kind 分派遍历），
 // 完整重构方向是拆为 played_events / graveyard_events 两个独立 Source + 独立管道。
 // 触发条件不变：再有 Transform 内嵌匹配判定的同类案例出现时启动完整拆分。

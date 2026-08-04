@@ -10,6 +10,7 @@ import lin.domain.result.WeightResult
 import lin.myLog
 import lin.rule.context.RuleEnv
 import lin.rule.context.WarInfoEnv
+import lin.rule.handler.EvalSignal
 import lin.rule.handler.evaluateCardRoots
 import lin.rule.handler.updateIntent
 import lin.utils.serviceLoader.ServiceLoaderUtils
@@ -86,9 +87,16 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         var total = 0.0
 
         // 1. 条件树求值（新系统）
-        val treeResult = evaluateCardRoots(comboCard, warManage, ruleEnv)
-        if (treeResult.pruned) {
-            return UnUseWeight
+        // @verify U-002: EvalSignal.Banned 异常穿透，隐式控制流；唯一捕获边界在编排层
+        val treeResult = try {
+            evaluateCardRoots(comboCard, warManage, ruleEnv)
+        } catch (e: EvalSignal) {
+            when (e) {
+                EvalSignal.Banned -> {
+                    comboCard.unUse()
+                    return UnUseWeight
+                }
+            }
         }
         if (treeResult.actions.isNotEmpty()) {
             comboCard.updateIntent(treeResult.actions)

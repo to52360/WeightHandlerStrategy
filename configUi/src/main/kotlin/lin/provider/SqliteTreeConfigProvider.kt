@@ -43,7 +43,7 @@ class SqliteTreeConfigProvider(
         }
     }
 
-    // @defect D-001: GROUP 绑定跟随分组管理 enabled 状态，已修复缓存缺陷，现为动态查询。
+    // @defect purpose-tag-configurable/D-001: GROUP 绑定跟随分组管理 enabled 状态，已修复缓存缺陷，现为动态查询。
     private fun filterBindings(config: EvaluatorTreeConfig, currentEnabledGroupIds: Set<String>): EvaluatorTreeConfig {
         val filtered = config.bindingIds.filter { id ->
             when (config.bindingType) {

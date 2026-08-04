@@ -52,8 +52,9 @@ CardConfig
 ```
 
 > **RuleMap → EvaluatorTreeRoot 迁移**：`RuleMap` 已弃用，替换为 `EvaluatorTreeRoot`，通过 AST 树结构（
-`RuleNode/AndNode/OrNode/NotNode/BranchNode`）表达条件组合。`ConfigHandler` 中新增 `is EvaluatorTreeRoot` 分支，将根节点注入
-`CardWeightInfo.intentEvaluatorRoots`。
+> `RuleNode/AndNode/OrNode/BranchNode`）表达条件组合（评估树不支持 NOT，取反仅用于条件树）。`ConfigHandler` 中新增
+> `is EvaluatorTreeRoot` 分支，将根节点注入
+> `CardWeightInfo.intentEvaluatorRoots`。
 
 ---
 

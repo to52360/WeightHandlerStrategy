@@ -17,7 +17,9 @@ sealed interface EvaluatorInstanceNode {
 
     data class AndNode(val children: List<EvaluatorInstanceNode>) : EvaluatorInstanceNode
     data class OrNode(val children: List<EvaluatorInstanceNode>) : EvaluatorInstanceNode
-    data class NotNode(val child: EvaluatorInstanceNode) : EvaluatorInstanceNode
+
+    // @verify U-003: 评估树不支持 NOT（取反），配置层 LogicNode.Not 仅用于条件树；
+    // instantiate 遇到评估树 NOT 配置直接报错（见下方）
     data class BranchNode(
         val nodeId: String,
         val condition: ConditionLogic,
@@ -55,7 +57,8 @@ fun EvaluatorTreeConfig.instantiate(
 
             is LogicNode.And -> EvaluatorInstanceNode.AndNode(node.children.map(::instantiateNode))
             is LogicNode.Or -> EvaluatorInstanceNode.OrNode(node.children.map(::instantiateNode))
-            is LogicNode.Not -> EvaluatorInstanceNode.NotNode(instantiateNode(node.child))
+            // 评估树不支持 NOT（取反），LogicNode.Not 仅用于条件树；此处直接拒绝
+            is LogicNode.Not -> error("评估树不支持 NOT 节点（取反仅用于条件树）")
             is LogicNode.Branch -> {
                 val payload = node.payload as? EvaluatorPayload.BranchCondition
                     ?: error("Branch node payload must be BranchCondition")

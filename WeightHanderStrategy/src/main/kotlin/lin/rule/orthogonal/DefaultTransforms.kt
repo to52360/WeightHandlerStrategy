@@ -253,7 +253,7 @@ data class WeightedActivitySumParams(
 /**
  * 活动加权求和转换器（Q-2a）：按事件类型和 cardId 匹配，对匹配事件累计权重。
  *
- * ⚠️ 临时方案（@defect D-002 部分解决）—— 职责混合，待多数据源重构
+ * ⚠️ 临时方案（@defect ai-config-validation/D-002 部分解决）—— 职责混合，待多数据源重构
  * - 当前混合职责：加权求和（Transform）+ 事件类型匹配判定（Operator），缓存职责已归引用化 Source/评估级 Map
  * - 正确方向：拆为多 DataSource（played_activity_events / graveyard_activity_events 独立输出），
  *   匹配判定交独立 Operator，本 Transform 只对已匹配事件求和

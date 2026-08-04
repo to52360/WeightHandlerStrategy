@@ -139,6 +139,17 @@ bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 P
             }
             val managerName = input.managerName?.takeIf { it.isNotBlank() } ?: sourceFile
             val existingId = input.existingId?.takeIf { it.isNotBlank() }
+            // Q-009：更新模式（显式 existingId 或同名/同源方案）下按 name 复用旧 binding id，
+            // 避免整体 replaceBindings 重建 id 导致 combo_plan / 评估树 bindingId 引用断裂。
+            val targetManagerId = existingId
+                ?: groupService.loadAllManagers()
+                    .firstOrNull { it.name == managerName || it.sourceFile == sourceFile }
+                    ?.id
+            val existingBindingsByName: Map<String, CardGroupBinding> = if (targetManagerId != null) {
+                groupService.loadBindings(targetManagerId).associateBy { it.name }
+            } else {
+                emptyMap()
+            }
             val bindings = input.bindings.map { bi ->
                 val behaviors = buildList {
                     bi.stageOverride?.takeIf { it.isNotBlank() }?.let { stage ->
@@ -158,7 +169,7 @@ bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 P
                     }
                 }
                 CardGroupBinding(
-                    id = nextShortId(),
+                    id = existingBindingsByName[bi.name]?.id ?: nextShortId(),
                     managerId = "",
                     name = bi.name,
                     cardIds = bi.cardIds,

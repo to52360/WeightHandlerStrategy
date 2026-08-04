@@ -10,6 +10,7 @@ import lin.rule.score.ScoreEffect
 import lin.rule.tree.EvaluatorLeafConfig
 import kotlin.reflect.KClass
 
+/** 规则逻辑：只产评分（Continue），控制语义（missValue 兜底 / Banned 禁止）由守卫侧 guardMissBehavior 决定，规则不参与控制 */
 typealias RuleLogic = RuleContext.(RuleEnv) -> RuleResult
 
 /** 叶子节点求值闭包：返回 [EvalOutcome] 三态，由守卫结果 + rule 评分组合而成 */

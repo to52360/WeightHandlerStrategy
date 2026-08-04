@@ -66,7 +66,15 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
 /**
  * 对一张卡牌的所有意图评估根节点执行条件树求值。
  * 需要在 [RuleEnv] 作用域内调用（例如 `with(WarInfoEnv(warManage))`）。
+ *
+ * 返回值是纯值聚合（[RuleResult.Accumulate]），不携带控制语义：
+ * - "不参与评分"由守卫未命中 + missValue=0 表达，无独立剪枝信号。
+ * - 全局禁止（Banned）通过 [EvalSignal.Banned] 异常穿透到编排层，
+ *   副作用（card.unUse()）统一由 weightEvaluator 处理。
  */
+// @defect purpose-tag-extension/D-001: roots 顺序累加，跨 bindingType（GROUP/PURPOSE_TAG/CARD）不去重不覆盖——
+// PURPOSE_TAG 树的"全局兜底"实为 additive，与 fallback 语义冲突（双倍计分风险）。BAN(constraint) 例外：
+// EvalOutcome.Banned 一票否决穿透，天然无冲突。加分方向 tag 树案例出现前保持现状。
 fun evaluateCardRoots(
     card: ComboCard,
     warManage: MyWarManage,
@@ -78,17 +86,15 @@ fun evaluateCardRoots(
     card.intentEvaluatorRoots()?.let { roots ->
         val context = RuleContext(card)
         for (root in roots) {
-            val res = evaluateConditionTree(root, context, ruleEnv, collectedActions)
-            if (res is EvalOutcome.Pruned) return RuleResult.Accumulate(totalScore, collectedActions, pruned = true)
-            when (res) {
+            when (val res = evaluateConditionTree(root, context, ruleEnv, collectedActions)) {
                 is EvalOutcome.Matched -> totalScore += res.score
                 is EvalOutcome.Skipped -> totalScore += res.score
-                EvalOutcome.Pruned -> {} // 不可达，前面已 return
+                EvalOutcome.Banned -> throw EvalSignal.Banned // 全局禁止，穿透到编排层
             }
         }
     }
 
-    return RuleResult.Accumulate(totalScore, collectedActions, pruned = false)
+    return RuleResult.Accumulate(totalScore, collectedActions)
 }
 
 /**
@@ -113,16 +119,15 @@ fun evaluateConditionTree(
             var totalScore = 0.0
             var anyMatched = false
             for (child in node.children) {
-                val res = evaluateConditionTree(child, context, ruleEnv, collectedActions)
-                if (res is EvalOutcome.Pruned) return EvalOutcome.Pruned
-                when (res) {
+                when (val res = evaluateConditionTree(child, context, ruleEnv, collectedActions)) {
                     is EvalOutcome.Matched -> {
                         anyMatched = true
                         totalScore += res.score
                     }
 
                     is EvalOutcome.Skipped -> totalScore += res.score
-                    is EvalOutcome.Pruned -> {}
+                    // 全局禁止：向上穿透
+                    EvalOutcome.Banned -> return EvalOutcome.Banned
                 }
             }
             if (anyMatched) EvalOutcome.Matched(totalScore) else EvalOutcome.Skipped(totalScore)
@@ -131,25 +136,18 @@ fun evaluateConditionTree(
         is EvaluatorInstanceNode.OrNode -> {
             for (child in node.children) {
                 val localActions = mutableListOf<ComboCardAction>()
-                val res = evaluateConditionTree(child, context, ruleEnv, localActions)
-                if (res is EvalOutcome.Matched) {
-                    collectedActions.addAll(localActions)
-                    return res
+                when (val res = evaluateConditionTree(child, context, ruleEnv, localActions)) {
+                    is EvalOutcome.Matched -> {
+                        collectedActions.addAll(localActions)
+                        return res
+                    }
+                    // 未命中：该分支放弃，尝试下一个子节点
+                    is EvalOutcome.Skipped -> {}
+                    // 全局禁止：向上穿透
+                    EvalOutcome.Banned -> return EvalOutcome.Banned
                 }
-                if (res is EvalOutcome.Pruned) return EvalOutcome.Pruned
-                // Skipped: 继续尝试下一个子节点
             }
             EvalOutcome.Skipped(score = 0.0)
-        }
-
-        is EvaluatorInstanceNode.NotNode -> {
-            val localActions = mutableListOf<ComboCardAction>()
-            val res = evaluateConditionTree(node.child, context, ruleEnv, localActions)
-            when (res) {
-                is EvalOutcome.Matched -> EvalOutcome.Skipped(score = 0.0)
-                is EvalOutcome.Skipped -> EvalOutcome.Matched(score = 0.0)
-                is EvalOutcome.Pruned -> EvalOutcome.Pruned
-            }
         }
 
         is EvaluatorInstanceNode.BranchNode -> {

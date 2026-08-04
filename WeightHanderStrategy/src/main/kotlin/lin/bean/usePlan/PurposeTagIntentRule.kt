@@ -66,6 +66,11 @@ class DefaultPurposeTagIntentRuleProvider : PurposeTagIntentRuleProvider {
             tagId = PurposeTagId.EXTRA_COST,
             defaultStage = UseStage.GENERAL,
             priority = 50
+        ),
+        PurposeTagIntentRule(
+            tagId = PurposeTagId.DRAW_CARD,
+            defaultStage = UseStage.GENERAL,
+            priority = 60
         )
     )
 }

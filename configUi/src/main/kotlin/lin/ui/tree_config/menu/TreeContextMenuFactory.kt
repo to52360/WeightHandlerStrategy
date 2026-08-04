@@ -7,7 +7,9 @@ import lin.ui.tree_config.LogicNodeWrapper
 
 class TreeContextMenuFactory<L>(
     private val payloadFactory: PayloadFactory<L>,
-    private val titleResolver: ((L?) -> String)? = null
+    private val titleResolver: ((L?) -> String)? = null,
+    /** 是否允许创建/切换 NOT 节点（条件树=true；评估树=false，评估树不支持取反） */
+    private val allowNot: Boolean = true
 ) {
 
     fun createContextMenu(
@@ -24,15 +26,15 @@ class TreeContextMenuFactory<L>(
             addMenu.items.addAll(
                 createAddMenuItem("AND 节点", treeItem, LogicNodeType.AND),
                 createAddMenuItem("OR 节点", treeItem, LogicNodeType.OR),
-                createAddMenuItem("NOT 节点", treeItem, LogicNodeType.NOT),
+                if (allowNot) createAddMenuItem("NOT 节点", treeItem, LogicNodeType.NOT) else null,
                 createAddMenuItem("LEAF 节点", treeItem, LogicNodeType.LEAF),
                 createAddMenuItem("BRANCH 节点", treeItem, LogicNodeType.BRANCH)
             )
             menu.items.add(addMenu)
         }
 
-        // NOT 节点只允许添加一个子节点
-        if (type == LogicNodeType.NOT && treeItem.children.isEmpty()) {
+        // NOT 节点只允许添加一个子节点（条件树专用）
+        if (allowNot && type == LogicNodeType.NOT && treeItem.children.isEmpty()) {
             val addMenu = Menu("添加子节点")
             addMenu.items.addAll(
                 createAddMenuItem("AND 节点", treeItem, LogicNodeType.AND),
@@ -63,7 +65,9 @@ class TreeContextMenuFactory<L>(
         // 节点类型替换功能：允许所有节点（包括 Root 和 Branch 的子节点）更改类型
         menu.items.add(SeparatorMenuItem())
         val changeMenu = Menu(if (isRoot) "更改根节点类型" else "更改节点类型")
-        LogicNodeType.entries.filter { it != type }.forEach { targetType ->
+        LogicNodeType.entries
+            .filter { it != type && (allowNot || it != LogicNodeType.NOT) }
+            .forEach { targetType ->
             changeMenu.items.add(MenuItem("${targetType.name} 节点").apply {
                 setOnAction {
                     treeItem.value.type = targetType

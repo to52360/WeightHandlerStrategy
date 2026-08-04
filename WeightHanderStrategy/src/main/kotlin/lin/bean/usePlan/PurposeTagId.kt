@@ -29,5 +29,8 @@ value class PurposeTagId(val value: String) {
 
         /** 额外费用牌 */
         val EXTRA_COST = PurposeTagId("EXTRA_COST")
+
+        /** 过牌/抽牌牌 */
+        val DRAW_CARD = PurposeTagId("DRAW_CARD")
     }
 }

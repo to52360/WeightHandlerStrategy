@@ -263,7 +263,7 @@ class EvaluatorPropertyEditorStrategy(
                 text = if (empty || item == null) null
                 else when (item) {
                     GuardMissBehavior.SCORE -> "给兜底分 (继续评估)"
-                    GuardMissBehavior.PRUNE -> "剪枝 (终止评估树)"
+                    GuardMissBehavior.BAN -> "禁止打出 (整卡不可用)"
                 }
             }
         }

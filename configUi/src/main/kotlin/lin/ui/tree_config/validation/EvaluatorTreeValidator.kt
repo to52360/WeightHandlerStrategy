@@ -170,11 +170,13 @@ class EvaluatorTreeValidator(
             }
         }
 
-        // PRUNE 时 missValue 无意义（warn 级，不拦截）
-        if (leafConfig.guardMissBehavior == GuardMissBehavior.PRUNE && scoreable.scoreEffect.missValue != 0.0) {
+        // BAN 时 missValue 无意义（warn 级，不拦截）
+        if (leafConfig.guardMissBehavior == GuardMissBehavior.BAN
+            && scoreable.scoreEffect.missValue != 0.0
+        ) {
             diagnostics += ValidationDiagnostic(
-                code = "prune_miss_value_warn",
-                message = "剪枝(PRUNE)行为下 missValue 不会被使用，当前值 ${scoreable.scoreEffect.missValue} 无意义",
+                code = "ban_miss_value_warn",
+                message = "禁止(BAN)行为下 missValue 不会被使用，当前值 ${scoreable.scoreEffect.missValue} 无意义",
                 path = "$prefix.guardMissBehavior"
             )
         }

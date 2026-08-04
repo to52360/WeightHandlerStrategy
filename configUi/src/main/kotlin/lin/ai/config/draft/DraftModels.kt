@@ -12,13 +12,12 @@ data class CreateDraftRequest(
     @field:JsonPropertyDescription(
         """评估树的拓扑逻辑骨架。与 cloneFrom 互斥：从零创建模式必填；提供 cloneFrom 时留空（使用克隆源的骨架）。
         
-【JSON 格式要求—WRAPPER_OBJECT 多态】系统使用 Jackson WRAPPER_OBJECT 序列化，五种节点的 key 分别是: "AndNode" / "OrNode" / "NotNode" / "BranchNode" / "Leaf"。每个节点的 payload 是 "Rule" 或 "BranchCondition" 包裹的含 nodeId 对象。
+【JSON 格式要求—WRAPPER_OBJECT 多态】系统使用 Jackson WRAPPER_OBJECT 序列化，四种节点的 key 分别是: "AndNode" / "OrNode" / "BranchNode" / "Leaf"。每个节点的 payload 是 "Rule" 或 "BranchCondition" 包裹的含 nodeId 对象。评估树【不支持】NOT 节点（取反仅用于条件树）。
         
 示例:
 - 单叶子: {"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}
 - AND(两个子): {"AndNode":{"children":[{"Leaf":{"payload":{"Rule":{"nodeId":"a"}}}},{"Leaf":{"payload":{"Rule":{"nodeId":"b"}}}}]}}
 - OR: {"OrNode":{"children":[...]}}
-- NOT: {"NotNode":{"child":{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}}}
 - Branch: {"BranchNode":{"payload":{"BranchCondition":{"nodeId":"c1"}},"onTrue":{...},"onFalse":{...}}}"""
     )
     val root: EvaluatorNode? = null,

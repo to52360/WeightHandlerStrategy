@@ -85,7 +85,9 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
                 else -> p?.toString() ?: "?"
             }
         }
-        val contextMenuFactory = TreeContextMenuFactory(EvaluatorPayloadFactory(), evaluatorTitleResolver)
+        // @verify U-003: 评估树不支持 NOT（取反），禁用 NOT 节点菜单
+        val contextMenuFactory =
+            TreeContextMenuFactory(EvaluatorPayloadFactory(), evaluatorTitleResolver, allowNot = false)
         logicTreeEditor.addBehavior(object : TreeEditorBehavior<LogicNodeWrapper<EvaluatorPayload>> {
             override fun install(editor: LogicTreeEditor<LogicNodeWrapper<EvaluatorPayload>>) {
                 editor.cellInterceptors.add { cell, item, empty ->

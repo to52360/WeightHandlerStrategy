@@ -20,10 +20,14 @@ const val EVALUATOR_LEAF_GUARD_MISS_BEHAVIOR_FIELD = "guardMissBehavior"
 
 /**
  * 守卫未命中时的行为策略。
- * - [SCORE]：给 missValue 兜底分，继续评估其他节点（默认行为，向后兼容）
- * - [PRUNE]：控制流剪枝，终止整棵评估树
+ * - [SCORE]：给 missValue 兜底分，继续评估其他节点（默认行为，向后兼容；
+ *   missValue=0 即"不参与评分"，无需独立剪枝信号）
+ * - [BAN]：强制禁止当前卡牌打出（守卫未命中即命中"禁止条件"，
+ *   全局穿透整棵评估树并调用 [lin.bean.ComboCard.unUse]，副作用在编排层处理）
+ *
+ * @verify U-001 已收敛：PRUNE 与 SCORE+missValue=0 行为等价，已并入 SCORE
  */
-enum class GuardMissBehavior { SCORE, PRUNE }
+enum class GuardMissBehavior { SCORE, BAN }
 
 /**
  * CONDITION / CONDITION_TREE 叶子固定绑定 ConstantScore。

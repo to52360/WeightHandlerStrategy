@@ -2,10 +2,12 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.PurposeTagIntentRuleProvider
+import lin.repository.card_purpose.CardPurposeEntity
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.service.TreeConfigService
+import java.time.LocalDate
 
 private sealed interface PurposeTagQuery {
     data object ListAction : PurposeTagQuery
@@ -71,6 +73,18 @@ data class PurposeTagDetailDto(
     val boundEvaluatorTrees: List<BoundTreeSummaryDto>
 )
 
+/** 批量打标输入（save_card_purpose） */
+data class SaveCardPurposeInput(
+    @field:JsonPropertyDescription("要打标的卡牌 ID 列表（如 [\"BOT_909\"]）。不能为空。")
+    val cardIds: List<String>,
+
+    @field:JsonPropertyDescription("最终生效的用途标签 ID 完整集合（覆盖语义，如 [\"DRAW_CARD\"]）。空集合 = 清除该卡全部标签。")
+    val purposeTags: List<String> = emptyList(),
+
+    @field:JsonPropertyDescription("使用后是否需要重新规划（replanAfterUse）。null 表示不修改当前值。")
+    val replanAfterUse: Boolean? = null
+)
+
 /**
  * 用途标签 (PurposeTag) MCP 查询工具提供者。
  * 支持 action=LIST（列出标签及其出牌阶段规则摘要）与 action=GET（读取标签完整推导规则、关联卡牌及绑定树）。
@@ -95,8 +109,58 @@ class PurposeTagToolProvider(
                 is PurposeTagQuery.ListAction -> handleList()
                 is PurposeTagQuery.GetAction -> handleGet(query.tagId)
             }
+        },
+
+        // ── save_card_purpose: 批量打标（增删查合一，重复调用幂等）──
+        typedTool<SaveCardPurposeInput>(
+            name = "save_card_purpose",
+            description = """
+                批量设置卡牌的战略用途标签（PURPOSE_TAG 打标），并可调整 replanAfterUse。
+                重复调用幂等：对同一卡牌以同一 tags 集合再次调用结果不变。
+
+                purposeTags 为【完整覆盖】语义：传入后该卡最终标签 = 传入集合（与 UI 打标"合并 Tag"不同，此处直接整表替换），
+                传空集合表示清除该卡全部标签。replanAfterUse 为 null 表示不修改当前值。
+
+                典型场景：给过牌卡打 DRAW_CARD 标签，或给某卡增补/移除用途标签。
+            """.trimIndent()
+        ) { input ->
+            handleSave(input)
         }
     )
+
+    private fun handleSave(input: SaveCardPurposeInput): McpToolResult {
+        if (input.cardIds.isEmpty()) throw McpBadInput("cardIds 不能为空")
+
+        // 校验标签合法性：仅允许已定义标签，防幻觉打未知 tag
+        val availableTagIds = tagProvider.tags().map { it.id.value }.toSet()
+        val unknownTags = input.purposeTags.filter { it !in availableTagIds }
+        if (unknownTags.isNotEmpty()) {
+            throw McpBadInput("未知用途标签: $unknownTags。当前可用标签: $availableTagIds")
+        }
+
+        val now = LocalDate.now().toString()
+        val entities = input.cardIds.distinct().map { cardId ->
+            val existing = cardPurposeRepository.findByCardId(cardId)
+            CardPurposeEntity(
+                cardId = cardId,
+                name = existing?.name,
+                purposeTags = input.purposeTags.joinToString(","),
+                replanAfterUse = input.replanAfterUse ?: existing?.replanAfterUse ?: false,
+                createdDate = existing?.createdDate ?: now
+            )
+        }
+        cardPurposeRepository.saveAll(entities)
+
+        val result = entities.map { e ->
+            mapOf(
+                "cardId" to e.cardId,
+                "name" to e.name,
+                "purposeTags" to e.purposeTags.split(",").filter { it.isNotBlank() },
+                "replanAfterUse" to e.replanAfterUse
+            )
+        }
+        return mcpSuccess(mapOf("savedCount" to result.size, "cards" to result))
+    }
 
     private fun handleList(): McpToolResult {
         val tags = tagProvider.tags()

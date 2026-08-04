@@ -128,6 +128,7 @@ class GuardCompiler(
  * 评分逻辑编译：编译编码规则或 SourceScore 管道。
  * 只依赖规则/评分相关服务，不碰条件守卫。
  */
+
 class ScoreCompiler(
     private val ruleRegistry: RuleRegistry,
     private val assembler: PipelineAssembler,
@@ -232,12 +233,15 @@ class LeafLogicAssembler(
             val guardPassed = guardLogic == null || guardLogic(this, env)
             when {
                 guardPassed -> {
+                    // 规则只产评分（RuleLogic 已收窄为 Continue），控制流只由守卫 guardMissBehavior 决定
                     when (val res = scoreLogic(this, env)) {
                         is RuleResult.Continue -> EvalOutcome.Matched(res.score, res.modifyCard)
+                        // Accumulate 是评估层聚合结果，不应出现在叶子逻辑处（防御性分支）
+                        is RuleResult.Accumulate -> error("叶子逻辑不应返回 Accumulate: ${leafConfig.nodeId}")
                     }
                 }
 
-                guardMissBehavior == GuardMissBehavior.PRUNE -> EvalOutcome.Pruned
+                guardMissBehavior == GuardMissBehavior.BAN -> EvalOutcome.Banned
                 else -> EvalOutcome.Skipped(missValue)
             }
         }
