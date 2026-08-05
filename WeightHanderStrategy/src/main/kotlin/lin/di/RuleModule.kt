@@ -3,10 +3,8 @@ package lin.di
 import lin.bean.CardCombinedConfig
 import lin.domain.use.plan.UsePlanBuilder
 import lin.rule.RuleInfoRegister
-import lin.rule.handler.GuardCompiler
-import lin.rule.handler.LeafLogicAssembler
-import lin.rule.handler.RuleTreeBindingTask
-import lin.rule.handler.ScoreCompiler
+import lin.rule.handler.*
+import lin.serviceLoader.provider.AuraBoostConfigProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import lin.serviceLoader.provider.StartupTask
 import lin.utils.startup.*
@@ -27,6 +25,7 @@ val ruleModule = module {
     }
     single<ScoreCompiler> { ScoreCompiler(get(), get(), get()) }
     single<LeafLogicAssembler> { LeafLogicAssembler(get(), get()) }
+    single<AuraBoostEvaluator> { AuraBoostEvaluator(get(), getAll<AuraBoostConfigProvider>()) }
 
     // 配置绑定步骤：每个维度独立成 Step，新增维度只需加一行 single 声明
     single<ConfigBindingStep> { WeightInfoStep() }

@@ -10,6 +10,7 @@ import lin.domain.result.WeightResult
 import lin.myLog
 import lin.rule.context.RuleEnv
 import lin.rule.context.WarInfoEnv
+import lin.rule.handler.AuraBoostEvaluator
 import lin.rule.handler.EvalSignal
 import lin.rule.handler.evaluateCardRoots
 import lin.rule.handler.updateIntent
@@ -24,6 +25,7 @@ import org.koin.core.component.KoinComponent
 class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
     private val weightHandlers: MutableList<WeightHandler> = mutableListOf()
     private val discoverWeightHandlers: MutableList<DiscoverWeightHandler> = mutableListOf()
+    private val auraBoostEvaluator: AuraBoostEvaluator by lazy { getKoin().get() }
 
     init {
         try {
@@ -102,6 +104,9 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
             comboCard.updateIntent(treeResult.actions)
         }
         total += treeResult.score
+
+        // 1.5 push 广播分（独立 additive 通道，aura-boost D-004；光环加分只走 AuraBoost，评估树不写光环条件）
+        total += auraBoostEvaluator.activeScore(comboCard, ruleEnv)
 
         // 2. legacy handler 链（旧系统，兼容）
         for (handler in weightHandlers) {

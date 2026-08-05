@@ -28,14 +28,20 @@ class ConditionTreeConfigService(
     private val repository: ConditionTreeConfigRepository,
     private val mapper: ObjectMapper
 ) {
-    fun saveConfig(name: String, config: ConditionTreeConfig, existingId: String? = null): String {
+    fun saveConfig(
+        name: String,
+        config: ConditionTreeConfig,
+        existingId: String? = null,
+        managerId: String? = null
+    ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
         val json = mapper.writeValueAsString(config.copy(id = id, name = name))
         repository.save(
             ConditionTreeConfigEntity(
                 id = id,
                 name = name,
-                configData = json
+                configData = json,
+                managerId = managerId
             )
         )
         return id
@@ -56,8 +62,8 @@ class ConditionTreeConfigService(
         repository.deleteById(id)
     }
 
-    fun loadAllMeta(): List<Pair<String, String>> {
-        return repository.findAllMeta()
+    fun loadAllMeta(managerId: String? = null): List<Pair<String, String>> {
+        return repository.findMetaByManagerId(managerId)
     }
 
     private fun readConfig(entity: ConditionTreeConfigEntity): ConditionTreeConfig? {

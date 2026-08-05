@@ -1,5 +1,6 @@
 package lin.serviceLoader.provider
 
+import lin.bean.AuraBoostConfig
 import lin.bean.usePlan.CardPurpose
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.GroupUseOverride
@@ -54,4 +55,14 @@ fun interface ComboPlanDefinitionProvider {
      * 定义只描述"组关系、加权、互斥和使用关系"，不负责真实出牌。
      */
     fun findAll(): List<ComboPlanDefinition>
+}
+
+/**
+ * Push 广播评分配置提供者（aura-boost）。
+ *
+ * SPI 入口，configUi 通过此接口读取 aura_boost 表。
+ * 引擎端无默认实现时 get 空列表（boosts 为空，AuraBoostEvaluator.activeScore 返回 0）。
+ */
+fun interface AuraBoostConfigProvider {
+    fun findAll(): List<AuraBoostConfig>
 }

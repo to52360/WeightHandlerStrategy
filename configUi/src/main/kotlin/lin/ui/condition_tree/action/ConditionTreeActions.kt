@@ -58,10 +58,13 @@ class SaveConditionTreeAction : ConditionTreeWorkbenchAction {
                     refId = "empty_${System.currentTimeMillis().toString(16).takeLast(4)}"
                 )
             }
+            val extras = mutableMapOf<String, Any>()
+            workbench.targetManagerId?.let { extras["managerId"] = it }
+
             val savedId = if (selectedItem.isDraft) {
-                workbench.treeConfigStrategy.save(selectedItem.name, conditionNode)
+                workbench.treeConfigStrategy.save(selectedItem.name, conditionNode, extras = extras)
             } else {
-                workbench.treeConfigStrategy.save(selectedItem.name, conditionNode, selectedItem.id)
+                workbench.treeConfigStrategy.save(selectedItem.name, conditionNode, selectedItem.id, extras)
             }
 
             if (selectedItem.isDraft) {

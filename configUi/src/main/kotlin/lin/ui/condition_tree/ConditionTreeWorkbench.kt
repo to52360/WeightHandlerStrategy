@@ -5,6 +5,7 @@ import javafx.scene.control.SplitPane
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
+import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.components.LogicTreeEditor
 import lin.ui.components.TreeConfigStrategy
 import lin.ui.components.TreeEditorBehavior
@@ -21,6 +22,10 @@ class ConditionTreeWorkbench : SplitPane(), KoinComponent {
 
     private val conditionRegistry: ConditionRegistry by inject()
     private val conditionTreeConfigService: ConditionTreeConfigService by inject()
+    private val activeManagerHolder: ActiveManagerHolder by inject()
+
+    var targetManagerId: String? = null
+        get() = field ?: activeManagerHolder.activeManagerId
 
     val treeConfigStrategy: TreeConfigStrategy<ConditionPayload> =
         ConditionTreeConfigStrategy(conditionTreeConfigService)

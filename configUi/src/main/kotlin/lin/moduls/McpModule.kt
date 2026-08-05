@@ -7,6 +7,7 @@ import lin.ai.config.DefaultCardGroupQueryService
 import lin.di.infraModule
 import lin.mcp.*
 import lin.repository.card_group.CardGroupService
+import lin.repository.condition_tree.ConditionTreeConfigService
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -52,6 +53,13 @@ val mcpModule = module {
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
+    single { ConditionTreeToolProvider(get<ConditionTreeConfigService>()) } bind McpToolProvider::class
+    single {
+        AuraBoostToolProvider(
+            get<lin.repository.aura_boost.AuraBoostConfigService>(),
+            get<ConditionTreeConfigService>()
+        )
+    } bind McpToolProvider::class
     single { lin.mcp.AiDraftTreeToolProvider(get(), get<CardGroupService>()) } bind McpToolProvider::class
     single {
         ComboPlanToolProvider(

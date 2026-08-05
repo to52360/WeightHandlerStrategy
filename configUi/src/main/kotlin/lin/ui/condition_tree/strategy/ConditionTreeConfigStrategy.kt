@@ -21,7 +21,8 @@ class ConditionTreeConfigStrategy(
             name = name,
             root = root
         )
-        return service.saveConfig(name, config, existingId)
+        val managerId = extras["managerId"] as? String
+        return service.saveConfig(name, config, existingId, managerId = managerId)
     }
 
     override fun loadAll(): List<TreeConfigStrategy.LoadedConfig<ConditionPayload>> {

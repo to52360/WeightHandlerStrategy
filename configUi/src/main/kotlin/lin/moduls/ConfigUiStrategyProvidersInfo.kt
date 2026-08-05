@@ -1,9 +1,8 @@
 package lin.moduls
 
-import lin.provider.SqliteCardPurposeProvider
-import lin.provider.SqliteComboPlanDefinitionProvider
-import lin.provider.SqliteConditionTreeConfigProvider
-import lin.provider.SqliteTreeConfigProvider
+import lin.provider.*
+import lin.repository.aura_boost.AuraBoostConfigService
+import lin.repository.aura_boost.AuraBoostRepository
 import lin.repository.card_group.CardGroupBehaviorRepository
 import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardGroupService
@@ -62,6 +61,12 @@ val strategyProviderModule = module {
                 repository = ConditionTreeConfigRepository(get()),
                 mapper = createConditionTreeConfigMapper()
             )
+        )
+    }
+
+    single<AuraBoostConfigProvider> {
+        SqliteAuraBoostConfigProvider(
+            service = AuraBoostConfigService(AuraBoostRepository(get()))
         )
     }
 

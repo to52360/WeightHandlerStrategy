@@ -9,6 +9,8 @@ import lin.di.infraModule
 import lin.repository.HsCardRepository
 import lin.repository.OrthogonalTemplateRepository
 import lin.repository.TemplateGroupRepository
+import lin.repository.aura_boost.AuraBoostConfigService
+import lin.repository.aura_boost.AuraBoostRepository
 import lin.repository.card_group.CardGroupBehaviorRepository
 import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardGroupService
@@ -23,6 +25,7 @@ import lin.repository.tree_config.EvaluatorTreeTemplateRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.ui.SelectOptionRegistry
 import lin.ui.UiExtension
+import lin.ui.aura_boost.AuraBoostExtension
 import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.card_group.CardGroupExtension
 import lin.ui.card_purpose.CardPurposeExtension
@@ -75,6 +78,7 @@ val uiModule = module {
     single { ConditionTreeExtension() } bind UiExtension::class
     single { CardPurposeExtension() } bind UiExtension::class
     single { ComboPlanExtension() } bind UiExtension::class
+    single { AuraBoostExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册
     single { CreateNewTreeAction() } bind TreeWorkbenchAction::class
@@ -130,6 +134,8 @@ val uiDBModule = module {
             createConditionTreeConfigMapper()
         )
     }
+    single { AuraBoostRepository(get()) }
+    single { AuraBoostConfigService(get()) }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupBehaviorRepository(get()) }
     single { CardGroupRepository(get(), get()) }
