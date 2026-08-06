@@ -16,7 +16,12 @@ class EvaluatorLeafSourceCatalog(
     private val conditionRegistry: ConditionRegistry,
     private val conditionTreeConfigService: ConditionTreeConfigService
 ) {
-    fun loadAll(): List<EvaluatorLeafMeta> {
+    /**
+     * 加载全部可用叶子能力。
+     * @param managerId 非空时条件树按"当前卡组私有 + 全局共享"过滤；为空则条件树全量返回。
+     *                  规则/条件等静态能力不受卡组过滤影响。
+     */
+    fun loadAll(managerId: String? = null): List<EvaluatorLeafMeta> {
         val virtualMetas = listOf(
             EvaluatorLeafMeta(
                 kind = EvaluatorLeafKind.Condition.Orthogonal,
@@ -35,7 +40,7 @@ class EvaluatorLeafSourceCatalog(
                 fields = emptyList()
             )
         )
-        return virtualMetas + loadRuleMetas() + loadConditionMetas() + loadConditionTreeMetas()
+        return virtualMetas + loadRuleMetas() + loadConditionMetas() + loadConditionTreeMetas(managerId)
     }
 
     private fun loadRuleMetas(): List<EvaluatorLeafMeta> {
@@ -48,9 +53,17 @@ class EvaluatorLeafSourceCatalog(
             .getOrDefault(emptyList())
     }
 
-    private fun loadConditionTreeMetas(): List<EvaluatorLeafMeta> {
+    private fun loadConditionTreeMetas(managerId: String? = null): List<EvaluatorLeafMeta> {
         return runCatchingLog("加载条件树配置项失败") {
-            conditionTreeConfigService.loadAllMeta().map { (id, name) ->
+            // 条件树双维度过滤：
+            // 1. 按卡组：managerId 非空时只返回当前卡组私有 + 全局共享树（避免其他卡组树噪音）
+            // 2. 过滤一次性树（inlineCreated，由消费方内联自动创建）：背景知识只展示可复用的模板条件树，
+            //    避免评估树编排时被 aura-boost/conditionalStage 场景的一次性树噪音干扰。
+            conditionTreeConfigService.loadAllMeta(managerId)
+                .filterNot { it.inlineCreated }
+                .map { meta ->
+                    val id = meta.id
+                    val name = meta.name
                 val config = conditionTreeConfigService.findById(id)
                 val fields = config?.root?.collectConditionRefs()?.distinctBy { it.refId }?.flatMap { ref ->
                     when (ref) {

@@ -11,16 +11,15 @@ import lin.bean.ComboCard
 import lin.bean.usePlan.ConditionalStageOverride
 import lin.bean.usePlan.UseIntent
 import lin.bean.usePlan.UseStage
-import lin.rule.condition.ConditionPayload
-import lin.rule.condition.ConditionRegistry
-import lin.rule.condition.ConditionTreeConfig
-import lin.rule.condition.PipelineAssembler
+import lin.rule.condition.*
 import lin.rule.handler.GuardCompiler
 import lin.rule.orthogonal.CountProjectionTransform
 import lin.rule.orthogonal.HandCardsSource
 import lin.rule.orthogonal.LessThanOrEqualOp
 import lin.rule.orthogonal.TransformCall
 import lin.rule.tree.LogicNode
+import lin.serviceLoader.provider.ConditionRegistrationProvider
+import lin.serviceLoader.provider.ConditionTreeArgsProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -48,21 +47,36 @@ class UsePlanBuilderTest {
         )
     )
 
-    private fun buildBuilder(tree: ConditionTreeConfig): UsePlanBuilder {
+    private fun buildBuilder(
+        tree: ConditionTreeConfig,
+        codedConditions: Collection<ConditionRegistration<*>> = emptyList(),
+        conditionArgsById: Map<String, Map<String, Any>> = emptyMap()
+    ): UsePlanBuilder {
         val assembler = PipelineAssembler(
             dataSources = mapOf(HandCardsSource.id to HandCardsSource),
             transforms = mapOf(CountProjectionTransform.id to CountProjectionTransform),
             operators = mapOf(LessThanOrEqualOp.id to LessThanOrEqualOp),
             objectMapper = objectMapper
         )
-        val registry = ConditionRegistry(providers = emptyList(), pipelineAssembler = assembler)
+        val registry = ConditionRegistry(
+            providers = listOf(
+                object : ConditionRegistrationProvider {
+                    override fun getConditionRegistrations(): Collection<ConditionRegistration<*>> = codedConditions
+                }
+            ),
+            pipelineAssembler = assembler
+        )
         val treeProvider = object : ConditionTreeConfigProvider {
             override fun findById(id: String): ConditionTreeConfig? =
                 if (id == tree.id) tree else null
 
             override fun findAll(): List<ConditionTreeConfig> = listOf(tree)
         }
-        return UsePlanBuilder(GuardCompiler(registry, listOf(treeProvider), assembler))
+        // 旁挂参数表（D-005）：conditionArgsById 按树 id 提供 prefixed 参数
+        val argsProvider = object : ConditionTreeArgsProvider {
+            override fun findById(treeId: String): Map<String, Any>? = conditionArgsById[treeId]
+        }
+        return UsePlanBuilder(GuardCompiler(registry, listOf(treeProvider), assembler, listOf(argsProvider)))
     }
 
     private fun ampCard(cs: ConditionalStageOverride): ComboCard = ComboCard(
@@ -119,5 +133,60 @@ class UsePlanBuilderTest {
         val env = fakeRuleEnv(createMockWarInfo(handCards = List(2) { createMockCard() }))
         val plan = buildBuilder(tree).build(listOf(card), env)
         assertEquals(UseStage.SETUP, plan.intents.getValue(card).stage)
+    }
+
+    /** 构造「编码条件 maxCost ≤ N」模板树：ConditionRef 叶子，参数存旁挂表（D-005）。 */
+    private fun handCostLteTree(id: String): ConditionTreeConfig = ConditionTreeConfig(
+        id = id,
+        name = "cost<=N",
+        root = LogicNode.Leaf(ConditionPayload.ConditionRef(conditionId = "hand_cost", refId = "hc"))
+    )
+
+    @Test
+    fun testConditionRefArgsFromSideTable() {
+        // 编码条件：手牌费用上限，参数 maxCost 由旁挂参数表提供（消费方只存树 id）
+        val coded = ConditionBuilder.scalar(ConditionType.IntType)
+            .id("hand_cost")
+            .metadata("手牌费用上限")
+            .field("maxCost", "费用上限")
+            .factory { maxCost: Int -> { maxCost <= 3 } }
+            .build()
+        val tree = handCostLteTree("tree_cost")
+        // 旁表 args 以 "refId.propertyName" 前缀存储（与评估树 ConditionTreeLeafConfig.args 同构）
+        val builder = buildBuilder(
+            tree,
+            codedConditions = listOf(coded),
+            conditionArgsById = mapOf("tree_cost" to mapOf("hc.maxCost" to 2))
+        )
+        val card = ampCard(ConditionalStageOverride(conditionId = tree.id, stage = UseStage.SETUP))
+        val env = fakeRuleEnv(createMockWarInfo(handCards = List(2) { createMockCard() }))
+        val plan = builder.build(listOf(card), env)
+        assertEquals(UseStage.SETUP, plan.intents.getValue(card).stage)
+    }
+
+    @Test
+    fun testConditionRefArgsMissFallsBack() {
+        val coded = ConditionBuilder.scalar(ConditionType.IntType)
+            .id("hand_cost")
+            .metadata("手牌费用上限")
+            .field("maxCost", "费用上限")
+            .factory { maxCost: Int -> { maxCost <= 3 } }
+            .build()
+        val tree = handCostLteTree("tree_cost")
+        val builder = buildBuilder(
+            tree,
+            codedConditions = listOf(coded),
+            conditionArgsById = mapOf("tree_cost" to mapOf("hc.maxCost" to 5))
+        )
+        // maxCost=5 → 未命中 → elseStage=null → 沿用基础 GENERAL
+        val card = ampCard(
+            ConditionalStageOverride(
+                conditionId = tree.id,
+                stage = UseStage.SETUP
+            )
+        )
+        val env = fakeRuleEnv(createMockWarInfo(handCards = List(2) { createMockCard() }))
+        val plan = builder.build(listOf(card), env)
+        assertEquals(UseStage.GENERAL, plan.intents.getValue(card).stage)
     }
 }

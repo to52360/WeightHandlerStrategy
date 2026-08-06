@@ -73,7 +73,9 @@ class OrthogonalRuleDialog(
             dataSources = assembler.allDataSources().toList(),
             scoreOperators = scoreOperatorRegistry.all(),
             allConditions = conditionRegistry.metadataList(),
-            allConditionTrees = conditionTreeConfigService.loadAllMeta(),
+            allConditionTrees = conditionTreeConfigService.loadAllMeta()
+                .filterNot { it.inlineCreated }
+                .map { it.id to it.name },
             allTransforms = assembler.allTransforms().toList(),
             mapper = lin.ui.service.createTreeConfigMapper()
         )

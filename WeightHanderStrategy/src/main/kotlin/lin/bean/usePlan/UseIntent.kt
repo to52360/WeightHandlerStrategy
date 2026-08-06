@@ -45,6 +45,8 @@ data class CardPurpose(
  * 条件化阶段覆盖：运行期条件命中时使用 [stage]，未命中回落 [elseStage]（null = 沿用默认推导）。
  *
  * 条件引用 condition_tree_config 的 id（复用评估条件树：正交管道叶子 + And/Or/Branch 组合）。
+ * 条件树是纯结构模板（不含参数），编码条件参数统一存旁挂参数表（D-005），本消费方只存树 id，
+ * 运行期由 GuardCompiler 经 ConditionTreeArgsProvider 查旁表注入。
  * 运行期由 UsePlanBuilder 用 RuleEnv 求值，产出动态 UseIntent；UsePlanOrderer 纯函数排序器不感知。
  */
 data class ConditionalStageOverride(

@@ -14,6 +14,7 @@ import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperator
 import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
+import lin.serviceLoader.provider.ConditionTreeArgsProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import kotlin.reflect.KType
 import kotlin.reflect.full.isSubtypeOf
@@ -27,7 +28,8 @@ import kotlin.reflect.full.isSubtypeOf
 class GuardCompiler(
     private val conditionRegistry: ConditionRegistry,
     private val conditionTreeProviders: List<ConditionTreeConfigProvider>,
-    private val assembler: PipelineAssembler
+    private val assembler: PipelineAssembler,
+    private val conditionTreeArgsProviders: List<ConditionTreeArgsProvider> = emptyList()
 ) {
     fun compile(leafConfig: EvaluatorLeafConfig): ConditionLogic? {
         return when (leafConfig) {
@@ -74,11 +76,31 @@ class GuardCompiler(
 
     // ── 条件树编译 ──
 
+    /** 评估树路径：消费方叶子自带 args 注入（模板复用语义，leafConfig.args 是唯一参数来源）。 */
     private fun buildConditionTreeLogic(leafConfig: ConditionTreeLeafConfig): ConditionLogic {
         val conditionTree = conditionTreeProviders
             .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
             ?: error("Condition tree config not found: sourceId=${leafConfig.sourceId}")
-        val args = leafConfig.args
+        return compileTreeWithArgs(conditionTree, leafConfig.args)
+    }
+
+    /**
+     * 编译条件树并注入叶子参数（排序 conditionalStage / AuraBoost 路径，D-005 旁挂表）。
+     *
+     * 编码条件(ConditionRef)参数统一存旁挂参数表（condition_tree_args），消费方只存树 id，
+     * 参数经 [ConditionTreeArgsProvider] 查旁表解析；PipelineRef 的 operatorArgs 阈值合法留在树内。
+     */
+    fun compileTree(conditionTreeId: String): ConditionLogic {
+        val conditionTree = conditionTreeProviders
+            .firstNotNullOfOrNull { it.findById(conditionTreeId) }
+            ?: error("Condition tree config not found: conditionTreeId=$conditionTreeId")
+        // D-005：编码条件参数唯一来源是旁挂参数表（condition_tree_args），查不到即无参数。
+        val args = conditionTreeArgsProviders.firstNotNullOfOrNull { it.findById(conditionTree.id) } ?: emptyMap()
+        return compileTreeWithArgs(conditionTree, args)
+    }
+
+    private fun compileTreeWithArgs(conditionTree: ConditionTreeConfig, args: Map<String, Any>): ConditionLogic {
+        val conditionTreeId = conditionTree.id
         val conditionRefs = conditionTree.root.collectConditionRefs().distinctBy { it.refId }
         for (ref in conditionRefs) {
             val conditionArgs = args.extractPrefixedArgs(ref.refId)
@@ -86,7 +108,7 @@ class GuardCompiler(
                 is ConditionPayload.ConditionRef -> {
                     val registration = conditionRegistry.require(ref.conditionId)
                     validate(
-                        "条件树 [${leafConfig.sourceId}] 嵌套条件", ref.refId, conditionArgs,
+                        "条件树 [${conditionTreeId}] 嵌套条件", ref.refId, conditionArgs,
                         listOf(registration.field.toFieldSpec())
                     )
                 }
@@ -96,14 +118,14 @@ class GuardCompiler(
                         val transform = assembler.findTransform(call.transformId)
                             ?: error("Transform not found: ${call.transformId}")
                         validate(
-                            "条件树 [${leafConfig.sourceId}] 嵌套管道步骤 [${transform.id}]",
+                            "条件树 [${conditionTreeId}] 嵌套管道步骤 [${transform.id}]",
                             ref.refId, call.args, transform.fields
                         )
                     }
                     val operator = assembler.findOperator(ref.operatorId)
                         ?: error("Operator not found: ${ref.operatorId}")
                     validate(
-                        "条件树 [${leafConfig.sourceId}] 嵌套管道算子 [${operator.id}]",
+                        "条件树 [${conditionTreeId}] 嵌套管道算子 [${operator.id}]",
                         ref.refId, ref.operatorArgs + conditionArgs, operator.paramSpecs
                     )
                 }
@@ -119,17 +141,6 @@ class GuardCompiler(
             }
             conditionRegistry.build(newPayload)
         }
-    }
-
-    /**
-     * 编译裸条件树（排序侧 conditionalStage 复用）：按 id 查条件树，叶子自带参数直接编译。
-     * 与评估树 leafConfig 的 args 注入无关——条件树叶子 PipelineRef 自带 operatorArgs（阈值写在树配置里）。
-     */
-    fun compileTree(conditionTreeId: String): ConditionLogic {
-        val conditionTree = conditionTreeProviders
-            .firstNotNullOfOrNull { it.findById(conditionTreeId) }
-            ?: error("Condition tree config not found: conditionTreeId=$conditionTreeId")
-        return conditionTree.root.compile(conditionRegistry)
     }
 }
 

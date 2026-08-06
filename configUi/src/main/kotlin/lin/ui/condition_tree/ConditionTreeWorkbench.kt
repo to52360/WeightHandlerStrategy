@@ -12,13 +12,17 @@ import lin.ui.components.TreeEditorBehavior
 import lin.ui.condition_tree.strategy.ConditionPayloadFactory
 import lin.ui.condition_tree.strategy.ConditionPropertyEditorStrategy
 import lin.ui.condition_tree.strategy.ConditionTreeConfigStrategy
+import lin.ui.tree_config.LogicNodeType
 import lin.ui.tree_config.LogicNodeWrapper
 import lin.ui.tree_config.PropertyPanel
+import lin.ui.tree_config.TreeModelConverter
 import lin.ui.tree_config.menu.TreeContextMenuFactory
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-class ConditionTreeWorkbench : SplitPane(), KoinComponent {
+class ConditionTreeWorkbench(
+    val showList: Boolean = true
+) : SplitPane(), KoinComponent {
 
     private val conditionRegistry: ConditionRegistry by inject()
     private val conditionTreeConfigService: ConditionTreeConfigService by inject()
@@ -35,17 +39,20 @@ class ConditionTreeWorkbench : SplitPane(), KoinComponent {
 
     val propertyPanel = PropertyPanel(ConditionPropertyEditorStrategy(conditionRegistry))
 
-    private val configListPanel = ConditionTreeConfigListPanel(this, treeConfigStrategy)
+    private val configListPanel: ConditionTreeConfigListPanel? =
+        if (showList) ConditionTreeConfigListPanel(this, treeConfigStrategy) else null
 
-    val configListView get() = configListPanel.configListView
+    val configListView get() = configListPanel?.configListView
 
     init {
-        val listPanel = configListPanel
-        val treePanel = logicTreeEditor
-        val rightPanel = propertyPanel
-
-        this.items.addAll(listPanel, treePanel, rightPanel)
-        this.setDividerPositions(0.2, 0.6)
+        if (configListPanel != null) {
+            this.items.addAll(configListPanel, logicTreeEditor, propertyPanel)
+            this.setDividerPositions(0.2, 0.6)
+            configListPanel.refreshList()
+        } else {
+            this.items.addAll(logicTreeEditor, propertyPanel)
+            this.setDividerPositions(0.5)
+        }
 
         // 注册选中节点驱动属性面板
         logicTreeEditor.addBehavior(object : TreeEditorBehavior<LogicNodeWrapper<ConditionPayload>> {
@@ -77,10 +84,56 @@ class ConditionTreeWorkbench : SplitPane(), KoinComponent {
                 }
             }
         })
-
-        configListPanel.refreshList()
     }
 
-    fun refreshList() = configListPanel.refreshList()
-    fun addDraftItem(name: String) = configListPanel.addDraftItem(name)
+    fun refreshList() {
+        configListPanel?.refreshList()
+    }
+
+    fun addDraftItem(name: String): ConditionTreeListItem? {
+        return configListPanel?.addDraftItem(name)
+    }
+
+    fun initDefaultRootIfEmpty() {
+        if (logicTreeEditor.treeView.root == null) {
+            val rootItem = javafx.scene.control.TreeItem(
+                LogicNodeWrapper<ConditionPayload>(LogicNodeType.AND)
+            ).also { it.isExpanded = true }
+            logicTreeEditor.treeView.root = rootItem
+            logicTreeEditor.treeView.selectionModel.select(rootItem)
+            propertyPanel.showNode(rootItem.value)
+        } else {
+            val rootItem = logicTreeEditor.treeView.root
+            logicTreeEditor.treeView.selectionModel.select(rootItem)
+            if (rootItem != null) {
+                propertyPanel.showNode(rootItem.value)
+            }
+        }
+    }
+
+    fun loadExistingTree(treeId: String) {
+        val loaded = treeConfigStrategy.loadAll().firstOrNull { it.id == treeId }
+        if (loaded?.root != null) {
+            val rootItem = TreeModelConverter.toTreeItem(loaded.root)
+            logicTreeEditor.treeView.root = rootItem
+            logicTreeEditor.treeView.selectionModel.select(rootItem)
+            propertyPanel.showNode(rootItem.value)
+        }
+    }
+
+    fun saveCurrent(name: String, existingId: String? = null, managerId: String? = targetManagerId): String {
+        val rootNode = logicTreeEditor.treeView.root
+            ?: throw IllegalStateException("当前条件树为空，请先配置节点")
+        val conditionNode = TreeModelConverter.fromTreeItem(rootNode) {
+            ConditionPayload.ConditionRef(
+                conditionId = "",
+                refId = "empty_${System.currentTimeMillis().toString(16).takeLast(4)}"
+            )
+        }
+        val extras = mutableMapOf<String, Any>()
+        val finalManagerId = managerId ?: targetManagerId
+        finalManagerId?.let { extras["managerId"] = it }
+
+        return treeConfigStrategy.save(name, conditionNode, existingId, extras)
+    }
 }

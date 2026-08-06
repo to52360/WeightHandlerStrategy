@@ -10,6 +10,8 @@ import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
 import lin.ui.components.PropertyEditorStrategy
 import lin.ui.condition_tree.components.OrthogonalConditionDialog
+import lin.ui.tree_config.DynamicFieldForm
+import lin.ui.tree_config.FieldValueReader
 import lin.ui.tree_config.LogicNodeType
 import lin.ui.tree_config.LogicNodeWrapper
 import java.util.*
@@ -17,6 +19,8 @@ import java.util.*
 class ConditionPropertyEditorStrategy(
     private val conditionRegistry: ConditionRegistry
 ) : PropertyEditorStrategy<ConditionPayload> {
+
+    private val dynamicFieldForm by lazy { DynamicFieldForm() }
 
     override fun canEdit(type: LogicNodeType): Boolean {
         return type == LogicNodeType.LEAF || type == LogicNodeType.BRANCH
@@ -113,8 +117,8 @@ class ConditionPropertyEditorStrategy(
         onChanged: () -> Unit
     ) {
         val allConditions = conditionRegistry.metadataList()
-        val currentConditionId = (wrapper.payload as? ConditionPayload.ConditionRef)?.conditionId
-        val refId = wrapper.payload?.refId
+        val currentRef = wrapper.payload as? ConditionPayload.ConditionRef
+        val currentConditionId = currentRef?.conditionId
 
         val conditionCombo = ComboBox<ConditionMeta>().apply {
             maxWidth = Double.MAX_VALUE
@@ -125,15 +129,56 @@ class ConditionPropertyEditorStrategy(
                 ?.let { selectionModel.select(it) }
         }
 
+        // 动态参数字段容器：按当前选中条件的 FieldSpec 渲染输入控件
+        val argsContainer = VBox(8.0).apply {
+            style = "-fx-padding: 4 0 0 0;"
+        }
+
+        fun rebuildArgsFields(meta: ConditionMeta?) {
+            argsContainer.children.clear()
+            val args = (wrapper.payload as? ConditionPayload.ConditionRef)?.args ?: emptyMap()
+            if (meta != null && meta.fields.isNotEmpty()) {
+                val form = dynamicFieldForm.build(
+                    specs = meta.fields.map { it.fieldSpec },
+                    existingValues = FieldValueReader { prop -> args[prop] },
+                    onFieldChanged = { prop, value ->
+                        val cur = wrapper.payload as? ConditionPayload.ConditionRef ?: return@build
+                        val newArgs = cur.args.toMutableMap()
+                        newArgs[prop] = value
+                        wrapper.payload = cur.copy(args = newArgs)
+                        onChanged()
+                    }
+                )
+                argsContainer.children.add(form)
+            } else if (meta != null) {
+                argsContainer.children.add(
+                    Label("此条件无额外参数，无需填写。").apply {
+                        style = "-fx-text-fill: #888; -fx-font-size: 11px; -fx-font-style: italic;"
+                    }
+                )
+            }
+        }
+
+        // 初始渲染当前条件的参数字段（打开已保存树时，参数由服务层从旁挂表合并回显）
+        val currentMeta = allConditions.firstOrNull { it.conditionId == currentConditionId }
+        rebuildArgsFields(currentMeta)
+
         conditionCombo.selectionModel.selectedItemProperty().addListener { _, _, selectedCondition ->
             if (selectedCondition != null && selectedCondition.conditionId != currentConditionId) {
                 val newRefId = generateUniqueRefId(selectedCondition.conditionId)
                 wrapper.payload = ConditionPayload.ConditionRef(
                     conditionId = selectedCondition.conditionId,
-                    refId = newRefId
+                    refId = newRefId,
+                    args = emptyMap()
                 )
+                rebuildArgsFields(selectedCondition)
                 onChanged()
             }
+        }
+
+        val hint = Label("参数保存到条件树参数表（树 JSON 保持纯结构，排序/AuraBoost 引用时自动注入）。").apply {
+            style = "-fx-text-fill: #888; -fx-font-size: 11px; -fx-font-style: italic;"
+            isWrapText = true
         }
 
         container.children.addAll(
@@ -142,10 +187,8 @@ class ConditionPropertyEditorStrategy(
                 children.addAll(Label("编码条件:"), conditionCombo)
                 HBox.setHgrow(conditionCombo, Priority.ALWAYS)
             },
-            Label("普通硬编码条件，可在引用该条件树的评估树叶子节点中统一配置参数。").apply {
-                style = "-fx-text-fill: #888; -fx-font-size: 11px; -fx-font-style: italic;"
-                isWrapText = true
-            }
+            argsContainer,
+            hint
         )
     }
 

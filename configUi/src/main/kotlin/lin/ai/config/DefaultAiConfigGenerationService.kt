@@ -24,8 +24,8 @@ class DefaultAiConfigGenerationService(
 ) : AiConfigGenerationService {
     private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
 
-    override fun listCapabilityBackground(): AiCapabilityBackground {
-        val all = leafSourceCatalog.loadAll()
+    override fun listCapabilityBackground(managerId: String?): AiCapabilityBackground {
+        val all = leafSourceCatalog.loadAll(managerId)
         fun entryOf(item: lin.rule.tree.EvaluatorLeafMeta) = AiCapabilityEntry(
             sourceId = item.sourceId,
             name = item.name,

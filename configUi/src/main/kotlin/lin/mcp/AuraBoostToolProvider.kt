@@ -5,6 +5,7 @@ import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInput
 import lin.repository.condition_tree.ConditionTreeConfigService
+import lin.repository.condition_tree.createConditionTreeConfigMapper
 
 /**
  * Push 广播评分配置（aura-boost）MCP 工具提供者。
@@ -12,11 +13,17 @@ import lin.repository.condition_tree.ConditionTreeConfigService
  * AuraBoost = 触发条件树（conditionId，全局检测）命中后，给 targetConditionId（受益卡过滤）命中的卡加分。
  * additive 独立通道：命中分与评估树分相加；光环加分只走 AuraBoost，评估树不写光环条件（D-004）。
  * managerId 为消费方归属（卡组级配置），引用的条件树是全局资源（D-003）。
+ *
+ * 内联创建（Q-003）：conditionId/targetConditionId 与 conditionTreeJson/targetConditionTreeJson 互斥，
+ * 提供 treeJson 时自动创建条件树返回新 id，一次性树无需先建模板。
  */
 class AuraBoostToolProvider(
     private val service: AuraBoostConfigService,
     private val conditionTreeService: ConditionTreeConfigService
 ) : McpToolProvider {
+
+    private val mapper = createConditionTreeConfigMapper()
+
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<AuraBoostQueryInput>(
             name = "aura_boost",
@@ -40,33 +47,55 @@ class AuraBoostToolProvider(
             }
         },
 
-        typedTool<SaveAuraBoostInput>(
+        typedTool<SaveAuraBoostMcpInput>(
             name = "save_aura_boost",
             description = """
                 创建或更新一条 Push 广播评分配置（AuraBoost）。
-                语义：触发条件树 conditionId 命中（如"莱妮莎在场"）→ 给 targetConditionId 命中（如"是法术且cost≤2"）的卡 +score。
+                语义：触发条件树命中（如"莱妮莎在场"）→ 给受益过滤条件树命中的卡 +score。
                 additive 通道：加分与评估树分相加，光环加分只走 AuraBoost，评估树不写光环条件（防双倍计分）。
-                前置：conditionId / targetConditionId 需先用 condition_tree(action=SAVE) 创建。
+
+                【条件树两种提供方式（二选一，互斥）】
+                - 复用已有条件树：conditionId / targetConditionId 传已有树 id（来自 condition_tree(action=LIST)）
+                - 一次性内联创建：conditionTreeJson / targetConditionTreeJson 直接传条件树 JSON（{id,name,root}），
+                  无需先 condition_tree(action=SAVE) 建模板，本工具自动建树并返回新 id
+
                 managerId 关联卡组（消费方归属）；引用的条件树是全局资源。传 existingId 更新已有配置。
             """.trimIndent()
         ) { input ->
-            if (conditionTreeService.findById(input.conditionId) == null) {
-                return@typedTool mcpError("触发条件树不存在: ${input.conditionId}（先 condition_tree(action=SAVE) 创建）")
-            }
-            if (conditionTreeService.findById(input.targetConditionId) == null) {
-                return@typedTool mcpError("受益过滤条件树不存在: ${input.targetConditionId}（先 condition_tree(action=SAVE) 创建）")
-            }
+            val conditionId = resolveConditionTreeReference(
+                service = conditionTreeService,
+                mapper = mapper,
+                conditionId = input.conditionId,
+                treeJson = input.conditionTreeJson,
+                defaultName = "${input.name ?: "boost"}_trigger",
+                label = "触发条件树",
+                managerId = input.managerId
+            )
+            val targetConditionId = resolveConditionTreeReference(
+                service = conditionTreeService,
+                mapper = mapper,
+                conditionId = input.targetConditionId,
+                treeJson = input.targetConditionTreeJson,
+                defaultName = "${input.name ?: "boost"}_target",
+                label = "受益过滤条件树",
+                managerId = input.managerId
+            )
             val id = service.save(
                 SaveAuraBoostInput(
                     name = input.name,
-                    conditionId = input.conditionId,
-                    targetConditionId = input.targetConditionId,
+                    conditionId = conditionId,
+                    targetConditionId = targetConditionId,
                     score = input.score,
                     managerId = input.managerId,
                     existingId = input.existingId
                 )
             )
-            mcpSuccess(mapOf("id" to id, "name" to input.name, "score" to input.score))
+            mcpSuccess(
+                mapOf(
+                    "id" to id, "name" to input.name, "score" to input.score,
+                    "conditionId" to conditionId, "targetConditionId" to targetConditionId
+                )
+            )
         },
 
         typedTool<DeleteAuraBoostInput>(
@@ -104,6 +133,30 @@ private data class AuraBoostQueryInput(
 private data class DeleteAuraBoostInput(
     @field:JsonPropertyDescription("要删除的 AuraBoost id。")
     val boostId: String
+)
+
+/**
+ * save_aura_boost 的 MCP 专用扁平 input（不直接复用 repository 的 SaveAuraBoostInput，
+ * 因为后者 conditionId/targetConditionId 为必填，无法表达"内联创建"分支）。
+ * conditionId 与 conditionTreeJson 互斥（同 targetConditionId / targetConditionTreeJson）。
+ */
+private data class SaveAuraBoostMcpInput(
+    @field:JsonPropertyDescription("配置名称。")
+    val name: String? = null,
+    @field:JsonPropertyDescription("触发条件树 id（复用已有树）。与 conditionTreeJson 互斥：提供 conditionTreeJson 时此字段留空。")
+    val conditionId: String? = null,
+    @field:JsonPropertyDescription("触发条件树内联 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}，root 为节点对象。与 conditionId 互斥：提供此字段时自动建树。")
+    val conditionTreeJson: String? = null,
+    @field:JsonPropertyDescription("受益过滤条件树 id（复用已有树）。与 targetConditionTreeJson 互斥。")
+    val targetConditionId: String? = null,
+    @field:JsonPropertyDescription("受益过滤条件树内联 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}。与 targetConditionId 互斥：提供此字段时自动建树。")
+    val targetConditionTreeJson: String? = null,
+    @field:JsonPropertyDescription("命中后加给受益卡的分值。")
+    val score: Double,
+    @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 card_group(action=LIST)）。")
+    val managerId: String? = null,
+    @field:JsonPropertyDescription("可选：更新已有 AuraBoost 时传其 id；不传则新建。")
+    val existingId: String? = null
 )
 
 private fun AuraBoostEntity.toSummary(): Map<String, Any?> = mapOf(

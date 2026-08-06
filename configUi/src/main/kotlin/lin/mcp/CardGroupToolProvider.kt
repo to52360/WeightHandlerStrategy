@@ -10,6 +10,8 @@ import lin.dao.CardGroupJsonParser
 import lin.dao.CardWeightConfig
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
+import lin.repository.condition_tree.ConditionTreeConfigService
+import lin.repository.condition_tree.createConditionTreeConfigMapper
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.findOverride
@@ -27,8 +29,11 @@ class CardGroupToolProvider(
     private val sourceService: CardGroupQueryService,
     private val groupService: CardGroupService,
     private val cardRepo: HsCardRepository,
-    private val treeConfigService: TreeConfigService
+    private val treeConfigService: TreeConfigService,
+    private val conditionTreeService: ConditionTreeConfigService
 ) : McpToolProvider {
+
+    private val conditionTreeMapper = createConditionTreeConfigMapper()
     override fun provide(): List<McpToolHandler> = listOf(
         // ── card_pool: 卡池文件列表 + 详情 (合并) ──
         typedTool<CardPoolInput>(
@@ -97,8 +102,9 @@ bindings 可选 stageOverride 字段，直接设置分组出牌阶段（覆盖 P
 - 典型场景：莱妮莎/奥尔多侍从/斩星巨刃等引擎牌设 SETUP，使其优先于常规 GENERAL 阶段打出。
 bindings 可选条件化阶段（dynamic-ordering）：
 - conditionalStageConditionId + conditionalStageStage（+ 可选 conditionalStageElseStage）：条件树命中→该阶段，未命中→elseStage（缺省沿用默认推导）
+- 条件树两种提供方式（二选一，互斥）：复用已有树传 conditionalStageConditionId；一次性内联传 conditionalStageConditionTreeJson（完整条件树 JSON {id,name,root}），无需先建模板，本工具自动建树
 - 典型场景：过牌与增幅牌的顺序随手牌/场面动态反转（如手牌少且场面好时增幅牌提前 SETUP，压力大且无解牌时过牌提前 RESOURCE）
-- 注意：conditionalStageConditionId 的 condition_tree 需先经 condition_tree(action=SAVE) 创建；阈值参数写在条件树管道叶子里。"""
+- 条件树参数：正交管道(PipelineRef)阈值写在树内 operatorArgs；编码条件(ConditionRef)参数写在内联树 JSON 的叶子 args 中，保存时自动入条件树参数旁挂表（条件树本身保持纯结构）"""
         ) { input ->
             // ── clone mode ──
             if (input.cloneFrom != null) {
@@ -164,9 +170,20 @@ bindings 可选条件化阶段（dynamic-ordering）：
             }
             val bindings = input.bindings.map { bi ->
                 val behaviors = buildList {
-                    val conditionalStage = bi.conditionalStageConditionId?.takeIf { it.isNotBlank() }?.let { cid ->
+                    val hasConditionalStage = !bi.conditionalStageConditionId.isNullOrBlank()
+                            || !bi.conditionalStageConditionTreeJson.isNullOrBlank()
+                    val conditionalStage = if (hasConditionalStage) {
+                        val cid = resolveConditionTreeReference(
+                            service = conditionTreeService,
+                            mapper = conditionTreeMapper,
+                            conditionId = bi.conditionalStageConditionId?.takeIf { it.isNotBlank() },
+                            treeJson = bi.conditionalStageConditionTreeJson?.takeIf { it.isNotBlank() },
+                            defaultName = "sort_${bi.name}_stage",
+                            label = "bindings[${bi.name}] conditionalStage 条件树",
+                            managerId = targetManagerId
+                        )
                         val stageName = bi.conditionalStageStage?.takeIf { it.isNotBlank() }
-                            ?: throw McpBadInput("bindings[${bi.name}] 提供 conditionalStageConditionId 时必须同时提供 conditionalStageStage")
+                            ?: throw McpBadInput("bindings[${bi.name}] 提供 conditionalStageConditionId/ConditionTreeJson 时必须同时提供 conditionalStageStage")
                         val stage = try {
                             UseStage.valueOf(stageName)
                         } catch (_: IllegalArgumentException) {
@@ -179,7 +196,13 @@ bindings 可选条件化阶段（dynamic-ordering）：
                                 throw McpBadInput("bindings[${bi.name}] conditionalStageElseStage 无效: '$it'，支持: ${UseStage.entries.joinToString { it.name }}")
                             }
                         }
-                        ConditionalStageOverride(conditionId = cid, stage = stage, elseStage = elseStage)
+                        ConditionalStageOverride(
+                            conditionId = cid,
+                            stage = stage,
+                            elseStage = elseStage
+                        )
+                    } else {
+                        null
                     }
                     val stageOverride = bi.stageOverride?.takeIf { it.isNotBlank() }?.let { stage ->
                         try {
@@ -455,9 +478,11 @@ private data class SaveCardGroupBindingInput(
     val description: String? = null,
     @field:JsonPropertyDescription("可选：覆盖分组的默认出牌阶段，接受 UseStage 枚举值（RESOURCE/SETUP/CLEAR/DEFEND/COMBO/GENERAL/END）。SETUP 阶段的牌优先于 GENERAL。不提供则走 PurposeTag 默认推导。")
     val stageOverride: String? = null,
-    @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树 id（condition_tree(action=LIST) 获取）。提供时启用动态排序：条件树命中 → conditionalStageStage，未命中 → conditionalStageElseStage（缺省沿用默认推导）。与 stageOverride 可同时提供。")
+    @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树 id（condition_tree(action=LIST) 获取）。提供时启用动态排序：条件树命中 → conditionalStageStage，未命中 → conditionalStageElseStage（缺省沿用默认推导）。与 conditionalStageConditionTreeJson 互斥，与 stageOverride 可同时提供。")
     val conditionalStageConditionId: String? = null,
-    @field:JsonPropertyDescription("条件化阶段命中时用的出牌阶段（UseStage 枚举值），需与 conditionalStageConditionId 同时提供。")
+    @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树内联 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}，root 为节点对象。与 conditionalStageConditionId 互斥：提供此字段时自动建树。")
+    val conditionalStageConditionTreeJson: String? = null,
+    @field:JsonPropertyDescription("条件化阶段命中时用的出牌阶段（UseStage 枚举值），需与 conditionalStageConditionId/ConditionTreeJson 同时提供。")
     val conditionalStageStage: String? = null,
     @field:JsonPropertyDescription("可选：条件化阶段未命中时用的出牌阶段（UseStage 枚举值），缺省沿用默认推导。需与 conditionalStageConditionId 同时提供。")
     val conditionalStageElseStage: String? = null

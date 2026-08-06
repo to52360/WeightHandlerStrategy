@@ -4,12 +4,7 @@ import javafx.scene.control.Alert
 import javafx.scene.control.Alert.AlertType
 import javafx.scene.control.ButtonType
 import javafx.scene.control.TextInputDialog
-import javafx.scene.control.TreeItem
-import lin.rule.condition.ConditionPayload
 import lin.ui.condition_tree.ConditionTreeWorkbench
-import lin.ui.tree_config.LogicNodeType
-import lin.ui.tree_config.LogicNodeWrapper
-import lin.ui.tree_config.TreeModelConverter
 
 class CreateConditionTreeAction : ConditionTreeWorkbenchAction {
     override val title: String = "新建"
@@ -25,12 +20,10 @@ class CreateConditionTreeAction : ConditionTreeWorkbenchAction {
                 return@ifPresent
             }
             val draftItem = workbench.addDraftItem(name)
-
-            val rootItem = TreeItem(LogicNodeWrapper<ConditionPayload>(LogicNodeType.AND)).also { it.isExpanded = true }
-            workbench.nodeTreeView.root = rootItem
-            workbench.propertyPanel.showPlaceholder()
-
-            workbench.configListView.selectionModel.select(draftItem)
+            workbench.initDefaultRootIfEmpty()
+            if (draftItem != null) {
+                workbench.configListView?.selectionModel?.select(draftItem)
+            }
         }
     }
 }
@@ -40,7 +33,7 @@ class SaveConditionTreeAction : ConditionTreeWorkbenchAction {
     override val order: Int = 20
 
     override fun execute(workbench: ConditionTreeWorkbench) {
-        val selectedItem = workbench.configListView.selectionModel.selectedItem
+        val selectedItem = workbench.configListView?.selectionModel?.selectedItem
         if (selectedItem == null) {
             showError("请先在左侧列表中选择或新建一个条件树配置")
             return
@@ -52,27 +45,15 @@ class SaveConditionTreeAction : ConditionTreeWorkbenchAction {
         }
 
         try {
-            val conditionNode = TreeModelConverter.fromTreeItem(rootNode) {
-                ConditionPayload.ConditionRef(
-                    conditionId = "",
-                    refId = "empty_${System.currentTimeMillis().toString(16).takeLast(4)}"
-                )
-            }
-            val extras = mutableMapOf<String, Any>()
-            workbench.targetManagerId?.let { extras["managerId"] = it }
-
-            val savedId = if (selectedItem.isDraft) {
-                workbench.treeConfigStrategy.save(selectedItem.name, conditionNode, extras = extras)
-            } else {
-                workbench.treeConfigStrategy.save(selectedItem.name, conditionNode, selectedItem.id, extras)
-            }
+            val existingId = if (selectedItem.isDraft) null else selectedItem.id
+            val savedId = workbench.saveCurrent(selectedItem.name, existingId = existingId)
 
             if (selectedItem.isDraft) {
-                workbench.configListView.items.remove(selectedItem)
+                workbench.configListView?.items?.remove(selectedItem)
             }
             workbench.refreshList()
-            val savedItem = workbench.configListView.items.find { it.id == savedId }
-            savedItem?.let { workbench.configListView.selectionModel.select(it) }
+            val savedItem = workbench.configListView?.items?.find { it.id == savedId }
+            savedItem?.let { workbench.configListView?.selectionModel?.select(it) }
 
             showInfo("保存成功", "条件树 [${selectedItem.name}] 已成功保存")
         } catch (e: Exception) {
@@ -86,7 +67,7 @@ class DeleteConditionTreeAction : ConditionTreeWorkbenchAction {
     override val order: Int = 30
 
     override fun execute(workbench: ConditionTreeWorkbench) {
-        val selectedItem = workbench.configListView.selectionModel.selectedItem
+        val selectedItem = workbench.configListView?.selectionModel?.selectedItem
         if (selectedItem == null) {
             showError("请先选择要删除的配置")
             return

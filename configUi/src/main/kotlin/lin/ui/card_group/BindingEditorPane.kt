@@ -13,7 +13,6 @@ import lin.dao.CardWeightConfig
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.findOverride
 import lin.ui.card_group.behavior.BehaviorDisplayMappers
-import lin.ui.card_group.behavior.BehaviorEditorPane
 
 /**
  * 右侧：Binding 详情编辑面板
@@ -57,11 +56,6 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         }
 
         // 2. 表格与控制栏
-        val behaviorPane = BehaviorEditorPane(
-            store,
-            bindingTableView.selectionModel.selectedIndexProperty().lessThan(0)
-        )
-
         val tableBox = VBox(5.0).apply {
             val toolBar = HBox(5.0).apply {
                 alignment = Pos.CENTER_LEFT
@@ -75,17 +69,38 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                         if (idx >= 0) store.dispatch(WorkbenchActions.removeBinding(idx))
                     }
                 }
-                children.addAll(btnAdd, btnRemove)
+                val btnEditBehavior = Button("⚙️ 行为策略配置").apply {
+                    style = "-fx-background-color: #0d6efd; -fx-text-fill: white; -fx-font-weight: bold;"
+                    disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
+                    setOnAction {
+                        val idx = bindingTableView.selectionModel.selectedIndex
+                        if (idx >= 0) {
+                            lin.ui.card_group.behavior.GroupBehaviorDialog(store).showAndWait()
+                        }
+                    }
+                }
+                children.addAll(btnAdd, btnRemove, btnEditBehavior)
             }
+
+            bindingTableView.isEditable = true
 
             // 初始化表格列
             val colNo = TableColumn<CardGroupBinding, String>("ID").apply {
                 setCellValueFactory { ReadOnlyStringWrapper(it.value.id) }
-                prefWidth = 100.0
+                prefWidth = 90.0
             }
-            val colName = TableColumn<CardGroupBinding, String>("分组名称").apply {
+            val colName = TableColumn<CardGroupBinding, String>("分组名称 (可修改)").apply {
                 setCellValueFactory { ReadOnlyStringWrapper(it.value.name) }
-                prefWidth = 200.0
+                setCellFactory(javafx.scene.control.cell.TextFieldTableCell.forTableColumn())
+                setOnEditCommit { event ->
+                    val idx = event.tablePosition.row
+                    val newName = event.newValue
+                    if (idx in store.state.currentBindings.indices && !newName.isNullOrBlank()) {
+                        store.selectBinding(idx)
+                        store.updateBindingName(newName)
+                    }
+                }
+                prefWidth = 180.0
             }
             val colCardCount = TableColumn<CardGroupBinding, Number>("已选卡数").apply {
                 setCellValueFactory { ReadOnlyIntegerWrapper(it.value.cardIds.size) }
@@ -96,13 +111,39 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                     val stageName = it.value.behaviors.findOverride()?.stageOverride?.name
                     ReadOnlyStringWrapper(if (stageName != null) BehaviorDisplayMappers.stageToLabel(stageName) else "-")
                 }
-                prefWidth = 120.0
+                prefWidth = 110.0
             }
             val colWeight = TableColumn<CardGroupBinding, String>("排序权重").apply {
                 setCellValueFactory { ReadOnlyStringWrapper(it.value.behaviors.findOverride()?.orderWeight?.toString() ?: "-") }
                 prefWidth = 70.0
             }
-            bindingTableView.columns.addAll(colNo, colName, colCardCount, colStage, colWeight)
+            val colAction = TableColumn<CardGroupBinding, Void>("操作").apply {
+                prefWidth = 110.0
+                setCellFactory {
+                    object : TableCell<CardGroupBinding, Void>() {
+                        private val btn = Button("⚙️ 配置策略").apply {
+                            style =
+                                "-fx-font-size: 11px; -fx-background-color: #f8f9fa; -fx-border-color: #ced4da; -fx-border-radius: 4;"
+                            setOnAction {
+                                val binding = tableRow?.item
+                                if (binding != null) {
+                                    val idx = tableView.items.indexOf(binding)
+                                    if (idx >= 0) {
+                                        store.selectBinding(idx)
+                                        lin.ui.card_group.behavior.GroupBehaviorDialog(store).showAndWait()
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun updateItem(item: Void?, empty: Boolean) {
+                            super.updateItem(item, empty)
+                            graphic = if (empty) null else btn
+                        }
+                    }
+                }
+            }
+            bindingTableView.columns.addAll(colNo, colName, colCardCount, colStage, colWeight, colAction)
 
             bindingTableView.items = obsBindings
             bindingTableView.selectionModel.selectedIndexProperty().addListener { _, _, newValue ->
@@ -111,8 +152,21 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 }
             }
 
+            // 支持双击表格行直接打开策略配置弹窗
+            bindingTableView.setRowFactory {
+                val row = TableRow<CardGroupBinding>()
+                row.setOnMouseClicked { event ->
+                    if (event.clickCount == 2 && !row.isEmpty) {
+                        val idx = row.index
+                        store.selectBinding(idx)
+                        lin.ui.card_group.behavior.GroupBehaviorDialog(store).showAndWait()
+                    }
+                }
+                row
+            }
+
             setVgrow(bindingTableView, Priority.ALWAYS)
-            children.addAll(toolBar, bindingTableView, behaviorPane.node)
+            children.addAll(toolBar, bindingTableView)
         }
 
         // 3. 底部选卡区 (左右两栏 SplitPane)
@@ -158,9 +212,15 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
             )
         }
 
-        setVgrow(tableBox, Priority.ALWAYS)
-        setVgrow(cardSelectPane, Priority.ALWAYS)
-        children.addAll(infoBox, tableBox, cardSelectPane)
+        // 垂直分割面板：给表格与选卡区各自分配充足的可调节空间
+        val mainSplitPane = SplitPane().apply {
+            orientation = javafx.geometry.Orientation.VERTICAL
+            items.addAll(tableBox, cardSelectPane)
+            setDividerPositions(0.45)
+        }
+
+        setVgrow(mainSplitPane, Priority.ALWAYS)
+        children.addAll(infoBox, mainSplitPane)
 
         // =====================================
         // State -> UI 更新逻辑

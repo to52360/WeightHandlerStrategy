@@ -17,8 +17,9 @@ interface AiConfigGenerationService {
      * 返回系统当前真实存在的全部可编排能力，按领域分组，并标注每种能力所需的属性。
      * AI 必须在编排卡牌分组、构建评估树之前先调用本方法，依据真实 sourceId 与属性规划，
      * 严禁凭空捏造规则/条件 ID 或属性。正交能力的底层积木细节不在此暴露，见 [list_orthogonal_components]（构造阶段再查）。
+     * @param managerId 非空时条件树按"当前卡组私有 + 全局共享"过滤（且排除一次性树）；为空则全量返回。
      */
-    fun listCapabilityBackground(): AiCapabilityBackground
+    fun listCapabilityBackground(managerId: String? = null): AiCapabilityBackground
 
     fun validateEvaluatorTree(request: SaveEvaluatorTreeRequest): ValidationReport
 

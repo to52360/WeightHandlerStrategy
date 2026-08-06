@@ -95,10 +95,10 @@ class OverridePane(
 
     private var isUpdatingFromState = false
 
-    init {
-        val baseBlock = buildBaseBlock()
-        val conditionalBlock = buildConditionalBlock(disableWhen)
+    val baseBlock: HBox = buildBaseBlock()
+    val conditionalBlock: VBox = buildConditionalBlock(disableWhen)
 
+    init {
         node = VBox(10.0).apply {
             children.addAll(baseBlock, conditionalBlock)
         }
@@ -112,13 +112,11 @@ class OverridePane(
     private fun buildBaseBlock(): HBox {
         return HBox(12.0).apply {
             alignment = Pos.CENTER_LEFT
-            padding = Insets(8.0)
-            style =
-                "-fx-background-color: #f8f9fa; -fx-border-color: #e9ecef; -fx-border-radius: 4; -fx-background-radius: 4;"
+            padding = Insets(4.0, 0.0, 4.0, 0.0)
             children.addAll(
-                Label("阶段覆盖:"), stageCombo,
-                Label("重规划:"), replanCombo,
-                Label("排序权重:"), weightField
+                Label("阶段覆盖:").apply { style = "-fx-font-weight: bold;" }, stageCombo,
+                Label("重规划:").apply { style = "-fx-font-weight: bold;" }, replanCombo,
+                Label("排序权重:").apply { style = "-fx-font-weight: bold;" }, weightField
             )
         }
     }
@@ -127,7 +125,7 @@ class OverridePane(
         val treeSelectRow = HBox(10.0).apply {
             alignment = Pos.CENTER_LEFT
             children.addAll(
-                Label("条件树:"),
+                Label("条件树:").apply { style = "-fx-font-weight: bold;" },
                 conditionTreeCombo,
                 newTreeBtn,
                 editTreeBtn,
@@ -138,22 +136,20 @@ class OverridePane(
         val stageSelectRow = HBox(15.0).apply {
             alignment = Pos.CENTER_LEFT
             children.addAll(
-                Label("命中阶段:"), conditionStageCombo,
-                Label("未命中阶段:"), conditionElseCombo
+                Label("命中阶段:").apply { style = "-fx-font-weight: bold;" }, conditionStageCombo,
+                Label("未命中阶段:").apply { style = "-fx-font-weight: bold;" }, conditionElseCombo
             )
         }
 
         val conditionalSubContainer = VBox(8.0).apply {
-            padding = Insets(8.0)
-            style =
-                "-fx-background-color: #eef2f7; -fx-border-color: #d0d7de; -fx-border-radius: 4; -fx-background-radius: 4;"
+            padding = Insets(8.0, 0.0, 0.0, 16.0)
             children.addAll(treeSelectRow, stageSelectRow)
         }
 
         // 联动：控制条件区块在未勾选时置灰
         conditionalSubContainer.disableProperty().bind(enableCSCheckBox.selectedProperty().not().or(disableWhen))
 
-        return VBox(6.0).apply {
+        return VBox(8.0).apply {
             children.addAll(enableCSCheckBox, conditionalSubContainer)
         }
     }

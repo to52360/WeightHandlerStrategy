@@ -20,7 +20,7 @@ import lin.rule.handler.GuardCompiler
 class UsePlanBuilder(
     private val guardCompiler: GuardCompiler
 ) {
-    // 条件树编译缓存：按 conditionId 一次编译，整局复用（条件树叶子自带参数，全局源整轮结果一致）
+    /** 条件树编译缓存：按 conditionId 一次编译，整局复用（参数在旁挂表，同一棵树参数固定）。 */
     private val treeLogicCache = mutableMapOf<String, ConditionLogic>()
 
     fun build(cards: List<ComboCard>, ruleEnv: RuleEnv): UsePlan {

@@ -49,7 +49,8 @@ val mcpModule = module {
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
             get<lin.repository.HsCardRepository>(),
-            get<lin.ui.service.TreeConfigService>()
+            get<lin.ui.service.TreeConfigService>(),
+            get<ConditionTreeConfigService>()
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class

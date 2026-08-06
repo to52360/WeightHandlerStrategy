@@ -14,7 +14,8 @@ class ConditionTreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 config_data TEXT NOT NULL,
-                manager_id TEXT
+                manager_id TEXT,
+                inline_created INTEGER NOT NULL DEFAULT 0
             );
         """.trimIndent()
         jdbcTemplate.execute(sql)
@@ -22,14 +23,15 @@ class ConditionTreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
 
     fun save(entity: ConditionTreeConfigEntity) {
         val sql = """
-            INSERT INTO condition_tree_config (id, name, config_data, manager_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO condition_tree_config (id, name, config_data, manager_id, inline_created)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 config_data = excluded.config_data,
-                manager_id = excluded.manager_id
+                manager_id = excluded.manager_id,
+                inline_created = excluded.inline_created
         """.trimIndent()
-        jdbcTemplate.update(sql, entity.id, entity.name, entity.configData, entity.managerId)
+        jdbcTemplate.update(sql, entity.id, entity.name, entity.configData, entity.managerId, entity.inlineCreated)
     }
 
     fun findAll(): List<ConditionTreeConfigEntity> {
@@ -44,32 +46,51 @@ class ConditionTreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
         jdbcTemplate.update("DELETE FROM condition_tree_config WHERE id = ?", id)
     }
 
-    fun findAllMeta(): List<Pair<String, String>> {
-        return jdbcTemplate.query("SELECT id, name FROM condition_tree_config") { rs, _ ->
-            rs.getString("id") to rs.getString("name")
-        }
-    }
-
     /**
-     * 根据卡组 managerId 查询可用的条件树元数据：返回当前卡组私有条件树 + 全局共享条件树 (manager_id 为 NULL 或空)。
+     * 按卡组查询可用的条件树元数据：返回当前卡组私有条件树 + 全局共享条件树（manager_id 为 NULL）。
+     * 与 tree_config（评估树）的 null 语义保持一致；写入端已将空字符串归一化为 NULL。
+     * managerId 为空时等价全量返回。
      */
-    fun findMetaByManagerId(managerId: String?): List<Pair<String, String>> {
+    fun findMetaByManagerId(managerId: String?): List<ConditionTreeMeta> {
         if (managerId.isNullOrEmpty()) {
             return findAllMeta()
         }
         val sql =
-            "SELECT id, name FROM condition_tree_config WHERE manager_id = ? OR manager_id IS NULL OR manager_id = ''"
+            "SELECT id, name, manager_id, inline_created FROM condition_tree_config WHERE manager_id = ? OR manager_id IS NULL"
         return jdbcTemplate.query(sql, { rs, _ ->
-            rs.getString("id") to rs.getString("name")
+            rs.toMeta()
         }, managerId)
     }
+
+    /** 全量返回条件树元数据（含 inlineCreated 标记）。 */
+    fun findAllMeta(): List<ConditionTreeMeta> {
+        return jdbcTemplate.query("SELECT id, name, manager_id, inline_created FROM condition_tree_config") { rs, _ ->
+            rs.toMeta()
+        }
+    }
+
+    private fun java.sql.ResultSet.toMeta(): ConditionTreeMeta = ConditionTreeMeta(
+        id = getString("id"),
+        name = getString("name"),
+        managerId = getString("manager_id"),
+        inlineCreated = getBoolean("inline_created")
+    )
 
     private val rowMapper = RowMapper { rs, _ ->
         ConditionTreeConfigEntity(
             id = rs.getString("id"),
             name = rs.getString("name"),
             configData = rs.getString("config_data"),
-            managerId = rs.getString("manager_id")
+            managerId = rs.getString("manager_id"),
+            inlineCreated = rs.getBoolean("inline_created")
         )
     }
 }
+
+/** 条件树元数据（id/name/managerId/inlineCreated），供 LIST 与背景知识过滤。 */
+data class ConditionTreeMeta(
+    val id: String,
+    val name: String,
+    val managerId: String? = null,
+    val inlineCreated: Boolean = false
+)

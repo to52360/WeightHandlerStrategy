@@ -15,7 +15,7 @@ class AiTreeConfigToolProvider(
     private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
-        McpToolHandler(
+        typedTool<ListCapabilityBackgroundInput>(
             name = "list_capability_background",
             description = """
                 【能力背景 / 规划前置】列出系统当前真实存在的全部可编排能力，按领域分组：
@@ -23,14 +23,14 @@ class AiTreeConfigToolProvider(
                 每项含 sourceId、name、desc 以及该能力需要的属性 requiredProperties。
                 AI 必须在编排卡牌分组、构建评估树之前先调用本工具，依据真实存在的 sourceId 与属性来规划，
                 严禁凭空捏造规则/条件 ID 或属性字段，否则会在提交时被校验拒绝（幻觉）。
+                传 managerId 时条件树按"当前卡组私有 + 全局共享"过滤（且排除消费方内联自动创建的一次性树），
+                不传则全量返回所有条件树。
                 正交能力（orthogonal_condition / orthogonal_rule）的底层积木与类型链路不在此展开，
                 构造正交叶子时再调用 list_orthogonal_components 获取精细细节。
-            """.trimIndent(),
-            inputSchemaJson = """{"type":"object","properties":{}}""",
-            call = {
-                mcpSuccess(service.listCapabilityBackground())
-            }
-        ),
+            """.trimIndent()
+        ) { input ->
+            mcpSuccess(service.listCapabilityBackground(input.managerId))
+        },
 
         // ── evaluator_tree: 评估树列表 + 详情 (合并) ──
         typedTool<EvaluatorTreeInput>(
@@ -129,3 +129,8 @@ private data class EvaluatorTreeInput(
 
 /** LIST 无 managerId 过滤时的返回条数上限 */
 private const val DEFAULT_TREE_LIST_LIMIT = 50
+
+private data class ListCapabilityBackgroundInput(
+    @field:JsonPropertyDescription("可选：卡组 managerId（来自 card_group(action=LIST)）。提供时条件树按\"当前卡组私有 + 全局共享\"过滤（且排除一次性内联树）；不传则全量返回所有条件树。")
+    val managerId: String? = null
+)
