@@ -14,7 +14,6 @@ import lin.rule.score.ScoreEffect
 import lin.rule.score.ScoreOperator
 import lin.rule.score.ScoreOperatorRegistry
 import lin.rule.tree.*
-import lin.serviceLoader.provider.ConditionTreeArgsProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import kotlin.reflect.KType
 import kotlin.reflect.full.isSubtypeOf
@@ -28,8 +27,7 @@ import kotlin.reflect.full.isSubtypeOf
 class GuardCompiler(
     private val conditionRegistry: ConditionRegistry,
     private val conditionTreeProviders: List<ConditionTreeConfigProvider>,
-    private val assembler: PipelineAssembler,
-    private val conditionTreeArgsProviders: List<ConditionTreeArgsProvider> = emptyList()
+    private val assembler: PipelineAssembler
 ) {
     fun compile(leafConfig: EvaluatorLeafConfig): ConditionLogic? {
         return when (leafConfig) {
@@ -76,7 +74,7 @@ class GuardCompiler(
 
     // ── 条件树编译 ──
 
-    /** 评估树路径：消费方叶子自带 args 注入（模板复用语义，leafConfig.args 是唯一参数来源）。 */
+    /** 评估树路径：叶子 args 是唯一参数来源（语义 B，忽略树内参数——树内参数仅作表单预填参考）。 */
     private fun buildConditionTreeLogic(leafConfig: ConditionTreeLeafConfig): ConditionLogic {
         val conditionTree = conditionTreeProviders
             .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
@@ -85,18 +83,14 @@ class GuardCompiler(
     }
 
     /**
-     * 编译条件树并注入叶子参数（排序 conditionalStage / AuraBoost 路径，D-005 旁挂表）。
-     *
-     * 编码条件(ConditionRef)参数统一存旁挂参数表（condition_tree_args），消费方只存树 id，
-     * 参数经 [ConditionTreeArgsProvider] 查旁表解析；PipelineRef 的 operatorArgs 阈值合法留在树内。
+     * 编译条件树（排序 conditionalStage / AuraBoost 路径）：消费方无参数通道，直接用树内参数裸编译。
+     * 条件树 config_data 存完整参数（ConditionRef.args + PipelineRef.operatorArgs），树内参数即编译参数。
      */
     fun compileTree(conditionTreeId: String): ConditionLogic {
         val conditionTree = conditionTreeProviders
             .firstNotNullOfOrNull { it.findById(conditionTreeId) }
             ?: error("Condition tree config not found: conditionTreeId=$conditionTreeId")
-        // D-005：编码条件参数唯一来源是旁挂参数表（condition_tree_args），查不到即无参数。
-        val args = conditionTreeArgsProviders.firstNotNullOfOrNull { it.findById(conditionTree.id) } ?: emptyMap()
-        return compileTreeWithArgs(conditionTree, args)
+        return compileTreeWithArgs(conditionTree, collectNativeArgs(conditionTree.root))
     }
 
     private fun compileTreeWithArgs(conditionTree: ConditionTreeConfig, args: Map<String, Any>): ConditionLogic {
@@ -124,9 +118,10 @@ class GuardCompiler(
                     }
                     val operator = assembler.findOperator(ref.operatorId)
                         ?: error("Operator not found: ${ref.operatorId}")
+                    // 纯注入：operatorArgs 唯一来源是注入参数（树内参数被忽略，仅作表单参考）
                     validate(
                         "条件树 [${conditionTreeId}] 嵌套管道算子 [${operator.id}]",
-                        ref.refId, ref.operatorArgs + conditionArgs, operator.paramSpecs
+                        ref.refId, conditionArgs, operator.paramSpecs
                     )
                 }
             }
@@ -135,12 +130,25 @@ class GuardCompiler(
             val conditionArgs = args.extractPrefixedArgs(ref.refId)
             val newPayload = when (ref) {
                 is ConditionPayload.ConditionRef -> ref.copy(args = conditionArgs)
-                is ConditionPayload.PipelineRef ->
-                    if (conditionArgs.isNotEmpty()) ref.copy(operatorArgs = ref.operatorArgs + conditionArgs)
-                    else ref
+                // 纯注入：忽略树内参数（语义 B），参数唯一来源是注入 args
+                is ConditionPayload.PipelineRef -> ref.copy(operatorArgs = conditionArgs)
             }
             conditionRegistry.build(newPayload)
         }
+    }
+
+    /** 提取条件树树内参数为 prefixed flat map（裸编译：排序/AuraBoost 直接以树内参数作为编译参数）。 */
+    private fun collectNativeArgs(root: ConditionNode): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+        root.collectConditionRefs().forEach { ref ->
+            when (ref) {
+                is ConditionPayload.ConditionRef ->
+                    ref.args.forEach { (key, value) -> result["${ref.refId}.$key"] = value }
+                is ConditionPayload.PipelineRef ->
+                    ref.operatorArgs.forEach { (key, value) -> result["${ref.refId}.$key"] = value }
+            }
+        }
+        return result
     }
 }
 

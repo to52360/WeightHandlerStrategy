@@ -19,7 +19,8 @@ class DynamicFormLeafEditor : LeafEditor {
     override fun render(ctx: LeafEditContext): VBox {
         val container = VBox(8.0)
         val existing = ctx.leafConfigs[ctx.nodeId]
-        val args = existing?.args?.toMutableMap() ?: mutableMapOf()
+        // 语义 B：新建叶子时预填树内参数（参考示例，保存后固化到叶子 args）；已有叶子沿用其 args
+        val args = existing?.args?.toMutableMap() ?: ctx.selectedLeaf.defaultArgs.toMutableMap()
 
         buildDynamicForm(container, ctx, existing, args)
 

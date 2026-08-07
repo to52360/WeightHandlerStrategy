@@ -18,7 +18,7 @@ sealed interface EvaluatorInstanceNode {
     data class AndNode(val children: List<EvaluatorInstanceNode>) : EvaluatorInstanceNode
     data class OrNode(val children: List<EvaluatorInstanceNode>) : EvaluatorInstanceNode
 
-    // @verify U-003: 评估树不支持 NOT（取反），配置层 LogicNode.Not 仅用于条件树；
+    // @verify play-ordering-and-aura/U-003: 评估树不支持 NOT（取反），配置层 LogicNode.Not 仅用于条件树；
     // instantiate 遇到评估树 NOT 配置直接报错（见下方）
     data class BranchNode(
         val nodeId: String,

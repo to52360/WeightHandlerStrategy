@@ -86,7 +86,7 @@ class EvaluatorTreeWorkbench : SplitPane(), KoinComponent {
                 else -> p?.toString() ?: "?"
             }
         }
-        // @verify U-003: 评估树不支持 NOT（取反），禁用 NOT 节点菜单
+        // @verify play-ordering-and-aura/U-003: 评估树不支持 NOT（取反），禁用 NOT 节点菜单
         val contextMenuFactory =
             TreeContextMenuFactory(EvaluatorPayloadFactory(), evaluatorTitleResolver, allowNot = false)
         logicTreeEditor.addBehavior(object : TreeEditorBehavior<LogicNodeWrapper<EvaluatorPayload>> {

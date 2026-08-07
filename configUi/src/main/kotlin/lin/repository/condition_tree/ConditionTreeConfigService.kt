@@ -4,12 +4,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import lin.rule.condition.ConditionNode
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionTreeConfig
-import lin.rule.condition.collectConditionRefs
-import lin.rule.parse.extractPrefixedArgs
-import lin.rule.tree.LogicNode
 import lin.utils.json.registerLogicNodeMixin
 import java.util.*
 
@@ -28,10 +24,17 @@ fun createConditionTreeConfigMapper(): ObjectMapper {
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 abstract class ConditionPayloadMixin
 
+/**
+ * 条件树配置服务（语义 B，D-007）。
+ *
+ * 条件树 config_data 存完整参数（ConditionRef.args + PipelineRef.operatorArgs + transform call.args 全在树内）。
+ * - 排序/AuraBoost（GuardCompiler.compileTree）：消费方无参数通道，直接用树内参数裸编译。
+ * - 评估树（GuardCompiler.buildConditionTreeLogic）：叶子 args 是唯一参数来源，树内参数仅作表单预填参考
+ *   （改树内参数不影响已配置的评估树叶子）。
+ */
 class ConditionTreeConfigService(
     private val repository: ConditionTreeConfigRepository,
-    private val mapper: ObjectMapper,
-    private val argsRepository: ConditionTreeArgsRepository
+    private val mapper: ObjectMapper
 ) {
     /**
      * @param managerId 归属卡组：null = 全局共享树；非 null = 卡组私有树（空字符串自动归一化为 null，
@@ -47,10 +50,7 @@ class ConditionTreeConfigService(
         inlineCreated: Boolean = false
     ): String {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
-        // D-005 拆参：编码条件(ConditionRef)参数入旁挂表，条件树 JSON 保持纯结构（消除默认值/实体双语义）。
-        argsRepository.save(id, collectCodedArgs(config.root))
-        val stripped = config.copy(root = stripCodedArgs(config.root))
-        val json = mapper.writeValueAsString(stripped.copy(id = id, name = name))
+        val json = mapper.writeValueAsString(config.copy(id = id, name = name))
         repository.save(
             ConditionTreeConfigEntity(
                 id = id,
@@ -76,61 +76,6 @@ class ConditionTreeConfigService(
 
     fun delete(id: String) {
         repository.deleteById(id)
-        argsRepository.deleteByTreeId(id)
-    }
-
-    /** 收集条件树所有编码条件(ConditionRef)参数为 prefixed flat map（refId.propertyName → value）。 */
-    private fun collectCodedArgs(root: ConditionNode): Map<String, Any> {
-        val result = mutableMapOf<String, Any>()
-        root.collectConditionRefs()
-            .filterIsInstance<ConditionPayload.ConditionRef>()
-            .forEach { ref ->
-                ref.args.forEach { (key, value) -> result["${ref.refId}.$key"] = value }
-            }
-        return result
-    }
-
-    /** 递归清除条件树内 ConditionRef 的 args（PipelineRef 结构参数保留），使树 JSON 为纯结构模板。 */
-    private fun stripCodedArgs(node: ConditionNode): ConditionNode = when (node) {
-        is LogicNode.Leaf -> node.copy(payload = stripPayload(node.payload))
-        is LogicNode.And -> node.copy(children = node.children.map { stripCodedArgs(it) })
-        is LogicNode.Or -> node.copy(children = node.children.map { stripCodedArgs(it) })
-        is LogicNode.Not -> node.copy(child = stripCodedArgs(node.child))
-        is LogicNode.Branch -> node.copy(
-            payload = stripPayload(node.payload),
-            onTrue = stripCodedArgs(node.onTrue),
-            onFalse = stripCodedArgs(node.onFalse)
-        )
-    }
-
-    private fun stripPayload(payload: ConditionPayload): ConditionPayload = when (payload) {
-        is ConditionPayload.ConditionRef -> payload.copy(args = emptyMap())
-        is ConditionPayload.PipelineRef -> payload
-    }
-
-    /**
-     * 读时合并旁挂表参数回 ConditionRef（工作台/编辑器回显用）。
-     * 条件树 JSON 是纯结构，编译路径不依赖此合并（评估树走 leafConfig.args、排序/AuraBoost 走旁表）。
-     */
-    private fun mergeCodedArgs(node: ConditionNode, args: Map<String, Any>): ConditionNode = when (node) {
-        is LogicNode.Leaf -> node.copy(payload = mergePayload(node.payload, args))
-        is LogicNode.And -> node.copy(children = node.children.map { mergeCodedArgs(it, args) })
-        is LogicNode.Or -> node.copy(children = node.children.map { mergeCodedArgs(it, args) })
-        is LogicNode.Not -> node.copy(child = mergeCodedArgs(node.child, args))
-        is LogicNode.Branch -> node.copy(
-            payload = mergePayload(node.payload, args),
-            onTrue = mergeCodedArgs(node.onTrue, args),
-            onFalse = mergeCodedArgs(node.onFalse, args)
-        )
-    }
-
-    private fun mergePayload(payload: ConditionPayload, args: Map<String, Any>): ConditionPayload = when (payload) {
-        is ConditionPayload.ConditionRef -> {
-            val refArgs = args.extractPrefixedArgs(payload.refId)
-            if (refArgs.isNotEmpty()) payload.copy(args = refArgs) else payload
-        }
-
-        is ConditionPayload.PipelineRef -> payload
     }
 
     /**
@@ -142,15 +87,11 @@ class ConditionTreeConfigService(
     }
 
     private fun readConfig(entity: ConditionTreeConfigEntity): ConditionTreeConfig? {
-        val config = try {
+        return try {
             mapper.readValue(entity.configData, ConditionTreeConfig::class.java)
         } catch (e: Exception) {
             e.printStackTrace()
             null
-        } ?: return null
-        // D-005 回显：把旁挂表参数合并回 ConditionRef（工作台/编辑器显示用；编译路径不依赖此合并）
-        val args = argsRepository.findById(entity.id)
-        if (args.isNullOrEmpty()) return config
-        return config.copy(root = mergeCodedArgs(config.root, args))
+        }
     }
 }

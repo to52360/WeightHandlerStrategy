@@ -5,7 +5,6 @@ import lin.domain.use.plan.UsePlanBuilder
 import lin.rule.RuleInfoRegister
 import lin.rule.handler.*
 import lin.serviceLoader.provider.AuraBoostConfigProvider
-import lin.serviceLoader.provider.ConditionTreeArgsProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import lin.serviceLoader.provider.StartupTask
 import lin.utils.startup.*
@@ -22,7 +21,7 @@ val ruleModule = module {
 
     // 🌟 先注册配置组装，后注册规则树绑定，保证 StartupTask 执行顺序
     single<GuardCompiler> {
-        GuardCompiler(get(), getAll<ConditionTreeConfigProvider>(), get(), getAll<ConditionTreeArgsProvider>())
+        GuardCompiler(get(), getAll<ConditionTreeConfigProvider>(), get())
     }
     single<ScoreCompiler> { ScoreCompiler(get(), get(), get()) }
     single<LeafLogicAssembler> { LeafLogicAssembler(get(), get()) }

@@ -29,7 +29,7 @@ sealed class EvalOutcome {
     object Banned : EvalOutcome()
 }
 
-// ARCH-UNSETTLED U-002: 用异常（EvalSignal）作为全局控制信号是隐式控制流——
+// ARCH-UNSETTLED purpose-tag-extension/U-002: 用异常（EvalSignal）作为全局控制信号是隐式控制流——
 // 调用方需知悉抛点（evaluateCardRoots）与捕获点（weightEvaluator 编排边界）。
 // 仅 Banned 全局穿透一条路径使用。
 // 待确认：是否换回显式 sealed 返回值传递（代价是 Accumulate 重带控制分支）。

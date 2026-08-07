@@ -109,8 +109,8 @@ class ConditionTreeToolProvider(
                 treeJson 传「完整条件树 JSON 的字符串」：{id, name, root}，root 为节点对象。
                 叶子 payload 两种：ConditionRef（引用编码条件，conditionId + args）或
                 PipelineRef（正交管道：sourceId + transforms + operatorId + operatorArgs + refId）。
-                编码条件参数（ConditionRef.args）保存时自动拆入条件树参数旁挂表（condition_tree_args），
-                条件树 JSON 保持纯结构；GET 读取时自动合并回显。
+                条件树参数（ConditionRef.args / PipelineRef.operatorArgs / transform 参数）直接存树内，
+                GET 读取原样返回；评估树引用时由叶子 args 决定参数（树内参数仅作表单参考）。
                 可从 condition_tree(action=GET) 拿现有树复制修改后回传；管道积木用 list_orthogonal_components 查询。
                 提供 existingId 更新已有树，否则新建（自动生成 8 位短 id）。
             """.trimIndent()

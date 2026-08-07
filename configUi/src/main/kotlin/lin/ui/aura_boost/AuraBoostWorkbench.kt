@@ -91,6 +91,8 @@ class AuraBoostWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 val selected = newState.selectedEntity
                 if (selected == null) {
                     if (!isCreatingMode) {
+                        // 空状态也同步条件树下拉选项（否则 items 从未填充，展开下拉为空）
+                        editorPanel.syncConditionTrees(treeOptions)
                         editorPanel.clearEditor()
                     }
                 } else {

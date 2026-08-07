@@ -25,7 +25,7 @@ const val EVALUATOR_LEAF_GUARD_MISS_BEHAVIOR_FIELD = "guardMissBehavior"
  * - [BAN]：强制禁止当前卡牌打出（守卫未命中即命中"禁止条件"，
  *   全局穿透整棵评估树并调用 [lin.bean.ComboCard.unUse]，副作用在编排层处理）
  *
- * @verify U-001 已收敛：PRUNE 与 SCORE+missValue=0 行为等价，已并入 SCORE
+ * @verify play-ordering-and-aura/U-001 已收敛：PRUNE 与 SCORE+missValue=0 行为等价，已并入 SCORE
  */
 enum class GuardMissBehavior { SCORE, BAN }
 
@@ -133,7 +133,9 @@ data class EvaluatorLeafMeta(
     val name: String,
     val desc: String = "",
     val builtInFields: List<FieldSpec> = emptyList(),
-    val fields: List<FieldSpec>
+    val fields: List<FieldSpec>,
+    /** 新建叶子时的默认参数（条件树引用场景：预填树内参数作参考，D-007 语义 B）。 */
+    val defaultArgs: Map<String, Any> = emptyMap()
 )
 
 

@@ -8,7 +8,6 @@ import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
-import lin.repository.condition_tree.ConditionTreeArgsRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
@@ -60,16 +59,10 @@ val strategyProviderModule = module {
         SqliteConditionTreeConfigProvider(
             service = ConditionTreeConfigService(
                 repository = ConditionTreeConfigRepository(get()),
-                mapper = createConditionTreeConfigMapper(),
-                argsRepository = ConditionTreeArgsRepository(get())
+                mapper = createConditionTreeConfigMapper()
             )
         )
     }
-
-    single<ConditionTreeArgsProvider> {
-        SqliteConditionTreeArgsProvider(ConditionTreeArgsRepository(get()))
-    }
-
 
     single<AuraBoostConfigProvider> {
         SqliteAuraBoostConfigProvider(

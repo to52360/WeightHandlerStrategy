@@ -19,7 +19,6 @@ import lin.rule.orthogonal.LessThanOrEqualOp
 import lin.rule.orthogonal.TransformCall
 import lin.rule.tree.LogicNode
 import lin.serviceLoader.provider.ConditionRegistrationProvider
-import lin.serviceLoader.provider.ConditionTreeArgsProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -27,12 +26,14 @@ import org.junit.Test
 /**
  * conditionalStage 条件化阶段覆盖的运行期求值测试：
  * 条件树命中 → 覆盖 stage；未命中 → elseStage（null 沿用基础 UseIntent）。
+ *
+ * 语义 B（D-007）：排序/AuraBoost 走 compileTree 裸编译，参数直接来自条件树 config_data。
  */
 class UsePlanBuilderTest {
 
     private val objectMapper = ObjectMapper().registerKotlinModule()
 
-    /** 构造「手牌数量 ≤ threshold」条件树，叶子 PipelineRef 自带阈值参数。 */
+    /** 构造「手牌数量 ≤ threshold」条件树：PipelineRef 阈值在树内（排序/AuraBoost 裸编译直接用）。 */
     private fun handCountLteTree(id: String, threshold: Int): ConditionTreeConfig = ConditionTreeConfig(
         id = id,
         name = "hand<=$threshold",
@@ -49,8 +50,7 @@ class UsePlanBuilderTest {
 
     private fun buildBuilder(
         tree: ConditionTreeConfig,
-        codedConditions: Collection<ConditionRegistration<*>> = emptyList(),
-        conditionArgsById: Map<String, Map<String, Any>> = emptyMap()
+        codedConditions: Collection<ConditionRegistration<*>> = emptyList()
     ): UsePlanBuilder {
         val assembler = PipelineAssembler(
             dataSources = mapOf(HandCardsSource.id to HandCardsSource),
@@ -72,11 +72,7 @@ class UsePlanBuilderTest {
 
             override fun findAll(): List<ConditionTreeConfig> = listOf(tree)
         }
-        // 旁挂参数表（D-005）：conditionArgsById 按树 id 提供 prefixed 参数
-        val argsProvider = object : ConditionTreeArgsProvider {
-            override fun findById(treeId: String): Map<String, Any>? = conditionArgsById[treeId]
-        }
-        return UsePlanBuilder(GuardCompiler(registry, listOf(treeProvider), assembler, listOf(argsProvider)))
+        return UsePlanBuilder(GuardCompiler(registry, listOf(treeProvider), assembler))
     }
 
     private fun ampCard(cs: ConditionalStageOverride): ComboCard = ComboCard(
@@ -135,29 +131,26 @@ class UsePlanBuilderTest {
         assertEquals(UseStage.SETUP, plan.intents.getValue(card).stage)
     }
 
-    /** 构造「编码条件 maxCost ≤ N」模板树：ConditionRef 叶子，参数存旁挂表（D-005）。 */
-    private fun handCostLteTree(id: String): ConditionTreeConfig = ConditionTreeConfig(
+    /** 构造「编码条件 maxCost ≤ N」条件树：ConditionRef 参数在树内（裸编译直接用）。 */
+    private fun handCostLteTree(id: String, maxCost: Int): ConditionTreeConfig = ConditionTreeConfig(
         id = id,
-        name = "cost<=N",
-        root = LogicNode.Leaf(ConditionPayload.ConditionRef(conditionId = "hand_cost", refId = "hc"))
+        name = "cost<=$maxCost",
+        root = LogicNode.Leaf(
+            ConditionPayload.ConditionRef(conditionId = "hand_cost", refId = "hc", args = mapOf("maxCost" to maxCost))
+        )
     )
 
     @Test
-    fun testConditionRefArgsFromSideTable() {
-        // 编码条件：手牌费用上限，参数 maxCost 由旁挂参数表提供（消费方只存树 id）
+    fun testConditionRefArgsFromTree() {
+        // 编码条件：手牌费用上限，参数 maxCost 直接存条件树（排序/AuraBoost 裸编译）
         val coded = ConditionBuilder.scalar(ConditionType.IntType)
             .id("hand_cost")
             .metadata("手牌费用上限")
             .field("maxCost", "费用上限")
             .factory { maxCost: Int -> { maxCost <= 3 } }
             .build()
-        val tree = handCostLteTree("tree_cost")
-        // 旁表 args 以 "refId.propertyName" 前缀存储（与评估树 ConditionTreeLeafConfig.args 同构）
-        val builder = buildBuilder(
-            tree,
-            codedConditions = listOf(coded),
-            conditionArgsById = mapOf("tree_cost" to mapOf("hc.maxCost" to 2))
-        )
+        val tree = handCostLteTree("tree_cost", 2)
+        val builder = buildBuilder(tree, codedConditions = listOf(coded))
         val card = ampCard(ConditionalStageOverride(conditionId = tree.id, stage = UseStage.SETUP))
         val env = fakeRuleEnv(createMockWarInfo(handCards = List(2) { createMockCard() }))
         val plan = builder.build(listOf(card), env)
@@ -172,12 +165,8 @@ class UsePlanBuilderTest {
             .field("maxCost", "费用上限")
             .factory { maxCost: Int -> { maxCost <= 3 } }
             .build()
-        val tree = handCostLteTree("tree_cost")
-        val builder = buildBuilder(
-            tree,
-            codedConditions = listOf(coded),
-            conditionArgsById = mapOf("tree_cost" to mapOf("hc.maxCost" to 5))
-        )
+        val tree = handCostLteTree("tree_cost", 5)
+        val builder = buildBuilder(tree, codedConditions = listOf(coded))
         // maxCost=5 → 未命中 → elseStage=null → 沿用基础 GENERAL
         val card = ampCard(
             ConditionalStageOverride(

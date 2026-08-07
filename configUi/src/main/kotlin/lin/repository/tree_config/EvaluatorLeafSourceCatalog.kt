@@ -3,6 +3,7 @@ package lin.repository.tree_config
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
+import lin.rule.condition.ConditionTreeConfig
 import lin.rule.condition.collectConditionRefs
 import lin.rule.parse.withConditionPrefix
 import lin.rule.registry.RuleRegistry
@@ -92,9 +93,25 @@ class EvaluatorLeafSourceCatalog(
                     name = name,
                     desc = "",
                     builtInFields = CONDITION_BUILT_IN_FIELDS,
-                    fields = fields
+                    fields = fields,
+                    defaultArgs = collectConditionTreeDefaultArgs(config)
                 )
             }
         }.getOrDefault(emptyList())
+    }
+
+    /** 收集条件树树内参数为 prefixed flat map（评估树叶子表单预填参考，D-007 语义 B）。 */
+    private fun collectConditionTreeDefaultArgs(config: ConditionTreeConfig?): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+        config?.root?.collectConditionRefs()?.forEach { ref ->
+            when (ref) {
+                is ConditionPayload.ConditionRef ->
+                    ref.args.forEach { (key, value) -> result["${ref.refId}.$key"] = value }
+
+                is ConditionPayload.PipelineRef ->
+                    ref.operatorArgs.forEach { (key, value) -> result["${ref.refId}.$key"] = value }
+            }
+        }
+        return result
     }
 }

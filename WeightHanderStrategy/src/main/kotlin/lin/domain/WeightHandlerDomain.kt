@@ -89,7 +89,7 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         var total = 0.0
 
         // 1. 条件树求值（新系统）
-        // @verify U-002: EvalSignal.Banned 异常穿透，隐式控制流；唯一捕获边界在编排层
+        // @verify purpose-tag-extension/U-002: EvalSignal.Banned 异常穿透，隐式控制流；唯一捕获边界在编排层
         val treeResult = try {
             evaluateCardRoots(comboCard, warManage, ruleEnv)
         } catch (e: EvalSignal) {

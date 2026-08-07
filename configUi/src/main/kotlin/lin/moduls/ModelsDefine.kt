@@ -16,7 +16,6 @@ import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
-import lin.repository.condition_tree.ConditionTreeArgsRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
@@ -129,12 +128,10 @@ val uiDBModule = module {
     single { EvaluatorTreeTemplateService(get(), get(), createTreeConfigMapper()) }
     single { EvaluatorTreeResolver(get(), get()) }
     single { ConditionTreeConfigRepository(get()) }
-    single { ConditionTreeArgsRepository(get()) }
     single {
         ConditionTreeConfigService(
             get(),
-            createConditionTreeConfigMapper(),
-            get()
+            createConditionTreeConfigMapper()
         )
     }
     single { AuraBoostRepository(get()) }

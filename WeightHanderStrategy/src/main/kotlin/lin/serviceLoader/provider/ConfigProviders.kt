@@ -34,20 +34,6 @@ interface ConditionTreeConfigProvider {
 }
 
 /**
- * 条件树参数提供者（条件树参数旁挂表，D-005）。
- *
- * 编码条件(ConditionRef)的参数不存条件树 JSON（条件树是纯结构模板），统一存旁挂参数表
- * （condition_tree_args，按树 id 一对一）。消费方（评估树/排序/AuraBoost）只存树 id，
- * 编译时经本 provider 查参注入。
- *
- * 返回带 refId 前缀的 flat map（如 {"hc.maxCost": 3}），与 [ConditionTreeLeafConfig.args] 同构。
- * null = 该树无参数记录（消费方可回退收集树内残留参数，兼容存量数据）。
- */
-fun interface ConditionTreeArgsProvider {
-    fun findById(treeId: String): Map<String, Any>?
-}
-
-/**
  * 分组使用覆盖提供者。
  *
  * @deprecated 行为属性已合并到 CardGroupBinding，由 GroupBehaviorProvider 提供。
