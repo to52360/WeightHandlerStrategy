@@ -38,6 +38,7 @@ import lin.ui.condition_tree.action.ConditionTreeWorkbenchAction
 import lin.ui.condition_tree.action.CreateConditionTreeAction
 import lin.ui.condition_tree.action.DeleteConditionTreeAction
 import lin.ui.condition_tree.action.SaveConditionTreeAction
+import lin.ui.condition_tree.validation.ConditionTreeValidator
 import lin.ui.service.EvaluatorTreeResolver
 import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
@@ -131,10 +132,12 @@ val uiDBModule = module {
     single {
         ConditionTreeConfigService(
             get(),
-            createConditionTreeConfigMapper()
+            createConditionTreeConfigMapper(),
+            get()
         )
     }
     single { AuraBoostRepository(get()) }
+    single { ConditionTreeValidator(get()) }
     single { AuraBoostConfigService(get()) }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupBehaviorRepository(get()) }

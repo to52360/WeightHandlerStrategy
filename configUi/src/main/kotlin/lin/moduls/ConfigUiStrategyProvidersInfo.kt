@@ -59,7 +59,8 @@ val strategyProviderModule = module {
         SqliteConditionTreeConfigProvider(
             service = ConditionTreeConfigService(
                 repository = ConditionTreeConfigRepository(get()),
-                mapper = createConditionTreeConfigMapper()
+                mapper = createConditionTreeConfigMapper(),
+                conditionTreeValidator = get()
             )
         )
     }

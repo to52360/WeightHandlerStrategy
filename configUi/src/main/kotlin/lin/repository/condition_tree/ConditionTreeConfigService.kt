@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionTreeConfig
+import lin.ui.condition_tree.validation.ConditionTreeValidator
 import lin.utils.json.registerLogicNodeMixin
 import java.util.*
 
@@ -34,7 +35,8 @@ abstract class ConditionPayloadMixin
  */
 class ConditionTreeConfigService(
     private val repository: ConditionTreeConfigRepository,
-    private val mapper: ObjectMapper
+    private val mapper: ObjectMapper,
+    private val conditionTreeValidator: ConditionTreeValidator
 ) {
     /**
      * @param managerId 归属卡组：null = 全局共享树；非 null = 卡组私有树（空字符串自动归一化为 null，
@@ -49,6 +51,14 @@ class ConditionTreeConfigService(
         managerId: String? = null,
         inlineCreated: Boolean = false
     ): String {
+        // 分界校验：内联创建（inlineCreated，消费方自动建的一次性树，实际使用，含全局光环）→ 参数必须完整；
+        // 工作台/MCP 建的模板（骨架，供评估树叶子覆盖参数参考）→ 参数不影响使用，不校验。
+        if (inlineCreated) {
+            val errors = conditionTreeValidator.validateArgs(config)
+            if (errors.isNotEmpty()) {
+                throw IllegalArgumentException("条件树 [${config.name}] 参数不完整：\n${errors.joinToString("\n")}")
+            }
+        }
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
         val json = mapper.writeValueAsString(config.copy(id = id, name = name))
         repository.save(
