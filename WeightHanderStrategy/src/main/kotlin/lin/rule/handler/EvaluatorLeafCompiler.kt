@@ -85,53 +85,80 @@ class GuardCompiler(
     /**
      * 编译条件树（排序 conditionalStage / AuraBoost 路径）：消费方无参数通道，直接用树内参数裸编译。
      * 条件树 config_data 存完整参数（ConditionRef.args + PipelineRef.operatorArgs），树内参数即编译参数。
+     *
+     * @param crossCard 非 null 时强制覆盖树内所有 PipelineRef 的 crossCard（AuraBoost conditionId 树用，
+     *                  惯例全局源 + crossCard=true → 同一决策 pass 内多卡共享分段缓存，Q-002 方向 c）。
+     *                  为 null 保留树内配置（默认）。
      */
-    fun compileTree(conditionTreeId: String): ConditionLogic {
+    fun compileTree(conditionTreeId: String, crossCard: Boolean? = null): ConditionLogic {
         val conditionTree = conditionTreeProviders
             .firstNotNullOfOrNull { it.findById(conditionTreeId) }
             ?: error("Condition tree config not found: conditionTreeId=$conditionTreeId")
-        return compileTreeWithArgs(conditionTree, collectNativeArgs(conditionTree.root))
+        return compileTreeWithArgs(conditionTree, collectNativeArgs(conditionTree.root), crossCard)
     }
 
-    private fun compileTreeWithArgs(conditionTree: ConditionTreeConfig, args: Map<String, Any>): ConditionLogic {
+    /**
+     * 编译条件树（消费方参数优先，树内参数兜底）。
+     *
+     * 语义 C（D-007 演进，2026-08-09）：
+     * - 注入 args（消费方传入）**优先**覆盖同名参数；
+     * - 树内参数（PipelineRef.operatorArgs / ConditionRef.args）作为**兜底默认值**，
+     *   消费方未显式传入的参数自动回落树内。
+     *
+     * @verify condition-tree-tooling/Q-002（2026-08-09 标记方案 B 隐患）：
+     *   变化轴不一致——同一棵树可被多个消费方（AuraBoost 用树内参数裸编译 / 评估树用注入 args）引用。
+     *   **修改树内参数会静默影响所有"未显式覆盖该参数"的消费方**（一处改动波及多个引用方），
+     *   消费方显式覆盖的参数则只影响自身。配置时需明确"参数最终值 = 消费方覆盖 > 树内默认"，
+     *   避免误以为只改一处。
+     */
+    private fun compileTreeWithArgs(
+        conditionTree: ConditionTreeConfig,
+        args: Map<String, Any>,
+        crossCard: Boolean? = null
+    ): ConditionLogic {
         val conditionTreeId = conditionTree.id
         val conditionRefs = conditionTree.root.collectConditionRefs().distinctBy { it.refId }
+        // 树内默认参数（裸编译参数），消费方注入参数覆盖它
+        val nativeArgs = collectNativeArgs(conditionTree.root)
         for (ref in conditionRefs) {
-            val conditionArgs = args.extractPrefixedArgs(ref.refId)
+            val mergedArgs = nativeArgs.extractPrefixedArgs(ref.refId) + args.extractPrefixedArgs(ref.refId)
             when (ref) {
                 is ConditionPayload.ConditionRef -> {
                     val registration = conditionRegistry.require(ref.conditionId)
                     validate(
-                        "条件树 [${conditionTreeId}] 嵌套条件", ref.refId, conditionArgs,
+                        "条件树 [${conditionTreeId}] 嵌套条件", ref.refId, mergedArgs,
                         listOf(registration.field.toFieldSpec())
                     )
                 }
 
                 is ConditionPayload.PipelineRef -> {
-                    for (call in ref.transforms) {
-                        val transform = assembler.findTransform(call.transformId)
-                            ?: error("Transform not found: ${call.transformId}")
+                    for ((transformId, args1) in ref.transforms) {
+                        val transform = assembler.findTransform(transformId)
+                            ?: error("Transform not found: $transformId")
                         validate(
                             "条件树 [${conditionTreeId}] 嵌套管道步骤 [${transform.id}]",
-                            ref.refId, call.args, transform.fields
+                            ref.refId, args1, transform.fields
                         )
                     }
                     val operator = assembler.findOperator(ref.operatorId)
                         ?: error("Operator not found: ${ref.operatorId}")
-                    // 纯注入：operatorArgs 唯一来源是注入参数（树内参数被忽略，仅作表单参考）
                     validate(
                         "条件树 [${conditionTreeId}] 嵌套管道算子 [${operator.id}]",
-                        ref.refId, conditionArgs, operator.paramSpecs
+                        ref.refId, mergedArgs, operator.paramSpecs
                     )
                 }
             }
         }
         return conditionTree.root.compile { ref ->
-            val conditionArgs = args.extractPrefixedArgs(ref.refId)
+            val mergedArgs = nativeArgs.extractPrefixedArgs(ref.refId) + args.extractPrefixedArgs(ref.refId)
             val newPayload = when (ref) {
-                is ConditionPayload.ConditionRef -> ref.copy(args = conditionArgs)
-                // 纯注入：忽略树内参数（语义 B），参数唯一来源是注入 args
-                is ConditionPayload.PipelineRef -> ref.copy(operatorArgs = conditionArgs)
+                is ConditionPayload.ConditionRef -> ref.copy(args = mergedArgs)
+                // 消费方参数优先 + 树内兜底（语义 C）
+                is ConditionPayload.PipelineRef -> {
+                    val forced = crossCard
+                    if (forced == null) ref.copy(operatorArgs = mergedArgs)
+                    else ref.copy(operatorArgs = mergedArgs, crossCard = forced)
+                }
             }
             conditionRegistry.build(newPayload)
         }
@@ -271,6 +298,7 @@ class LeafLogicAssembler(
                     }
                 }
 
+                guardMissBehavior == GuardMissBehavior.PRUNE -> EvalOutcome.Pruned
                 guardMissBehavior == GuardMissBehavior.BAN -> EvalOutcome.Banned
                 else -> EvalOutcome.Skipped(missValue)
             }

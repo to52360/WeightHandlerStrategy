@@ -10,8 +10,8 @@ package lin.bean
  * 边界约定"光环加分只走 AuraBoost，评估树不写光环条件"，防双通道重复打分。
  *
  * @param conditionId       触发条件树 id（如"莱妮莎在场"）。惯例只用全局源
- *                          （war_view / me_combo_cards / hand_cards），命中与否与具体卡无关，
- *                          pipelineCache 整局兜底。
+ *                          （war_view / me_combo_cards / hand_cards），命中与否与具体卡无关；
+ *                          运行时编译强制 crossCard=true，同一决策 pass 内多卡共享分段缓存（Q-002 方向 c）。
  * @param targetConditionId 受益卡过滤条件树 id（可引 evaluating_card，per-card 判定"这张卡是受益者吗"）。
  * @param score             命中加分。
  */

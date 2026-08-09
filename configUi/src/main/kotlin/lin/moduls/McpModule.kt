@@ -22,7 +22,8 @@ val mcpModule = module {
             get(),
             get(),
             get<CardGroupService>(),
-            get()
+            get(),
+            get<ConditionTreeConfigService>()
         )
     }
     single<lin.ai.config.draft.DraftTreeService> {
@@ -30,7 +31,8 @@ val mcpModule = module {
             get(),
             get(),
             get(),
-            get()
+            get(),
+            get<ConditionTreeConfigService>()
         )
     }
 
@@ -54,7 +56,13 @@ val mcpModule = module {
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
-    single { ConditionTreeToolProvider(get<ConditionTreeConfigService>()) } bind McpToolProvider::class
+    single {
+        ConditionTreeToolProvider(
+            get<ConditionTreeConfigService>(),
+            get<lin.repository.aura_boost.AuraBoostConfigService>(),
+            get<lin.repository.tree_config.EvaluatorLeafConfigRepository>()
+        )
+    } bind McpToolProvider::class
     single {
         AuraBoostToolProvider(
             get<lin.repository.aura_boost.AuraBoostConfigService>(),

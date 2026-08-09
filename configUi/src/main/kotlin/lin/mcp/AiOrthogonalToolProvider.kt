@@ -147,7 +147,7 @@ class AiOrthogonalToolProvider(
                         },
                         "hint" to "下一步：选定数据源后调用 action=TRANSFORMS 并传 sourceId 查询可接转换器。",
                         "orthogonal_leaf_json_templates" to mapOf(
-                            "description" to "调用 put_draft_leaf 填充叶子节点时，ORTHOGONAL_CONDITION 与 ORTHOGONAL_RULE 的正确 Polymorphic JSON 结构模板。guardMissBehavior 取值：SCORE=守卫未命中时给 missValue 兜底分继续评估（默认，missValue=0 即不参与评分）；BAN=守卫未命中即强制禁止该卡打出（整卡不可用，如手牌超上限禁止过牌卡）。",
+                            "description" to "调用 put_draft_leaf 填充叶子节点时，ORTHOGONAL_CONDITION 与 ORTHOGONAL_RULE 的正确 Polymorphic JSON 结构模板。guardMissBehavior 取值：SCORE=守卫未命中时给 missValue 兜底分继续评估（默认，missValue=0 即不参与评分）；PRUNE=守卫未命中即门控短路整棵 AND/OR 子树（典型：AND 内多条件并列门控，任一条件不满足整棵不加分）；BAN=守卫未命中即强制禁止该卡打出（整卡不可用，如手牌超上限禁止过牌卡）。",
                             "ORTHOGONAL_CONDITION" to mapOf(
                                 "leafConfig" to leafTemplate(
                                     OrthogonalConditionLeafConfig(
@@ -172,6 +172,14 @@ class AiOrthogonalToolProvider(
                                     OrthogonalRuleLeafConfig(
                                         nodeId = "r2",
                                         sourceId = "orthogonal_rule",
+                                        guardCondition = ConditionPayload.PipelineRef(
+                                            sourceId = "<DataSourceId>",
+                                            transforms = listOf(TransformCall("<TransformId>")),
+                                            operatorId = "<OperatorId>",
+                                            operatorArgs = mapOf("threshold" to 4),
+                                            crossCard = false,
+                                            refId = "r2_guard"
+                                        ),
                                         scoreEffect = ScoreEffect.SourceScore(
                                             sourceId = "<DataSourceId>",
                                             operatorId = "<OperatorId>",
@@ -180,7 +188,7 @@ class AiOrthogonalToolProvider(
                                             missValue = 0.0
                                         ),
                                         args = emptyMap(),
-                                        guardMissBehavior = GuardMissBehavior.SCORE
+                                        guardMissBehavior = GuardMissBehavior.PRUNE
                                     )
                                 )
                             ),

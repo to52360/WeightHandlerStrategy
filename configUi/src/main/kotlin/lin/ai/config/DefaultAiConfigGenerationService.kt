@@ -1,6 +1,7 @@
 package lin.ai.config
 
 import lin.repository.card_group.CardGroupService
+import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorLeafKind
@@ -20,9 +21,10 @@ class DefaultAiConfigGenerationService(
     private val treeConfigService: TreeConfigService,
     pipelineAssembler: PipelineAssembler,
     private val cardGroupService: CardGroupService,
-    private val purposeTagProvider: PurposeTagProvider = DefaultPurposeTagProvider()
+    private val purposeTagProvider: PurposeTagProvider = DefaultPurposeTagProvider(),
+    conditionTreeService: ConditionTreeConfigService? = null
 ) : AiConfigGenerationService {
-    private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
+    private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler, conditionTreeService)
 
     override fun listCapabilityBackground(managerId: String?): AiCapabilityBackground {
         val all = leafSourceCatalog.loadAll(managerId)

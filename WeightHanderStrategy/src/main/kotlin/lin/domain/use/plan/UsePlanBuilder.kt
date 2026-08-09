@@ -20,7 +20,7 @@ import lin.rule.handler.GuardCompiler
 class UsePlanBuilder(
     private val guardCompiler: GuardCompiler
 ) {
-    /** 条件树编译缓存：按 conditionId 一次编译，整局复用（参数在旁挂表，同一棵树参数固定）。 */
+    /** 条件树编译缓存：按 conditionId 一次编译，应用运行期复用（参数在树内 config_data，D-007 裸编译）。 */
     private val treeLogicCache = mutableMapOf<String, ConditionLogic>()
 
     fun build(cards: List<ComboCard>, ruleEnv: RuleEnv): UsePlan {
@@ -39,10 +39,15 @@ class UsePlanBuilder(
         )
     }
 
-    /** conditionalStage 覆盖：条件命中 → cs.stage；未命中 → cs.elseStage（null 沿用基础推导 UseIntent）。 */
+    /**
+     * conditionalStage 覆盖：条件命中 → cs.stage；未命中 → cs.elseStage（null 沿用基础推导 UseIntent）。
+     * 条件树惯例只用全局源（不引 evaluating_card，dynamic-ordering driver-case 约定），
+     * 编译强制 crossCard=true → 同一决策 pass 内多卡共享分段管道缓存（与 AuraBoost conditionId 对齐）。
+     */
     private fun applyConditionalStage(card: ComboCard, base: UseIntent, ruleEnv: RuleEnv): UseIntent {
         val cs = card.combinedConfig?.conditionalStage ?: return base
-        val logic = treeLogicCache.getOrPut(cs.conditionId) { guardCompiler.compileTree(cs.conditionId) }
+        val logic =
+            treeLogicCache.getOrPut(cs.conditionId) { guardCompiler.compileTree(cs.conditionId, crossCard = true) }
         val matched = logic(RuleContext(card), ruleEnv)
         val stage = if (matched) cs.stage else cs.elseStage
         return if (stage == null) base else base.copy(stage = stage)

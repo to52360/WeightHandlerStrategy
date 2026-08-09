@@ -1,0 +1,599 @@
+============================================================
+ [1/3] Build WeightHandlerStrategy (-P release, shaded koin)
+============================================================
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] Deck-Plugin-Market                                                 [pom]
+[INFO] WeightHandlerStrategy                                              [jar]
+[INFO] 
+[INFO] -----------------< club.xiaojiawei:Deck-Plugin-Market >-----------------
+[INFO] Building Deck-Plugin-Market 1.0.0                                  [1/2]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[WARNING] 6 problems were encountered while building the effective model for org.openjfx:javafx-base:jar:22 during dependency collection step for project (use -X to see details)
+[INFO] 
+[INFO] --- build-helper:3.4.0:add-source (add-generated-sources) @ Deck-Plugin-Market ---
+[INFO] Source directory: G:\liw_work\jiaoBen\Deck-Plugin-Market\target\generated-sources\version added.
+[INFO] 
+[INFO] --- kotlin:2.2.0:kapt (kapt) @ Deck-Plugin-Market ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- kotlin:2.2.0:compile (compile) @ Deck-Plugin-Market ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- compiler:3.12.1:compile (compile) @ Deck-Plugin-Market ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- kotlin:2.2.0:test-compile (test-compile) @ Deck-Plugin-Market ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- compiler:3.12.1:testCompile (testCompile) @ Deck-Plugin-Market ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ Deck-Plugin-Market ---
+[INFO] Installing G:\liw_work\jiaoBen\Deck-Plugin-Market\pom.xml to C:\Users\Administrator.DESKTOP-M655C2L\.m2\repository\club\xiaojiawei\Deck-Plugin-Market\1.0.0\Deck-Plugin-Market-1.0.0.pom
+[INFO] 
+[INFO] ---------------------< lin:WeightHandlerStrategy >----------------------
+[INFO] Building WeightHandlerStrategy 1.0.0                               [2/2]
+[INFO]   from WeightHanderStrategy\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- build-helper:3.4.0:add-source (add-generated-sources) @ WeightHandlerStrategy ---
+[INFO] Source directory: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\target\generated-sources\version added.
+[INFO] 
+[INFO] --- kotlin:2.2.0:kapt (kapt) @ WeightHandlerStrategy ---
+[INFO] Applied plugin: 'kotlinx-serialization'
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::staticFieldBase has been called by org.jetbrains.kotlin.kapt.base.util.ModuleManipulationUtilsKt (file:/C:/Users/Administrator.DESKTOP-M655C2L/.m2/repository/org/jetbrains/kotlin/kotlin-annotation-processing-embeddable/2.2.0/kotlin-annotation-processing-embeddable-2.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class org.jetbrains.kotlin.kapt.base.util.ModuleManipulationUtilsKt
+WARNING: sun.misc.Unsafe::staticFieldBase will be removed in a future release
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\AuraBoostConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\CardCombinedConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\cardExt\base\CardBaseExt.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\cardExt\cardList\CardsExtFun.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\CardType.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\CardWeightInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\ComboCard.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\ComboCardConfigAccess.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\ComboCardExt.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\ComboInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\ConfigSlice.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\CardComboBinding.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\ComboPlanDefinition.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\PurposeTagId.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\PurposeTagIntentRule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\PurposeTagStore.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\UseConstraint.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\UseIntent.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\bean\usePlan\UseStage.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\BaseConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\cardConfig\CardConfigBind.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\CardConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\ConfigDispatcher.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\ConfigStore.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\EngineConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\find\BindingGroupFinder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\find\CardBindingFinder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\find\CardFindFun.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\find\def\BindInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\find\def\WeightInfoFinder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\find\PurposeTagFinder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\handler\ConfigHandler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\config\useDemo\WarriorBindInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\di\ConfigModule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\di\DataModule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\di\DomainModule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\di\InfraModule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\di\ModulesLoad.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\di\RuleModule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\combo\ChangeComboParse.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\combo\ComboParse.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\combo\ComboParseImpl.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\ComboDomain.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\ComboExecution.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\context\ComboDefValue.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\MatchActivity.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\MatchState.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\MyWarManage.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\PipelineCache.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\result\ChangeCardSelector.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\result\ChangeWeightResult.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\result\FindBestCombination.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\result\WeightResult.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\strategy\FindComboStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\DiscoverSync.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\order\UseOrderPlanner.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\ComboAssembler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\ComboUseConstraintBuilder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\UseIntentAssembler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\UseIntentDeriver.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\UsePlan.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\UsePlanBuilder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\plan\UsePlanOrderer.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\UseActionRegistry.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\UseContext.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\UseDomain.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\UseFunction.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\use\UseStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\war\SimpleCleanWar.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\domain\WeightHandlerDomain.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\lifecycle\LifecycleRegister.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\lifecycle\LifecycleRegisterImpl.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\lifecycle\RoundLifecycle.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\lifecycle\StatusReset.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\build\RuleBean.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\build\RuleBuildBizExtensions.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\build\RuleBuildContext.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\build\RuleBuildContextExtensions.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\build\RuleBuilder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\build\RuleBuilderExtensions.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\ConditionBuilder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\ConditionCompiler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\ConditionDemo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\ConditionNode.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\ConditionRegistry.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\ConditionTreeConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\condition\PipelineAssembler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\context\RuleContext.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\context\RuleEnv.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\context\WarViewExt.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\context\WarViewFactory.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\handler\AuraBoostEvaluator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\handler\CardAction.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\handler\EvalOutcome.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\handler\EvaluatorLeafCompiler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\handler\RuleResult.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\handler\RuleTreeBinding.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\DataSource.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\DefaultComponentsProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\DefaultDataSources.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\DefaultOperators.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\DefaultTransforms.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\Operator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\OrthogonalCategories.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\PipelineExecution.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\Transform.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\orthogonal\TransformCall.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\parse\DynamicFieldDef.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\parse\FieldParser.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\parse\RuleAnnotations.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\parse\RuleArgsParser.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\parse\RuleTraits.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\parse\SpecValidator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\registry\RuleRegistry.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\RuleInfoRegister.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\score\DefaultScoreOperators.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\score\ScoreEffect.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\score\ScoreOperator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\score\ScoreOperatorRegistry.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\BindingGroupId.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\CardBindingId.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\CardGroupBehaviorExtensions.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\CardGroupBinding.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\EvaluatorLeafConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\EvaluatorLeafMeta.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\EvaluatorNode.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\EvaluatorTreeBinding.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\EvaluatorTreeConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\EvaluatorTreeInstance.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\LogicNode.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\tree\PurposeTagBindingId.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\rule\useDemo\DemoRule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\script\WeightConditionEngine.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\cardInfoProvide\CardWeightInfoProvide.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\cardInfoProvide\COINProvide.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\cardInfoProvide\DefCardWeightInfoProvide.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\findCombo\AbsFindStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\findCombo\ForgeFindStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\findCombo\SkillFindStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\module\ModulesInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\parse\LieRenParse.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\parse\ParseCardRule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\parse\ParseCardWeightInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\parse\ParseCombo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\provider\BindingProviders.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\provider\ConfigProviders.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\provider\PipelineProviders.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\provider\RuleProviders.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\provider\StartupTask.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\provider\UiProviders.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\afterRule\HaloRule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\ConditionType.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\def\AbsDefCondition.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\DepBindInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\DepWeightInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\ChangeCardStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\combo\ChangeCardByAdv.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\HandArea.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\HandLeaveCostByGroupId.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\HandNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\race\HandAreaRace.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\hand\race\HandAreaRaceByAbleUse.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\buff\OnWarNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\buff\OnWarRaceNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\buff\PointWarCard.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\OnWarByGroupId.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\OnWarInterface.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\CleanWar.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\ReleaseWar.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\RivalHasNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\RivalNun.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\softClean\ExcessDamageFactorByNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\softClean\IsAdvByMeAtc.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\softClean\SoftCleanByResource.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\onWar\rival\utils\DamageCache.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\status\ExcessDamageByNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\status\HeroHasArmor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\status\LessCostFactorByNum.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\abs\AbsWeightCondition.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\base\NumUtil.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\PredicateGroupIds.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\PredicateListByRace.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\ProcessWeightInfoByRaceUtils.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\TypeDefine.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\war\CalExcessDamage.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\war\CleanWarUtils.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\utils\war\WarStatus.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\WeightCondition.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\serviceLoader\weightRule\WeightRule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\temp\VMThreadCode.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\database\dao\CardInfoDao.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\database\SqliteJdbcProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\RunCatchingUtil.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\serviceLoader\JarClassLoader.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\serviceLoader\ServiceLoaderUtils.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\CardConfigBindingTask.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\CardPurposeBehaviorStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\ComboStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\ConfigBindingStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\GroupBehaviorStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\GroupIndexStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\PurposeStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\utils\startup\WeightInfoStep.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\warExt\action\WarActionExt.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\warExt\my\attack\AttackWarInfoExt.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\warExt\my\base\MyWarInfoExt.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\warExt\my\twoLambda\TwoLambda.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\warExt\option\WarInfoByOption.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\warExt\rival\WarInfoByRival.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\bean\ConditionGroup.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\ConditionWeightHandler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\config\ComboInfoDao.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\config\GroupStrategyDao.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\config\WeightConditionDao.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\context\ConditionException.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\condition\CustomizeConditionConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\GeneralMinionWeightHandler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\HandlerDefine.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\warHandler\ToDieHandler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\weightHandler\WeaponWeightHandler.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\WeightHandlerPlugin.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\main\kotlin\lin\WeightHandlerStrategy.kt
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ WeightHandlerStrategy ---
+[INFO] Copying 13 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- kotlin:2.2.0:compile (compile) @ WeightHandlerStrategy ---
+[INFO] Applied plugin: 'kotlinx-serialization'
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/bean/CardWeightInfo.kt:104:38 'class Combo : Any' is deprecated. combo���ع�����׼��ɾ��,Ǩ�Ƶ�ComboEntries.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/bean/CardWeightInfo.kt:106:22 'class Combo : Any' is deprecated. combo���ع�����׼��ɾ��,Ǩ�Ƶ�ComboEntries.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/bean/CardWeightInfo.kt:109:25 'class Combo : Any' is deprecated. combo���ع�����׼��ɾ��,Ǩ�Ƶ�ComboEntries.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/bean/ComboCardConfigAccess.kt:11:15 This extension is shadowed by a member: 'fun groupId(): Double?' defined in 'lin/bean/ComboCard'.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/bean/ComboCardConfigAccess.kt:17:15 This extension is shadowed by a member: 'fun toDie(): Boolean' defined in 'lin/bean/ComboCard'.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/config/cardConfig/CardConfigBind.kt:4:8 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/config/cardConfig/CardConfigBind.kt:14:52 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/di/DataModule.kt:4:8 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/di/DataModule.kt:25:33 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/di/DataModule.kt:27:34 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/domain/combo/ComboParseImpl.kt:41:21 'constructor(comboId: Int, comboRule: (ComboCard) -> Double, comboType: String): Combo' is deprecated. combo���ع�����׼��ɾ��,Ǩ�Ƶ�ComboEntries.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/domain/use/order/UseOrderPlanner.kt:3:8 'class Combo : Any' is deprecated. combo���ع�����׼��ɾ��,Ǩ�Ƶ�ComboEntries.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/domain/use/order/UseOrderPlanner.kt:45:17 'class Combo : Any' is deprecated. combo���ع�����׼��ɾ��,Ǩ�Ƶ�ComboEntries.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/serviceLoader/parse/LieRenParse.kt:6:21 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/main/kotlin/lin/serviceLoader/parse/ParseCombo.kt:15:20 'interface ParseCardWeightInfo : Any' is deprecated. �ӿڼ�������.
+[INFO] 
+[INFO] --- compiler:3.12.1:compile (compile) @ WeightHandlerStrategy ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ WeightHandlerStrategy ---
+[INFO] skip non existing resourceDirectory G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\src\test\resources
+[INFO] 
+[INFO] --- kotlin:2.2.0:test-compile (test-compile) @ WeightHandlerStrategy ---
+[INFO] Applied plugin: 'kotlinx-serialization'
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/WeightHanderStrategy/src/test/kotlin/lin/rule/orthogonal/DefaultOrthogonalComponentsTest.kt:28:43 Check for instance is always 'true'.
+[INFO] 
+[INFO] --- compiler:3.12.1:testCompile (testCompile) @ WeightHandlerStrategy ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ WeightHandlerStrategy ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.3.0:jar (default-jar) @ WeightHandlerStrategy ---
+[INFO] Building jar: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\target\WeightHandlerStrategy.jar
+[INFO] 
+[INFO] --- shade:3.2.4:shade (default) @ WeightHandlerStrategy ---
+[INFO] Including io.insert-koin:koin-core-jvm:jar:4.1.0 in the shaded jar.
+[INFO] Excluding co.touchlab:stately-concurrency-jvm:jar:2.1.0 from the shaded jar.
+[INFO] Excluding co.touchlab:stately-strict-jvm:jar:2.1.0 from the shaded jar.
+[INFO] Excluding co.touchlab:stately-concurrent-collections-jvm:jar:2.1.0 from the shaded jar.
+[INFO] Excluding com.fasterxml.jackson.core:jackson-databind:jar:2.17.2 from the shaded jar.
+[INFO] Excluding com.fasterxml.jackson.core:jackson-annotations:jar:2.17.2 from the shaded jar.
+[INFO] Excluding com.fasterxml.jackson.core:jackson-core:jar:2.17.2 from the shaded jar.
+[INFO] Excluding com.fasterxml.jackson.datatype:jackson-datatype-jsr310:jar:2.17.2 from the shaded jar.
+[INFO] Excluding com.fasterxml.jackson.module:jackson-module-kotlin:jar:2.17.2 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlin:kotlin-reflect:jar:2.2.0 from the shaded jar.
+[INFO] Excluding com.github.xjw580:hs-script-strategy-sdk:jar:1.1.3 from the shaded jar.
+[INFO] Excluding org.openjfx:javafx-base:jar:22 from the shaded jar.
+[INFO] Excluding org.openjfx:javafx-base:jar:win:22 from the shaded jar.
+[INFO] Excluding com.github.xjw580:hs-script-base:jar:1.2.2 from the shaded jar.
+[INFO] Excluding net.java.dev.jna:jna:jar:5.14.0 from the shaded jar.
+[INFO] Excluding net.java.dev.jna:jna-platform:jar:5.14.0 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:jar:1.6.3 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlin:kotlin-stdlib-common:jar:1.9.22 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:jar:1.6.3 from the shaded jar.
+[INFO] Excluding com.github.xjw580:hs-script-card-sdk:jar:1.2.4 from the shaded jar.
+[INFO] Excluding net.bytebuddy:byte-buddy:jar:1.14.12 from the shaded jar.
+[INFO] Excluding org.springframework:spring-jdbc:jar:6.1.14 from the shaded jar.
+[INFO] Excluding org.springframework:spring-beans:jar:6.1.14 from the shaded jar.
+[INFO] Excluding org.springframework:spring-core:jar:6.1.14 from the shaded jar.
+[INFO] Excluding org.springframework:spring-jcl:jar:6.1.14 from the shaded jar.
+[INFO] Excluding org.springframework:spring-tx:jar:6.1.14 from the shaded jar.
+[INFO] Excluding org.xerial:sqlite-jdbc:jar:3.46.1.3 from the shaded jar.
+[INFO] Excluding com.github.xjw580:hs-script-plugin-sdk:jar:1.1.3 from the shaded jar.
+[INFO] Excluding org.openjfx:javafx-controls:jar:22 from the shaded jar.
+[INFO] Excluding org.openjfx:javafx-graphics:jar:22 from the shaded jar.
+[INFO] Excluding org.openjfx:javafx-graphics:jar:win:22 from the shaded jar.
+[INFO] Excluding org.openjfx:javafx-controls:jar:win:22 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlin:kotlin-stdlib:jar:2.2.0 from the shaded jar.
+[INFO] Excluding org.jetbrains:annotations:jar:13.0 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlin:kotlin-stdlib-jdk8:jar:2.2.0 from the shaded jar.
+[INFO] Excluding org.jetbrains.kotlin:kotlin-stdlib-jdk7:jar:2.2.0 from the shaded jar.
+[INFO] Excluding org.mapstruct:mapstruct:jar:1.6.0.Beta1 from the shaded jar.
+[INFO] Excluding org.slf4j:slf4j-api:jar:2.0.9 from the shaded jar.
+[INFO] Excluding ch.qos.logback:logback-classic:jar:1.5.13 from the shaded jar.
+[INFO] Excluding ch.qos.logback:logback-core:jar:1.5.13 from the shaded jar.
+[INFO] Excluding io.github.oshai:kotlin-logging-jvm:jar:7.0.7 from the shaded jar.
+[WARNING] WeightHandlerStrategy.jar, koin-core-jvm-4.1.0.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/MANIFEST.MF
+[WARNING] maven-shade-plugin has detected that some class files are
+[WARNING] present in two or more JARs. When this happens, only one
+[WARNING] single version of the class is copied to the uber jar.
+[WARNING] Usually this is not harmful and you can skip these warnings,
+[WARNING] otherwise try to manually exclude artifacts based on
+[WARNING] mvn dependency:tree -Ddetail=true and the above output.
+[WARNING] See http://maven.apache.org/plugins/maven-shade-plugin/
+[INFO] Replacing original artifact with shaded artifact.
+[INFO] Replacing G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\target\WeightHandlerStrategy.jar with G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\target\WeightHandlerStrategy-1.0.0-shaded.jar
+[INFO] Dependency-reduced POM written at: G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\dependency-reduced-pom.xml
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ WeightHandlerStrategy ---
+[INFO] Installing G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\dependency-reduced-pom.xml to C:\Users\Administrator.DESKTOP-M655C2L\.m2\repository\lin\WeightHandlerStrategy\1.0.0\WeightHandlerStrategy-1.0.0.pom
+[INFO] Installing G:\liw_work\jiaoBen\Deck-Plugin-Market\WeightHanderStrategy\target\WeightHandlerStrategy.jar to C:\Users\Administrator.DESKTOP-M655C2L\.m2\repository\lin\WeightHandlerStrategy\1.0.0\WeightHandlerStrategy-1.0.0.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Deck-Plugin-Market 1.0.0:
+[INFO] 
+[INFO] Deck-Plugin-Market ................................. SUCCESS [  1.002 s]
+[INFO] WeightHandlerStrategy .............................. SUCCESS [ 36.334 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  37.510 s
+[INFO] Finished at: 2026-08-09T17:37:32+08:00
+[INFO] ------------------------------------------------------------------------
+
+============================================================
+ [2/3] Build configUi (no -P release)
+============================================================
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ----------------------------< lin:configUi >----------------------------
+[INFO] Building configUi 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] 6 problems were encountered while building the effective model for org.openjfx:javafx-base:jar:22 during dependency collection step for project (use -X to see details)
+[INFO] 
+[INFO] --- build-helper:3.4.0:add-source (add-generated-sources) @ configUi ---
+[INFO] Source directory: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\target\generated-sources\version added.
+[INFO] 
+[INFO] --- kotlin:2.2.0:kapt (kapt) @ configUi ---
+[INFO] Applied plugin: 'kotlinx-serialization'
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::staticFieldBase has been called by org.jetbrains.kotlin.kapt.base.util.ModuleManipulationUtilsKt (file:/C:/Users/Administrator.DESKTOP-M655C2L/.m2/repository/org/jetbrains/kotlin/kotlin-annotation-processing-embeddable/2.2.0/kotlin-annotation-processing-embeddable-2.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class org.jetbrains.kotlin.kapt.base.util.ModuleManipulationUtilsKt
+WARNING: sun.misc.Unsafe::staticFieldBase will be removed in a future release
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\AiConfigGenerationModels.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\CardGroupQueryService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\DefaultAiConfigGenerationService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\DefaultCardGroupQueryService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\draft\DefaultDraftTreeService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\draft\DraftModels.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ai\config\draft\DraftTreeService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\config\PathConfig.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\dao\CardGroupJsonParser.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\Main.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\AiDraftTreeToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\AiOrthogonalToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\AiTreeConfigToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\AiTreeTemplateToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\AuraBoostToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\CardGroupToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\ComboPlanManagementToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\ComboPlanToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\ConditionTreeToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\McpModels.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\McpServerMain.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\PurposeTagToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\mcp\TemplateToolProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\moduls\ConfigUiStrategyProvidersInfo.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\moduls\McpModule.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\moduls\ModelsDefine.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\provider\SqliteAuraBoostConfigProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\provider\SqliteCardPurposeProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\provider\SqliteComboPlanDefinitionProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\provider\SqliteConditionTreeArgsProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\provider\SqliteConditionTreeConfigProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\provider\SqliteTreeConfigProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\aura_boost\AuraBoostConfigService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\aura_boost\AuraBoostRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\card_group\CardGroupBehaviorRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\card_group\CardGroupEntities.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\card_group\CardGroupRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\card_group\CardGroupService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\card_purpose\CardPurposeEntities.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\card_purpose\CardPurposeRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\combo_plan\ComboPlanDefinitionEntities.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\combo_plan\ComboPlanDefinitionRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\condition_tree\ConditionTreeArgsRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\condition_tree\ConditionTreeConfigEntity.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\condition_tree\ConditionTreeConfigRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\condition_tree\ConditionTreeConfigService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\HsCardRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\OrthogonalTemplateRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\TemplateGroupRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\tree_config\EvaluatorLeafConfigRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\tree_config\EvaluatorLeafSourceCatalog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\tree_config\EvaluatorTreeTemplateEntity.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\tree_config\EvaluatorTreeTemplateRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\tree_config\TreeConfigEntity.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\repository\tree_config\TreeConfigRepository.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\tree_config\bridge\NodeNameUtils.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\ActiveAware.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\AuraBoostEditorPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\AuraBoostExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\AuraBoostListPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\AuraBoostState.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\AuraBoostStore.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\AuraBoostWorkbench.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\aura_boost\ManagerFilterItem.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\ActiveManagerHolder.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\behavior\BehaviorDisplayMappers.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\behavior\BehaviorEditorPane.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\behavior\GroupBehaviorDialog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\behavior\OverridePane.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\behavior\StatDimensionsPane.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\behavior\UseActionPane.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\BindingEditorPane.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\CardGroupExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\CardGroupWorkbench.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\ManagerListPane.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\WorkbenchState.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_group\WorkbenchStore.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\CardPurposeExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\CardPurposeState.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\CardPurposeStore.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\CardPurposeWorkbench.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\PurposeTagDef.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\PurposeTagProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\PurposeTagRecognizer.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\card_purpose\PurposeTagTreeBindingPolicy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\combo_plan\BindingUiRow.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\combo_plan\ComboPlanEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\combo_plan\ComboPlanExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\combo_plan\ComboPlanState.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\combo_plan\ComboPlanStore.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\combo_plan\ComboPlanWorkbench.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\components\LogicTreeEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\components\PaginationBar.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\components\PayloadFactory.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\components\PropertyEditorStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\components\TemplateNameDialog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\components\TreeConfigStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\action\ConditionTreeActions.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\action\ConditionTreeWorkbenchAction.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\components\OrthogonalConditionDialog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\ConditionTreeConfigListPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\ConditionTreeDialog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\ConditionTreeExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\ConditionTreeListItem.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\ConditionTreeWorkbench.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\strategy\ConditionPayloadFactory.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\strategy\ConditionPropertyEditorStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\strategy\ConditionTreeConfigStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\condition_tree\validation\ConditionTreeValidator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\MainShellView.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\SelectOptionRegistry.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\service\EvaluatorTreeResolver.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\service\EvaluatorTreeTemplateService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\service\TreeConfigService.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\action\DefaultTreeActions.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\action\TreeWorkbenchAction.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\bridge\EvaluatorLeafConfigBridge.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\ConditionConfigPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\ConfigListPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\GuardPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\OrthogonalPipelineEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\OrthogonalRuleDialog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\ScorePanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\components\TreePropertiesDialog.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\DynamicFieldForm.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\EvaluatorTreeExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\EvaluatorTreeModels.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\EvaluatorTreeWorkbench.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\menu\TreeContextMenuFactory.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\PropertyPanel.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\CardRaceOptionProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\editors\DynamicFormLeafEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\editors\OrthogonalConditionLeafEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\editors\OrthogonalRuleLeafEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\EvaluatorLeafFormHelper.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\EvaluatorPayloadFactory.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\EvaluatorPropertyEditorStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\EvaluatorTreeConfigStrategy.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\LeafEditor.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\ScoreOperatorOptionProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\strategy\SideOptionProvider.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\tree_config\validation\EvaluatorTreeValidator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\ui\UiExtension.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\utils\HearthstoneDeckCodeParser.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\utils\IdGenerator.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\utils\JavaFxUtils.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\utils\JdbcProviderResolver.kt
+[WARNING] Duplicate source root: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\src\main\kotlin\lin\utils\json\LogicNodeJson.kt
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ configUi ---
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- kotlin:2.2.0:compile (compile) @ configUi ---
+[INFO] Applied plugin: 'kotlinx-serialization'
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/configUi/src/main/kotlin/lin/ui/tree_config/strategy/EvaluatorTreeConfigStrategy.kt:19:47 Unchecked cast of 'Any?' to 'List<String>'.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/configUi/src/main/kotlin/lin/ui/tree_config/strategy/EvaluatorTreeConfigStrategy.kt:20:49 Unchecked cast of 'Any?' to 'Map<String, EvaluatorLeafConfig>'.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/configUi/src/main/kotlin/lin/ui/tree_config/strategy/editors/OrthogonalConditionLeafEditor.kt:68:25 Check for instance is always 'true'.
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/configUi/src/main/kotlin/lin/ui/tree_config/strategy/editors/OrthogonalConditionLeafEditor.kt:69:25 Check for instance is always 'false'.
+[INFO] 
+[INFO] --- compiler:3.12.1:compile (compile) @ configUi ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ configUi ---
+[INFO] Copying 0 resource from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- kotlin:2.2.0:test-compile (test-compile) @ configUi ---
+[INFO] Applied plugin: 'kotlinx-serialization'
+[WARNING] file:///G:/liw_work/jiaoBen/Deck-Plugin-Market/configUi/src/test/kotlin/lin/mcp/McpTestEnv.kt:180:60 Unchecked cast of 'Map<*, *>!' to 'Map<String, Any?>'.
+[INFO] 
+[INFO] --- compiler:3.12.1:testCompile (testCompile) @ configUi ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ configUi ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.3.0:jar (default-jar) @ configUi ---
+[INFO] Building jar: G:\liw_work\jiaoBen\Deck-Plugin-Market\configUi\target\configUi.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  45.440 s
+[INFO] Finished at: 2026-08-09T17:38:19+08:00
+[INFO] ------------------------------------------------------------------------
+
+============================================================
+ [3/3] Copy jars to: F:\myApp\HBuddy_2\plugin
+============================================================
+
+[OK] Deployed:
+  F:\myApp\HBuddy_2\plugin\WeightHandlerStrategy.jar
+  F:\myApp\HBuddy_2\plugin\configUi.jar
+
+Restart / reconnect MCP server, then delete_condition_tree etc.
+will be available.
+

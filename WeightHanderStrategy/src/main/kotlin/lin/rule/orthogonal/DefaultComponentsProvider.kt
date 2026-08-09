@@ -47,6 +47,7 @@ class DefaultTransformProvider : TransformProvider {
         SumHealthTransform,
         EvaluatingCardCostTransform,
         ToCardsTransform,
+        ToCardTransform,
         PickGroupCountTransform,
         WeightedActivitySumTransform,
         ComboCardCostFilterTransform

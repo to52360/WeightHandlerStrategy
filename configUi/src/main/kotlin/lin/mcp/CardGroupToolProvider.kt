@@ -104,7 +104,7 @@ bindings 可选条件化阶段（dynamic-ordering）：
 - conditionalStageConditionId + conditionalStageStage（+ 可选 conditionalStageElseStage）：条件树命中→该阶段，未命中→elseStage（缺省沿用默认推导）
 - 条件树两种提供方式（二选一，互斥）：复用已有树传 conditionalStageConditionId；一次性内联传 conditionalStageConditionTreeJson（完整条件树 JSON {id,name,root}），无需先建模板，本工具自动建树
 - 典型场景：过牌与增幅牌的顺序随手牌/场面动态反转（如手牌少且场面好时增幅牌提前 SETUP，压力大且无解牌时过牌提前 RESOURCE）
-- 条件树参数：正交管道(PipelineRef)阈值写在树内 operatorArgs；编码条件(ConditionRef)参数写在内联树 JSON 的叶子 args 中，保存时自动入条件树参数旁挂表（条件树本身保持纯结构）"""
+- 条件树参数：正交管道(PipelineRef)阈值写在树内 operatorArgs；编码条件(ConditionRef)参数写在内联树 JSON 的叶子 args 中，**全部参数直接存条件树内（无旁挂表）**，GET 原样返回"""
         ) { input ->
             // ── clone mode ──
             if (input.cloneFrom != null) {

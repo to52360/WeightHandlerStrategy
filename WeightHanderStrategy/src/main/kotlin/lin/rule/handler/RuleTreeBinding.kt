@@ -68,7 +68,8 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
  * 需要在 [RuleEnv] 作用域内调用（例如 `with(WarInfoEnv(warManage))`）。
  *
  * 返回值是纯值聚合（[RuleResult.Accumulate]），不携带控制语义：
- * - "不参与评分"由守卫未命中 + missValue=0 表达，无独立剪枝信号。
+ * - "不参与评分"由守卫未命中 + missValue=0 表达（SCORE）。
+ * - 门控短路（[EvalOutcome.Pruned]）在根节点层面视为该根树不贡献分，继续下一棵根树。
  * - 全局禁止（Banned）通过 [EvalSignal.Banned] 异常穿透到编排层，
  *   副作用（card.unUse()）统一由 weightEvaluator 处理。
  */
@@ -89,6 +90,8 @@ fun evaluateCardRoots(
             when (val res = evaluateConditionTree(root, context, ruleEnv, collectedActions)) {
                 is EvalOutcome.Matched -> totalScore += res.score
                 is EvalOutcome.Skipped -> totalScore += res.score
+                // 门控短路：该根树不贡献分（等价于整树 0 分），继续下一棵根树
+                EvalOutcome.Pruned -> {}
                 EvalOutcome.Banned -> throw EvalSignal.Banned // 全局禁止，穿透到编排层
             }
         }
@@ -126,6 +129,8 @@ fun evaluateConditionTree(
                     }
 
                     is EvalOutcome.Skipped -> totalScore += res.score
+                    // 门控短路：任一子节点 Pruned → 整棵 AND 子树终止（后续子节点不评估）
+                    EvalOutcome.Pruned -> return EvalOutcome.Pruned
                     // 全局禁止：向上穿透
                     EvalOutcome.Banned -> return EvalOutcome.Banned
                 }
@@ -143,6 +148,8 @@ fun evaluateConditionTree(
                     }
                     // 未命中：该分支放弃，尝试下一个子节点
                     is EvalOutcome.Skipped -> {}
+                    // 门控短路：任一子节点 Pruned → 整棵 OR 子树终止
+                    EvalOutcome.Pruned -> return EvalOutcome.Pruned
                     // 全局禁止：向上穿透
                     EvalOutcome.Banned -> return EvalOutcome.Banned
                 }

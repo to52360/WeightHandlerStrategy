@@ -2,8 +2,10 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.ObjectMapper
+import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
+import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.rule.condition.ConditionTreeConfig
 
 /**
@@ -53,10 +55,40 @@ fun resolveConditionTreeReference(
  * 按 D-003 条件树为全局资源：LIST 全量返回，不按卡组过滤。
  */
 class ConditionTreeToolProvider(
-    private val service: ConditionTreeConfigService
+    private val service: ConditionTreeConfigService,
+    private val auraBoostConfigService: AuraBoostConfigService,
+    private val leafConfigRepository: EvaluatorLeafConfigRepository
 ) : McpToolProvider {
 
     private val mapper = createConditionTreeConfigMapper()
+
+    /**
+     * 扫描条件树的引用方（删除前安全检查）。
+     * @return 引用方描述列表（空 = 无引用，可安全删除）
+     */
+    private fun findReferencers(conditionTreeId: String): List<String> {
+        val refs = mutableListOf<String>()
+
+        // 1. AuraBoost 引用（condition_id / target_condition_id）
+        auraBoostConfigService.loadAll().forEach { ab ->
+            if (ab.conditionId == conditionTreeId) {
+                refs += "aura_boost ${ab.id}（conditionId，name=${ab.name ?: "?"}）"
+            }
+            if (ab.targetConditionId == conditionTreeId) {
+                refs += "aura_boost ${ab.id}（targetConditionId，name=${ab.name ?: "?"}）"
+            }
+        }
+
+        // 2. 评估树叶子引用（CONDITION_TREE 叶子 sourceId）
+        leafConfigRepository.findAllRaw().forEach { (configId, leafJson) ->
+            // leaf_config 序列化为 {"CONDITION_TREE":{"nodeId":"...","sourceId":"<id>",...}} 形式
+            if (leafJson.contains("\"CONDITION_TREE\"") && leafJson.contains("\"sourceId\":\"$conditionTreeId\"")) {
+                refs += "评估树叶子（config_id=$configId）"
+            }
+        }
+
+        return refs.distinct()
+    }
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<ConditionTreeQueryInput>(
@@ -124,9 +156,53 @@ class ConditionTreeToolProvider(
             }
             val id = service.saveConfig(input.name, config, input.existingId, managerId = input.managerId)
             mcpSuccess(mapOf("id" to id, "name" to input.name, "managerId" to input.managerId))
+        },
+
+        typedTool<DeleteConditionTreeInput>(
+            name = "delete_condition_tree",
+            description = """
+                删除一棵条件树。删除前会检查引用方：如果存在任何 AuraBoost（aura_boost 的 conditionId/targetConditionId）
+                或评估树叶子（CONDITION_TREE 叶子的 sourceId）引用此树，则拒绝删除并列出所有引用方，
+                避免产生悬空引用。conditionTreeId 由 condition_tree(action=LIST) 获取。
+                删除成功后返回该树的完整原始 configData（JSON）——如需恢复误删，可将返回的 configData 原样传给
+                save_condition_tree 的 treeJson（并保留 name/managerId/inlineCreated）重建。
+                注意：消费方内联自动创建的一次性树（inlineCreated=true，来自 save_aura_boost/save_card_group 的 treeJson）
+                随消费方整体管理，一般无需单独删除。
+            """.trimIndent()
+        ) { input ->
+            val meta = service.loadAllMeta().firstOrNull { it.id == input.conditionTreeId }
+                ?: return@typedTool mcpError("条件树不存在: ${input.conditionTreeId}")
+
+            val referencers = findReferencers(input.conditionTreeId)
+            if (referencers.isNotEmpty()) {
+                val depInfo = referencers.joinToString("\n") { "  - $it" }
+                return@typedTool mcpError(
+                    "无法删除条件树 [${meta.name}] (id=${input.conditionTreeId})，以下引用方依赖此树:\n$depInfo\n" +
+                            "请先解除这些引用（修改 AuraBoost / 评估树叶子）后重试。"
+                )
+            }
+
+            // 删除前捕获完整原始数据（configData 可直接用于恢复重建）
+            val entity = service.loadAll().firstOrNull { it.first.id == input.conditionTreeId }?.first
+            service.delete(input.conditionTreeId)
+            mcpSuccess(
+                mapOf(
+                    "deleted" to meta.id,
+                    "name" to meta.name,
+                    "managerId" to (meta.managerId ?: ""),
+                    "inlineCreated" to meta.inlineCreated,
+                    "restoreConfigData" to (entity?.configData ?: ""),
+                    "restoreHint" to "误删恢复：将 restoreConfigData 原样作为 save_condition_tree 的 treeJson 参数（name=原name，managerId=原managerId）即可重建"
+                )
+            )
         }
     )
 }
+
+private data class DeleteConditionTreeInput(
+    @field:JsonPropertyDescription("要删除的条件树 id（8 位短 id，由 condition_tree(action=LIST) 获取）。")
+    val conditionTreeId: String
+)
 
 private sealed interface ConditionTreeQuery {
     data class List(val managerId: String?) : ConditionTreeQuery

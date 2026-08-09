@@ -67,7 +67,8 @@ val strategyProviderModule = module {
 
     single<AuraBoostConfigProvider> {
         SqliteAuraBoostConfigProvider(
-            service = AuraBoostConfigService(AuraBoostRepository(get()))
+            service = AuraBoostConfigService(AuraBoostRepository(get())),
+            cardGroupService = get()
         )
     }
 

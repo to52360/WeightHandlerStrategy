@@ -40,6 +40,14 @@ class EvaluatorLeafConfigRepository(
         }
     }
 
+    /** 全量返回 (config_id, leaf_config 原文)，供引用检查扫描（不反序列化，避免多态解析开销） */
+    fun findAllRaw(): List<Pair<String, String>> {
+        val sql = "SELECT config_id, leaf_config FROM evaluator_leaf_config"
+        return jdbcTemplate.query(sql) { rs, _ ->
+            rs.getString("config_id") to rs.getString("leaf_config")
+        }
+    }
+
     /** 删除该 config 下的所有叶子配置 */
     fun deleteByConfigId(configId: String) {
         val sql = "DELETE FROM evaluator_leaf_config WHERE config_id = ?"

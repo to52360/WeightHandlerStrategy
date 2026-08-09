@@ -14,8 +14,12 @@ import lin.serviceLoader.provider.AuraBoostConfigProvider
  * - [AuraBoostConfig.conditionId]（触发条件树）未命中 → 短路；
  * - [AuraBoostConfig.targetConditionId]（受益卡过滤）命中 → 加分。
  *
- * 条件树编译缓存与 dynamic-ordering `UsePlanBuilder.treeLogicCache` 同款；
- * conditionId 条件树惯例只用全局源，命中结果靠 pipelineCache 整局兜底。
+ * 条件树编译缓存与 dynamic-ordering `UsePlanBuilder.treeLogicCache` 同款。
+ * 性能（Q-002 方向 c，2026-08-08）：conditionId 树惯例只用全局源（结果与具体卡无关），
+ * 编译时强制 crossCard=true → 同一决策 pass 内多卡共享分段管道缓存（RuleEnv.cache）；
+ * targetConditionId 可引 evaluating_card（per-card 结果），保持树内 crossCard 配置不覆盖。
+ * 注意：conditionId 树若违反"只用全局源"约定引入 evaluating_card，跨卡缓存结果会错误——
+ * 建树约定（skill 文档）必须保证 conditionId 树只用全局源。
  */
 class AuraBoostEvaluator(
     private val guardCompiler: GuardCompiler,
@@ -36,10 +40,14 @@ class AuraBoostEvaluator(
     }
 
     private fun match(context: RuleContext, boost: AuraBoostConfig, ruleEnv: RuleEnv): Boolean {
-        val trigger = treeLogicCache.getOrPut(boost.conditionId) { guardCompiler.compileTree(boost.conditionId) }
+        // 后缀区分编译版本：conditionId 强制 crossCard=true，targetConditionId 保留树内配置
+        val trigger = treeLogicCache.getOrPut("${boost.conditionId}#cc") {
+            guardCompiler.compileTree(boost.conditionId, crossCard = true)
+        }
         if (!trigger(context, ruleEnv)) return false
-        val target =
-            treeLogicCache.getOrPut(boost.targetConditionId) { guardCompiler.compileTree(boost.targetConditionId) }
+        val target = treeLogicCache.getOrPut("${boost.targetConditionId}#tree") {
+            guardCompiler.compileTree(boost.targetConditionId)
+        }
         return target(context, ruleEnv)
     }
 }

@@ -62,6 +62,14 @@ class DefaultOrthogonalComponentsTest {
     }
 
     @Test
+    fun testToCardTransform() {
+        val spellComboCard = ComboCard(card = createMockCard(cardId = "TEST_SPELL", cardType = CardTypeEnum.SPELL))
+        val card = ToCardTransform.transform(spellComboCard)
+        assertEquals("TEST_SPELL", card.cardId)
+        assertEquals("单卡桥接应保持 Card 类型属性", CardTypeEnum.SPELL, card.cardType)
+    }
+
+    @Test
     fun testPressureFactorTransform() {
         val mockWarInfo = createMockWarInfo(
             rivalPlayCards = listOf(

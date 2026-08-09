@@ -70,7 +70,7 @@ class AiDraftTreeToolProvider(
         },
         typedTool<GetDraftStatusRequest>(
             name = "get_draft_status",
-            description = "查询某个评估树草稿的当前进度，返回已填节点、未填节点和总数。当对话中断或上下文截断后恢复时，用此工具确认草稿还缺哪些叶子需要继续填写。"
+            description = "查询某个评估树草稿的当前进度，返回已填节点、未填节点和总数。当对话中断或上下文截断后恢复时，用此工具确认草稿还缺哪些叶子需要继续填写。注意：草稿有生命周期，进程重启/长期搁置后会过期（返回不存在），过期草稿无法续填，需重新 create_draft_tree。"
         ) { request ->
             val result = draftTreeService.getDraftStatus(request.draftId)
                 ?: return@typedTool mcpError("草稿不存在或已过期: ${request.draftId}")

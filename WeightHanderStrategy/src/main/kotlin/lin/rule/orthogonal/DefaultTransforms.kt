@@ -236,6 +236,27 @@ val ToCardsTransform = transform<List<ComboCard>, List<Card>>(
     input.map { it.card }
 }
 
+// ARCH-UNSETTLED aura-boost/U-001: 单卡 ComboCard→Card 桥接 transform 与现有组件风格冲突（现有风格=按类型分数据源，如
+// hand_cards 输出 List<Card>、evaluating_card 输出 ComboCard，各数据源自带类型，无"桥接"先例；List 级 to_cards 是例外，
+// 且其动机是批量投影）。本组件因 AuraBoost target 树 per-card 求值（WeightHandlerDomain.kt:109 逐卡调 activeScore）补，
+// 但是否为过度设计（仅此一场景需要单卡类型判定）未收敛：若后续出现更多"evaluating_card 转 Card"诉求，应评估
+// 是否改为单独数据源（如 evaluating_card_card 直出 Card）统一风格。真实边界出现时回本 topic 复核。
+/**
+ * 单卡 ComboCard → Card 桥接转换器：投影当前评估 ComboCard 的底层 Card。
+ *
+ * 补组件动因（aura-boost P-5，2026-08-08）：AuraBoost target 树按 per-card 求值
+ * （evaluating_card 输出 ComboCard），但类型/种族判断算子（is_card_type / is_card_race）
+ * 输入是 Card——缺单卡桥接导致"≤2费法术"受益过滤无法表达类型条件。
+ * 与 List 级 `to_cards` 对称，供 evaluating_card → to_card → is_card_type(SPELL) 链路使用。
+ */
+val ToCardTransform = transform<ComboCard, Card>(
+    id = "to_card",
+    name = "投影为单卡Card",
+    description = "将当前评估的 ComboCard 投影为其底层 Card，桥接单卡级 ComboCard 管道与 Card 级算子"
+) { input, _ ->
+    input.card
+}
+
 data class PickGroupCountParams(
     @lin.rule.parse.RuleField(
         name = "分组ID",

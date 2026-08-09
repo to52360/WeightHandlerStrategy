@@ -1,5 +1,6 @@
 package lin.ui.tree_config.validation
 
+import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.PipelineAssembler
@@ -20,7 +21,8 @@ import lin.ui.tree_config.bridge.leafKind
  */
 class EvaluatorTreeValidator(
     private val leafSourceCatalog: EvaluatorLeafSourceCatalog,
-    private val pipelineAssembler: PipelineAssembler
+    private val pipelineAssembler: PipelineAssembler,
+    private val conditionTreeService: ConditionTreeConfigService? = null
 ) {
     data class ValidationDiagnostic(
         val code: String,
@@ -118,6 +120,22 @@ class EvaluatorTreeValidator(
             return
         }
 
+        // condition-tree-tooling/Q-001（2026-08-09 定论）：评估树 CONDITION_TREE 叶子
+        // 禁止引用内联创建（inlineCreated=true）的条件树——内联树生命周期绑定消费方
+        // （消费方删除→树悬空），且背景知识隐藏发现性差。评估树只允许引用可复用模板树。
+        if (leafConfig is ConditionTreeLeafConfig && conditionTreeService != null) {
+            val treeMeta = conditionTreeService.loadAllMeta().firstOrNull { it.id == leafConfig.sourceId }
+            if (treeMeta != null && treeMeta.inlineCreated) {
+                diagnostics += ValidationDiagnostic(
+                    code = "condition_tree_inline_reference_forbidden",
+                    message = "评估树不能引用内联创建的条件树 [${treeMeta.name}]（id=${leafConfig.sourceId}）：" +
+                            "内联树生命周期绑定消费方，评估树引用会导致悬空。请改用 save_condition_tree 创建可复用模板树后引用。",
+                    path = "leafConfigs.${leafConfig.nodeId}.sourceId"
+                )
+                return
+            }
+        }
+
         val allFields = meta.builtInFields + meta.fields
         val validationResult = SpecValidator.validate(leafConfig.args, allFields)
         if (!validationResult.isValid) {
@@ -170,13 +188,18 @@ class EvaluatorTreeValidator(
             }
         }
 
-        // BAN 时 missValue 无意义（warn 级，不拦截）
-        if (leafConfig.guardMissBehavior == GuardMissBehavior.BAN
+        // PRUNE/BAN 时 missValue 无意义（warn 级，不拦截）
+        if (leafConfig.guardMissBehavior != GuardMissBehavior.SCORE
             && scoreable.scoreEffect.missValue != 0.0
         ) {
+            val behaviorName = when (leafConfig.guardMissBehavior) {
+                GuardMissBehavior.PRUNE -> "门控短路(PRUNE)"
+                GuardMissBehavior.BAN -> "禁止(BAN)"
+                GuardMissBehavior.SCORE -> "给兜底分(SCORE)"
+            }
             diagnostics += ValidationDiagnostic(
-                code = "ban_miss_value_warn",
-                message = "禁止(BAN)行为下 missValue 不会被使用，当前值 ${scoreable.scoreEffect.missValue} 无意义",
+                code = "non_score_miss_value_warn",
+                message = "$behaviorName 行为下 missValue 不会被使用，当前值 ${scoreable.scoreEffect.missValue} 无意义",
                 path = "$prefix.guardMissBehavior"
             )
         }

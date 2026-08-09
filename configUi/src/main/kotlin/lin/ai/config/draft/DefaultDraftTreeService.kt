@@ -1,6 +1,7 @@
 package lin.ai.config.draft
 
 import lin.ai.config.*
+import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.rule.condition.PipelineAssembler
 import lin.rule.tree.EvaluatorLeafConfig
@@ -15,10 +16,11 @@ class DefaultDraftTreeService(
     leafSourceCatalog: EvaluatorLeafSourceCatalog,
     pipelineAssembler: PipelineAssembler,
     private val aiConfigGenerationService: AiConfigGenerationService,
-    private val treeConfigService: TreeConfigService
+    private val treeConfigService: TreeConfigService,
+    conditionTreeService: ConditionTreeConfigService
 ) : DraftTreeService {
 
-    private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler)
+    private val validator = EvaluatorTreeValidator(leafSourceCatalog, pipelineAssembler, conditionTreeService)
 
 
     private val drafts = ConcurrentHashMap<String, DraftTreeState>()
