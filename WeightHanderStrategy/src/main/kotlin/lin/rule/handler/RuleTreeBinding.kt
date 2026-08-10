@@ -73,7 +73,7 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
  * - 全局禁止（Banned）通过 [EvalSignal.Banned] 异常穿透到编排层，
  *   副作用（card.unUse()）统一由 weightEvaluator 处理。
  */
-// @defect purpose-tag-extension/D-001: roots 顺序累加，跨 bindingType（GROUP/PURPOSE_TAG/CARD）不去重不覆盖——
+// @defect purpose-tag-extension/K-001: roots 顺序累加，跨 bindingType（GROUP/PURPOSE_TAG/CARD）不去重不覆盖——
 // PURPOSE_TAG 树的"全局兜底"实为 additive，与 fallback 语义冲突（双倍计分风险）。BAN(constraint) 例外：
 // EvalOutcome.Banned 一票否决穿透，天然无冲突。加分方向 tag 树案例出现前保持现状。
 fun evaluateCardRoots(

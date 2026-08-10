@@ -19,10 +19,12 @@ class CardGroupRepository(
         jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_manager (
-                id          TEXT    PRIMARY KEY,
-                name        TEXT    NOT NULL,
-                source_file TEXT    NOT NULL,
-                enabled     INTEGER NOT NULL DEFAULT 1
+                id                  TEXT    PRIMARY KEY,
+                name                TEXT    NOT NULL,
+                source_file         TEXT    NOT NULL,
+                enabled             INTEGER NOT NULL DEFAULT 1,
+                manager_description TEXT,
+                manager_status      TEXT
             );
             """.trimIndent()
         )
@@ -48,21 +50,26 @@ class CardGroupRepository(
             id = rs.getString("id"),
             name = rs.getString("name"),
             sourceFile = rs.getString("source_file"),
-            enabled = rs.getInt("enabled") == 1
+            enabled = rs.getInt("enabled") == 1,
+            description = rs.getString("manager_description"),
+            status = rs.getString("manager_status")
         )
     }
 
     fun saveManager(entity: CardManagerEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_manager (id, name, source_file, enabled)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO card_group_manager (id, name, source_file, enabled, manager_description, manager_status)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                name        = excluded.name,
-                source_file = excluded.source_file,
-                enabled     = excluded.enabled
+                name                = excluded.name,
+                source_file         = excluded.source_file,
+                enabled             = excluded.enabled,
+                manager_description = excluded.manager_description,
+                manager_status      = excluded.manager_status
             """.trimIndent(),
-            entity.id, entity.name, entity.sourceFile, if (entity.enabled) 1 else 0
+            entity.id, entity.name, entity.sourceFile, if (entity.enabled) 1 else 0,
+            entity.description, entity.status
         )
     }
 
@@ -75,6 +82,17 @@ class CardGroupRepository(
         } else {
             findAllManagers()
         }
+    }
+
+    fun findManagerById(id: String): CardManagerEntity? =
+        jdbcTemplate.query("SELECT * FROM card_group_manager WHERE id = ?", managerRowMapper, id).firstOrNull()
+
+    /** 仅更新方案级元信息（description/status），不触碰 bindings（细粒度变更专用，避免整体 replaceBindings）。 */
+    fun updateManagerMeta(id: String, description: String?, status: String?) {
+        jdbcTemplate.update(
+            "UPDATE card_group_manager SET manager_description = ?, manager_status = ? WHERE id = ?",
+            description, status, id
+        )
     }
 
     fun deleteManager(id: String) {

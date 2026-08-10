@@ -29,7 +29,7 @@ const val EVALUATOR_LEAF_GUARD_MISS_BEHAVIOR_FIELD = "guardMissBehavior"
  * - [BAN]：强制禁止当前卡牌打出（守卫未命中即命中"禁止条件"，
  *   全局穿透整棵评估树并调用 [lin.bean.ComboCard.unUse]，副作用在编排层处理）
  *
- * @verify prune-semantics/D-001（2026-08-09 修订）：PRUNE 曾于 2026-08-03 并入 SCORE（当时判断
+ * @verify prune-semantics/K-001（2026-08-09 修订）：PRUNE 曾于 2026-08-03 并入 SCORE（当时判断
  *   "单叶子行为等价"），实战（libram_tutors 多条件门控）证明 Branch 无法优雅替代 2+ 条件并列门控，
  *   用户拍板恢复。等价性说明：单叶子层面 PRUNE=SCORE+missValue=0（都是该叶子 0 分），
  *   但 AND 组合层面不等价——PRUNE 短路整棵 AND，SCORE 不短路。

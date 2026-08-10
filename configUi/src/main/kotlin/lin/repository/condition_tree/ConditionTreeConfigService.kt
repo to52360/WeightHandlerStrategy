@@ -26,12 +26,12 @@ fun createConditionTreeConfigMapper(): ObjectMapper {
 abstract class ConditionPayloadMixin
 
 /**
- * 条件树配置服务（语义 B，D-007）。
+ * 条件树配置服务（语义 C，D-007 + 2026-08-09 Q-002 方案 B 演进）。
  *
  * 条件树 config_data 存完整参数（ConditionRef.args + PipelineRef.operatorArgs + transform call.args 全在树内）。
  * - 排序/AuraBoost（GuardCompiler.compileTree）：消费方无参数通道，直接用树内参数裸编译。
- * - 评估树（GuardCompiler.buildConditionTreeLogic）：叶子 args 是唯一参数来源，树内参数仅作表单预填参考
- *   （改树内参数不影响已配置的评估树叶子）。
+ * - 评估树（GuardCompiler.buildConditionTreeLogic）：消费方 args（叶子）优先 + 树内参数兜底，
+ *   最终值 = 消费方覆盖 > 树内默认（Q-002 方案 B；注意改树内参数会静默影响所有未显式覆盖的消费方）。
  */
 class ConditionTreeConfigService(
     private val repository: ConditionTreeConfigRepository,

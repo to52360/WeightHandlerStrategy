@@ -50,7 +50,9 @@ class CardGroupService(private val repository: CardGroupRepository) {
         sourceFile: String,
         enabled: Boolean,
         bindings: List<CardGroupBinding>,
-        existingId: String? = null
+        existingId: String? = null,
+        managerDescription: String? = null,
+        managerStatus: String? = null
     ): String {
         val allManagers = repository.findAllManagers()
         val id = existingId
@@ -61,7 +63,19 @@ class CardGroupService(private val repository: CardGroupRepository) {
         allManagers.filter { (it.name == name || it.sourceFile == sourceFile) && it.id != id }
             .forEach { repository.deleteManager(it.id) }
 
-        repository.saveManager(CardManagerEntity(id = id, name = name, sourceFile = sourceFile, enabled = enabled))
+        // 缺省（null/blank）保持原值不覆盖——修复 2026-08-10 待测发现：
+        // 此前 null 直接写入 upsert 会清空已有 description/status，与工具描述"缺省不覆盖"不符。
+        val existingMeta = allManagers.firstOrNull { it.id == id }
+        repository.saveManager(
+            CardManagerEntity(
+                id = id,
+                name = name,
+                sourceFile = sourceFile,
+                enabled = enabled,
+                description = managerDescription?.takeIf { it.isNotBlank() } ?: existingMeta?.description,
+                status = managerStatus?.takeIf { it.isNotBlank() } ?: existingMeta?.status
+            )
+        )
 
         // 整体替换该 Manager 下的 Binding（行为覆盖/使用动作已迁到 card_group_behavior 表）
         val entities = bindings.map { binding ->
@@ -92,6 +106,21 @@ class CardGroupService(private val repository: CardGroupRepository) {
     }
 
     fun deleteManager(id: String) = repository.deleteManager(id)
+
+    /**
+     * 仅更新方案级元信息（description/status），不触碰 bindings。
+     * 供频繁的状态/描述变更（细粒度 MCP 工具 update_card_group_meta），
+     * 避免走 saveManager 的整体 replaceBindings 重建。缺省（null/blank）保持原值不覆盖。
+     */
+    fun updateManagerMeta(managerId: String, description: String?, status: String?): Boolean {
+        val existing = repository.findManagerById(managerId) ?: return false
+        repository.updateManagerMeta(
+            managerId,
+            description = description?.takeIf { it.isNotBlank() } ?: existing.description,
+            status = status?.takeIf { it.isNotBlank() } ?: existing.status
+        )
+        return true
+    }
 
     /** 加载某 Manager 下所有 Binding（供 UI 工作台使用） */
     fun loadBindings(managerId: String): List<CardGroupBinding> =

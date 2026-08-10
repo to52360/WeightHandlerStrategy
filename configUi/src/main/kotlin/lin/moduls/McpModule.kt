@@ -47,12 +47,22 @@ val mcpModule = module {
     } bind McpToolProvider::class
     single { AiOrthogonalToolProvider(get(), get()) } bind McpToolProvider::class
     single {
-        CardGroupToolProvider(
+        lin.mcp.card_group.CardGroupToolProvider(
+            get<CardGroupService>(),
+            get<lin.ui.service.TreeConfigService>()
+        )
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.card_group.SaveCardGroupToolProvider(
+            get<CardGroupService>(),
+            get<ConditionTreeConfigService>()
+        )
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.card_group.CardPoolToolProvider(
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
-            get<lin.repository.HsCardRepository>(),
-            get<lin.ui.service.TreeConfigService>(),
-            get<ConditionTreeConfigService>()
+            get<lin.repository.HsCardRepository>()
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
@@ -90,6 +100,16 @@ val mcpModule = module {
             get(),
             get<lin.repository.card_purpose.CardPurposeRepository>(),
             get<lin.ui.service.TreeConfigService>()
+        )
+    } bind McpToolProvider::class
+    single {
+        StrategyCoverageToolProvider(
+            get<CardGroupService>(),
+            get<lin.ui.service.TreeConfigService>(),
+            get<lin.repository.combo_plan.ComboPlanDefinitionRepository>(),
+            get<lin.repository.aura_boost.AuraBoostConfigService>(),
+            get<ConditionTreeConfigService>(),
+            get<lin.repository.card_purpose.CardPurposeRepository>()
         )
     } bind McpToolProvider::class
 

@@ -12,8 +12,10 @@ private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL
 data class CardManagerEntity(
     val id: String,       // UUID，主键
     val name: String,
-    val sourceFile: String, // 新增：来源 .cardgroup 文件名
-    val enabled: Boolean
+    val sourceFile: String, // 来源 .cardgroup 文件名
+    val enabled: Boolean,
+    val description: String? = null, // 卡组总体描述/规划（manager_description 列，2026-08-10）
+    val status: String? = null       // 配置进度状态（manager_status 列，2026-08-10）：PLANNED / IN_PROGRESS / CONFIGURED
 )
 
 /**

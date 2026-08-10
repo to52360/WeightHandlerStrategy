@@ -112,28 +112,28 @@ class EvaluatorTreeValidator(
     ) {
         val meta = knownSources[leafConfig.leafKind to leafConfig.sourceId]
         if (meta == null) {
+            // condition-tree-tooling/Q-001（2026-08-09 定论）：评估树 CONDITION_TREE 叶子禁止引用
+            // 内联创建（inlineCreated=true）的条件树——内联树生命周期绑定消费方（消费方删除→树悬空）。
+            // 内联树被 leafSourceCatalog（filterNot inlineCreated）排除在可引用来源外，会先走到本分支，
+            // 这里优先给出明确错误码，避免 AI/用户困惑"树明明存在却报未知来源"。
+            if (leafConfig is ConditionTreeLeafConfig && conditionTreeService != null) {
+                val treeMeta = conditionTreeService.loadAllMeta().firstOrNull { it.id == leafConfig.sourceId }
+                if (treeMeta != null && treeMeta.inlineCreated) {
+                    diagnostics += ValidationDiagnostic(
+                        code = "condition_tree_inline_reference_forbidden",
+                        message = "评估树不能引用内联创建的条件树 [${treeMeta.name}]（id=${leafConfig.sourceId}）：" +
+                                "内联树生命周期绑定消费方，评估树引用会导致悬空。请改用 save_condition_tree 创建可复用模板树后引用。",
+                        path = "leafConfigs.${leafConfig.nodeId}.sourceId"
+                    )
+                    return
+                }
+            }
             diagnostics += ValidationDiagnostic(
                 code = "unknown_leaf_source",
                 message = "未知评估树叶子来源: kind=${leafConfig.leafKind}, sourceId=${leafConfig.sourceId}",
                 path = "leafConfigs.${leafConfig.nodeId}.sourceId"
             )
             return
-        }
-
-        // condition-tree-tooling/Q-001（2026-08-09 定论）：评估树 CONDITION_TREE 叶子
-        // 禁止引用内联创建（inlineCreated=true）的条件树——内联树生命周期绑定消费方
-        // （消费方删除→树悬空），且背景知识隐藏发现性差。评估树只允许引用可复用模板树。
-        if (leafConfig is ConditionTreeLeafConfig && conditionTreeService != null) {
-            val treeMeta = conditionTreeService.loadAllMeta().firstOrNull { it.id == leafConfig.sourceId }
-            if (treeMeta != null && treeMeta.inlineCreated) {
-                diagnostics += ValidationDiagnostic(
-                    code = "condition_tree_inline_reference_forbidden",
-                    message = "评估树不能引用内联创建的条件树 [${treeMeta.name}]（id=${leafConfig.sourceId}）：" +
-                            "内联树生命周期绑定消费方，评估树引用会导致悬空。请改用 save_condition_tree 创建可复用模板树后引用。",
-                    path = "leafConfigs.${leafConfig.nodeId}.sourceId"
-                )
-                return
-            }
         }
 
         val allFields = meta.builtInFields + meta.fields

@@ -42,9 +42,9 @@ fun resolveConditionTreeReference(
         throw McpBadInput("$label：conditionId 与 treeJson 必须提供其一（一次性树传 treeJson 内联创建，无需先建模板）")
     }
     if (service.findById(conditionId) == null) {
-        throw McpBadInput("$label 条件树不存在: $conditionId（一次性树可直接传 treeJson 内联创建，或先 condition_tree(action=SAVE) 建模板）")
+        throw McpBadInput("$label 条件树不存在: $conditionId（一次性树可直接传 treeJson 内联创建，或先 save_condition_tree 建模板）")
     }
-    return conditionId!!
+    return conditionId
 }
 
 /**
@@ -142,7 +142,8 @@ class ConditionTreeToolProvider(
                 叶子 payload 两种：ConditionRef（引用编码条件，conditionId + args）或
                 PipelineRef（正交管道：sourceId + transforms + operatorId + operatorArgs + refId）。
                 条件树参数（ConditionRef.args / PipelineRef.operatorArgs / transform 参数）直接存树内，
-                GET 读取原样返回；评估树引用时由叶子 args 决定参数（树内参数仅作表单参考）。
+                GET 读取原样返回；评估树 CONDITION_TREE 叶子引用时叶子 args 优先、树内参数兜底
+                （最终值 = 消费方覆盖 > 树内默认，Q-002 方案 B）。
                 可从 condition_tree(action=GET) 拿现有树复制修改后回传；管道积木用 list_orthogonal_components 查询。
                 提供 existingId 更新已有树，否则新建（自动生成 8 位短 id）。
             """.trimIndent()
@@ -182,8 +183,13 @@ class ConditionTreeToolProvider(
                 )
             }
 
-            // 删除前捕获完整原始数据（configData 可直接用于恢复重建）
-            val entity = service.loadAll().firstOrNull { it.first.id == input.conditionTreeId }?.first
+            // 删除前捕获完整配置；restoreConfigData 用 configUi mapper 重新序列化，保证与 save_condition_tree
+            // 解析格式一致（误删恢复往返可用）。数据库原文 configData 可能为引擎侧/旧格式
+            // （如 nodeName 落在 WRAPPER_OBJECT wrapper 外层），原样回传 save_condition_tree 会解析失败。
+            val loaded = service.loadAll().firstOrNull { it.first.id == input.conditionTreeId }
+            val restoreData = loaded?.second?.let { mapper.writeValueAsString(it) }
+                ?: loaded?.first?.configData
+                ?: ""
             service.delete(input.conditionTreeId)
             mcpSuccess(
                 mapOf(
@@ -191,7 +197,7 @@ class ConditionTreeToolProvider(
                     "name" to meta.name,
                     "managerId" to (meta.managerId ?: ""),
                     "inlineCreated" to meta.inlineCreated,
-                    "restoreConfigData" to (entity?.configData ?: ""),
+                    "restoreConfigData" to restoreData,
                     "restoreHint" to "误删恢复：将 restoreConfigData 原样作为 save_condition_tree 的 treeJson 参数（name=原name，managerId=原managerId）即可重建"
                 )
             )

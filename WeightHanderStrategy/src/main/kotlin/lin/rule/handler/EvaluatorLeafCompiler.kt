@@ -74,7 +74,7 @@ class GuardCompiler(
 
     // ── 条件树编译 ──
 
-    /** 评估树路径：叶子 args 是唯一参数来源（语义 B，忽略树内参数——树内参数仅作表单预填参考）。 */
+    /** 评估树路径：叶子 args（消费方）优先 + 树内参数兜底（语义 C，Q-002 方案 B，见 compileTreeWithArgs）。 */
     private fun buildConditionTreeLogic(leafConfig: ConditionTreeLeafConfig): ConditionLogic {
         val conditionTree = conditionTreeProviders
             .firstNotNullOfOrNull { it.findById(leafConfig.sourceId) }
