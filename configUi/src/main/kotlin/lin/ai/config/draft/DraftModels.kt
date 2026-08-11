@@ -1,12 +1,38 @@
 package lin.ai.config.draft
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
+import com.fasterxml.jackson.annotation.JsonSubTypes
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import lin.ai.config.ValidationReport
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorNode
 import lin.rule.tree.EvaluatorTreeBindingType
 
-data class CreateDraftRequest(
+/**
+ * 评估树草稿命令（多态 WRAPPER_OBJECT，2026-08-11 合一改造）。
+ *
+ * 用 discriminated union 取代纯平铺 [CreateDraftRequest] 的"模式互斥可 null 字段"污染：
+ * - [CreateDraftTreeCmd]：创建/克隆草稿分支，字段收敛为创建语义，deleteDraftId 消失
+ * - [DeleteDraftTreeCmd]：删除废弃草稿分支，仅 deleteDraftId
+ *
+ * JSON 调用形态：
+ * - 创建: {"CreateDraftTree":{"name":"...","bindingType":"GROUP","bindingIds":[...],...}}
+ * - 删除: {"DeleteDraftTree":{"deleteDraftId":"..."}}
+ *
+ * 与项目 LogicNode（AndNode/OrNode/Leaf）同款 WRAPPER_OBJECT 多态，AI 已熟悉该形态。
+ * 长期验证中：victools 未开 JSONSUBTYPES 也能生成 anyOf 分支 schema（2026-08-11 实验证实）。
+ */
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+@JsonSubTypes(
+    JsonSubTypes.Type(value = CreateDraftTreeCmd::class, name = "CreateDraftTree"),
+    JsonSubTypes.Type(value = DeleteDraftTreeCmd::class, name = "DeleteDraftTree")
+)
+sealed interface DraftTreeCommand
+
+/**
+ * 创建/克隆评估树草稿。
+ */
+data class CreateDraftTreeCmd(
     @field:JsonPropertyDescription("评估树的名称")
     val name: String,
     @field:JsonPropertyDescription(
@@ -21,7 +47,12 @@ data class CreateDraftRequest(
 - Branch: {"BranchNode":{"payload":{"BranchCondition":{"nodeId":"c1"}},"onTrue":{...},"onFalse":{...}}}"""
     )
     val root: EvaluatorNode? = null,
-    @field:JsonPropertyDescription("绑定的目标类型（GROUP, PURPOSE_TAG 或 CARD）")
+    @field:JsonPropertyDescription(
+        """绑定的目标类型（GROUP, PURPOSE_TAG 或 CARD）。
+        - GROUP：绑定战术分组（规则复用 / combo 联动 / 编排需求），managerId 必填。
+        - CARD：绑定单卡（非联动独特单卡微观规则，如"神性圣契非 0 费卡手扣分"），managerId 留空。
+        - PURPOSE_TAG：绑定用途标签（意图驱动统一规则），managerId 留空。"""
+    )
     val bindingType: EvaluatorTreeBindingType,
     @field:JsonPropertyDescription(
         """绑定的目标 ID 列表。
@@ -36,12 +67,12 @@ data class CreateDraftRequest(
     val existingId: String? = null,
     @field:JsonPropertyDescription(
         """所属卡组 manager 的 id（GROUP 绑定时【必填】）。
-        取值来自 list_card_groups 返回的 id，或 save_card_group 响应的 managerId。注意它不同于 bindingIds 里的绑定条目 id。PURPOSE_TAG 或 CARD 绑定时留空。"""
+        取值来自 card_group(action=LIST) 返回的 id，或 save_card_group 响应的 managerId。注意它不同于 bindingIds 里的绑定条目 id。PURPOSE_TAG 或 CARD 绑定时留空。"""
     )
     val managerId: String? = null,
     @field:JsonPropertyDescription("克隆已有评估树的 id（由 evaluator_tree(action=LIST) 获取）。与 root 互斥：提供 cloneFrom 时 root 留空。非空时以该配置为蓝本创建草稿，叶子节点参数预填，missingNodeIds 为空，可直接 commit 或用 put_draft_leaf 覆盖差异节点。")
     val cloneFrom: String? = null
-) {
+) : DraftTreeCommand {
     fun toQuery(): DraftCreationQuery {
         val cloneFrom = cloneFrom
         return if (cloneFrom != null) {
@@ -56,9 +87,18 @@ data class CreateDraftRequest(
 }
 
 /**
+ * 删除废弃草稿（拓扑设计错误/不再需要，与 group_override 的 clearOverride 同一合一模式）。
+ * 草稿删除后不可恢复，仅内存态不影响已落盘配置。
+ */
+data class DeleteDraftTreeCmd(
+    @field:JsonPropertyDescription("要废弃的草稿 id")
+    val deleteDraftId: String
+) : DraftTreeCommand
+
+/**
  * 草稿创建意图的 sealed 域模型：用编译期类型区分「从零创建」与「克隆」，
- * 消除 [CreateDraftRequest.root] / [CreateDraftRequest.cloneFrom] 的伪可选可空。
- * 扁平 JSON 载体仍是 [CreateDraftRequest]，由 [CreateDraftRequest.toQuery] 在边界转换。
+ * 消除 [CreateDraftTreeCmd.root] / [CreateDraftTreeCmd.cloneFrom] 的伪可选可空。
+ * 由 [CreateDraftTreeCmd.toQuery] 在边界转换。
  */
 sealed interface DraftCreationQuery {
     data class NewDraft(val root: EvaluatorNode) : DraftCreationQuery
@@ -84,14 +124,9 @@ data class GetDraftStatusRequest(
     val draftId: String
 )
 
-data class AbandonDraftRequest(
-    @field:JsonPropertyDescription("要废弃的草稿 ID")
-    val draftId: String
-)
-
 data class DraftTreeState(
     val draftId: String,
-    val skeletonRequest: CreateDraftRequest,
+    val skeletonRequest: CreateDraftTreeCmd,
     val leafConfigs: MutableMap<String, EvaluatorLeafConfig>,
     val expectedNodeIds: Set<String>,
     val createdAt: Long,

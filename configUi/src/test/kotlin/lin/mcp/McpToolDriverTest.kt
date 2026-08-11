@@ -80,14 +80,14 @@ class McpToolDriverTest : McpTestEnv() {
                 """{"OrNode":{"children":[{"Leaf":{"payload":{"Rule":{"nodeId":"leaf1"}}}},{"Leaf":{"payload":{"Rule":{"nodeId":"leaf2"}}}}]}}"""
             val createResp = call(
                 "create_draft_tree",
-                """{
+                """{"CreateDraftTree":{
                   "name":"verify_tree_1",
                   "root":$root,
                   "bindingType":"GROUP",
                   "bindingIds":[${bindingIds.joinToString(",") { "\"$it\"" }}],
                   "managerId":"$managerId",
                   "description":"端到端验证自动生成"
-                }"""
+                }}"""
             )
             val draftId = mapper.readValue(createResp.contentJson, Map::class.java)["draftId"] as String
 
@@ -139,14 +139,14 @@ class McpToolDriverTest : McpTestEnv() {
             val codedRoot = """{"OrNode":{"children":[{"Leaf":{"payload":{"Rule":{"nodeId":"cleaf1"}}}}]}}"""
             val codedCreate = call(
                 "create_draft_tree",
-                """{
+                """{"CreateDraftTree":{
                   "name":"verify_coded_1",
                   "root":$codedRoot,
                   "bindingType":"GROUP",
                   "bindingIds":[${bindingIds.joinToString(",") { "\"$it\"" }}],
                   "managerId":"$managerId",
                   "description":"验证编码规则生成"
-                }"""
+                }}"""
             )
             val codedDraftId = mapper.readValue(codedCreate.contentJson, Map::class.java)["draftId"] as String
             call(
@@ -185,28 +185,35 @@ class McpToolDriverTest : McpTestEnv() {
     }
 
     @Test
-    fun testStringifiedRootInCreateDraftTree() {
-        val rootStr = mapper.writeValueAsString(
-            mapOf(
-                "OrNode" to mapOf(
-                    "children" to listOf(
-                        mapOf("Leaf" to mapOf("payload" to mapOf("Rule" to mapOf("nodeId" to "r1"))))
-                    )
-                )
-            )
-        )
+    fun testPolymorphicCreateAndDeleteDraftTree() {
+        // 多态 WRAPPER_OBJECT：创建分支 CreateDraftTree（root 必须是对象，非 String）
         val args = mapOf(
-            "name" to "test_stringified_root",
-            "root" to rootStr,
-            "bindingType" to "CARD",
-            "bindingIds" to listOf("BT_020")
+            "CreateDraftTree" to mapOf(
+                "name" to "test_polymorphic_draft",
+                "root" to mapOf(
+                    "Leaf" to mapOf("payload" to mapOf("Rule" to mapOf("nodeId" to "r1")))
+                ),
+                "bindingType" to "CARD",
+                "bindingIds" to listOf("BT_020")
+            )
         )
         val resp = call("create_draft_tree", mapper.writeValueAsString(args))
         org.junit.Assert.assertFalse(
-            "create_draft_tree 应成功解析 String 类型的 root: ${resp.contentJson}",
+            "create_draft_tree CreateDraftTree 分支应成功: ${resp.contentJson}",
             resp.isError
         )
         val draftId = mapper.readValue(resp.contentJson, Map::class.java)["draftId"] as String
-        call("abandon_draft", """{"draftId":"$draftId"}""")
+
+        // 多态删除分支：DeleteDraftTree
+        val delResp = call("create_draft_tree", """{"DeleteDraftTree":{"deleteDraftId":"$draftId"}}""")
+        org.junit.Assert.assertFalse(
+            "create_draft_tree DeleteDraftTree 分支应成功: ${delResp.contentJson}",
+            delResp.isError
+        )
+        val delJson = mapper.readValue(delResp.contentJson, Map::class.java)
+        org.junit.Assert.assertEquals(
+            "删除响应应返回 deleted=true",
+            true, delJson["deleted"]
+        )
     }
 }

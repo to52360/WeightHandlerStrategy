@@ -13,7 +13,7 @@ interface DraftTreeService {
     /**
      * 1. 创建骨架暂存，返回 draftId 与预期要填写的 nodeId 列表
      */
-    fun createDraft(request: CreateDraftRequest): DraftCreationResult
+    fun createDraft(request: CreateDraftTreeCmd): DraftCreationResult
 
     /**
      * 2. 增量更新单个叶子节点配置。

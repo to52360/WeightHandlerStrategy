@@ -47,7 +47,7 @@ class SaveCardGroupToolProvider(
 - 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案，为空则自动按 managerName/sourceFile 覆盖更新已有方案
 - 克隆模式：提供 cloneFrom，以该方案为蓝本创建副本，含所有 binding 与 behavior，managerName 缺省自动加「副本」后缀
 - **分步提交**：本工具只提交分组归属（cardIds），不设置出牌策略；分组更新时保留已配置的策略（stageOverride/conditionalStage）。
-  出牌阶段策略用 `save_group_override` 单独配置。
+  出牌阶段策略用 `group_override` 单独配置。
 
 【恢复/修改上下文最佳实践】
 在任何重启任务或续接对话的场景中，强烈建议先调用 `card_group(action="LIST")` 获取已有的 managerId，并调用 `card_group(action="GET", managerId="...")` 探查现有分组及其 bindingIds；如需更新则传入 existingId。若未传 existingId 但 managerName/sourceFile 相同，系统也会自动覆盖同名方案，不会产生多余重复项。

@@ -44,14 +44,14 @@ class DeckFlowStage3_Group1CommitTest : McpTestEnv() {
         // 2. Step 1: 创建草稿骨架 (create_draft_tree)
         val root = """{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}"""
         val createResp = call(
-            "create_draft_tree", """{
+            "create_draft_tree", """{"CreateDraftTree":{
             "name":"tree_$GROUP_NAME",
             "root":$root,
             "bindingType":"GROUP",
             "bindingIds":["$bindingId"],
             "managerId":"$managerId",
             "description":"[$GROUP_NAME] 减费未满4费时给8.0优先分，满4费后降优先级"
-        }"""
+        }}"""
         )
         assertTrue("create_draft_tree 应成功: ${createResp.contentJson}", !createResp.isError)
         val draftId = mapper.readValue(createResp.contentJson, Map::class.java)["draftId"] as String
