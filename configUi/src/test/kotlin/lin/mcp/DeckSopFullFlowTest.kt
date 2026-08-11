@@ -119,14 +119,14 @@ class DeckSopFullFlowTest : McpTestEnv() {
             """{"OrNode":{"children":[{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}},{"Leaf":{"payload":{"Rule":{"nodeId":"c1"}}}}]}}"""
 
         val createResp = call(
-            "create_draft_tree", """{"CreateDraftTree":{
+            "create_draft_tree", """{
             "name":"eval_${g.name}",
             "root":$root,
             "bindingType":"GROUP",
             "bindingIds":["${g.bindingId}"],
             "managerId":"$mgrId",
             "description":"$g.name"
-        }}"""
+        }"""
         )
         if (createResp.isError) {
             println("  ❌ create 失败"); return

@@ -7,67 +7,47 @@ import lin.rule.tree.EvaluatorTreeBindingType
 /**
  * 负责评估树生成的渐进式/草稿池 MCP 工具暴露。
  * 代替原先单一且极易出错的 save_evaluator_tree。
+ *
+ * 草稿删除方案已定论（mcp-tool-shaping/D-003）：维持独立 abandon_draft 工具，不做合一。
+ * 历史：曾用 deleteDraftId 合一（2026-08-10）→ 多态改造（2026-08-11）因顶层 anyOf 致"无工具"回退 → 删除合一撤销。
  */
 class AiDraftTreeToolProvider(
     private val draftTreeService: DraftTreeService,
     private val cardGroupService: CardGroupService
 ) : McpToolProvider {
     override fun provide(): List<McpToolHandler> = listOf(
-        typedTool<DraftTreeCommand>(
+        typedTool<CreateDraftRequest>(
             name = "create_draft_tree",
-            description = """创建评估树草稿骨架，或删除废弃草稿。评估树 JSON 结构极大，必须采用渐进式生成：
-                                1. 用此工具建立拓扑骨架（创建模式）或删除废弃草稿（删除模式）
+            description = """创建一个评估树草稿骨架。评估树 JSON 结构极大，必须采用渐进式生成：
+                                1. 用此工具建立拓扑骨架，返回 draftId 和 missingNodeIds
                                 2. 用 put_draft_leaf 逐个填充叶子节点
                                 3. 全部填完后用 commit_draft_tree 提交
                                 
-                                【多态输入形态】本工具使用 WRAPPER_OBJECT 多态（与评估树节点同款），二选一：
-                                - {"CreateDraftTree":{...}}：创建/克隆草稿，字段见下
-                                - {"DeleteDraftTree":{"deleteDraftId":"<草稿id>"}}：删除废弃草稿
-                                  （拓扑设计错误/不再需要，与 group_override 的 clearOverride 同一合一模式），返回 deleted=true；草稿不存在或已过期则报错
-                                
-                                【CreateDraftTree 创建模式】两种互斥：
-                                - 从零创建：提供 root（拓扑骨架）+ bindingType + bindingIds（GROUP 还需 managerId）
-                                - 克隆已有树：提供 cloneFrom（已有配置 id），叶子参数预填，可直接 commit 或用 put_draft_leaf 覆盖差异节点
                                 拓扑不满意时无需修改，重新创建一个新草稿即可。
                                 
-                                【绑定约束】
-                                - bindingType=GROUP：managerId 必填，bindingIds 必须是该卡组方案下的绑定条目 id（非 manager 自身 id）
-                                - bindingType=CARD：bindingIds 填卡牌 id（如 ["BT_020"]），managerId 留空
-                                - bindingType=PURPOSE_TAG：bindingIds 填用途标签 id，managerId 留空
+                                【两种互斥模式】
+                                - 从零创建：提供 root（拓扑骨架）
+                                - 克隆已有树：提供 cloneFrom（已有配置 id），叶子参数预填，可直接 commit 或用 put_draft_leaf 覆盖差异节点
                             """
-        ) { command ->
-            when (command) {
-                is DeleteDraftTreeCmd -> {
-                    // 删除废弃草稿（合一，与 group_override 的 clearOverride 同一模式）
-                    val removed = draftTreeService.abandonDraft(command.deleteDraftId)
-                    if (removed) {
-                        mcpSuccess(mapOf("deleted" to true, "draftId" to command.deleteDraftId))
-                    } else {
-                        mcpError("草稿不存在或已过期: ${command.deleteDraftId}")
-                    }
-                }
-
-                is CreateDraftTreeCmd -> {
-                    // 提前校验 GROUP 绑定的引用完整性，避免填入全部叶子后才在 commit 时被拒
-                    if (command.bindingType == EvaluatorTreeBindingType.GROUP) {
-                        val managerId = command.managerId
-                            ?: return@typedTool mcpError("bindingType=GROUP 时 managerId 必填（取值来自 card_group(action=LIST) 或 save_card_group 响应的 managerId）")
-                        val allManagers = cardGroupService.loadAll(onlyEnabled = true)
-                        val manager = allManagers.firstOrNull { it.cardGroupManagerId == managerId }
-                            ?: return@typedTool mcpError("卡组方案不存在或未启用: $managerId。可用 card_group(action=LIST) 查看现有方案。")
-                        val validBindingIds = manager.bindings.map { it.id }.toSet()
-                        val invalidIds = command.bindingIds.filter { it !in validBindingIds }
-                        if (invalidIds.isNotEmpty()) {
-                            return@typedTool mcpError(
-                                "以下 bindingIds 不属于卡组方案 \"${manager.name}\": $invalidIds。" +
-                                        "该方案的有效绑定条目为: ${manager.bindings.map { "${it.name}(${it.id})" }}"
-                            )
-                        }
-                    }
-                    val result = draftTreeService.createDraft(command)
-                    mcpSuccess(result)
+        ) { request ->
+            // 提前校验 GROUP 绑定的引用完整性，避免填入全部叶子后才在 commit 时被拒
+            if (request.bindingType == EvaluatorTreeBindingType.GROUP) {
+                val managerId = request.managerId
+                    ?: return@typedTool mcpError("bindingType=GROUP 时 managerId 必填（取值来自 card_group(action=LIST) 或 save_card_group 响应的 managerId）")
+                val allManagers = cardGroupService.loadAll(onlyEnabled = true)
+                val manager = allManagers.firstOrNull { it.cardGroupManagerId == managerId }
+                    ?: return@typedTool mcpError("卡组方案不存在或未启用: $managerId。可用 card_group(action=LIST) 查看现有方案。")
+                val validBindingIds = manager.bindings.map { it.id }.toSet()
+                val invalidIds = request.bindingIds.filter { it !in validBindingIds }
+                if (invalidIds.isNotEmpty()) {
+                    return@typedTool mcpError(
+                        "以下 bindingIds 不属于卡组方案 \"${manager.name}\": $invalidIds。" +
+                                "该方案的有效绑定条目为: ${manager.bindings.map { "${it.name}(${it.id})" }}"
+                    )
                 }
             }
+            val result = draftTreeService.createDraft(request)
+            mcpSuccess(result)
         },
         typedTool<PutDraftLeafRequest>(
             name = "put_draft_leaf",
@@ -98,6 +78,17 @@ class AiDraftTreeToolProvider(
             val result = draftTreeService.getDraftStatus(request.draftId)
                 ?: return@typedTool mcpError("草稿不存在或已过期: ${request.draftId}")
             mcpSuccess(result)
+        },
+        typedTool<AbandonDraftRequest>(
+            name = "abandon_draft",
+            description = "废弃一个不再需要的评估树草稿（如绑定校验失败、拓扑设计错误等）。被废弃的草稿将立即从内存中清除。"
+        ) { request ->
+            val removed = draftTreeService.abandonDraft(request.draftId)
+            if (removed) {
+                mcpSuccess(mapOf("abandoned" to true, "draftId" to request.draftId))
+            } else {
+                mcpError("草稿不存在或已过期: ${request.draftId}")
+            }
         }
     )
 }

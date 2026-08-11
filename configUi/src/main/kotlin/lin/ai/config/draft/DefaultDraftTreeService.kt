@@ -26,10 +26,9 @@ class DefaultDraftTreeService(
     private val drafts = ConcurrentHashMap<String, DraftTreeState>()
     private val EVICTION_MILLIS = 2 * 60 * 60 * 1000L // 2 hours
 
-    override fun createDraft(request: CreateDraftTreeCmd): DraftCreationResult {
+    override fun createDraft(request: CreateDraftRequest): DraftCreationResult {
         lazyEvict()
-        // 创建模式必填校验：name/bindingType/bindingIds 已由类型系统（非空字段）保证；
-        // 此处只保留跨字段的条件校验（GROUP 绑定需 managerId）
+        // 条件必填边界校验：GROUP 绑定时 managerId 必填，缺失即非法输入（与 root 的非克隆必填校验同一风格）
         if (request.bindingType == EvaluatorTreeBindingType.GROUP && request.managerId.isNullOrBlank()) {
             throw IllegalArgumentException("bindingType=GROUP 时 managerId 必填（取值来自 list_card_groups 或 save_card_group 响应的 managerId）")
         }
@@ -113,19 +112,15 @@ class DefaultDraftTreeService(
         }
 
         val request = state.skeletonRequest
-        // createDraft 入口已校验创建模式必填，此处直接解包非空（草稿创建后这些字段保证存在）
-        val bindingType = request.bindingType
-            ?: throw IllegalArgumentException("草稿绑定类型缺失（草稿创建时已校验，不应发生）")
-        val name = request.name ?: throw IllegalArgumentException("草稿名称缺失（草稿创建时已校验，不应发生）")
         val fullConfig = EvaluatorTreeConfig(
-            bindingType = bindingType,
+            bindingType = request.bindingType,
             bindingIds = request.bindingIds,
             root = request.root!!,
             leafConfigs = state.leafConfigs
         )
 
         val saveRequest = SaveEvaluatorTreeRequest(
-            name = name,
+            name = request.name,
             config = fullConfig,
             description = request.description,
             existingId = request.existingId,

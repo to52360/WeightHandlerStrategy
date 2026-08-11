@@ -55,14 +55,14 @@ class DeckFlowStage4Test : McpTestEnv() {
                 """{"OrNode":{"children":[{"Leaf":{"payload":{"Rule":{"nodeId":"leaf1"}}}},{"Leaf":{"payload":{"Rule":{"nodeId":"leaf2"}}}}]}}"""
             val createResp = call(
                 "create_draft_tree",
-                """{"CreateDraftTree":{
+                """{
                   "name":"verify_tree_4",
                   "root":$root,
                   "bindingType":"GROUP",
                   "bindingIds":[${bindingIds.joinToString(",") { "\"$it\"" }}],
                   "managerId":"$managerId",
                   "description":"Stage4 端到端验证"
-                }}"""
+                }"""
             )
             assertTrue("create_draft_tree should succeed", !createResp.isError)
             val draftId = mapper.readValue(createResp.contentJson, Map::class.java)["draftId"] as String

@@ -48,12 +48,12 @@ class PurposeTagToolTest : McpTestEnv() {
     @Test
     fun testCreateDraftTreeWithPurposeTagBinding() {
         val reqJson = """
-            {"CreateDraftTree": {
+            {
                 "name": "保命用途标签测试评估树",
                 "bindingType": "PURPOSE_TAG",
                 "bindingIds": ["SAVE_LIFE"],
                 "root": {"Leaf":{"payload":{"Rule":{"nodeId":"leaf_1"}}}}
-            }}
+            }
         """.trimIndent()
 
         val resp = call("create_draft_tree", reqJson)

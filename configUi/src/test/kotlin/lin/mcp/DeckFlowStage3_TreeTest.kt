@@ -127,14 +127,14 @@ class DeckFlowStage3_TreeTest : McpTestEnv() {
         // step A: 创建草稿骨架
         val root = """{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}"""
         val createResp = call(
-            "create_draft_tree", """{"CreateDraftTree":{
+            "create_draft_tree", """{
             "name":"tree_$bindingName",
             "root":$root,
             "bindingType":"GROUP",
             "bindingIds":["$bindingId"],
             "managerId":"$managerId",
             "description":"[$bindingName] 评估树"
-        }}"""
+        }"""
         )
         if (createResp.isError) {
             return TreeResult(bindingName, error = "create_draft_tree: ${createResp.contentJson}")

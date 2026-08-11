@@ -20,6 +20,10 @@ import lin.utils.nextShortId
  * - `save_card_group` 只做分组定义（name/cardIds/description），更新时保留已有策略（behaviors），不碰出牌阶段；
  * - `group_override` 单独配置/清除分组的出牌阶段策略（stageOverride / conditionalStage，clearOverride 清除）。
  * 对照 architecture-context/config-tooling/ 文档。
+ *
+ * ARCH-UNSETTLED mcp-tool-shaping/U-001: group_override 的 clearOverride（SET+清除合一）属"字段存在性/布尔隐含语义"形态，
+ * 用户指认其为对 AI 感知问题最大的位置之一（平铺 + 多业务语义混杂）。观察中，等待工具数量/合一权衡后再定；
+ * 此合一形态【不得】作为参考扩散到其他工具。
  */
 class SaveCardGroupToolProvider(
     private val groupService: CardGroupService,
@@ -296,7 +300,7 @@ private data class SaveGroupOverrideInput(
     @field:JsonPropertyDescription("分组绑定条目 id（card_group(action=GET) 的 bindings[].id）。")
     val bindingId: String,
     @field:JsonPropertyDescription("可选：true 时清除该分组的全部出牌策略（stageOverride/conditionalStage），保留其他行为（如 useActions）。缺省 false。")
-    val clearOverride: Boolean = false,
+    val clearOverride: Boolean = false,  // ARCH-UNSETTLED mcp-tool-shaping/U-001: SET+清除合一，布尔隐含语义，观察中勿扩散
     @field:JsonPropertyDescription("可选：覆盖出牌阶段（RESOURCE/SETUP/CLEAR/DEFEND/COMBO/GENERAL/END）。缺省保留原值。")
     val stageOverride: String? = null,
     @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树 id（condition_tree(action=LIST) 获取）。与 conditionalStageConditionTreeJson 互斥。")
