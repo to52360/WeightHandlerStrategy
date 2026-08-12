@@ -23,7 +23,7 @@ class CardGroupDetailFieldsTest : McpTestEnv() {
             savedFile = java.nio.file.Path.of("../data/cardgroup/detail_verify.cardgroup")
 
             // 查询详情
-            val resp = call("get_card_group_detail", """{"fileName":"detail_verify"}""")
+            val resp = call("get", """{"resource":"card_pool","id":"detail_verify"}""")
             assertTrue("should succeed", !resp.isError)
 
             val data = mapper.readValue(resp.contentJson, MutableMap::class.java)

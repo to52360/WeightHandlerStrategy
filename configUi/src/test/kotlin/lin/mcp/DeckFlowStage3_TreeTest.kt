@@ -25,11 +25,11 @@ class DeckFlowStage3_TreeTest : McpTestEnv() {
 
         // ── 步骤 1: 探查当前规则池（纯 MCP） ──
         println("\n--- 步骤 1: 探查可用能力 ---")
-        call("list_capability_background")
+        call("list", """{"resource":"capability_background"}""")
 
         // ── 步骤 2: 通过 MCP 找到分组（名称+ID） ──
         println("\n--- 步骤 2: 查找分组 ---")
-        val listResp = call("card_group", """{"action":"LIST"}""")
+        val listResp = call("list", """{"resource":"card_group"}""")
         @Suppress("UNCHECKED_CAST")
         val groups = mapper.readValue(listResp.contentJson, List::class.java) as List<Map<String, Any>>
         val target = groups.find { it["name"] == MANAGER_NAME }
@@ -39,7 +39,7 @@ class DeckFlowStage3_TreeTest : McpTestEnv() {
 
         // ── 步骤 3: 通过 MCP 获取所有 binding（名称+ID+cardIds） ──
         println("\n--- 步骤 3: 获取分组详情 ---")
-        val mgrResp = call("card_group", """{"action":"GET","managerId":"$managerId"}""")
+        val mgrResp = call("get", """{"resource":"card_group","id":"$managerId"}""")
         val mgrData = mapper.readValue(mgrResp.contentJson, Map::class.java)
         @Suppress("UNCHECKED_CAST")
         val bindings = mgrData["bindings"] as List<Map<String, Any>>
@@ -101,7 +101,7 @@ class DeckFlowStage3_TreeTest : McpTestEnv() {
 
         // 确认：列出所有已保存的树
         println("\n--- 当前所有评估树 ---")
-        call("evaluator_tree", """{"action":"LIST"}""")
+        call("list", """{"resource":"evaluator_tree"}""")
 
         // 保存追踪
         saveTrackedIds(FILE_NAME, MANAGER_NAME, managerId, allTreeIds)

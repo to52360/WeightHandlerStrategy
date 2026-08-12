@@ -1,136 +1,113 @@
 package lin.mcp
 
-import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.ai.config.AiConfigGenerationService
+import lin.mcp.action.*
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.service.TreeConfigService
 
 /**
- * 评估树配置 MCP 工具提供者。
- * 专管能力背景、评估树查询与删除。
+ * AiTreeConfig 域 MCP 工具提供者（纯动作域，无独立写工具）：
+ * - [EvaluatorTreeAction]：resource=evaluator_tree 的 get/list/delete（原 evaluator_tree / delete_evaluator_tree 工具）。
+ * - [CapabilityBackgroundAction]：resource=capability_background 的 list（原 list_capability_background 工具，并入 list 大类）。
+ * 动作由 get/list/delete/tool_capabilities 四大 dispatcher 收集分发；本类无 provide() 工具。
  */
 class AiTreeConfigToolProvider(
-    private val service: AiConfigGenerationService,
     private val treeConfigService: TreeConfigService,
-    private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository
+    private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository,
+    private val aiConfigGenerationService: AiConfigGenerationService
 ) : McpToolProvider {
-    override fun provide(): List<McpToolHandler> = listOf(
-        typedTool<ListCapabilityBackgroundInput>(
-            name = "list_capability_background",
-            description = """
-                【能力背景 / 规划前置】列出系统当前真实存在的全部可编排能力，按领域分组：
-                codedRules（预编码规则）、plainConditions（预编码条件）、conditionTrees（条件树），
-                每项含 sourceId、name、desc 以及该能力需要的属性 requiredProperties。
-                AI 必须在编排卡牌分组、构建评估树之前先调用本工具，依据真实存在的 sourceId 与属性来规划，
-                严禁凭空捏造规则/条件 ID 或属性字段，否则会在提交时被校验拒绝（幻觉）。
-                传 managerId 时条件树按"当前卡组私有 + 全局共享"过滤（且排除消费方内联自动创建的一次性树），
-                不传则全量返回所有条件树。
-                正交能力（orthogonal_condition / orthogonal_rule）的底层积木与类型链路不在此展开，
-                构造正交叶子时再调用 list_orthogonal_components 获取精细细节。
-            """.trimIndent()
-        ) { input ->
-            mcpSuccess(service.listCapabilityBackground(input.managerId))
-        },
 
-        // ── evaluator_tree: 评估树列表 + 详情 (合并) ──
-        typedTool<EvaluatorTreeInput>(
-            name = "evaluator_tree",
-            description = "查询评估树。支持 action=LIST（列出已保存树的 id/name/bindingType 摘要，可传 managerId 按卡组过滤，不传则返回全部且最多 50 条）和 action=GET（读取某棵树的完整配置：managerId/bindingType/bindingIds/tree 拓扑/leafConfigs/associatedComboPlans）。"
-        ) { input ->
-            when (val query = input.toQuery()) {
-                is EvaluatorTreeQuery.ListAction -> {
-                    mcpSuccess(
-                        treeConfigService.loadSummaries(
-                            managerId = query.managerId,
-                            limit = if (query.managerId.isNullOrBlank()) DEFAULT_TREE_LIST_LIMIT else null
-                        )
+    override val actions: List<ResourceAction> = listOf(
+        EvaluatorTreeAction(treeConfigService, comboPlanDefinitionRepository),
+        CapabilityBackgroundAction(aiConfigGenerationService)
+    )
+
+    override fun provide(): List<McpToolHandler> = emptyList()
+
+    /** evaluator_tree 查询动作。 */
+    private class EvaluatorTreeAction(
+        private val treeConfigService: TreeConfigService,
+        private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository
+    ) : GetAction, ListAction, DeleteAction {
+
+        override val resource: String = ActionResources.EVALUATOR_TREE
+
+        override fun handleList(managerId: String?): McpToolResult {
+            return mcpSuccess(
+                treeConfigService.loadSummaries(
+                    managerId = managerId,
+                    limit = if (managerId.isNullOrBlank()) DEFAULT_TREE_LIST_LIMIT else null
+                )
+            )
+        }
+
+        override fun handleGet(id: String): McpToolResult {
+            val result = treeConfigService.findById(id)
+            if (result?.second == null) {
+                return mcpError("树配置不存在: $id")
+            }
+            val entity = result.first!!
+            val config = result.second!!
+            val managerId = entity.managerId
+            val associatedComboPlans = if (!managerId.isNullOrBlank()) {
+                comboPlanDefinitionRepository.findByManagerId(managerId).map { plan ->
+                    mapOf(
+                        "id" to plan.id,
+                        "relation" to plan.relation,
+                        "score" to plan.score,
+                        "coreGroupIds" to plan.coreGroupIdSet().toList(),
+                        "depGroupIds" to plan.depGroupIdSet().toList(),
+                        "coreMutex" to plan.coreMutex,
+                        "mustAdjacent" to plan.mustAdjacent
                     )
                 }
+            } else emptyList()
 
-                is EvaluatorTreeQuery.GetAction -> {
-                    val result = treeConfigService.findById(query.id)
-                    if (result?.second == null) {
-                        mcpError("树配置不存在")
-                    } else {
-                        val entity = result.first!!
-                        val config = result.second!!
-                        val managerId = entity.managerId
-                        val associatedComboPlans = if (!managerId.isNullOrBlank()) {
-                            comboPlanDefinitionRepository.findByManagerId(managerId).map { plan ->
-                                mapOf(
-                                    "id" to plan.id,
-                                    "relation" to plan.relation,
-                                    "score" to plan.score,
-                                    "coreGroupIds" to plan.coreGroupIdSet().toList(),
-                                    "depGroupIds" to plan.depGroupIdSet().toList(),
-                                    "coreMutex" to plan.coreMutex,
-                                    "mustAdjacent" to plan.mustAdjacent
-                                )
-                            }
-                        } else emptyList()
+            return mcpSuccess(
+                mapOf(
+                    "managerId" to managerId,
+                    "bindingType" to config.bindingType.name,
+                    "bindingIds" to config.bindingIds,
+                    "tree" to config.root.toNamed(),
+                    "leafConfigs" to config.leafConfigs,
+                    "associatedComboPlans" to associatedComboPlans
+                )
+            )
+        }
 
-                        mcpSuccess(
-                            mapOf(
-                                "managerId" to managerId,
-                                "bindingType" to config.bindingType.name,
-                                "bindingIds" to config.bindingIds,
-                                "tree" to config.root.toNamed(),
-                                "leafConfigs" to config.leafConfigs,
-                                "associatedComboPlans" to associatedComboPlans
-                            )
-                        )
-                    }
-                }
-            }
-        },
+        override val getFieldHint: String = "树 id（由 list 返回，或 save_card_group/草稿提交产生）"
 
-        // ── delete_evaluator_tree (保留) ──
-        typedTool<DeleteTreeInput>(
-            name = "delete_evaluator_tree",
-            description = "删除一棵已保存的评估树（含其叶子配置）。treeId 由 evaluator_tree(action=LIST) 获取。删除不可恢复。无效 ID 返回错误+现有树列表以防幻觉。"
-        ) { input ->
+        override fun handleDelete(id: String): McpToolResult {
             val summaries = treeConfigService.loadSummaries()
-            val target = summaries.firstOrNull { it["id"] == input.treeId }
-                ?: return@typedTool mcpError("树不存在: ${input.treeId}。当前存在的树列表: ${summaries.map { mapOf("id" to it["id"], "name" to it["name"]) }}")
-            treeConfigService.delete(input.treeId)
-            mcpSuccess(mapOf("deleted" to true, "treeId" to input.treeId, "treeName" to target["name"]))
-        }
-    )
-}
-
-/**
- * 评估树查询的 sealed 域模型：用编译期类型区分 LIST / GET，
- * GET 分支的 [Get.id] 为非空 String，消除原 input 中 id 的伪可选可空。
- * 扁平 JSON 载体仍是 [EvaluatorTreeInput]，由 [toQuery] 在边界转换。
- */
-private sealed interface EvaluatorTreeQuery {
-    data class ListAction(val managerId: String?) : EvaluatorTreeQuery
-    data class GetAction(val id: String) : EvaluatorTreeQuery
-}
-
-private data class EvaluatorTreeInput(
-    @field:JsonPropertyDescription("操作类型：LIST 列出树摘要，GET 读取树完整配置（需传 id）")
-    val action: String,
-    @field:JsonPropertyDescription("树 id，仅 action=GET 时需要，由 evaluator_tree(action=LIST) 返回。")
-    val id: String? = null,
-    @field:JsonPropertyDescription("卡组/管理器 ID，仅 action=LIST 时可选，按卡组过滤（含全局共享树）。不传则返回全部，最多 50 条。")
-    val managerId: String? = null
-) {
-    fun toQuery(): EvaluatorTreeQuery = when (action.uppercase()) {
-        "GET" -> {
-            val id = id
-            if (id.isNullOrBlank()) throw McpBadInput("action=GET 需要 id 参数") else EvaluatorTreeQuery.GetAction(id)
+            val target = summaries.firstOrNull { it["id"] == id }
+                ?: return mcpError(
+                    "树不存在: $id。当前存在的树列表: ${
+                        summaries.map { mapOf("id" to it["id"], "name" to it["name"]) }
+                    }"
+                )
+            treeConfigService.delete(id)
+            return mcpSuccess(mapOf("deleted" to true, "treeId" to id, "treeName" to target["name"]))
         }
 
-        "LIST" -> EvaluatorTreeQuery.ListAction(managerId)
-        else -> throw McpBadInput("未知 action: $action，支持 LIST / GET")
+        override val deleteFieldHint: String = "树 id（由 list(resource=evaluator_tree) 获取）"
+
+        override val deleteSemantics: String = "删除不可恢复（含叶子配置）"
+
+        companion object {
+            /** list 无 managerId 过滤时的返回条数上限（原 evaluator_tree 工具的 LIST 语义）。 */
+            const val DEFAULT_TREE_LIST_LIMIT = 50
+        }
+    }
+
+    /** capability_background 列表动作（只读）。 */
+    private class CapabilityBackgroundAction(
+        private val service: AiConfigGenerationService
+    ) : ListAction {
+
+        override val resource: String = ActionResources.CAPABILITY_BACKGROUND
+
+        override fun handleList(managerId: String?): McpToolResult {
+            return mcpSuccess(service.listCapabilityBackground(managerId))
+        }
     }
 }
-
-/** LIST 无 managerId 过滤时的返回条数上限 */
-private const val DEFAULT_TREE_LIST_LIMIT = 50
-
-private data class ListCapabilityBackgroundInput(
-    @field:JsonPropertyDescription("可选：卡组 managerId（来自 card_group(action=LIST)）。提供时条件树按\"当前卡组私有 + 全局共享\"过滤（且排除一次性内联树）；不传则全量返回所有条件树。")
-    val managerId: String? = null
-)

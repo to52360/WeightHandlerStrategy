@@ -18,12 +18,13 @@ class DeckFlowStage4_DeleteTest : McpTestEnv() {
     @Test
     fun testDeleteTools() {
         // ── 0. 确认 tool 已注册 ──
-        assertTrue("delete_card_group tool 未注册", "delete_card_group" in tools)
-        assertTrue("delete_evaluator_tree tool 未注册", "delete_evaluator_tree" in tools)
-        println("✅ delete 工具均已注册")
+        assertTrue("delete tool 未注册", "delete" in tools)
+        assertTrue("get tool 未注册", "get" in tools)
+        assertTrue("list tool 未注册", "list" in tools)
+        println("✅ 动作大类工具均已注册")
 
         // ── 1. 找到当前 manager ──
-        val listResp = call("card_group", """{"action":"LIST"}""")
+        val listResp = call("list", """{"resource":"card_group"}""")
         @Suppress("UNCHECKED_CAST")
         val groups = mapper.readValue(listResp.contentJson, List::class.java) as List<Map<String, Any>>
         val target = groups.find { it["name"] == MANAGER_NAME }
@@ -33,7 +34,7 @@ class DeckFlowStage4_DeleteTest : McpTestEnv() {
         println(">>> 当前 Manager: name='${target["name"]}' id=$managerId")
 
         // ── 2. 获取关联的树 ──
-        val treeListResp = call("evaluator_tree", """{"action":"LIST"}""")
+        val treeListResp = call("list", """{"resource":"evaluator_tree"}""")
         @Suppress("UNCHECKED_CAST")
         val trees = mapper.readValue(treeListResp.contentJson, List::class.java) as List<Map<String, Any>>
         val linkedTrees = trees.filter { it["managerId"] == managerId }
@@ -46,8 +47,8 @@ class DeckFlowStage4_DeleteTest : McpTestEnv() {
             val firstTreeId = firstTree["id"] as String
             val firstName = firstTree["name"] as String
 
-            println("\n--- 测试 delete_evaluator_tree ---")
-            val delTreeResp = call("delete_evaluator_tree", """{"treeId":"$firstTreeId"}""")
+            println("\n--- 测试 delete resource=evaluator_tree ---")
+            val delTreeResp = call("delete", """{"resource":"evaluator_tree","id":"$firstTreeId"}""")
             assertFalse("delete_evaluator_tree 不应报错", delTreeResp.isError)
             val delTreeData = mapper.readValue(delTreeResp.contentJson, Map::class.java)
             assertTrue("deleted 应为 true", delTreeData["deleted"] == true)
@@ -56,15 +57,15 @@ class DeckFlowStage4_DeleteTest : McpTestEnv() {
             println("✅ 成功删除树: name='${delTreeData["treeName"]}' id=${delTreeData["treeId"]}")
 
             // 验证已删
-            val afterTreeList = call("evaluator_tree", """{"action":"LIST"}""")
+            val afterTreeList = call("list", """{"resource":"evaluator_tree"}""")
             @Suppress("UNCHECKED_CAST")
             val afterTrees = mapper.readValue(afterTreeList.contentJson, List::class.java) as List<Map<String, Any>>
             assertFalse("树应已不在列表中", afterTrees.any { it["id"] == firstTreeId })
             println("✅ 确认树已不在列表中")
 
             // 测试无效 ID
-            println("\n--- 测试 delete_evaluator_tree 无效 ID ---")
-            val invalidResp = call("delete_evaluator_tree", """{"treeId":"nonexistent_id_xyz"}""")
+            println("\n--- 测试 delete resource=evaluator_tree 无效 ID ---")
+            val invalidResp = call("delete", """{"resource":"evaluator_tree","id":"nonexistent_id_xyz"}""")
             assertTrue("无效 ID 应报错", invalidResp.isError)
             val invalidData = mapper.readValue(invalidResp.contentJson, Map::class.java)
             assertTrue("应有 error 字段", invalidData.containsKey("error"))
@@ -72,9 +73,9 @@ class DeckFlowStage4_DeleteTest : McpTestEnv() {
             println("✅ 无效 ID 正确返回错误 + 现有树列表")
         }
 
-        // ── 4. 测试 delete_card_group（删除全部） ──
-        println("\n--- 测试 delete_card_group ---")
-        val delMgrResp = call("delete_card_group", """{"managerId":"$managerId"}""")
+        // ── 4. 测试 delete resource=card_group（删除全部） ──
+        println("\n--- 测试 delete resource=card_group ---")
+        val delMgrResp = call("delete", """{"resource":"card_group","id":"$managerId"}""")
         assertFalse("delete_card_group 不应报错", delMgrResp.isError)
         val delMgrData = mapper.readValue(delMgrResp.contentJson, Map::class.java)
         assertTrue("deleted 应为 true", delMgrData["deleted"] == true)
@@ -88,14 +89,14 @@ class DeckFlowStage4_DeleteTest : McpTestEnv() {
         println("  totalDeleted: ${delMgrData["totalDeleted"]}")
 
         // 验证 manager 已不在
-        val afterMgrList = call("card_group", """{"action":"LIST"}""")
+        val afterMgrList = call("list", """{"resource":"card_group"}""")
         @Suppress("UNCHECKED_CAST")
         val afterMgrs = mapper.readValue(afterMgrList.contentJson, List::class.java) as List<Map<String, Any>>
         assertFalse("Manager 应已不在列表中", afterMgrs.any { it["id"] == managerId })
         println("✅ 确认 Manager 已不在列表中")
 
         // 验证关联树也已级联删除
-        val finalTreeList = call("evaluator_tree", """{"action":"LIST"}""")
+        val finalTreeList = call("list", """{"resource":"evaluator_tree"}""")
         @Suppress("UNCHECKED_CAST")
         val finalTrees = mapper.readValue(finalTreeList.contentJson, List::class.java) as List<Map<String, Any>>
         val remainingLinked = finalTrees.filter { it["managerId"] == managerId }

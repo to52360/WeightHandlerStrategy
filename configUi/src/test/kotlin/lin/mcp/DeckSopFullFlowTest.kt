@@ -45,7 +45,7 @@ class DeckSopFullFlowTest : McpTestEnv() {
             // STEP 1: 能力背景探查
             // ═══════════════════════════════════════════
             println("\n========== STEP 1: 能力背景探查 ==========")
-            call("list_capability_background")
+            call("list", """{"resource":"capability_background"}""")
             call("list_orthogonal_components")
             call(
                 "parse_hearthstone_deck_code",
@@ -86,8 +86,8 @@ class DeckSopFullFlowTest : McpTestEnv() {
             // STEP 3: 参考模板
             // ═══════════════════════════════════════════
             println("\n========== STEP 3: 参考模板 ==========")
-            call("list_evaluator_trees")
-            call("list_evaluator_tree_templates")
+            call("list", """{"resource":"evaluator_tree"}""")
+            call("list", """{"resource":"tree_template"}""")
 
             // ═══════════════════════════════════════════
             // STEP 4: 为每个分组构建评估树
@@ -157,7 +157,7 @@ class DeckSopFullFlowTest : McpTestEnv() {
         println(if (c1) "  ✅ c1: 正交条件 — 手牌≥1张才评估" else "  ❌ c1: 失败")
 
         // 提交
-        call("get_draft_status", """{"draftId":"$draftId"}""")
+        call("get", """{"resource":"draft","id":"$draftId"}""")
         val commitResp = call("commit_draft_tree", """{"draftId":"$draftId"}""")
         val ok = runCatching {
             mapper.readValue(commitResp.contentJson, Map::class.java)["id"] as? String

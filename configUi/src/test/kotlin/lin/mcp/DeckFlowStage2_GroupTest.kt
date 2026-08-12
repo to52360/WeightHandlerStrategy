@@ -88,7 +88,7 @@ class DeckFlowStage2_GroupTest : McpTestEnv() {
         println("========================================")
 
         // 验证：读取刚创建的 manager
-        val mgrResp = call("card_group", """{"action":"GET","managerId":"$managerId"}""")
+        val mgrResp = call("get", """{"resource":"card_group","id":"$managerId"}""")
         assertTrue("card_group GET 应成功", !mgrResp.isError)
         @Suppress("UNCHECKED_CAST")
         val mgrData = mapper.readValue(mgrResp.contentJson, Map::class.java)

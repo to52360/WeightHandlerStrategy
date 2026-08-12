@@ -36,15 +36,11 @@ val mcpModule = module {
         )
     }
 
-    // 多个 McpToolProvider 必须 bind，否则 single<T> 同名覆盖，getAll 只能拿到最后一个
+    // ── 资源域 Provider（写工具 + 动作同文件，通过 McpToolProvider.actions 声明资源动作）──
+    // 注意：Koin 主类型必须用具体实现类，且只 bind McpToolProvider::class（接口主类型 bind 会同名覆盖，
+    // getAll 只拿到最后一个，2026-08-12 实测坑）。动作收集由 dispatcher 从 getAll<McpToolProvider>()
+    // 的 actions 汇总（Q-007 已实施：无独立 ResourceActionProvider 接口）。
     single { AiTreeTemplateToolProvider(get(), get()) } bind McpToolProvider::class
-    single {
-        AiTreeConfigToolProvider(
-            get<AiConfigGenerationService>(),
-            get(),
-            get()
-        )
-    } bind McpToolProvider::class
     single { AiOrthogonalToolProvider(get(), get()) } bind McpToolProvider::class
     single {
         lin.mcp.card_group.CardGroupToolProvider(
@@ -79,9 +75,11 @@ val mcpModule = module {
             get<ConditionTreeConfigService>()
         )
     } bind McpToolProvider::class
-    single { lin.mcp.AiDraftTreeToolProvider(get(), get<CardGroupService>()) } bind McpToolProvider::class
     single {
-        ComboPlanToolProvider(
+        lin.mcp.AiDraftTreeToolProvider(get(), get<CardGroupService>())
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.ComboPlanToolProvider(
             get(),
             get<CardGroupService>(),
             get<lin.repository.HsCardRepository>(),
@@ -89,9 +87,10 @@ val mcpModule = module {
         )
     } bind McpToolProvider::class
     single {
-        lin.mcp.ComboPlanManagementToolProvider(
-            get(),
-            get<CardGroupService>()
+        AiTreeConfigToolProvider(
+            get<lin.ui.service.TreeConfigService>(),
+            get<lin.repository.combo_plan.ComboPlanDefinitionRepository>(),
+            get<AiConfigGenerationService>()
         )
     } bind McpToolProvider::class
     single {
@@ -111,6 +110,21 @@ val mcpModule = module {
             get<ConditionTreeConfigService>(),
             get<lin.repository.card_purpose.CardPurposeRepository>()
         )
+    } bind McpToolProvider::class
+
+    // ── 动作大类 dispatcher（遍历全部 McpToolProvider 集合的 actions，按 resource 分发）──
+    // Lazy 注入避开循环依赖：getAll<McpToolProvider>() 含 dispatcher 自身，构造期解析会 StackOverflow。
+    single {
+        lin.mcp.action.GetDispatcher(lazy { getAll<McpToolProvider>() })
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.action.ListDispatcher(lazy { getAll<McpToolProvider>() })
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.action.DeleteDispatcher(lazy { getAll<McpToolProvider>() })
+    } bind McpToolProvider::class
+    single {
+        lin.mcp.action.ToolCapabilitiesProvider(lazy { getAll<McpToolProvider>() })
     } bind McpToolProvider::class
 
     single { MyMcpServer(getAll<McpToolProvider>()) }

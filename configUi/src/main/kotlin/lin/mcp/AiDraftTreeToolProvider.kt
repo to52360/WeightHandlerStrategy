@@ -1,6 +1,9 @@
 package lin.mcp
 
 import lin.ai.config.draft.*
+import lin.mcp.action.ActionResources
+import lin.mcp.action.GetAction
+import lin.mcp.action.ResourceAction
 import lin.repository.card_group.CardGroupService
 import lin.rule.tree.EvaluatorTreeBindingType
 
@@ -10,11 +13,17 @@ import lin.rule.tree.EvaluatorTreeBindingType
  *
  * 草稿删除方案已定论（mcp-tool-shaping/D-003）：维持独立 abandon_draft 工具，不做合一。
  * 历史：曾用 deleteDraftId 合一（2026-08-10）→ 多态改造（2026-08-11）因顶层 anyOf 致"无工具"回退 → 删除合一撤销。
+ * 动作：draft get（原 get_draft_status）并入 get 大类，与草稿写工具同文件。
  */
 class AiDraftTreeToolProvider(
     private val draftTreeService: DraftTreeService,
     private val cardGroupService: CardGroupService
 ) : McpToolProvider {
+
+    override val actions: List<ResourceAction> = listOf(
+        DraftGetAction(draftTreeService)
+    )
+
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<CreateDraftRequest>(
             name = "create_draft_tree",
@@ -71,14 +80,6 @@ class AiDraftTreeToolProvider(
                 mcpSuccess(result)
             }
         },
-        typedTool<GetDraftStatusRequest>(
-            name = "get_draft_status",
-            description = "查询某个评估树草稿的当前进度，返回已填节点、未填节点和总数。当对话中断或上下文截断后恢复时，用此工具确认草稿还缺哪些叶子需要继续填写。注意：草稿有生命周期，进程重启/长期搁置后会过期（返回不存在），过期草稿无法续填，需重新 create_draft_tree。"
-        ) { request ->
-            val result = draftTreeService.getDraftStatus(request.draftId)
-                ?: return@typedTool mcpError("草稿不存在或已过期: ${request.draftId}")
-            mcpSuccess(result)
-        },
         typedTool<AbandonDraftRequest>(
             name = "abandon_draft",
             description = "废弃一个不再需要的评估树草稿（如绑定校验失败、拓扑设计错误等）。被废弃的草稿将立即从内存中清除。"
@@ -91,4 +92,21 @@ class AiDraftTreeToolProvider(
             }
         }
     )
+
+    // ── 动作：draft get（原 get_draft_status）──
+
+    private class DraftGetAction(
+        private val draftTreeService: DraftTreeService
+    ) : GetAction {
+
+        override val resource: String = ActionResources.DRAFT
+
+        override fun handleGet(id: String): McpToolResult {
+            val result = draftTreeService.getDraftStatus(id)
+                ?: return mcpError("草稿不存在或已过期: $id（草稿有生命周期，进程重启/长期搁置后过期，过期需重新 create_draft_tree）")
+            return mcpSuccess(result)
+        }
+
+        override val getFieldHint: String = "草稿 id（由 create_draft_tree 返回的 draftId）"
+    }
 }

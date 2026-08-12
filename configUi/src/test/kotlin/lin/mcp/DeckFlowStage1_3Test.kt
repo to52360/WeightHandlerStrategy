@@ -34,8 +34,8 @@ class DeckFlowStage1_3Test : McpTestEnv() {
             assertTrue("should have parsed cards", parsedCards.isNotEmpty())
 
             // ── 元数据探查 ──
-            call("list_card_group_sources")
-            call("list_capability_background")
+            call("list", """{"resource":"card_pool"}""")
+            call("list", """{"resource":"capability_background"}""")
             call("list_orthogonal_components")
 
             // ── Stage 2: 用解析出的真实卡牌 ID 建分组 ──
@@ -60,16 +60,16 @@ class DeckFlowStage1_3Test : McpTestEnv() {
             assertNotNull("managerId should not be null", managerId)
             println(">>> managerId=$managerId, bindingIds=$bindingIds")
 
-            call("list_card_groups")
+            call("list", """{"resource":"card_group"}""")
 
-            // G-04：验证 get_card_group_manager 可查 binding 条目 ID
+            // G-04：验证 get(resource=card_group) 可查 binding 条目 ID
             if (managerId != null) {
-                call("get_card_group_manager", """{"managerId":"$managerId"}""")
+                call("get", """{"resource":"card_group","id":"$managerId"}""")
             }
 
             // ── Stage 3: 参考模板与存量配置 ──
-            call("list_evaluator_trees")
-            call("list_evaluator_tree_templates")
+            call("list", """{"resource":"evaluator_tree"}""")
+            call("list", """{"resource":"tree_template"}""")
 
             assertTrue(true)
         } finally {

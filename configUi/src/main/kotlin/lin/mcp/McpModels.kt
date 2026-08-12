@@ -1,5 +1,6 @@
 package lin.mcp
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.victools.jsonschema.generator.OptionPreset
 import com.github.victools.jsonschema.generator.SchemaGenerator
@@ -7,6 +8,7 @@ import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder
 import com.github.victools.jsonschema.generator.SchemaVersion
 import com.github.victools.jsonschema.module.jackson.JacksonModule
 import com.github.victools.jsonschema.module.jackson.JacksonOption
+import lin.mcp.action.ResourceAction
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.LogicNode
 import lin.tree_config.bridge.defaultNodeName
@@ -145,32 +147,37 @@ inline fun <reified I> typedTool(
 /**
  * MCP tool 提供者接口。
  * 每个 domain 实现此接口，提供本域的 tool 列表。
+ * actions：本 Provider 参与 get/list/delete 动作大类分发的资源动作（Q-007：直接声明在 Provider 上，
+ * dispatcher 从 getAll<McpToolProvider>() 的 actions 收集，无独立 ResourceActionProvider 接口）。
+ * 默认空 = 不参与动作分发（纯写工具 Provider）。
  */
 interface McpToolProvider {
     fun provide(): List<McpToolHandler>
+
+    val actions: List<ResourceAction> get() = emptyList()
 }
 
 data class SaveTreeTemplateInput(
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("模板名称")
+    @field:JsonPropertyDescription("模板名称")
     val name: String,
 
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("评估树骨架 JSON（字符串类型）。只存节点类型和引用关系，不存叶子节点的具体参数值。【必须传入「序列化后的 JSON 字符串」——即整段 JSON 文本整体作为一个字符串，不要直接传嵌套 JSON 对象】。")
+    @field:JsonPropertyDescription("评估树骨架 JSON（字符串类型）。只存节点类型和引用关系，不存叶子节点的具体参数值。【必须传入「序列化后的 JSON 字符串」——即整段 JSON 文本整体作为一个字符串，不要直接传嵌套 JSON 对象】。")
     val contentJson: String,
 
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("模板描述")
+    @field:JsonPropertyDescription("模板描述")
     val description: String? = null,
 
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("模板分组 ID（来自 list_template_groups），可选")
+    @field:JsonPropertyDescription("模板分组 ID（来自 list_template_groups），可选")
     val groupId: String? = null
 )
 
 data class GetTreeRequest(
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("要读取的模板或树配置的 ID")
+    @field:JsonPropertyDescription("要读取的模板或树配置的 ID")
     val id: String
 )
 
 data class DeleteTreeInput(
-    @field:com.fasterxml.jackson.annotation.JsonPropertyDescription("要删除的评估树 ID，来自 list_evaluator_trees 返回的 id。删除不可恢复。")
+    @field:JsonPropertyDescription("要删除的评估树 ID，来自 list_evaluator_trees 返回的 id。删除不可恢复。")
     val treeId: String
 )
 

@@ -19,7 +19,7 @@ class DeckFlowStage3_Group1CommitTest : McpTestEnv() {
         println("========== T-123 第 1 分组「圣契减费引擎」MCP 真实落盘 ==========")
 
         // 1. 获取 Card Group Manager 与第 1 分组 Binding ID
-        val listResp = call("card_group", """{"action":"LIST"}""")
+        val listResp = call("list", """{"resource":"card_group"}""")
 
         @Suppress("UNCHECKED_CAST")
         val groups = mapper.readValue(listResp.contentJson, List::class.java) as List<Map<String, Any>>
@@ -28,7 +28,7 @@ class DeckFlowStage3_Group1CommitTest : McpTestEnv() {
         val managerId = manager["id"] as String
         println(">>> Manager ID: $managerId")
 
-        val mgrResp = call("card_group", """{"action":"GET","managerId":"$managerId"}""")
+        val mgrResp = call("get", """{"resource":"card_group","id":"$managerId"}""")
         val mgrData = mapper.readValue(mgrResp.contentJson, Map::class.java)
 
         @Suppress("UNCHECKED_CAST")
@@ -105,7 +105,7 @@ class DeckFlowStage3_Group1CommitTest : McpTestEnv() {
         println(">>> ✅ Step 3: 提交落盘成功！产生正式 EvaluatorTree ID: '$treeId'")
 
         // 5. 校验：读取刚提交的 EvaluatorTree 确认落库
-        val getResp = call("evaluator_tree", """{"action":"GET","id":"$treeId"}""")
+        val getResp = call("get", """{"resource":"evaluator_tree","id":"$treeId"}""")
         assertTrue("evaluator_tree GET 应成功: ${getResp.contentJson}", !getResp.isError)
         println(">>> DB 数据校验成功！EvaluatorTree 详情:")
         println(getResp.contentJson)

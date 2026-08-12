@@ -8,8 +8,8 @@ class PurposeTagToolTest : McpTestEnv() {
 
     @Test
     fun testPurposeTagListAll() {
-        val resp = call("purpose_tag", """{"action":"LIST"}""")
-        assertFalse("purpose_tag LIST 不应报错", resp.isError)
+        val resp = call("list", """{"resource":"purpose_tag"}""")
+        assertFalse("purpose_tag list 不应报错", resp.isError)
         val json = resp.contentJson
         assertTrue("应包含 SAVE_LIFE", json.contains("SAVE_LIFE"))
         assertTrue("应包含 CLEAN", json.contains("CLEAN"))
@@ -22,8 +22,8 @@ class PurposeTagToolTest : McpTestEnv() {
 
     @Test
     fun testPurposeTagGetSuccess() {
-        val resp = call("purpose_tag", """{"action":"GET","tagId":"SAVE_LIFE"}""")
-        assertFalse("purpose_tag GET SAVE_LIFE 不应报错", resp.isError)
+        val resp = call("get", """{"resource":"purpose_tag","id":"SAVE_LIFE"}""")
+        assertFalse("purpose_tag get SAVE_LIFE 不应报错", resp.isError)
         val json = resp.contentJson
         assertTrue("应包含 SAVE_LIFE", json.contains("SAVE_LIFE"))
         assertTrue("应包含保命显示名", json.contains("保命"))
@@ -32,17 +32,17 @@ class PurposeTagToolTest : McpTestEnv() {
     }
 
     @Test
-    fun testPurposeTagGetMissingTagId() {
-        val resp = call("purpose_tag", """{"action":"GET"}""")
-        assertTrue("未传 tagId 的 GET 应返回 isError=true", resp.isError)
-        assertTrue("应提示提供合法的 tagId", resp.contentJson.contains("action=GET 必须提供合法的 tagId"))
+    fun testPurposeTagGetInvalidTagId() {
+        val resp = call("get", """{"resource":"purpose_tag","id":"NON_EXISTENT_TAG"}""")
+        assertTrue("不存在的 tagId 应返回 isError=true", resp.isError)
+        assertTrue("应提示合法的 tagId", resp.contentJson.contains("当前可用标签"))
     }
 
     @Test
-    fun testPurposeTagInvalidAction() {
-        val resp = call("purpose_tag", """{"action":"UNKNOWN"}""")
-        assertTrue("未知 action 应返回 error", resp.isError)
-        assertTrue("错误提示应说明支持 LIST, GET", resp.contentJson.contains("有效值仅限：LIST, GET"))
+    fun testUnknownResource() {
+        val resp = call("get", """{"resource":"unknown_resource"}""")
+        assertTrue("未知 resource 应返回 error", resp.isError)
+        assertTrue("错误提示应说明支持范围", resp.contentJson.contains("未知 resource"))
     }
 
     @Test

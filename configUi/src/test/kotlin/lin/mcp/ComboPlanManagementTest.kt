@@ -70,12 +70,13 @@ class ComboPlanManagementTest : McpTestEnv() {
         assertTrue("非法 managerId 应返回 error", invalidMgrResp.isError)
         assertTrue("应提示卡组不存在并输出可用卡组列表", invalidMgrResp.contentJson.contains("卡组/管理器不存在"))
 
-        // 3. 校验防幻觉：非法 bindingId 拒绝
+        // 3. 校验防幻觉：非法 bindingId 拒绝（depGroupIds 提供合法值，以命中"非法分组"分支而非"depGroupIds 为空"分支）
         val invalidBindingResp = call(
             "save_combo_plan",
             """{
               "managerId":"$testManagerId",
-              "coreGroupIds":["invalid_binding_id"]
+              "coreGroupIds":["invalid_binding_id"],
+              "depGroupIds":["$testBindingId2"]
             }"""
         )
         assertTrue("非法 bindingId 应返回 error", invalidBindingResp.isError)
@@ -98,7 +99,7 @@ class ComboPlanManagementTest : McpTestEnv() {
         val planId = mapper.readTree(saveResp.contentJson)["id"].asText()
 
         // 2. 执行删除，断言返回 deletedPlan 备份快照
-        val deleteResp = call("delete_combo_plan", """{"id":"$planId"}""")
+        val deleteResp = call("delete", """{"resource":"combo_plan","id":"$planId"}""")
         assertFalse("删除不应返回 error", deleteResp.isError)
 
         val deleteContent = mapper.readTree(deleteResp.contentJson)
@@ -137,12 +138,13 @@ class ComboPlanManagementTest : McpTestEnv() {
 
     @Test
     fun testCoManagerTreesAndComboPlansBiDirectional() {
-        // 1. 存入 ComboPlan
+        // 1. 存入 ComboPlan（必须含 depGroupIds 才构成有效 Combo）
         val saveComboResp = call(
             "save_combo_plan",
             """{
               "managerId":"$testManagerId",
               "coreGroupIds":["$testBindingId1"],
+              "depGroupIds":["$testBindingId2"],
               "score":2.0
             }"""
         )
@@ -156,7 +158,7 @@ class ComboPlanManagementTest : McpTestEnv() {
         )
 
         // 3. 验证 evaluator_tree(action=GET) 能反查到 associatedComboPlans
-        val treeGetResp = call("evaluator_tree", """{"action":"GET","id":"$treeId"}""")
+        val treeGetResp = call("get", """{"resource":"evaluator_tree","id":"$treeId"}""")
         assertFalse("evaluator_tree GET 不应报错", treeGetResp.isError)
         val treeContent = mapper.readTree(treeGetResp.contentJson)
 
@@ -166,7 +168,7 @@ class ComboPlanManagementTest : McpTestEnv() {
         assertEquals(comboId, associatedComboPlans[0]["id"].asText())
 
         // 4. 验证 combo_plan(action=GET) 能反查到 coManagerTrees
-        val comboGetResp = call("combo_plan", """{"action":"GET","id":"$comboId"}""")
+        val comboGetResp = call("get", """{"resource":"combo_plan","id":"$comboId"}""")
         assertFalse("combo_plan GET 不应报错", comboGetResp.isError)
         val comboContent = mapper.readTree(comboGetResp.contentJson)
 

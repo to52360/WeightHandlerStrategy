@@ -28,7 +28,7 @@ class DeckFlowStage1_ParseTest : McpTestEnv() {
 
         // 1. 探查能力面与正交积木
         println("========== 探查能力 ==========")
-        call("list_capability_background")
+        call("list", """{"resource":"capability_background"}""")
         call("list_orthogonal_components")
 
         // 2. 解析卡组代码生成 .cardgroup
@@ -47,7 +47,7 @@ class DeckFlowStage1_ParseTest : McpTestEnv() {
 
         // 3. 获取卡牌详情供 AI 阅读
         println("========== 获取卡组详情供 AI 分析 ==========")
-        val detailResp = call("card_pool", """{"action":"GET","fileName":"$FILE_NAME"}""")
+        val detailResp = call("get", """{"resource":"card_pool","id":"$FILE_NAME"}""")
         if (!detailResp.isError) {
             @Suppress("UNCHECKED_CAST")
             val detail = mapper.readValue(detailResp.contentJson, Map::class.java) as Map<String, Any>

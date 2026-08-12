@@ -1,6 +1,7 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
+import lin.mcp.action.*
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInput
@@ -8,14 +9,13 @@ import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
 
 /**
- * Push 广播评分配置（aura-boost）MCP 工具提供者。
+ * Push 广播评分配置（aura-boost）域 MCP 工具提供者（写工具 + 动作同文件）：
+ * - [AuraBoostAction]：resource=aura_boost 的 get/list/delete（原 aura_boost / delete_aura_boost 工具）。
+ * - provide()：save_aura_boost 写工具。
  *
  * AuraBoost = 触发条件树（conditionId，全局检测）命中后，给 targetConditionId（受益卡过滤）命中的卡加分。
  * additive 独立通道：命中分与评估树分相加；光环加分只走 AuraBoost，评估树不写光环条件（D-004）。
  * managerId 为消费方归属（卡组级配置），引用的条件树是全局资源（D-003）。
- *
- * 内联创建（Q-003）：conditionId/targetConditionId 与 conditionTreeJson/targetConditionTreeJson 互斥，
- * 提供 treeJson 时自动创建条件树返回新 id，一次性树无需先建模板。
  */
 class AuraBoostToolProvider(
     private val service: AuraBoostConfigService,
@@ -24,29 +24,11 @@ class AuraBoostToolProvider(
 
     private val mapper = createConditionTreeConfigMapper()
 
+    override val actions: List<ResourceAction> = listOf(
+        AuraBoostAction(service)
+    )
+
     override fun provide(): List<McpToolHandler> = listOf(
-        typedTool<AuraBoostQueryInput>(
-            name = "aura_boost",
-            description = """
-                查询 Push 广播评分配置（光环/全局条件加分）。支持 action=LIST（列出全部 AuraBoost 摘要，
-                可传 managerId 按卡组过滤）和 action=GET（读取单条完整配置：触发条件树 id、受益过滤条件树 id、加分）。
-            """.trimIndent()
-        ) { input ->
-            when (val query = input.toQuery()) {
-                is AuraBoostQuery.List -> {
-                    val list = service.loadAll()
-                        .filter { query.managerId == null || it.managerId == query.managerId }
-                    mcpSuccess(list.map { it.toSummary() })
-                }
-
-                is AuraBoostQuery.Get -> {
-                    val entity = service.findById(query.id)
-                        ?: return@typedTool mcpError("AuraBoost 不存在: ${query.id}")
-                    mcpSuccess(entity.toSummary())
-                }
-            }
-        },
-
         typedTool<SaveAuraBoostMcpInput>(
             name = "save_aura_boost",
             description = """
@@ -55,9 +37,9 @@ class AuraBoostToolProvider(
                 additive 通道：加分与评估树分相加，光环加分只走 AuraBoost，评估树不写光环条件（防双倍计分）。
 
                 【条件树两种提供方式（二选一，互斥）】
-                - 复用已有条件树：conditionId / targetConditionId 传已有树 id（来自 condition_tree(action=LIST)）
+                - 复用已有条件树：conditionId / targetConditionId 传已有树 id（来自 list(resource=condition_tree)）
                 - 一次性内联创建：conditionTreeJson / targetConditionTreeJson 直接传条件树 JSON（{id,name,root}），
-                  无需先 condition_tree(action=SAVE) 建模板，本工具自动建树并返回新 id
+                  无需先 save_condition_tree 建模板，本工具自动建树并返回新 id
 
                 managerId 关联卡组（消费方归属）；引用的条件树是全局资源。传 existingId 更新已有配置。
             """.trimIndent()
@@ -96,43 +78,51 @@ class AuraBoostToolProvider(
                     "conditionId" to conditionId, "targetConditionId" to targetConditionId
                 )
             )
-        },
-
-        typedTool<DeleteAuraBoostInput>(
-            name = "delete_aura_boost",
-            description = "删除一条 Push 广播评分配置（AuraBoost）。boostId 由 aura_boost(action=LIST) 获取。删除不可恢复。"
-        ) { input ->
-            val entity = service.findById(input.boostId)
-                ?: return@typedTool mcpError("AuraBoost 不存在: ${input.boostId}")
-            service.delete(input.boostId)
-            mcpSuccess(mapOf("deleted" to entity.id, "name" to entity.name))
         }
     )
-}
 
-private sealed interface AuraBoostQuery {
-    data class List(val managerId: String?) : AuraBoostQuery
-    data class Get(val id: String) : AuraBoostQuery
-}
+    // ── 动作：aura_boost get/list/delete ──
 
-private data class AuraBoostQueryInput(
-    @field:JsonPropertyDescription("操作类型：LIST 列出全部摘要，GET 读取单条完整配置。")
-    val action: String,
-    @field:JsonPropertyDescription("AuraBoost id（8 位短 id），仅 action=GET 时必填。")
-    val id: String? = null,
-    @field:JsonPropertyDescription("可选：仅 action=LIST 时有效，按卡组 managerId 过滤。")
-    val managerId: String? = null
-) {
-    fun toQuery(): AuraBoostQuery = when (action.uppercase()) {
-        "LIST" -> AuraBoostQuery.List(managerId)
-        "GET" -> AuraBoostQuery.Get(id ?: throw McpBadInput("action=GET 必须提供 id"))
-        else -> throw McpBadInput("未知 action: $action，支持 LIST / GET")
+    private class AuraBoostAction(
+        private val service: AuraBoostConfigService
+    ) : GetAction, ListAction, DeleteAction {
+
+        override val resource: String = ActionResources.AURA_BOOST
+
+        override fun handleList(managerId: String?): McpToolResult {
+            val list = service.loadAll()
+                .filter { managerId == null || it.managerId == managerId }
+            return mcpSuccess(list.map { it.toSummary() })
+        }
+
+        override fun handleGet(id: String): McpToolResult {
+            val entity = service.findById(id)
+                ?: return mcpError("AuraBoost 不存在: $id")
+            return mcpSuccess(entity.toSummary())
+        }
+
+        override val getFieldHint: String = "AuraBoost id（8 位短 id，由 list(resource=aura_boost) 返回）"
+
+        override fun handleDelete(id: String): McpToolResult {
+            val entity = service.findById(id)
+                ?: return mcpError("AuraBoost 不存在: $id")
+            service.delete(id)
+            return mcpSuccess(mapOf("deleted" to entity.id, "name" to entity.name))
+        }
+
+        override val deleteFieldHint: String = "AuraBoost id（由 list(resource=aura_boost) 返回）"
+
+        override val deleteSemantics: String = "删除不可恢复"
     }
 }
 
-private data class DeleteAuraBoostInput(
-    @field:JsonPropertyDescription("要删除的 AuraBoost id。")
-    val boostId: String
+private fun AuraBoostEntity.toSummary(): Map<String, Any?> = mapOf(
+    "id" to id,
+    "name" to name,
+    "conditionId" to conditionId,
+    "targetConditionId" to targetConditionId,
+    "score" to score,
+    "managerId" to managerId
 )
 
 /**
@@ -153,17 +143,8 @@ private data class SaveAuraBoostMcpInput(
     val targetConditionTreeJson: String? = null,
     @field:JsonPropertyDescription("命中后加给受益卡的分值。")
     val score: Double,
-    @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 card_group(action=LIST)）。")
+    @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 list(resource=card_group)）。")
     val managerId: String? = null,
     @field:JsonPropertyDescription("可选：更新已有 AuraBoost 时传其 id；不传则新建。")
     val existingId: String? = null
-)
-
-private fun AuraBoostEntity.toSummary(): Map<String, Any?> = mapOf(
-    "id" to id,
-    "name" to name,
-    "conditionId" to conditionId,
-    "targetConditionId" to targetConditionId,
-    "score" to score,
-    "managerId" to managerId
 )

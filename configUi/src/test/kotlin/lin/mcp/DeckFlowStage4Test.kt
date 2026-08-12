@@ -26,7 +26,7 @@ class DeckFlowStage4Test : McpTestEnv() {
             savedFile = java.nio.file.Path.of("../data/cardgroup/verify_deck_4.cardgroup")
 
             // 取前 3 张卡做简单分组
-            val detailResp = call("get_card_group_detail", """{"fileName":"verify_deck_4"}""")
+            val detailResp = call("get", """{"resource":"card_pool","id":"verify_deck_4"}""")
             val detailData = mapper.readValue(detailResp.contentJson, Map::class.java)
 
             @Suppress("UNCHECKED_CAST")
@@ -106,7 +106,7 @@ class DeckFlowStage4Test : McpTestEnv() {
             )
 
             // 查草稿状态
-            call("get_draft_status", """{"draftId":"$draftId"}""")
+            call("get", """{"resource":"draft","id":"$draftId"}""")
 
             // 提交草稿
             val commitResp = call("commit_draft_tree", """{"draftId":"$draftId"}""")

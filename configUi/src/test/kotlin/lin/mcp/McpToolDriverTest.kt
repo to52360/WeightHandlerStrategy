@@ -26,8 +26,8 @@ class McpToolDriverTest : McpTestEnv() {
                 """{"deckCode":"$deckCode","groupName":"verify_deck_1","enabled":true}"""
             )
                 .also { savedFile = java.nio.file.Path.of("../data/cardgroup/verify_deck_1.cardgroup") }
-            call("card_pool", """{"action":"LIST"}""")
-            call("list_capability_background")
+            call("list", """{"resource":"card_pool"}""")
+            call("list", """{"resource":"capability_background"}""")
             call("list_orthogonal_components")
 
             // ── Stage 2: 前置依赖供给（用解析出的卡池建分组）──
@@ -45,17 +45,17 @@ class McpToolDriverTest : McpTestEnv() {
                     @Suppress("UNCHECKED_CAST")
                     bindingIds = (m["bindingIds"] as? List<*>)?.map { it.toString() } ?: emptyList()
                 }
-            call("card_group", """{"action":"LIST"}""")
+            call("list", """{"resource":"card_group"}""")
 
             // G-04 验证：能查到已有分组的绑定条目 ID（bindingIds 来源）
             if (managerId != null) {
-                call("card_group", """{"action":"GET","managerId":"$managerId"}""")
+                call("get", """{"resource":"card_group","id":"$managerId"}""")
             }
 
             // ── Stage 3: 参考模板与存量配置 ──
-            call("evaluator_tree", """{"action":"LIST"}""")
-            call("tree_template", """{"action":"LIST"}""")
-            call("combo_plan", """{"action":"LIST"}""")
+            call("list", """{"resource":"evaluator_tree"}""")
+            call("list", """{"resource":"tree_template"}""")
+            call("list", """{"resource":"combo_plan"}""")
             if (managerId != null && bindingIds.isNotEmpty()) {
                 val createdPlanResp = call(
                     "save_combo_plan",
@@ -71,8 +71,8 @@ class McpToolDriverTest : McpTestEnv() {
                     throw AssertionError("save_combo_plan 失败（应为校验通过）：${createdPlanResp.contentJson}")
                 }
                 val createdPlanId = mapper.readValue(createdPlanResp.contentJson, Map::class.java)["id"] as String
-                call("combo_plan", """{"action":"GET","id":"$createdPlanId"}""")
-                call("delete_combo_plan", """{"id":"$createdPlanId"}""")
+                call("get", """{"resource":"combo_plan","id":"$createdPlanId"}""")
+                call("delete", """{"resource":"combo_plan","id":"$createdPlanId"}""")
             }
 
             // ── Stage 4: 渐进式生成 ──
@@ -128,7 +128,7 @@ class McpToolDriverTest : McpTestEnv() {
                 }"""
             )
 
-            call("get_draft_status", """{"draftId":"$draftId"}""")
+            call("get", """{"resource":"draft","id":"$draftId"}""")
 
             val commitResp = call("commit_draft_tree", """{"draftId":"$draftId"}""")
             treeId = runCatching {
@@ -165,7 +165,7 @@ class McpToolDriverTest : McpTestEnv() {
                   }
                 }"""
             )
-            call("get_draft_status", """{"draftId":"$codedDraftId"}""")
+            call("get", """{"resource":"draft","id":"$codedDraftId"}""")
             val codedCommit = call("commit_draft_tree", """{"draftId":"$codedDraftId"}""")
             codedTreeId = runCatching {
                 mapper.readValue(codedCommit.contentJson, Map::class.java)["id"] as String?
