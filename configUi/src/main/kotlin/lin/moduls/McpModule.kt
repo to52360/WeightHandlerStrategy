@@ -4,10 +4,26 @@ import lin.ai.config.AiConfigGenerationService
 import lin.ai.config.CardGroupQueryService
 import lin.ai.config.DefaultAiConfigGenerationService
 import lin.ai.config.DefaultCardGroupQueryService
+import lin.ai.config.draft.DefaultDraftTreeService
+import lin.ai.config.draft.DraftTreeService
 import lin.di.infraModule
 import lin.mcp.*
+import lin.mcp.action.DeleteDispatcher
+import lin.mcp.action.GetDispatcher
+import lin.mcp.action.ListDispatcher
+import lin.mcp.action.ToolCapabilitiesProvider
+import lin.mcp.card_group.CardGroupToolProvider
+import lin.mcp.card_group.CardPoolToolProvider
+import lin.mcp.card_group.SaveCardGroupToolProvider
+import lin.mcp.combo_plan.ComboPlanToolProvider
+import lin.repository.HsCardRepository
+import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.card_group.CardGroupService
+import lin.repository.card_purpose.CardPurposeRepository
+import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
+import lin.repository.tree_config.EvaluatorLeafConfigRepository
+import lin.ui.service.TreeConfigService
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -26,8 +42,8 @@ val mcpModule = module {
             get<ConditionTreeConfigService>()
         )
     }
-    single<lin.ai.config.draft.DraftTreeService> {
-        lin.ai.config.draft.DefaultDraftTreeService(
+    single<DraftTreeService> {
+        DefaultDraftTreeService(
             get(),
             get(),
             get(),
@@ -43,53 +59,51 @@ val mcpModule = module {
     single { AiTreeTemplateToolProvider(get(), get()) } bind McpToolProvider::class
     single { AiOrthogonalToolProvider(get(), get()) } bind McpToolProvider::class
     single {
-        lin.mcp.card_group.CardGroupToolProvider(
+        CardGroupToolProvider(
             get<CardGroupService>(),
-            get<lin.ui.service.TreeConfigService>()
+            get<TreeConfigService>()
         )
     } bind McpToolProvider::class
     single {
-        lin.mcp.card_group.SaveCardGroupToolProvider(
+        SaveCardGroupToolProvider(
             get<CardGroupService>(),
             get<ConditionTreeConfigService>()
         )
     } bind McpToolProvider::class
     single {
-        lin.mcp.card_group.CardPoolToolProvider(
+        CardPoolToolProvider(
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
-            get<lin.repository.HsCardRepository>()
+            get<HsCardRepository>()
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
     single {
         ConditionTreeToolProvider(
             get<ConditionTreeConfigService>(),
-            get<lin.repository.aura_boost.AuraBoostConfigService>(),
-            get<lin.repository.tree_config.EvaluatorLeafConfigRepository>()
+            get<AuraBoostConfigService>(),
+            get<EvaluatorLeafConfigRepository>()
         )
     } bind McpToolProvider::class
     single {
         AuraBoostToolProvider(
-            get<lin.repository.aura_boost.AuraBoostConfigService>(),
+            get<AuraBoostConfigService>(),
             get<ConditionTreeConfigService>()
         )
     } bind McpToolProvider::class
     single {
-        lin.mcp.AiDraftTreeToolProvider(get(), get<CardGroupService>())
+        AiDraftTreeToolProvider(get(), get<CardGroupService>())
     } bind McpToolProvider::class
     single {
-        lin.mcp.ComboPlanToolProvider(
+        ComboPlanToolProvider(
             get(),
-            get<CardGroupService>(),
-            get<lin.repository.HsCardRepository>(),
-            get<lin.ui.service.TreeConfigService>()
+            get<CardGroupService>()
         )
     } bind McpToolProvider::class
     single {
         AiTreeConfigToolProvider(
-            get<lin.ui.service.TreeConfigService>(),
-            get<lin.repository.combo_plan.ComboPlanDefinitionRepository>(),
+            get<TreeConfigService>(),
+            get<ComboPlanDefinitionRepository>(),
             get<AiConfigGenerationService>()
         )
     } bind McpToolProvider::class
@@ -97,34 +111,34 @@ val mcpModule = module {
         PurposeTagToolProvider(
             get(),
             get(),
-            get<lin.repository.card_purpose.CardPurposeRepository>(),
-            get<lin.ui.service.TreeConfigService>()
+            get<CardPurposeRepository>(),
+            get<TreeConfigService>()
         )
     } bind McpToolProvider::class
     single {
         StrategyCoverageToolProvider(
             get<CardGroupService>(),
-            get<lin.ui.service.TreeConfigService>(),
-            get<lin.repository.combo_plan.ComboPlanDefinitionRepository>(),
-            get<lin.repository.aura_boost.AuraBoostConfigService>(),
+            get<TreeConfigService>(),
+            get<ComboPlanDefinitionRepository>(),
+            get<AuraBoostConfigService>(),
             get<ConditionTreeConfigService>(),
-            get<lin.repository.card_purpose.CardPurposeRepository>()
+            get<CardPurposeRepository>()
         )
     } bind McpToolProvider::class
 
     // ── 动作大类 dispatcher（遍历全部 McpToolProvider 集合的 actions，按 resource 分发）──
     // Lazy 注入避开循环依赖：getAll<McpToolProvider>() 含 dispatcher 自身，构造期解析会 StackOverflow。
     single {
-        lin.mcp.action.GetDispatcher(lazy { getAll<McpToolProvider>() })
+        GetDispatcher(lazy { getAll<McpToolProvider>() })
     } bind McpToolProvider::class
     single {
-        lin.mcp.action.ListDispatcher(lazy { getAll<McpToolProvider>() })
+        ListDispatcher(lazy { getAll<McpToolProvider>() })
     } bind McpToolProvider::class
     single {
-        lin.mcp.action.DeleteDispatcher(lazy { getAll<McpToolProvider>() })
+        DeleteDispatcher(lazy { getAll<McpToolProvider>() })
     } bind McpToolProvider::class
     single {
-        lin.mcp.action.ToolCapabilitiesProvider(lazy { getAll<McpToolProvider>() })
+        ToolCapabilitiesProvider(lazy { getAll<McpToolProvider>() })
     } bind McpToolProvider::class
 
     single { MyMcpServer(getAll<McpToolProvider>()) }
@@ -137,5 +151,3 @@ fun loadMcpModules() {
         modules(infraModule, serviceModule, dbModule, uiDBModule, mcpModule)
     }
 }
-
-
