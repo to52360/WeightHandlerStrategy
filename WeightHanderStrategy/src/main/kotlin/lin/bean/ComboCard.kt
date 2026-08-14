@@ -26,7 +26,7 @@ typealias ComboRule = (ComboCard) -> Double
 class ComboCard(
     val combinedConfig: CardCombinedConfig? = null,
     val card: Card,
-    // 基础分：由卡牌费用派生（baseScore(cost)），经 MyWarManage.parseComboCard 注入；
+    // 基础分：由卡牌实际费用派生（baseScore(card.cost)），经 MyWarManage.parseComboCard 注入；
     // 已接入权重：basePowerWeight = baseScore + extraScore，powerWeight = basePowerWeight + extPowerWeight。勿重复加接。
     // 影响评估跟踪见 architecture-context/scoring-model/TRACKER.md 待决项 Q-5（baseScore 接入权重对出牌决策的影响，🔶 待评估）。
     val baseScore: Double = 0.0
@@ -105,10 +105,12 @@ class ComboCard(
     }
 
     /**
-     * todo-future   or条件判断,存在问题(需要严格的顺序),目前不想大改先这样
+     * 判断当前是否处于"基础分"状态：extPowerWeight 尚未被任何规则 addWeight 加分。
+     * baseScore/extraScore 是构造时注入的基础分，不属于"规则加分"，故只看 extPowerWeight。
+     * 通用随从兜底模型（GeneralMinionWeightHandler）据此判断"是否还需给身材兜底分"。
      */
     fun isBaseWeight(): Boolean {
-        return powerWeight == BaseWeight
+        return extPowerWeight == BaseWeight
     }
 
     /**

@@ -22,8 +22,9 @@ val PenaltyWeight: Double get() = EngineConfig.penaltyWeight
 val ComboCardWeight: Double get() = EngineConfig.comboCardWeight
 val ComboDecayFactor: Double get() = EngineConfig.comboDecayFactor
 
-// 基础分原语：由静态费用派生
-fun baseScore(cost: Int): Double = CostWeight * cost.toDouble().pow(ScoreExponent)
+// 基础分原语（双轨制轻量费用微增量）：由实际费用派生（0.5 * cost，保守封顶 4.0）
+// 用于战术模式下同组打破平局、以及法术底线兜底（见 D-012）
+fun baseScore(cost: Int): Double = (CostWeight * cost.toDouble().pow(ScoreExponent)).coerceAtMost(4.0)
 
 // 剩余法力惩罚原语：使用解耦后的 PenaltyWeight (使 PenaltyWeight < CostWeight，防止低费单卡负分)
 fun remainingCostPenalty(remainingCost: Int, totalCost: Int): Double {

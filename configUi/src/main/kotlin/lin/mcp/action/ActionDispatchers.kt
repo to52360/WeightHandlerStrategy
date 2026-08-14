@@ -136,7 +136,11 @@ class ToolCapabilitiesProvider(
                     mapOf(
                         "resource" to input.resource,
                         "get" to registry.get(input.resource)?.let { mapOf("id" to it.getFieldHint) },
-                        "list" to registry.list(input.resource)?.let { mapOf("managerId" to "可选，按卡组过滤") },
+                        "list" to registry.list(input.resource)?.let {
+                            mapOf(
+                                "managerId" to if (it.supportsManagerIdFilter) "可选，按卡组过滤" else "不支持（忽略此字段）"
+                            )
+                        },
                         "delete" to registry.delete(input.resource)?.let {
                             mapOf("id" to it.deleteFieldHint, "semantics" to it.deleteSemantics)
                         }

@@ -30,6 +30,11 @@ import lin.ui.service.TreeConfigService
  * - ORCHESTRATED：无评分机制，但仅有排序机制（stageOverride / conditionalStage）
  * - UNCOVERED：以上全无
  * 组内卡关联的用途标签（groupPurposeTags）作为辅助信息展示，不算分组覆盖依据（全局兜底非分组策略）。
+ *
+ * 卡级覆盖分层：
+ * - uncoveredCards：无分组、无标签、无 CARD 树的裸卡（完全无机制）
+ * - tagOnlyCards：有标签但无分组、无 CARD 树（标签只够全局兜底，无卡组特异性正向出牌策略）
+ * 两者互补，共同暴露"未获得卡组特异性出牌策略"的卡（未进组且无 CARD 树）。
  */
 class StrategyCoverageToolProvider(
     private val cardGroupService: CardGroupService,
@@ -50,6 +55,8 @@ class StrategyCoverageToolProvider(
                 conditionalStage 排序机制）> UNCOVERED（无任何机制）。
                 同时输出：
                 - uncoveredCards：不在任何分组、无用途标签、且无 CARD 单卡树的裸卡
+                - tagOnlyCards：有用途标签、但不在任何分组、且无 CARD 单卡树的卡（标签只够全局兜底，无卡组特异性
+                  正向出牌策略，覆盖质量缺口——注意"有标签 ≠ 有评分覆盖"）
                 - cardTrees：该卡组卡池中被 CARD 绑定单卡树覆盖的卡清单（CARD 树是全局资源，按卡池归属展示；
                   单卡微观规则如"神性圣契非 0 费卡手扣分"走 CARD 绑定）
                 managerId 由 card_group(action=LIST) 获取；不传则返回全部卡组。
@@ -156,6 +163,15 @@ class StrategyCoverageToolProvider(
                 )
             }
             .map { cardId -> mapOf("cardId" to cardId, "purposeTags" to ctx.tagsByCard[cardId].orEmpty()) }
+        // 有标签无激励卡 = 有用途标签、但不在任何分组、且无 CARD 单卡树（标签只够全局兜底，无卡组特异性正向出牌策略）
+        // 正是 uncoveredCards 判定中"因有标签而被漏报"的那部分卡，单独成清单暴露覆盖质量缺口。
+        val tagOnlyCards = poolCards
+            .filter { cardId ->
+                cardId !in groupedCardIds && !ctx.tagsByCard[cardId].isNullOrEmpty() && !ctx.cardTreeByCard.containsKey(
+                    cardId
+                )
+            }
+            .map { cardId -> mapOf("cardId" to cardId, "purposeTags" to ctx.tagsByCard[cardId].orEmpty()) }
 
         val uncoveredGroupIds = groups.asSequence()
             .filter { it["status"] == "UNCOVERED" }
@@ -175,11 +191,13 @@ class StrategyCoverageToolProvider(
                 "orchestratedGroups" to groups.count { it["status"] == "ORCHESTRATED" },
                 "uncoveredGroups" to groups.count { it["status"] == "UNCOVERED" },
                 "uncoveredCardCount" to uncoveredCards.size,
+                "tagOnlyCardCount" to tagOnlyCards.size,
                 "cardTreeCardCount" to cardTrees.size
             ),
             "groups" to groups,
             "uncoveredGroups" to uncoveredGroupIds,
             "uncoveredCards" to uncoveredCards,
+            "tagOnlyCards" to tagOnlyCards,
             "cardTrees" to cardTrees
         )
     }

@@ -107,6 +107,8 @@ class ConditionTreeToolProvider(
 
         override val resource: String = ActionResources.CONDITION_TREE
 
+        override val supportsManagerIdFilter: Boolean = true
+
         override fun handleList(managerId: String?): McpToolResult {
             return mcpSuccess(
                 service.loadAllMeta(managerId).map {

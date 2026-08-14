@@ -89,6 +89,8 @@ class AuraBoostToolProvider(
 
         override val resource: String = ActionResources.AURA_BOOST
 
+        override val supportsManagerIdFilter: Boolean = true
+
         override fun handleList(managerId: String?): McpToolResult {
             val list = service.loadAll()
                 .filter { managerId == null || it.managerId == managerId }

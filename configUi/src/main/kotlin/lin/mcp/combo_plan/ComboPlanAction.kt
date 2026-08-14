@@ -33,6 +33,8 @@ class ComboPlanAction(
 
     override val resource: String = ActionResources.COMBO_PLAN
 
+    override val supportsManagerIdFilter: Boolean = true
+
     override fun handleList(managerId: String?): McpToolResult {
         val entities = if (!managerId.isNullOrBlank()) {
             repository.findByManagerId(managerId)

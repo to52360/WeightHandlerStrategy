@@ -32,6 +32,8 @@ class AiTreeConfigToolProvider(
 
         override val resource: String = ActionResources.EVALUATOR_TREE
 
+        override val supportsManagerIdFilter: Boolean = true
+
         override fun handleList(managerId: String?): McpToolResult {
             return mcpSuccess(
                 treeConfigService.loadSummaries(
@@ -105,6 +107,8 @@ class AiTreeConfigToolProvider(
     ) : ListAction {
 
         override val resource: String = ActionResources.CAPABILITY_BACKGROUND
+
+        override val supportsManagerIdFilter: Boolean = true
 
         override fun handleList(managerId: String?): McpToolResult {
             return mcpSuccess(service.listCapabilityBackground(managerId))

@@ -39,6 +39,9 @@ interface GetAction : ResourceAction {
 
 /** list 动作：实现此接口即声明支持 list。 */
 interface ListAction : ResourceAction {
+    /** list 是否支持按 managerId 过滤（tool_capabilities 二级详情展示用，默认不支持）。 */
+    val supportsManagerIdFilter: Boolean get() = false
+
     fun handleList(managerId: String?): McpToolResult
 }
 
