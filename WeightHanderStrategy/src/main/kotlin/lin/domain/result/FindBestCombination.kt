@@ -3,10 +3,8 @@ package lin.domain.result
 import lin.bean.ComboCard
 import lin.bean.groupIds
 import lin.bean.usePlan.CardComboEntry
-import lin.domain.context.ComboDecayFactor
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
-import kotlin.math.pow
 
 interface FindBestCombination {
     fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard>
@@ -122,10 +120,9 @@ object DefaultFindBestCombination : FindBestCombination {
                     val comboBonus = evaluateNewComboBonus(bindings.entries)
                     if (comboBonus.isNaN()) continue
 
-                    // 基础分组合累加衰减：第 i 张卡的 baseScore 乘以 λ^(currentCombination.size)
-                    val decay = ComboDecayFactor.pow(currentCombination.size.toDouble())
+                    // 基础价值不衰减（D-013 方案 A）：物理价值恒定，堆砌惩罚统一由 comboPenalty 承担
                     val cardIncrementalWeight =
-                        (card.baseScore * decay) + card.extraScore + card.extPowerWeight + comboBonus
+                        card.baseValue + card.extPowerWeight + comboBonus
 
                     // 前进
                     currentCombination.add(card)

@@ -159,15 +159,11 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         var maxWeight = NotWeight
         for(i in cards.indices){
             val comboCard = warManage.parseComboCard(cards[i])
-            var baseWeight = NotWeight
+            // 基础价值（配置费用/身材/法术费用三分流）已在 parseComboCard 注入 baseValue
+            var finalWeight = comboCard.baseValue
             discoverWeightHandlers.forEach {
-                baseWeight += it.cardWeight(comboCard)
+                finalWeight += it.cardWeight(comboCard)
             }
-            val extWeight = pointToDouble(comboCard.basePowerWeight)
-            if (extWeight != 0) {
-                myLog.info { "id:${comboCard.cardId()},额外权重:$extWeight,也就是weight小数部分" }
-            }
-            val finalWeight = baseWeight + extWeight
             if (finalWeight > maxWeight) {
                 maxWeight = finalWeight
                 maxIndex = i
@@ -180,18 +176,7 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
 
     }
 
-    private fun pointToDouble(number: Double): Int {
-        val decimalStr = "%.3f".format(number)  // 使用足够精度格式化
-        val decimalIndex = decimalStr.indexOf('.')
 
-        if (decimalIndex == -1) return 0
-
-        val decimalPart = decimalStr.substring(decimalIndex + 1)
-        // 移除开头的零并转换为整数
-        return decimalPart.trimStart('0').toIntOrNull() ?: 0
-
-
-    }
 
 
 

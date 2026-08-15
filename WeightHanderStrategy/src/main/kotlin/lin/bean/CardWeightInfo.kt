@@ -26,7 +26,8 @@ const val FirstUseGroupId = 20
  * 转化位置
  * [lin.serviceLoader.cardInfoProvide.DefCardWeightInfoProvide]
  * @param groupId 使用weight的值 [club.xiaojiawei.hsscriptcardsdk.bean.CardWeight.weight]
- * @param powerWeight 检测优先级
+ * @param powerWeight 配置等效费用（D-014 起语义从"检测优先级/分数"改为"等效费用"）：>0 表示显式配置该卡等效费用，
+ *   基础价值 = costValue(powerWeight)（费用价值凹函数）；=0 表示无配置，走身材/法术兜底。
  *
  * todo-future (三合一了)信息太多可以拆分.集合类的变量应该添加处理上下文(操作日志和处理器之间的通信)
  *

@@ -24,7 +24,9 @@ data class CardWeightConfig(
     val cardId: String,
     val name: String,
     val weight: Double? = null,
-    val changeWeight: Double? = null
+    val changeWeight: Double? = null,
+    // 配置等效费用（>0 覆盖身材/费用兜底，基础价值 = costValue(powerWeight)）。null 不写该字段。
+    val powerWeight: Double? = null
 )
 
 object CardGroupJsonParser {
@@ -81,7 +83,8 @@ object CardGroupJsonParser {
         enabled: Boolean = true,
         dirPath: Path = PathConfig.defaultDirPath,
         defaultWeight: Double? = null,
-        defaultChangeWeight: Double? = null
+        defaultChangeWeight: Double? = null,
+        defaultPowerWeight: Double? = null
     ): Path {
         if (cards.isEmpty()) {
             throw IllegalArgumentException("卡牌列表为空，无法生成 .cardgroup 文件")
@@ -91,7 +94,8 @@ object CardGroupJsonParser {
                 cardId = it.cardId,
                 name = it.name,
                 weight = defaultWeight,
-                changeWeight = defaultChangeWeight
+                changeWeight = defaultChangeWeight,
+                powerWeight = defaultPowerWeight
             )
         }
         return saveCardGroupConfigs(weightConfigs, groupName, enabled, dirPath)

@@ -71,7 +71,7 @@ class CardPoolToolProvider(
         // ── save_card_pool_weights (卡牌权重与换牌权重更新设置工具) ──
         typedTool<SaveCardPoolWeightsInput>(
             name = "save_card_pool_weights",
-            description = "为指定 .cardgroup 卡池文件更新或设置单卡的静态出牌权重 weight 与开局换牌权重 changeWeight。更新时会保留原卡池中的其他卡牌，仅增量更新或追加传入单卡的权重配置。"
+            description = "为指定 .cardgroup 卡池文件更新或设置单卡的静态出牌权重 weight、开局换牌权重 changeWeight、配置等效费用 powerWeight（>0 时该卡基础价值按 costValue(powerWeight) 计算，覆盖身材/费用兜底）。更新时会保留原卡池中的其他卡牌，仅增量更新或追加传入单卡的权重配置。"
         ) { input ->
             if (input.fileName.isBlank()) return@typedTool mcpError("fileName 参数不能为空")
             if (input.cards.isEmpty()) return@typedTool mcpError("cards 列表不能为空")
@@ -83,14 +83,16 @@ class CardPoolToolProvider(
                 .associateBy { it.cardId }
                 .toMutableMap()
 
-            for ((cardId, name, weight, changeWeight) in input.cards) {
+            for (item in input.cards) {
+                val cardId = item.cardId
                 val oldItem = updatedCardMap[cardId]
-                val cardName = name ?: oldItem?.name ?: cardRepo.findName(cardId) ?: cardId
+                val cardName = item.name ?: oldItem?.name ?: cardRepo.findName(cardId) ?: cardId
                 updatedCardMap[cardId] = CardWeightConfig(
                     cardId = cardId,
                     name = cardName,
-                    weight = weight ?: oldItem?.weight,
-                    changeWeight = changeWeight ?: oldItem?.changeWeight
+                    weight = item.weight ?: oldItem?.weight,
+                    changeWeight = item.changeWeight ?: oldItem?.changeWeight,
+                    powerWeight = item.powerWeight ?: oldItem?.powerWeight
                 )
             }
 
@@ -178,7 +180,7 @@ private data class ParseDeckCodeInput(
 private data class SaveCardPoolWeightsInput(
     @field:JsonPropertyDescription("卡池文件名（不含 .cardgroup 后缀），如 real_libram_deck")
     val fileName: String,
-    @field:JsonPropertyDescription("需要更新权重的单卡列表。每张卡可指定 cardId, name, weight(静态出牌权重), changeWeight(开局换牌权重)。未包含的既有卡牌将予以保留。")
+    @field:JsonPropertyDescription("需要更新权重的单卡列表。每张卡可指定 cardId, name, weight(静态出牌权重), changeWeight(开局换牌权重), powerWeight(配置等效费用)。未包含的既有卡牌将予以保留。")
     val cards: List<CardWeightItemInput>,
     @field:JsonPropertyDescription("文件是否启用，缺省保持原文件状态或默认 true")
     val enabled: Boolean? = null
@@ -192,5 +194,7 @@ private data class CardWeightItemInput(
     @field:JsonPropertyDescription("静态出牌权重 weight（可选）")
     val weight: Double? = null,
     @field:JsonPropertyDescription("开局换牌权重 changeWeight（可选，正数偏好保留，负数偏好换掉，如 15.0 或 -100.0）")
-    val changeWeight: Double? = null
+    val changeWeight: Double? = null,
+    @field:JsonPropertyDescription("配置等效费用 powerWeight（可选，>0 时该卡基础价值 = costValue(powerWeight)，覆盖身材/费用兜底。如 5.0 表示该卡等效 5 费）")
+    val powerWeight: Double? = null
 )

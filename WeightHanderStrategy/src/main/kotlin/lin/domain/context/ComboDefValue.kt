@@ -16,15 +16,19 @@ val OrderWeight: Double get() = EngineConfig.orderWeight
 val UnUseWeight: Double get() = EngineConfig.unUseWeight
 val UseSkillWeight: Double get() = EngineConfig.useSkillWeight
 
-val ScoreExponent: Double get() = EngineConfig.scoreExponent
 val PenaltyRatioExponent: Double get() = EngineConfig.penaltyRatioExponent
 val PenaltyWeight: Double get() = EngineConfig.penaltyWeight
 val ComboCardWeight: Double get() = EngineConfig.comboCardWeight
-val ComboDecayFactor: Double get() = EngineConfig.comboDecayFactor
+val CostValueWeight: Double get() = EngineConfig.costValueWeight
+val CostValueExponent: Double get() = EngineConfig.costValueExponent
+val CostValueMaxCost: Double get() = EngineConfig.costValueMaxCost
 
-// 基础分原语（双轨制轻量费用微增量）：由实际费用派生（0.5 * cost，保守封顶 4.0）
-// 用于战术模式下同组打破平局、以及法术底线兜底（见 D-012）
-fun baseScore(cost: Int): Double = (CostWeight * cost.toDouble().pow(ScoreExponent)).coerceAtMost(4.0)
+// 费用价值凹函数（基础价值三分流共用）：costValue(cost) = CostValueWeight * min(cost, MaxCost)^CostValueExponent。
+// 表达炉石「低费抢节奏溢价、高费卡手/怕解贬值」的非线性经济规律（指数 0.5 = √cost）。
+// 三类输入：① 配置等效费用（powerWeight）；② 随从等效费用 (atc+hp)/2（实时身材）；③ 法术初始费用（数据库）。
+// 上限 MaxCost（默认 10）封顶「夸张身材」（如实时 buff 到 30/30）与异常费用，避免基础价值虚高。
+fun costValue(cost: Double): Double =
+    CostValueWeight * cost.coerceAtMost(CostValueMaxCost).pow(CostValueExponent)
 
 // 剩余法力惩罚原语：使用解耦后的 PenaltyWeight (使 PenaltyWeight < CostWeight，防止低费单卡负分)
 fun remainingCostPenalty(remainingCost: Int, totalCost: Int): Double {

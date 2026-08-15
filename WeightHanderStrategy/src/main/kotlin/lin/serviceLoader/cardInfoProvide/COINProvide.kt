@@ -19,7 +19,9 @@ class COINProvide : CardWeightInfoProvide {
      * todo 存在魔数
      */
     override fun getInfos(): Map<String, CardWeightInfo> {
-        val coin = CardWeightInfo(COIN_CARD_ID, -20.0)
+        // 硬币基础价值=0（不占配置费用分），"额外费用 + 最后打"由 useGroupId=COINGroupId + cardContext[coinKey] 通道承载，
+        // 不再用 -20.0 负权重污染 powerWeight 字段。
+        val coin = CardWeightInfo(COIN_CARD_ID, 0.0)
         //标记快速查询
         coin.useGroupId = COINGroupId
         coin.cardContext = coin.cardContext.addSafe(coinKey, 1)

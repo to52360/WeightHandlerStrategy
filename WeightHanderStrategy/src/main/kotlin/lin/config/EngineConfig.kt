@@ -12,11 +12,15 @@ object EngineConfig {
     val orderWeight get() = store.double("scoring.order.weight", 1.0)
     val unUseWeight get() = store.double("scoring.unuse.weight", -100.0)
     val useSkillWeight get() = store.double("scoring.use.skill.weight", -7.0)
-    val scoreExponent get() = store.double("scoring.exponent", 1.0)
     val penaltyRatioExponent get() = store.double("scoring.penalty.ratio.exponent", 0.5)
     val penaltyWeight get() = store.double("scoring.penalty.weight", 0.35)
     val comboCardWeight get() = store.double("scoring.combo.card.weight", 0.1)
-    val comboDecayFactor get() = store.double("scoring.combo.decay.factor", 0.85)
+
+    // 费用价值凹函数：costValue(cost) = costValueWeight * cost^costValueExponent
+    // （基础价值三分流共用：配置费用 / 随从等效费用 / 法术初始费用）
+    val costValueWeight get() = store.double("scoring.cost.value.weight", 3.0)
+    val costValueExponent get() = store.double("scoring.cost.value.exponent", 0.5)
+    val costValueMaxCost get() = store.double("scoring.cost.value.maxCost", 10.0)
 
     init {
         require(penaltyWeight < costWeight) {

@@ -8,14 +8,15 @@ import club.xiaojiawei.hsscriptcardsdk.bean.isValid
 import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
 import lin.bean.CardCombinedConfig
 import lin.bean.ComboCard
+import lin.bean.cardExt.base.isMinion
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
-import lin.domain.context.baseScore
 import lin.domain.use.tryUseCard
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
 import lin.serviceLoader.weightRule.utils.war.WarStatus
+import lin.utils.database.dao.CardInfoDao
 import lin.warExt.action.activeLocation
 import lin.warExt.action.cleanPlay
 import lin.warExt.action.cleanPlayAll
@@ -23,12 +24,14 @@ import lin.warExt.my.base.getCost
 import lin.warExt.my.base.getHandCards
 import lin.warExt.my.base.getPlayCards
 import lin.warExt.my.base.playCardIsFull
+import lin.weightHandler.calcBaseValue
 import lin.weightHandler.warHandler.ToDieHandler
 import org.koin.core.component.KoinComponent
 import org.koin.core.context.loadKoinModules
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import java.util.concurrent.ConcurrentHashMap
 
 
 /**
@@ -162,15 +165,22 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
 
     fun parseComboCard(card: Card): ComboCard {
-        // 基础分由实际费用派生（card.cost 动态，减费后随之变化）。
-        // 与通用模型（GeneralMinionWeightHandler，身材·实际费用）统一到"实际费用"单一语义，
-        // 消除减费卡"名义费用 vs 实际费用"双语义重复计费（见 config-tooling/TRACKER Q-015/Q-016）。
+        val combinedConfig = infoMap[card.cardId]
+        val configCost = combinedConfig?.weightInfo?.powerWeight ?: 0.0
+        // 仅"无配置法术"需要查询初始费用兜底（随从走实时身材、配置走等效费用，均不查数据库）
+        val baseCost = if (configCost <= 0.0 && !card.isMinion()) baseCost(card.cardId) else 0
         return ComboCard(
-            combinedConfig = infoMap[card.cardId],
+            combinedConfig = combinedConfig,
             card = card,
-            baseScore = baseScore(card.cost)
+            baseValue = calcBaseValue(card, combinedConfig, baseCost)
         )
     }
+
+    // 初始费用懒缓存（cardId -> 数据库初始 cost），静态值只查一次
+    private val cardInfoDao: CardInfoDao by lazy { getKoin().get() }
+    private val baseCostCache = ConcurrentHashMap<String, Int>()
+    private fun baseCost(cardId: String): Int =
+        baseCostCache.getOrPut(cardId) { cardInfoDao.queryCardCostById(cardId) ?: 0 }
 
 
     /**
