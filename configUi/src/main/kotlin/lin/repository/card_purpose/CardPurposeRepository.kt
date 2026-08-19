@@ -79,8 +79,8 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
     fun findByCardId(cardId: String): CardPurposeEntity? {
         val sql = """
             SELECT h.cardId as card_id, h.name,
-                   COALESCE(p.purpose_tags, '') as purpose_tags,
-                   COALESCE(p.replan_after_use, 0) as replan_after_use,
+                   p.purpose_tags as purpose_tags,
+                   p.replan_after_use as replan_after_use,
                    p.candidate_policy,
                    p.created_date
             FROM hs.cards h
@@ -228,8 +228,8 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
         val (whereClause, params) = buildConfigConditions(cardIds, searchText, tagFilter, dateFilter)
         val sql = """
             SELECT h.cardId as card_id, h.name,
-                   COALESCE(p.purpose_tags, '') as purpose_tags,
-                   COALESCE(p.replan_after_use, 0) as replan_after_use,
+                   p.purpose_tags as purpose_tags,
+                   p.replan_after_use as replan_after_use,
                    p.candidate_policy,
                    p.created_date
             FROM hs.cards h
