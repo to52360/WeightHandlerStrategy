@@ -2,10 +2,9 @@ package lin.bean
 
 
 import lin.config.CardType
+import lin.config.EvaluatorTreeRoot
 import lin.domain.context.NotWeight
 import lin.lifecycle.LifecycleRegister
-
-import lin.rule.tree.EvaluatorInstanceNode
 
 import lin.serviceLoader.weightRule.WeightRule
 import org.koin.core.component.KoinComponent
@@ -81,13 +80,13 @@ data class CardWeightInfo(
     }
 
 
+    private var _intentEvaluatorRoots: MutableList<EvaluatorTreeRoot>? = null
 
-    private var _intentEvaluatorRoots: MutableList<EvaluatorInstanceNode>? = null
-
-    val intentEvaluatorRoots: List<EvaluatorInstanceNode>
+    /** 评估树根 + 评分通道（Q-008）。channel 在绑定任务实例化时静态解析。 */
+    val intentEvaluatorRoots: List<EvaluatorTreeRoot>
         get() = _intentEvaluatorRoots ?: emptyList()
 
-    fun addIntentEvaluatorRoot(root: EvaluatorInstanceNode) {
+    fun addIntentEvaluatorRoot(root: EvaluatorTreeRoot) {
         _intentEvaluatorRoots = _intentEvaluatorRoots.addSafe(root)
     }
 

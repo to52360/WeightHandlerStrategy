@@ -2,12 +2,14 @@ package lin.rule.handler
 
 import lin.bean.ComboCard
 import lin.bean.cardExt.base.intentEvaluatorRoots
+import lin.bean.usePlan.*
 import lin.config.ConfigDispatcher
 import lin.config.EvaluatorTreeRoot
 import lin.domain.MyWarManage
 import lin.rule.context.RuleContext
 import lin.rule.context.RuleEnv
 import lin.rule.tree.*
+import lin.serviceLoader.provider.GroupBehaviorProvider
 import lin.serviceLoader.provider.StartupTask
 import lin.serviceLoader.provider.TreeConfigProvider
 import org.koin.core.component.KoinComponent
@@ -22,6 +24,9 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
         val configDispatcher = get<ConfigDispatcher>()
         val logicAssembler = get<LeafLogicAssembler>()
         val providers = getKoin().getAll<TreeConfigProvider>()
+        val groupBindings = getKoin().getOrNull<GroupBehaviorProvider>()?.provide().orEmpty()
+        val tagRuleIndex = (getKoin().getOrNull<PurposeTagIntentRuleProvider>()
+            ?: DefaultPurposeTagIntentRuleProvider()).rules().associateBy { it.tagId }
 
         for (provider in providers) {
             for (config in provider.findAll()) {
@@ -29,31 +34,74 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
                     leafBuilder = logicAssembler::build,
                     branchConditionBuilder = logicAssembler::buildBranch
                 )
+                // channel 静态解析：树显式 > 绑定目标缺省（GROUP/PURPOSE_TAG/CARD）> GENERAL
+                val root = EvaluatorTreeRoot(
+                    root = instance.root,
+                    channel = resolveChannel(config, groupBindings, tagRuleIndex)
+                )
 
                 // 按 instance.bindingType 分发给对应的 Finder
                 when (instance.bindingType) {
                     EvaluatorTreeBindingType.GROUP -> {
                         configDispatcher.processByType(
                             instance.bindingIds.map { BindingGroupId(it) },
-                            listOf(EvaluatorTreeRoot(instance.root))
+                            listOf(root)
                         )
                     }
 
                     EvaluatorTreeBindingType.PURPOSE_TAG -> {
                         configDispatcher.processByType(
                             instance.bindingIds.map { PurposeTagBindingId(it) },
-                            listOf(EvaluatorTreeRoot(instance.root))
+                            listOf(root)
                         )
                     }
 
                     EvaluatorTreeBindingType.CARD -> {
                         configDispatcher.processByType(
                             instance.bindingIds.map { CardBindingId(it) },
-                            listOf(EvaluatorTreeRoot(instance.root))
+                            listOf(root)
                         )
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * channel 解析（Q-008 定论）：
+     * 1. 树显式声明 `EvaluatorTreeConfig.channel` 最高优先。
+     * 2. 否则由绑定目标的候选策略推导缺省（[ScoreChannel.fromCandidatePolicy]）：
+     *    GROUP→GroupUseOverride.candidatePolicy、PURPOSE_TAG→PurposeTagIntentRule.defaultCandidatePolicy、CARD→GENERAL。
+     * 3. 一棵树绑多个 bindingId 时取缺省唯一值；不一致抛配置冲突，要求树显式声明。
+     *    （CARD 树的单卡显式 TACTICS_DOMINANT 边界：需 CardPurpose 数据，RuleTreeBindingTask 拿不到，见 TRACKER Q-008 追加待办。）
+     */
+    private fun resolveChannel(
+        config: EvaluatorTreeConfig,
+        groupBindings: List<CardGroupBinding>,
+        tagRuleIndex: Map<PurposeTagId, PurposeTagIntentRule>
+    ): ScoreChannel {
+        config.channel?.let { return it }
+        val derived = when (config.bindingType) {
+            EvaluatorTreeBindingType.GROUP -> config.bindingIds.mapNotNull { id ->
+                groupBindings.find { it.id == id }
+                    ?.behaviors?.findOverride()?.candidatePolicy
+                    ?.let { ScoreChannel.fromCandidatePolicy(it) }
+            }
+
+            EvaluatorTreeBindingType.PURPOSE_TAG -> config.bindingIds.mapNotNull { id ->
+                tagRuleIndex[PurposeTagId(id)]?.defaultCandidatePolicy
+                    ?.let { ScoreChannel.fromCandidatePolicy(it) }
+            }
+
+            EvaluatorTreeBindingType.CARD -> emptyList()
+        }.distinct()
+        return when (derived.size) {
+            0 -> ScoreChannel.GENERAL
+            1 -> derived.first()
+            else -> throw IllegalStateException(
+                "评分通道冲突：评估树 ${config.bindingType} ${config.bindingIds} 的绑定目标推导出多个不同的缺省 channel（$derived），" +
+                        "请在树配置上显式声明 channel"
+            )
         }
     }
 }
@@ -81,15 +129,25 @@ fun evaluateCardRoots(
     warManage: MyWarManage,
     ruleEnv: RuleEnv,
 ): RuleResult.Accumulate {
-    var totalScore = 0.0
+    var generalScore = 0.0
+    var tacticalScore = 0.0
     val collectedActions = mutableListOf<ComboCardAction>()
 
     card.intentEvaluatorRoots()?.let { roots ->
         val context = RuleContext(card)
         for (root in roots) {
-            when (val res = evaluateConditionTree(root, context, ruleEnv, collectedActions)) {
-                is EvalOutcome.Matched -> totalScore += res.score
-                is EvalOutcome.Skipped -> totalScore += res.score
+            when (val res = evaluateConditionTree(root.root, context, ruleEnv, collectedActions)) {
+                is EvalOutcome.Matched -> addToChannel(
+                    root.channel,
+                    res.score,
+                    { generalScore += it },
+                    { tacticalScore += it })
+
+                is EvalOutcome.Skipped -> addToChannel(
+                    root.channel,
+                    res.score,
+                    { generalScore += it },
+                    { tacticalScore += it })
                 // 门控短路：该根树不贡献分（等价于整树 0 分），继续下一棵根树
                 EvalOutcome.Pruned -> {}
                 EvalOutcome.Banned -> throw EvalSignal.Banned // 全局禁止，穿透到编排层
@@ -97,7 +155,19 @@ fun evaluateCardRoots(
         }
     }
 
-    return RuleResult.Accumulate(totalScore, collectedActions)
+    return RuleResult.Accumulate(generalScore, tacticalScore, collectedActions)
+}
+
+private inline fun addToChannel(
+    channel: ScoreChannel,
+    score: Double,
+    addGeneral: (Double) -> Unit,
+    addTactical: (Double) -> Unit
+) {
+    when (channel) {
+        ScoreChannel.GENERAL -> addGeneral(score)
+        ScoreChannel.TACTICAL -> addTactical(score)
+    }
 }
 
 /**

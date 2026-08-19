@@ -4,6 +4,8 @@ import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
+import lin.bean.usePlan.ScoreChannel
+import lin.config.EvaluatorTreeRoot
 import lin.domain.MyWarManage
 import lin.rule.handler.EvalOutcome
 import lin.rule.handler.EvalSignal
@@ -47,7 +49,7 @@ class PurposeTagDrawConstraintTest {
             else EvalOutcome.Skipped(0.0)
         }
 
-    private fun buildCard(vararg roots: EvaluatorInstanceNode): ComboCard {
+    private fun buildCard(vararg roots: EvaluatorTreeRoot): ComboCard {
         val info = CardWeightInfo(cardId = "TEST_DRAW_001", powerWeight = 1.0)
         roots.forEach { info.addIntentEvaluatorRoot(it) }
         return ComboCard(
@@ -56,13 +58,21 @@ class PurposeTagDrawConstraintTest {
         )
     }
 
+    /** 包装根节点为默认 GENERAL 通道（兼容旧构造） */
+    private fun generalRoot(root: EvaluatorInstanceNode): EvaluatorTreeRoot =
+        EvaluatorTreeRoot(root = root, channel = ScoreChannel.GENERAL)
+
+    /** 战术通道包装 */
+    private fun tacticalRoot(root: EvaluatorInstanceNode): EvaluatorTreeRoot =
+        EvaluatorTreeRoot(root = root, channel = ScoreChannel.TACTICAL)
+
     private fun ruleEnvWithHand(n: Int) = fakeRuleEnv(
         createMockWarInfo(handCards = List(n) { createMockCard(cardType = CardTypeEnum.SPELL) })
     )
 
     @Test
     fun `手牌满9时 Constraint 树 BAN 一票否决，score 累加作废`() {
-        val card = buildCard(scoreTree(), banTree())
+        val card = buildCard(generalRoot(scoreTree()), generalRoot(banTree()))
         // score 树先累加 -10，但 ban 树 Banned 异常穿透，最终整卡禁止
         assertFailsWith<EvalSignal.Banned> {
             evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(9))
@@ -71,14 +81,14 @@ class PurposeTagDrawConstraintTest {
 
     @Test
     fun `手牌8时未触发 BAN，score 树独立累加`() {
-        val card = buildCard(banTree(), scoreTree())
+        val card = buildCard(generalRoot(banTree()), generalRoot(scoreTree()))
         val result = evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(8))
         assertEquals(-10.0, result.score)
     }
 
     @Test
     fun `手牌6时两树都不命中，总分为0`() {
-        val card = buildCard(banTree(), scoreTree())
+        val card = buildCard(generalRoot(banTree()), generalRoot(scoreTree()))
         val result = evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(6))
         assertEquals(0.0, result.score)
     }
@@ -87,12 +97,45 @@ class PurposeTagDrawConstraintTest {
     fun `无 Constraint 时 score 模拟禁止是错误语义：返回有限负分而非一票否决`() {
         // 只有 score 树，即使用 -100 模拟"手牌满禁止"，也只是负分
         // 若其它树给 +30，净分仍为 -70，卡照常可出——不会像 BAN 那样整卡 unUse
-        val card = buildCard(scoreTree(score = -100.0))
+        val card = buildCard(generalRoot(scoreTree(score = -100.0)))
         val result = evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(9))
         assertEquals(-100.0, result.score)
         assertFailsWith<EvalSignal.Banned> {
             // 对照：如果真有 Constraint 树，同样手牌下应抛 Banned
-            evaluateCardRoots(buildCard(banTree()), mockWarManage(), ruleEnvWithHand(9))
+            evaluateCardRoots(buildCard(generalRoot(banTree())), mockWarManage(), ruleEnvWithHand(9))
         }
+    }
+
+    // ── T-007：评分通道分离（Q-008）──
+
+    @Test
+    fun `战术树分单独进tacticalScore不进generalScore`() {
+        val card = buildCard(tacticalRoot(scoreTree(score = 5.0)))
+        val result = evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(7))
+        assertEquals(0.0, result.generalScore)
+        assertEquals(5.0, result.tacticalScore)
+        assertEquals(5.0, result.score)
+    }
+
+    @Test
+    fun `普通树分进generalScore不进tacticalScore`() {
+        val card = buildCard(generalRoot(scoreTree(score = 3.0)))
+        val result = evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(7))
+        assertEquals(3.0, result.generalScore)
+        assertEquals(0.0, result.tacticalScore)
+        assertEquals(3.0, result.score)
+    }
+
+    @Test
+    fun `混合通道各自累加互不串扰`() {
+        val card = buildCard(
+            generalRoot(scoreTree(score = 3.0)),
+            tacticalRoot(scoreTree(score = 5.0)),
+            generalRoot(scoreTree(score = -1.0))
+        )
+        val result = evaluateCardRoots(card, mockWarManage(), ruleEnvWithHand(7))
+        assertEquals(2.0, result.generalScore)      // 3 + (-1)
+        assertEquals(5.0, result.tacticalScore)     // 5
+        assertEquals(7.0, result.score)             // 总和
     }
 }

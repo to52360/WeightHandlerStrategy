@@ -70,6 +70,7 @@ class AiTreeConfigToolProvider(
                     "managerId" to managerId,
                     "bindingType" to config.bindingType.name,
                     "bindingIds" to config.bindingIds,
+                    "channel" to config.channel?.name,
                     "tree" to config.root.toNamed(),
                     "leafConfigs" to config.leafConfigs,
                     "associatedComboPlans" to associatedComboPlans

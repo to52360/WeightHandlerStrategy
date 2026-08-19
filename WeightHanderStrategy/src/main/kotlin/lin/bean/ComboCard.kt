@@ -80,13 +80,17 @@ class ComboCard(
         get() = baseValue + extPowerWeight
     var extPowerWeight: Double = BaseWeight
 
+    // 评估树战术分（Q-008/T-007）：仅评估树 TACTICAL 通道的分，由 weightEvaluator 写入。
+    // 候选门控（T-008）读 tacticalScore > 0 判断"战术命中"，与七路混合的 extPowerWeight 解耦。
+    var tacticalScore: Double = 0.0
+
     /**
      * 权重累加方法
      */
     fun addWeight(weight: Double) {
         extPowerWeight += weight
-        //todo-future 临时方案 使用和权重不应该共用,遇到奥秘情况会吃亏,遇到有变化就会吃亏
-        useGroupOrder += weight
+        // D-003/T-009：断开 useGroupOrder 污染。useGroupOrder 是排序意图（UseIntent/配置），
+        // 与运行时权重（extPowerWeight）正交；运行时分数变化不再隐式改写排序。
     }
 
     fun cleanWeight() {
@@ -129,11 +133,10 @@ class ComboCard(
         extPowerWeight = UnUseWeight
     }
     fun isUnUse(): Boolean {
-        val offer = 1
-        //todo-future 负权重要最后使用的临时方案,但也引入存在多重语义问题
-        if (extPowerWeight == UnUseWeight) return true
-        if (powerWeight < NotWeight && useGroupId == DefUseGroupId) useGroupId = LastUseGroupId + offer
-        return false
+        // T-009：移除「负权重改 LastUseGroupId」副作用——那是旧的"负权重要最后使用"临时方案，
+        // 多重语义污染（isUnUse 本应只做不可用判断）。负分是软惩罚（评估树返回），由候选过滤
+        // （T-008 passesFirst/SecondRoundCandidate）在候选层承担，不在判断方法里改排序状态。
+        return extPowerWeight == UnUseWeight
     }
 
 

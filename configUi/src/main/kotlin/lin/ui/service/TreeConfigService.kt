@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import lin.bean.usePlan.ScoreChannel
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.TreeConfigEntity
 import lin.repository.tree_config.TreeConfigRepository
@@ -94,7 +95,8 @@ class TreeConfigService(
             description = description,
             configData = rootJson,
             enabled = enabled,
-            managerId = managerId
+            managerId = managerId,
+            channel = config.channel?.name
         )
         repository.save(entity)
         leafConfigRepository.saveAll(id, config.leafConfigs, mapper)
@@ -119,7 +121,8 @@ class TreeConfigService(
                 "description" to it.description,
                 "bindingType" to it.bindingType,
                 "managerId" to it.managerId,
-                "enabled" to it.enabled
+                "enabled" to it.enabled,
+                "channel" to it.channel
             )
         }
     }
@@ -151,7 +154,8 @@ class TreeConfigService(
             bindingType = EvaluatorTreeBindingType.valueOf(entity.bindingType),
             bindingIds = entity.bindingIds.split(",").filter { it.isNotBlank() },
             root = root,
-            leafConfigs = leafConfigs
+            leafConfigs = leafConfigs,
+            channel = entity.channel?.let { runCatching { ScoreChannel.valueOf(it) }.getOrNull() }
         )
     }
 

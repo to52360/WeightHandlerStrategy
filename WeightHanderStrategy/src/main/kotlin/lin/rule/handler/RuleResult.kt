@@ -17,9 +17,17 @@ sealed class RuleResult {
      * 纯值聚合：控制语义由 EvalOutcome 承担——
      * "不参与评分"由 missValue=0 表达，全局禁止经 EvalSignal.Banned 异常穿透，
      * 本类型不携带任何控制分支。
+     *
+     * Q-008：按评分通道分离——[generalScore]（一般价值）与 [tacticalScore]（战术价值）。
+     * [score] 保留为两者之和，兼容旧消费方；候选门控读 [tacticalScore] 而非 [score] 正负。
      */
     data class Accumulate(
-        val score: Double,
+        val generalScore: Double,
+        val tacticalScore: Double,
         val actions: List<ComboCardAction>
-    ) : RuleResult()
+    ) : RuleResult() {
+        /** 旧语义总分数 = general + tactical（兼容既有消费方） */
+        val score: Double
+            get() = generalScore + tacticalScore
+    }
 }

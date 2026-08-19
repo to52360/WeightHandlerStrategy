@@ -1,5 +1,6 @@
 package lin.ui.card_purpose
 
+import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagId
 
 data class CardUiItem(
@@ -7,6 +8,7 @@ data class CardUiItem(
     val name: String,
     val purposeTags: Set<PurposeTagId>,
     val replanAfterUse: Boolean,
+    val candidatePolicy: CandidatePolicy? = null, // 三态：null=跟随标签默认
     val isDbOnly: Boolean = false, // 是否仅存在于数据库历史中
     val createdDate: String? = null
 )

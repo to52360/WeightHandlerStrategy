@@ -14,9 +14,9 @@ import lin.bean.usePlan.UseIntent
 class UseIntentAssembler(
     private val cardPurposes: Map<String, CardPurpose>,
     private val groupMap: Map<String, Set<String>>,
-    private val groupOverrides: Map<String, GroupUseOverride>
+    private val groupOverrides: Map<String, GroupUseOverride>,
+    private val deriver: UseIntentDeriver = UseIntentDeriver()
 ) {
-    private val deriver = UseIntentDeriver()
 
     fun assemble(cardId: String): UseIntent {
         val cardPurpose = cardPurposes[cardId] ?: CardPurpose()
@@ -28,7 +28,9 @@ class UseIntentAssembler(
             stageOverride = groupOverride?.stageOverride,
             replanAfterUse = groupOverride?.replanAfterUse
                 ?: cardPurpose.replanAfterUse,
-            orderWeight = groupOverride?.orderWeight ?: 0.0
+            orderWeight = groupOverride?.orderWeight ?: 0.0,
+            candidatePolicy = groupOverride?.candidatePolicy
+                ?: cardPurpose.candidatePolicy
         )
         return deriver.derive(config)
     }

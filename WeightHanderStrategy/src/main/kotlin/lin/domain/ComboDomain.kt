@@ -6,6 +6,7 @@ import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.data.BaseData
 import lin.bean.ComboCard
 import lin.bean.cardExt.base.isMinion
+import lin.bean.passesSecondRoundCandidate
 import lin.config.cardConfig.CardConfigBind
 import lin.domain.context.CostWeight
 import lin.domain.context.NotWeight
@@ -75,7 +76,13 @@ class ComboDomain : KoinComponent {
 
 
     /**
-     * 处理剩余费用
+     * 第二轮余费候选入口（T-009，D-003/Q-007）。
+     *
+     * 由 [executeUseCard] 在第一轮组合使用后仍有剩余费用时调用：
+     * - 候选来源：第一轮落选卡（[EndWeightResult.lessAbleUseCards]），费用门槛 + 候选策略过滤
+     *   （[lin.bean.passesSecondRoundCandidate]：SURPLUS_ONLY/正总分 NORMAL/TACTICS_DOMINANT 需战术命中）。
+     * - 独立批次：新一轮 [DefaultFindBestCombination] 搜索 + [UsePlanOrderer] 排序，不复用第一轮顺序。
+     * - 已知问题：Q-009（第二轮顺序与第一轮不连贯、战场变化后候选可能过时）、Q-010（统一 cost<=剩余费用，无具体几费分层）。
      */
     private fun processLessCost(weightResult: EndWeightResult): Boolean {
 
@@ -86,9 +93,10 @@ class ComboDomain : KoinComponent {
         //没有为0的牌
         if (costWeight == NotWeight && !unAbleUseCards.any { it.cost() == 0 }) return false
         val isFull = warManage.isFull
-        //todo 注意使用useGroupOrder排除费用权重的影响,还调整了满了,随从
+        // T-008 第二轮候选过滤：费用门槛 + 候选策略（SURPLUS_ONLY/正总分 NORMAL/TACTICS_DOMINANT 需战术命中）。
+        // 断开旧 useGroupOrder 阈值判断（旧通道由 addWeight 污染，详见 D-003/T-009）。
         val moreTryCard =
-            unAbleUseCards.filter { it.cost() <= warManage.getCost() && costWeight + it.useGroupOrder > NotWeight && !(isFull && it.isMinion()) }
+            unAbleUseCards.filter { it.cost() <= warManage.getCost() && it.passesSecondRoundCandidate() && !(isFull && it.isMinion()) }
         if (moreTryCard.isEmpty()) return false
 
         val bestCombos = UsePlanOrderer.order(

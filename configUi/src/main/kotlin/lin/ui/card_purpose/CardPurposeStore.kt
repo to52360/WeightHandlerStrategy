@@ -2,6 +2,7 @@ package lin.ui.card_purpose
 
 import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
+import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagId
 import lin.dao.CardGroupJsonParser
 import lin.repository.HsCardRepository
@@ -99,6 +100,7 @@ class CardPurposeStore(
                 name = entity.name ?: "未知卡牌",
                 purposeTags = entity.toDomain().purposeTags,
                 replanAfterUse = entity.replanAfterUse,
+                candidatePolicy = entity.candidatePolicy,
                 createdDate = entity.createdDate,
                 isDbOnly = false
             )
@@ -144,11 +146,14 @@ class CardPurposeStore(
 
     /**
      * 批量或单卡保存卡牌战略用途配置
+     *
+     * @param candidatePolicy 三态覆盖：null=不修改（半选保留原值），显式值=覆盖
      */
     fun saveCardPurpose(
         cardIds: List<String>,
         tagsToApply: Map<PurposeTagId, Boolean?>,
-        replanAfterUse: Boolean?
+        replanAfterUse: Boolean?,
+        candidatePolicy: CandidatePolicy? = null
     ) {
         if (cardIds.isEmpty()) return
 
@@ -170,12 +175,15 @@ class CardPurposeStore(
 
             // 合并重规划
             val mergedReplan = replanAfterUse ?: currentItem.replanAfterUse
+            // 合并候选策略（三态）
+            val mergedPolicy = candidatePolicy ?: currentItem.candidatePolicy
 
             val entity = CardPurposeEntity(
                 cardId = cardId,
                 name = currentItem.name,
                 purposeTags = mergedTags.joinToString(",") { it.value },
                 replanAfterUse = mergedReplan,
+                candidatePolicy = mergedPolicy,
                 createdDate = currentItem.createdDate ?: LocalDate.now().toString()
             )
             entitiesToSave.add(entity)
@@ -212,6 +220,7 @@ class CardPurposeStore(
             name = name,
             purposeTags = tagsString,
             replanAfterUse = replan,
+            candidatePolicy = dbEntity?.candidatePolicy,
             createdDate = currentDate
         )
         repository.save(entity)

@@ -3,6 +3,7 @@ package lin.weightHandler
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.CardCombinedConfig
 import lin.bean.cardExt.base.isMinion
+import lin.domain.context.SpellCostValueWeight
 import lin.domain.context.costValue
 
 /**
@@ -19,7 +20,7 @@ fun calcBaseValue(card: Card, combinedConfig: CardCombinedConfig?, baseCost: Int
     return when {
         configCost > 0.0 -> costValue(configCost)
         card.isMinion() -> costValue((card.atc + card.health).toDouble() / 2.0) + getFixedTraitWeight(card)
-        else -> costValue(baseCost.toDouble())
+        else -> costValue(baseCost.toDouble(), SpellCostValueWeight)
     }
 }
 

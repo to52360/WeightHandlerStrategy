@@ -67,7 +67,7 @@ class RuleConfigHandler : ConfigHandler<Rule> {
                 // 与"全局兜底=fallback"语义冲突（GROUP+PURPOSE_TAG 同时绑定时双倍计分）。当前靠配置约定不在两层重复打分，
                 // 仅 BAN(constraint) 场景天然无冲突；加分方向 tag 树案例出现前不再讨论。
                 is EvaluatorTreeRoot -> cardWeightInfos.forEach { info ->
-                    info.addIntentEvaluatorRoot(config.root)
+                    info.addIntentEvaluatorRoot(config)
                 }
             }
         }

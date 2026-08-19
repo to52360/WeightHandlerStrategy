@@ -1,6 +1,7 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
+import lin.bean.passesFirstRoundCandidate
 import lin.domain.context.NotWeight
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
@@ -85,8 +86,11 @@ class EndWeightResult(
     }
 
     fun findBestCombination() {
+        // T-008：第一轮候选过滤——NORMAL 全纳、TACTICS_DOMINANT 需战术命中、SURPLUS_ONLY 排除。
+        // 与 EvalOutcome.Banned 硬禁区分：只进不出候选，不改 unUse，卡保持可用。
+        val firstRoundCandidates = _canUseCardsByHandler.filter { it.passesFirstRoundCandidate() }
         if (isLessCost()) {// 预评估快路：无替代组合，直接全收
-            this.bestCombination = _canUseCardsByHandler
+            this.bestCombination = firstRoundCandidates
             // S-0.2: 原 `extWeight -= lessCost * CostWeight` 在 lessCost 大时产生离谱负数并污染
             // extWeight 通道。改为惩罚上限钳制为不超过本组合自身权重和，避免负分失控；
             // 最终量纲/是否保留由 Q-3 模型决策定。
@@ -99,7 +103,7 @@ class EndWeightResult(
             }
         }
         else {
-            this.bestCombination = findStrategy.findBestCombination(_canUseCardsByHandler, cost)
+            this.bestCombination = findStrategy.findBestCombination(firstRoundCandidates, cost)
         }
 
     }

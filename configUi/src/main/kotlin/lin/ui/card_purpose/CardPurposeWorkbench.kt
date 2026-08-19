@@ -8,6 +8,7 @@ import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagId
 import lin.repository.HsCardRepository
 import lin.repository.card_purpose.CardPurposeRepository
@@ -19,6 +20,12 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
+
+    companion object {
+        /** 候选策略"跟随标签默认"占位标签（null 语义） */
+        private const val FOLLOW_DEFAULT_LABEL = "跟随标签默认"
+    }
+
 
     private val repository: CardPurposeRepository by inject()
     private val hsCardRepo: HsCardRepository by inject()
@@ -55,6 +62,12 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
     }
 
     private val replanCheck = CheckBox("使用后需要重新规划").apply { isAllowIndeterminate = false }
+
+    // 候选策略三态选择器（"跟随标签默认"=null，显式值=覆盖）
+    private val policyCombo = ComboBox<String>().apply {
+        items.addAll(listOf(FOLLOW_DEFAULT_LABEL) + CandidatePolicy.entries.map { it.name })
+        value = FOLLOW_DEFAULT_LABEL
+    }
 
     private var isUpdatingFromState = false
 
@@ -152,6 +165,16 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 style = "-fx-font-weight: bold; -fx-text-fill: #34495e; -fx-padding: 0 0 5 0;"
             })
             children.add(replanCheck)
+            children.add(
+                Label("候选策略 (candidatePolicy)").apply {
+                    style = "-fx-text-fill: #34495e; -fx-padding: 8 0 0 0;"
+                }
+            )
+            children.add(policyCombo.apply {
+                maxWidth = Double.MAX_VALUE
+                tooltip =
+                    Tooltip("决定卡牌能否进入候选：NORMAL 普通看总分；TACTICS_DOMINANT 需战术命中；SURPLUS_ONLY 余费专用。跟随标签默认=null。")
+            })
         }
 
         // 按钮栏
@@ -259,6 +282,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                     }
                     replanCheck.isIndeterminate = false
                     replanCheck.isSelected = false
+                    policyCombo.value = FOLLOW_DEFAULT_LABEL
                 } else {
                     editorBox.isDisable = false
                     if (selected.size == 1) {
@@ -273,6 +297,7 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                         }
                         replanCheck.isIndeterminate = false
                         replanCheck.isSelected = card.replanAfterUse
+                        policyCombo.value = card.candidatePolicy?.name ?: FOLLOW_DEFAULT_LABEL
                     } else {
                         // 批量编辑模式（三态）
                         detailTitle.text = "批量编辑 ${selected.size} 张卡牌"
@@ -344,7 +369,11 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
         // 合并 replanAfterUse 三态属性
         val replanVal = if (replanCheck.isIndeterminate) null else replanCheck.isSelected
 
-        store.saveCardPurpose(cardIds, tagsMap, replanVal)
+        // 候选策略三态：单选时 ComboBox 值直接映射（"跟随标签默认"=null）；批量时由用户显式选择覆盖
+        val policyVal = policyCombo.value?.takeUnless { it == FOLLOW_DEFAULT_LABEL }
+            ?.let { runCatching { CandidatePolicy.valueOf(it) }.getOrNull() }
+
+        store.saveCardPurpose(cardIds, tagsMap, replanVal, policyVal)
     }
 
     /**

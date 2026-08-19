@@ -116,7 +116,8 @@ class DefaultDraftTreeService(
             bindingType = request.bindingType,
             bindingIds = request.bindingIds,
             root = request.root!!,
-            leafConfigs = state.leafConfigs
+            leafConfigs = state.leafConfigs,
+            channel = request.channel
         )
 
         val saveRequest = SaveEvaluatorTreeRequest(

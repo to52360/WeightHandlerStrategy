@@ -97,14 +97,43 @@ class ScoringModelTest {
         assertEquals(costValue(5.0) + 1.5, ray9, 0.001)
         assertEquals(ray9, ray3, 0.001)
 
-        // 3. 法术兜底用「数据库初始费用」：实时费用=0（减费后）、初始费用=4，兜底分取初始费用 4
+        // 3. 法术兜底用「数据库初始费用」+ 保守系数：实时费用=0（减费后）、初始费用=4，
+        //    兜底分 = SpellCostValueWeight * √4 = 1.5 * 2 = 3.0（比同费随从身材 costValue(4.5) 保守）
         val spell = condition.createMockCard(cardId = "TEST_SPELL", cardType = CardTypeEnum.SPELL, cost = 0)
-        assertEquals(costValue(4.0), calcBaseValue(spell, null, 4), 0.001)
+        assertEquals(SpellCostValueWeight * 2.0, calcBaseValue(spell, null, 4), 0.001)
+        assertTrue(
+            "法术兜底应比同费随从身材更保守",
+            calcBaseValue(spell, null, 4) < calcBaseValue(createMinion("T_4", 4, 4, 5), null, 0)
+        )
 
         // 4. 配置费用优先：powerWeight=5 → costValue(5)，覆盖身材
         val cfgCard =
             condition.createMockCard(cardId = "CFG_5", cardType = CardTypeEnum.MINION, cost = 3, atc = 3, health = 4)
         val cfg = CardCombinedConfig(weightInfo = CardWeightInfo(cardId = "CFG_5", powerWeight = 5.0))
         assertEquals(costValue(5.0), calcBaseValue(cfgCard, cfg, 0), 0.001)
+    }
+
+    @Test
+    fun testConfigCostReplacesStatNotAdditive() {
+        fun createMinion(id: String, atc: Int, health: Int) =
+            condition.createMockCard(cardId = id, cardType = CardTypeEnum.MINION, cost = 3, atc = atc, health = health)
+
+        // 无配置：身材分 = costValue((atc+hp)/2)
+        val noCfg = createMinion("CFG_BODY", 6, 6)
+        val statOnly = calcBaseValue(noCfg, null, 0)
+        assertEquals(costValue(6.0), statOnly, 0.001)
+
+        // 配置 powerWeight=3：基础价值 = costValue(3)，完全取代身材分（二选一，不叠加）
+        val withCfg = createMinion("CFG_BODY", 6, 6)
+        val cfg = CardCombinedConfig(weightInfo = CardWeightInfo(cardId = "CFG_BODY", powerWeight = 3.0))
+        val configured = calcBaseValue(withCfg, cfg, 0)
+
+        assertEquals(costValue(3.0), configured, 0.001)
+        // 关键断言：配置后不含身材项，且不等于「配置分 + 身材分」的叠加
+        assertTrue(
+            "配置费用应完全取代身材分（二选一），而非叠加",
+            configured != costValue(3.0) + costValue(6.0)
+        )
+        assertTrue("配置费用较低时不应高于身材兜底（证明未叠加）", configured < statOnly)
     }
 }

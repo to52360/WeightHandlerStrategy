@@ -21,13 +21,16 @@ class UseIntentDeriver(
      * 根据配置推导运行时意图。
      *
      * stageOverride 优先级最高；没有显式指定时，按规则表推导默认阶段。
+     * candidatePolicy 按显式覆盖 > 唯一标签默认 > NORMAL 推导（见 [resolveCandidatePolicy]）。
      */
     fun derive(config: CardUseConfig): UseIntent {
+        val candidatePolicy = resolveCandidatePolicy(config)
         if (config.stageOverride != null) {
             return UseIntent(
                 stage = config.stageOverride,
                 replanAfterUse = config.replanAfterUse,
-                orderWeight = config.orderWeight
+                orderWeight = config.orderWeight,
+                candidatePolicy = candidatePolicy
             )
         }
 
@@ -40,13 +43,36 @@ class UseIntentDeriver(
             UseIntent(
                 stage = bestRule.defaultStage,
                 replanAfterUse = config.replanAfterUse,
-                orderWeight = if (config.orderWeight == 0.0) bestRule.defaultOrderWeight else config.orderWeight
+                orderWeight = if (config.orderWeight == 0.0) bestRule.defaultOrderWeight else config.orderWeight,
+                candidatePolicy = candidatePolicy
             )
         } else {
             UseIntent(
                 stage = UseStage.GENERAL,
                 replanAfterUse = config.replanAfterUse,
-                orderWeight = config.orderWeight
+                orderWeight = config.orderWeight,
+                candidatePolicy = candidatePolicy
+            )
+        }
+    }
+
+    /**
+     * 候选策略解析：显式覆盖 > 唯一标签默认 > NORMAL。
+     *
+     * 多个用途标签声明了互相冲突的 `defaultCandidatePolicy` 时属配置冲突——
+     * 不按 priority 裁决，抛异常要求单卡/分组显式覆盖（fail-fast，启动期暴露）。
+     */
+    private fun resolveCandidatePolicy(config: CardUseConfig): CandidatePolicy {
+        config.candidatePolicy?.let { return it }
+        val declared = config.purposeTags
+            .mapNotNull { ruleIndex[it]?.defaultCandidatePolicy }
+            .distinct()
+        return when (declared.size) {
+            0 -> CandidatePolicy.NORMAL
+            1 -> declared.first()
+            else -> throw IllegalStateException(
+                "候选策略冲突：用途标签 ${config.purposeTags} 声明了多个不同的 defaultCandidatePolicy（$declared），" +
+                        "请在单卡或分组显式覆盖 candidatePolicy"
             )
         }
     }

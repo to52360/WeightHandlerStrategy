@@ -22,6 +22,9 @@ object EngineConfig {
     val costValueExponent get() = store.double("scoring.cost.value.exponent", 0.5)
     val costValueMaxCost get() = store.double("scoring.cost.value.maxCost", 10.0)
 
+    // 法术兜底保守系数（法术无身材/不占场，空放负收益，应比同费随从更保守）
+    val spellCostValueWeight get() = store.double("scoring.spell.cost.value.weight", 1.5)
+
     init {
         require(penaltyWeight < costWeight) {
             "penaltyWeight ($penaltyWeight) 必须小于 costWeight ($costWeight)，否则会导致低费单卡严重负分偏见"

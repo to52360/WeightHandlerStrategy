@@ -18,11 +18,13 @@ class EvaluatorTreeConfigStrategy(
             ?: EvaluatorTreeBindingType.GROUP
         val bindingIds = extras["bindingIds"] as? List<String> ?: emptyList()
         val leafConfigs = extras["leafConfigs"] as? Map<String, EvaluatorLeafConfig> ?: emptyMap()
+        val channel = extras["channel"] as? lin.bean.usePlan.ScoreChannel
         val config = EvaluatorTreeConfig(
             bindingType = bindingType,
             bindingIds = bindingIds,
             root = root,
-            leafConfigs = leafConfigs
+            leafConfigs = leafConfigs,
+            channel = channel
         )
         return service.saveConfig(name, config, existingId)
     }
@@ -38,6 +40,7 @@ class EvaluatorTreeConfigStrategy(
                     config?.let {
                         put("bindingType", it.bindingType)
                         put("bindingIds", it.bindingIds)
+                        it.channel?.let { c -> put("channel", c) }
                     }
                     config?.leafConfigs?.let { put("leafConfigs", it) }
                 }

@@ -25,7 +25,12 @@ sealed interface Rule : BaseConfig
 data class Rules(val rules: List<WeightRule>) : Rule {
     constructor(rule: WeightRule) : this(listOf(rule))
 }
-data class EvaluatorTreeRoot(val root: EvaluatorInstanceNode) : Rule
+
+/** 评估树根节点 + 评分通道。channel 在绑定任务实例化时解析为最终值，随根注入 CardWeightInfo。 */
+data class EvaluatorTreeRoot(
+    val root: EvaluatorInstanceNode,
+    val channel: lin.bean.usePlan.ScoreChannel = lin.bean.usePlan.ScoreChannel.GENERAL
+) : Rule
 
 /**
  *  直接修改通用的,用于基础数值类型/临时过度,不分组管理的
