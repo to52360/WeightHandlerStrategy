@@ -103,8 +103,8 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         if (treeResult.actions.isNotEmpty()) {
             comboCard.updateIntent(treeResult.actions)
         }
-        // Q-008/T-007：评估树分按通道分离——general 进总分，tactical 单独存 ComboCard 供候选门控（T-008）消费。
-        total += treeResult.generalScore
+        // Q-008/T-007：评估树分按通道分离——总分（general + tactical）进入出牌总权重，tactical 单独存 ComboCard 供候选门控（T-008）消费。
+        total += treeResult.score
         comboCard.tacticalScore = treeResult.tacticalScore
 
         // 1.5 push 广播分（独立 additive 通道，aura-boost D-004；光环加分只走 AuraBoost，评估树不写光环条件）

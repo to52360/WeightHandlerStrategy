@@ -9,6 +9,8 @@ import kotlin.math.sqrt
 
 /** 一费权重值，打不满费用时仍然可打出 */
 val CostWeight: Double get() = EngineConfig.costWeight
+
+//todo 这里是不是要删了
 val MaxCostWeight: Double get() = EngineConfig.maxCostWeight
 val NotWeight: Double get() = EngineConfig.notWeight
 val BaseWeight: Double get() = EngineConfig.baseWeight

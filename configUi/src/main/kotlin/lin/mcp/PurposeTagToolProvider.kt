@@ -86,9 +86,9 @@ data class SaveCardPurposeInput(
 
 class PurposeTagToolProvider(
     private val tagProvider: PurposeTagProvider,
-    private val ruleProvider: PurposeTagIntentRuleProvider,
+    ruleProvider: PurposeTagIntentRuleProvider,
     private val cardPurposeRepository: CardPurposeRepository,
-    private val treeConfigService: TreeConfigService
+    treeConfigService: TreeConfigService
 ) : McpToolProvider {
 
     override val actions: List<ResourceAction> = listOf(

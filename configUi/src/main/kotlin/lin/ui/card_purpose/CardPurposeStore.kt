@@ -2,13 +2,10 @@ package lin.ui.card_purpose
 
 import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
-import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagId
 import lin.dao.CardGroupJsonParser
 import lin.repository.HsCardRepository
-import lin.repository.card_purpose.CardPurposeEntity
 import lin.repository.card_purpose.CardPurposeRepository
-import java.time.LocalDate
 
 class CardPurposeStore(
     private val repository: CardPurposeRepository,
@@ -147,13 +144,18 @@ class CardPurposeStore(
     /**
      * 批量或单卡保存卡牌战略用途配置
      *
-     * @param candidatePolicy 三态覆盖：null=不修改（半选保留原值），显式值=覆盖
+    /**
+     * 保存卡牌用途配置（包含多选批量覆盖支持）。
+     *
+     * @param candidatePolicy 候选策略值：当 overrideCandidatePolicy 为 true 时作为新值覆盖（null 表示跟随标签默认）；
+     * @param overrideCandidatePolicy 是否覆盖 candidatePolicy：true = 覆盖（支持重置为 null），false = 保持原值
      */
     fun saveCardPurpose(
         cardIds: List<String>,
         tagsToApply: Map<PurposeTagId, Boolean?>,
         replanAfterUse: Boolean?,
-        candidatePolicy: CandidatePolicy? = null
+    candidatePolicy: CandidatePolicy? = null,
+    overrideCandidatePolicy: Boolean = true
     ) {
         if (cardIds.isEmpty()) return
 
@@ -175,8 +177,8 @@ class CardPurposeStore(
 
             // 合并重规划
             val mergedReplan = replanAfterUse ?: currentItem.replanAfterUse
-            // 合并候选策略（三态）
-            val mergedPolicy = candidatePolicy ?: currentItem.candidatePolicy
+    // 合并候选策略（三态：overrideCandidatePolicy=true 时覆盖，包括设为 null 跟随默认）
+    val mergedPolicy = if (overrideCandidatePolicy) candidatePolicy else currentItem.candidatePolicy
 
             val entity = CardPurposeEntity(
                 cardId = cardId,

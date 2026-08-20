@@ -39,6 +39,8 @@ class EndWeightResult(
 ) : WeightResult() {
     //todo-future 存在直接操作权重,导致查找不到元素 想改成ArrayList,太复杂了,后面再说
     private val _canUseCardsByHandler = mutableListOf<ComboCard>()
+
+    //todo 不使用是不是断开,要核实一下
     val unUseCards: List<ComboCard>
         get() = _unUseCards
     private val _unUseCards: MutableList<ComboCard> by lazy {

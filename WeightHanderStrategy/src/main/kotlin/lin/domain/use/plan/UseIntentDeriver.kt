@@ -59,8 +59,8 @@ class UseIntentDeriver(
     /**
      * 候选策略解析：显式覆盖 > 唯一标签默认 > NORMAL。
      *
-     * 多个用途标签声明了互相冲突的 `defaultCandidatePolicy` 时属配置冲突——
-     * 不按 priority 裁决，抛异常要求单卡/分组显式覆盖（fail-fast，启动期暴露）。
+     * 用途标签 defaultCandidatePolicy 仅作为隐式默认值（建议/fallback）：
+     * 命中多个不同建议时软降级为 NORMAL，不抛崩溃异常，显式指定（单卡/分组）拥有最高优先。
      */
     private fun resolveCandidatePolicy(config: CardUseConfig): CandidatePolicy {
         config.candidatePolicy?.let { return it }
@@ -70,10 +70,7 @@ class UseIntentDeriver(
         return when (declared.size) {
             0 -> CandidatePolicy.NORMAL
             1 -> declared.first()
-            else -> throw IllegalStateException(
-                "候选策略冲突：用途标签 ${config.purposeTags} 声明了多个不同的 defaultCandidatePolicy（$declared），" +
-                        "请在单卡或分组显式覆盖 candidatePolicy"
-            )
+            else -> CandidatePolicy.NORMAL // 隐式默认值冲突安全回落 NORMAL
         }
     }
 }

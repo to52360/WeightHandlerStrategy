@@ -98,10 +98,7 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
         return when (derived.size) {
             0 -> ScoreChannel.GENERAL
             1 -> derived.first()
-            else -> throw IllegalStateException(
-                "评分通道冲突：评估树 ${config.bindingType} ${config.bindingIds} 的绑定目标推导出多个不同的缺省 channel（$derived），" +
-                        "请在树配置上显式声明 channel"
-            )
+            else -> ScoreChannel.GENERAL // 隐式推导冲突时回落 GENERAL，显式声明 EvaluatorTreeConfig.channel 拥有最高优先
         }
     }
 }

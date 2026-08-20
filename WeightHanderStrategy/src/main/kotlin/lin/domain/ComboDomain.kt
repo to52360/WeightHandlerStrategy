@@ -31,6 +31,7 @@ import org.koin.core.component.get
 const val MaxStackNum: Int = 10
 
 class ComboDomain : KoinComponent {
+    //todo 重构之后,新的排序怎么处理
     companion object {
         val USE_ORDER: Comparator<ComboCard> = UseOrderPlanner.BASE_ORDER
     }

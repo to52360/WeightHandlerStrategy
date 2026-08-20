@@ -4,6 +4,7 @@ import lin.rule.tree.*
 import lin.ui.components.TreeConfigStrategy
 import lin.ui.service.TreeConfigService
 
+//todo 这里怎么没用上
 class EvaluatorTreeConfigStrategy(
     private val service: TreeConfigService
 ) : TreeConfigStrategy<EvaluatorPayload> {

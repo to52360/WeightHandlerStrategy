@@ -12,9 +12,9 @@ import lin.ui.service.TreeConfigService
  * 动作由 get/list/delete/tool_capabilities 四大 dispatcher 收集分发；本类无 provide() 工具。
  */
 class AiTreeConfigToolProvider(
-    private val treeConfigService: TreeConfigService,
-    private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository,
-    private val aiConfigGenerationService: AiConfigGenerationService
+    treeConfigService: TreeConfigService,
+    comboPlanDefinitionRepository: ComboPlanDefinitionRepository,
+    aiConfigGenerationService: AiConfigGenerationService
 ) : McpToolProvider {
 
     override val actions: List<ResourceAction> = listOf(

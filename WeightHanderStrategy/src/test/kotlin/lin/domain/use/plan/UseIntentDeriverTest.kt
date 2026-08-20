@@ -78,9 +78,10 @@ class UseIntentDeriverTest {
         assertEquals(CandidatePolicy.SURPLUS_ONLY, intent.candidatePolicy)
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun `多标签声明冲突策略不按priority裁决直接抛异常`() {
-        // CLEAN → TACTICS_DOMINANT(300)，VALUE → NORMAL(50)：priority 更高的是 CLEAN，但冲突必须显式覆盖
-        deriver.derive(CardUseConfig(purposeTags = setOf(PurposeTagId.CLEAN, PurposeTagId.VALUE)))
+    @Test
+    fun `多标签声明不同候选策略时软降级为NORMAL`() {
+        // 用途标签仅为隐式默认值，CLEAN(TACTICS_DOMINANT) + VALUE(NORMAL) 冲突时安全降级为 NORMAL
+        val intent = deriver.derive(CardUseConfig(purposeTags = setOf(PurposeTagId.CLEAN, PurposeTagId.VALUE)))
+        assertEquals(CandidatePolicy.NORMAL, intent.candidatePolicy)
     }
 }

@@ -112,9 +112,7 @@ class ComboCard(
     fun toDie() = cardWeightInfo?.toDie ?: false
 
 
-
-
-    //在同一组会增加权重
+    //todo 同组加权现在怎么处理 在同一组会增加权重
     fun comboAddWeight(comboCard: ComboCard): Double {
         var weight = NotWeight
         combo?.forEach {
@@ -155,16 +153,14 @@ class ComboCard(
     override fun equals(other: Any?): Boolean {
         //select 比较cardId还是entityId,没有想清楚,先
         return other?.let {
-            if (this === other) true
-            else
-                when (other) {
-                    is ComboCard -> {
-                        card.entityId == other.card.entityId
-                    }
-
-                    is Card -> card.entityId == other.entityId
-                    else -> false
+            this === other || when (other) {
+                is ComboCard -> {
+                    card.entityId == other.card.entityId
                 }
+
+                is Card -> card.entityId == other.entityId
+                else -> false
+            }
         } ?: false
     }
 
