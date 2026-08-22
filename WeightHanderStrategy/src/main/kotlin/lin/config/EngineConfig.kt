@@ -11,7 +11,6 @@ object EngineConfig {
     val baseWeight get() = store.double("scoring.base.weight", 1.0)
     val orderWeight get() = store.double("scoring.order.weight", 1.0)
     val unUseWeight get() = store.double("scoring.unuse.weight", -100.0)
-    val useSkillWeight get() = store.double("scoring.use.skill.weight", -7.0)
     val penaltyRatioExponent get() = store.double("scoring.penalty.ratio.exponent", 0.5)
     val penaltyWeight get() = store.double("scoring.penalty.weight", 0.35)
     val comboCardWeight get() = store.double("scoring.combo.card.weight", 0.1)
@@ -24,6 +23,10 @@ object EngineConfig {
 
     // 法术兜底保守系数（法术无身材/不占场，空放负收益，应比同费随从更保守）
     val spellCostValueWeight get() = store.double("scoring.spell.cost.value.weight", 1.5)
+
+    // D-007 双费数模型：评估树战术分(分)→费 的全局换算。fillValue = fallback + min(G, tacticalScore×scale)。
+    // 唯一量纲标定常数（Q-019~021 缩水残余）：典型满命中树分 8~10 分 × 0.4 ≈ 3.2 费，覆盖常见 G≤3 饱和到满值。
+    val tacticalScoreScale get() = store.double("scoring.tactical.score.scale", 0.4)
 
     init {
         require(penaltyWeight < costWeight) {

@@ -19,7 +19,7 @@ import kotlin.reflect.KClass
 /**
  * 目的 降低ConditionWeightHandler的复杂
  * [lin.weightHandler.condition.ConditionWeightHandler]
- * todo [lin.rule.build.RuleFactory] ruleFactor 将从这里迁移到[lin.rule.registry.RuleRegistry] 这里只负责旧的Rule
+ *  [lin.rule.build.RuleFactory] ruleFactor 将从这里迁移到[lin.rule.registry.RuleRegistry] 这里只负责旧的Rule
  */
 class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: ConfigDispatcher) : KoinComponent {
     val groupCondition: HashMap<String, RuleInfo> = hashMapOf()
@@ -77,7 +77,7 @@ class RuleInfoRegister(infos: Collection<CardWeightInfo>, val configDispatcher: 
 
 
         } ?: run {//没有对应条件id实现
-            //todo
+
             val msg =
                 "groupId=${conditionGroup.groupId},没有匹配到规则:${conditionGroup.ruleId}的条件信息"
             myLog.warn { msg }

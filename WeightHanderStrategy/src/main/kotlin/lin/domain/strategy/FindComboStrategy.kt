@@ -154,7 +154,7 @@ class FindPlanner(val warManage: MyWarManage, val weightHandlerDomain: WeightHan
             if (noHasFindRule.isEmpty()) return EmptyWeightResult
             val newWeight = EndWeightResult(noHasFindRule, sumExtCost)
             newWeight.addAll(noHasFindRule)
-            newWeight.findBestCombination()
+            newWeight.findBestCombination(warManage.isFull)
             return newWeight
         }
         throw RuntimeException("额外费用事务失败")

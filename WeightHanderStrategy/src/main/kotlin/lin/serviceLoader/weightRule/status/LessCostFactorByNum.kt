@@ -7,7 +7,7 @@ import lin.warExt.my.base.getCost
 
 /**
  * 用于使用过牌卡牌
- * todo 存在问题 一直使用过牌
+ *  存在问题 一直使用过牌
  *
  */
 class LessCostFactorByNum : AbsWeightCondition() {

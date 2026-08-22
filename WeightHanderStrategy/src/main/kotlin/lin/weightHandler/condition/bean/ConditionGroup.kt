@@ -33,7 +33,7 @@ import lin.domain.context.CostWeight
 
 /**
  *
- * todo 只能要不要用组合,继承感觉不太好
+ *
  * 自定义加载配置性
  */
 /* class ConditionByCustomize(

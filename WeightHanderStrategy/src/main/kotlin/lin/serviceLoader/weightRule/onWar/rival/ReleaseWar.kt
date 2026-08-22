@@ -38,7 +38,7 @@ abstract class ReleaseWar(var warCardGap: Int) : CleanWar(CleanWarId) {
         val warStatus = cleanWarUtils.warStatus
         //溢出伤害太严重
         var warCardGap = this.warCardGap
-        //todo 虽然修改低攻清场问题,但是遇到buff类就有问题了
+        // 虽然修改低攻清场问题,但是遇到buff类就有问题了
         if (!warStatus.isAdv()) { //没优势缩减数量要求
             //todo-future 这里减2,当血量太少会疯狂解场,可接受场攻受血量影响
             warCardGap += if (warStatus.excessDamageFactor() >= 2 * ONE_FACTOR) -1
@@ -48,7 +48,7 @@ abstract class ReleaseWar(var warCardGap: Int) : CleanWar(CleanWarId) {
         if (cleanWarUtils.rivalNumLessGap(warCardGap)) {
             return UnUseWeight
         }
-        //todo 实验性,有优势不清理
+        // 实验性,有优势不清理
         if (!warStatus.isAdv())
             cleanWar(ALL_CLEAN)
         if (cleanWarUtils.lessGap(warCardGap, ALL_CLEAN)) {

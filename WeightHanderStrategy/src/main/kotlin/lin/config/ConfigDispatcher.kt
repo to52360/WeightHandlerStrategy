@@ -47,7 +47,7 @@ class ConfigDispatcher(
             var matched = false
             for (groupType in handlerMap.keys) {
                 if (groupType.java.isInstance(config)) {
-                    //todo 存在不支持报错,导致运行
+                    //存在不支持报错,导致运行
                     buckets[groupType]!!.add(config)
                     matched = true
                 }

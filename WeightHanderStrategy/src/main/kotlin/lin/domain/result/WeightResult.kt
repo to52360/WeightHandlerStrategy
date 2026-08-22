@@ -2,6 +2,7 @@ package lin.domain.result
 
 import lin.bean.ComboCard
 import lin.bean.passesFirstRoundCandidate
+import lin.bean.passesSurplusCandidate
 import lin.domain.context.NotWeight
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
@@ -48,8 +49,20 @@ class EndWeightResult(
     }
 
 
-    var bestCombination: List<ComboCard> = emptyList()
-        private set
+    /** 主组合：第一轮（快路全收 / backtrack 搜索）选出 */
+    private var mainCombination: List<ComboCard> = emptyList()
+
+    /** 余费填充组合：fillSurplusCost 选出 / 晚到候选重试更新（T-020） */
+    private var fillCombination: List<ComboCard> = emptyList()
+
+    /** 最终组合 = 主组合 + 填充组合（既有消费方统一视角，T-020 拆分内部存储不动外部契约） */
+    val bestCombination: List<ComboCard>
+        get() = mainCombination + fillCombination
+
+    // T-020：填充重试上下文——fillSurplusCost 定型时快照，供晚到候选（技能）同池竞争
+    private var fillBudget: Int = 0
+    private var fillCandidates: List<ComboCard> = emptyList()
+
     var extWeight = 0.0
 
     /**
@@ -82,17 +95,28 @@ class EndWeightResult(
     }
 
     fun lessAbleUseCards(): List<ComboCard> {
-        if (isLessCost()) return emptyList()
-        val lessAbleUseCards = _canUseCardsByHandler - bestCombination
-        return lessAbleUseCards
+        // T-011/Q-009：不再因 isLessCost() 截断。落选卡 = 可用卡 - 已选组合，
+        // 无论快路与否都是余费候选源（SURPLUS_ONLY 等被第一轮候选过滤挡掉的卡）。
+        return _canUseCardsByHandler - bestCombination.toSet()
     }
 
-    fun findBestCombination() {
+    fun findBestCombination(isFull: Boolean = false) {
         // T-008：第一轮候选过滤——NORMAL 全纳、TACTICS_DOMINANT 需战术命中、SURPLUS_ONLY 排除。
         // 与 EvalOutcome.Banned 硬禁区分：只进不出候选，不改 unUse，卡保持可用。
         val firstRoundCandidates = _canUseCardsByHandler.filter { it.passesFirstRoundCandidate() }
-        if (isLessCost()) {// 预评估快路：无替代组合，直接全收
-            this.bestCombination = firstRoundCandidates
+        val fastPath = isLessCost()
+        if (fastPath) {// 预评估快路：无替代组合，直接全收
+            this.mainCombination = firstRoundCandidates
+        } else {
+            this.mainCombination = findStrategy.findBestCombination(firstRoundCandidates, cost)
+        }
+
+        // T-011/Q-009：同轮余费统筹填充——主牌选完后，用剩余费用填充余费牌并合并进同一组合，
+        // 交由 UsePlanOrderer 全局按 UseStage 排序后一次性打出（否决两轮物理断层出牌）。
+        fillSurplusCost(isFull)
+
+        if (fastPath) {
+            // 快路 penalty 需在余费填充后重算：余费填充减少了剩余费用，penalty 应基于填充后的组合。
             // S-0.2: 原 `extWeight -= lessCost * CostWeight` 在 lessCost 大时产生离谱负数并污染
             // extWeight 通道。改为惩罚上限钳制为不超过本组合自身权重和，避免负分失控；
             // 最终量纲/是否保留由 Q-3 模型决策定。
@@ -104,15 +128,40 @@ class EndWeightResult(
                 extWeight -= penalty
             }
         }
-        else {
-            this.bestCombination = findStrategy.findBestCombination(firstRoundCandidates, cost)
-        }
+    }
 
+    /**
+     * T-011/Q-009：余费统筹填充（选牌算法第二梯队，非执行阶段断层）。
+     *
+     * 主牌已选后，在剩余费用内填充余费候选（[passesSurplusCandidate] 含 D-007 将就门：空闲 > G 或战术命中），
+     * 目标函数 `max Σ surplusFillValue`（D-007 费数机会成本，[SurplusFillCombination]），
+     * 合并进 [bestCombination]。排序与出牌由 UsePlanOrderer / useCombo 统一处理。
+     * 战场已满时不出随从（isFull && isMinion），与执行层 UseFunction 的硬拦截一致。
+     */
+    private fun fillSurplusCost(isFull: Boolean) {
+        val remainingCost = cost - costSum()
+        if (remainingCost < 0) return // 理论不可达（主牌总费用 ≤ cost），防御
+        fillBudget = remainingCost
+        fillCandidates = (_canUseCardsByHandler - bestCombination.toSet())
+            .filter { it.passesSurplusCandidate(remainingCost, isFull) }
+        if (fillCandidates.isEmpty()) return
+        this.fillCombination = SurplusFillCombination.findBestCombination(fillCandidates, remainingCost)
+    }
+
+    /**
+     * T-020：晚到候选（池外卡，如技能）参与填充竞争。技能等池外卡不在 `canUseCards` 池、
+     * 不进第一轮主组合（主牌位是第一轮赢来的，池外资源只争余费）——调用方须先完成单卡评估
+     * （树分/负分/unUse 就位），本方法按 [passesSurplusCandidate] 门控后与垫牌同池按 fillValue 重搜。
+     */
+    fun retryFillWithLateCandidate(lateCard: ComboCard, isFull: Boolean) {
+        if (fillBudget <= 0) return
+        if (!lateCard.passesSurplusCandidate(fillBudget, isFull)) return
+        fillCombination = SurplusFillCombination.findBestCombination(fillCandidates + lateCard, fillBudget)
     }
 
     fun addUseCard(comboCard: ComboCard) {
         //myLog.info { "中途添加卡牌,卡牌为:${comboCard}" }
-        if (comboCard.canUse()) this.bestCombination += comboCard
+        if (comboCard.canUse()) fillCombination += comboCard
         else _canUseCardsByHandler.add(comboCard)
     }
 

@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * T-008：候选策略过滤测试。
  * 第一轮：NORMAL 全纳、TACTICS_DOMINANT 需战术命中、SURPLUS_ONLY 排除。
- * 第二轮：TACTICS_DOMINANT 需战术命中；SURPLUS_ONLY/NORMAL 需正总分。
+ * 第二轮（D-005 起）：TACTICS_DOMINANT / SURPLUS_ONLY / NORMAL 统一按 powerWeight > 0（正总分）。
  */
 class CandidatePolicyFilterTest {
 
@@ -26,7 +26,8 @@ class CandidatePolicyFilterTest {
                 weightInfo = info,
                 useIntent = UseIntent(candidatePolicy = policy)
             ),
-            card = condition.createMockCard(cardId = "TEST_${policy}_${tacticalScore}")
+            card = condition.createMockCard(cardId = "TEST_${policy}_${tacticalScore}"),
+            baseValue = baseValue
         )
         card.extPowerWeight = extPowerWeight
         card.tacticalScore = tacticalScore
@@ -58,12 +59,18 @@ class CandidatePolicyFilterTest {
     // ── 第二轮 ──
 
     @Test
-    fun `第二轮 TACTICS_DOMINANT 仍只需战术命中`() {
-        assertTrue(buildCard(CandidatePolicy.TACTICS_DOMINANT, tacticalScore = 3.0).passesSecondRoundCandidate())
-        assertFalse(buildCard(CandidatePolicy.TACTICS_DOMINANT, tacticalScore = 0.0).passesSecondRoundCandidate())
-        // 有正底分但无战术：不当白板垫费
+    fun `第二轮 TACTICS_DOMINANT 按正总分判断（D-005 放宽）`() {
+        // 有正底分但无战术命中：余费内可将就出白板（不再死捏）
+        assertTrue(
+            buildCard(
+                CandidatePolicy.TACTICS_DOMINANT,
+                tacticalScore = 0.0,
+                baseValue = 5.0
+            ).passesSecondRoundCandidate()
+        )
+        // 负总分（亏模）：仍不出
         assertFalse(
-            buildCard(CandidatePolicy.TACTICS_DOMINANT, tacticalScore = 0.0, baseValue = 5.0)
+            buildCard(CandidatePolicy.TACTICS_DOMINANT, tacticalScore = 0.0, baseValue = 5.0, extPowerWeight = -10.0)
                 .passesSecondRoundCandidate()
         )
     }
@@ -71,12 +78,13 @@ class CandidatePolicyFilterTest {
     @Test
     fun `第二轮 SURPLUS_ONLY 正总分才通过`() {
         assertTrue(buildCard(CandidatePolicy.SURPLUS_ONLY, extPowerWeight = 2.0).passesSecondRoundCandidate())
-        assertFalse(buildCard(CandidatePolicy.SURPLUS_ONLY, extPowerWeight = -2.0).passesSecondRoundCandidate())
+        // 负总分需压过默认底分（baseValue=5）才构成「负出」
+        assertFalse(buildCard(CandidatePolicy.SURPLUS_ONLY, extPowerWeight = -10.0).passesSecondRoundCandidate())
     }
 
     @Test
     fun `第二轮 NORMAL 正总分才通过`() {
         assertTrue(buildCard(CandidatePolicy.NORMAL, extPowerWeight = 2.0).passesSecondRoundCandidate())
-        assertFalse(buildCard(CandidatePolicy.NORMAL, extPowerWeight = -2.0).passesSecondRoundCandidate())
+        assertFalse(buildCard(CandidatePolicy.NORMAL, extPowerWeight = -10.0).passesSecondRoundCandidate())
     }
 }

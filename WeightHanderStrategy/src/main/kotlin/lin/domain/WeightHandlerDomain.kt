@@ -79,6 +79,22 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
     }
 
     /**
+     * T-020：池外单卡评估（如英雄技能）——与 [processWeight] 同一编排（条件树 + aura + legacy handler），
+     * 使技能的评估树/Banned/负分/tacticalScore 真正生效。调用方负责先 cleanWeight 防重复累计。
+     */
+    fun evaluateStandaloneCard(comboCard: ComboCard) {
+        val ruleEnv = WarInfoEnv(warManage)
+        val calWeight = weightEvaluator(comboCard, warManage, ruleEnv)
+        if (calWeight != NotWeight) {
+            if (calWeight == UnUseWeight) {
+                comboCard.unUse()
+            } else {
+                comboCard.addWeight(calWeight)
+            }
+        }
+    }
+
+    /**
      * 单入口编排函数：先条件树求值，后 legacy handler 链。
      */
     private fun weightEvaluator(
@@ -103,9 +119,10 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         if (treeResult.actions.isNotEmpty()) {
             comboCard.updateIntent(treeResult.actions)
         }
-        // Q-008/T-007：评估树分按通道分离——总分（general + tactical）进入出牌总权重，tactical 单独存 ComboCard 供候选门控（T-008）消费。
+        // D-007 回归「树分皆战术信号」：全树分进出牌总权重，同时整体作为战术信号存 ComboCard
+        //（第一轮门控 / 将就门绕行 / fillValue 溢价消费）。Q-008 通道分离遗留待清理（T-018）。
         total += treeResult.score
-        comboCard.tacticalScore = treeResult.tacticalScore
+        comboCard.tacticalScore = treeResult.score
 
         // 1.5 push 广播分（独立 additive 通道，aura-boost D-004；光环加分只走 AuraBoost，评估树不写光环条件）
         total += auraBoostEvaluator.activeScore(comboCard, ruleEnv)
@@ -146,7 +163,8 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
      * 查找最好的组合
      */
     fun findBestCombination(weightResult: EndWeightResult): EndWeightResult {
-        weightResult.findBestCombination()
+        // T-011：传入战场是否已满，供余费填充排除满场随从（与执行层 UseFunction 硬拦截语义一致）。
+        weightResult.findBestCombination(warManage.isFull)
         return weightResult
     }
 

@@ -5,11 +5,8 @@ import club.xiaojiawei.hsscriptbase.config.log
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.data.BaseData
 import lin.bean.ComboCard
-import lin.bean.cardExt.base.isMinion
-import lin.bean.passesSecondRoundCandidate
+import lin.bean.passesSurplusCandidate
 import lin.config.cardConfig.CardConfigBind
-import lin.domain.context.CostWeight
-import lin.domain.context.NotWeight
 import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy
 import lin.domain.strategy.FindPlanner
@@ -77,44 +74,6 @@ class ComboDomain : KoinComponent {
 
 
     /**
-     * 第二轮余费候选入口（T-009，D-003/Q-007）。
-     *
-     * 由 [executeUseCard] 在第一轮组合使用后仍有剩余费用时调用：
-     * - 候选来源：第一轮落选卡（[EndWeightResult.lessAbleUseCards]），费用门槛 + 候选策略过滤
-     *   （[lin.bean.passesSecondRoundCandidate]：SURPLUS_ONLY/正总分 NORMAL/TACTICS_DOMINANT 需战术命中）。
-     * - 独立批次：新一轮 [DefaultFindBestCombination] 搜索 + [UsePlanOrderer] 排序，不复用第一轮顺序。
-     * - 已知问题：Q-009（第二轮顺序与第一轮不连贯、战场变化后候选可能过时）、Q-010（统一 cost<=剩余费用，无具体几费分层）。
-     */
-    private fun processLessCost(weightResult: EndWeightResult): Boolean {
-
-        val unAbleUseCards = weightResult.lessAbleUseCards()
-        myLog.info { "剩余未卡牌:${unAbleUseCards}" }
-        val costWeight = CostWeight * warManage.getCost()
-
-        //没有为0的牌
-        if (costWeight == NotWeight && !unAbleUseCards.any { it.cost() == 0 }) return false
-        val isFull = warManage.isFull
-        // T-008 第二轮候选过滤：费用门槛 + 候选策略（SURPLUS_ONLY/正总分 NORMAL/TACTICS_DOMINANT 需战术命中）。
-        // 断开旧 useGroupOrder 阈值判断（旧通道由 addWeight 污染，详见 D-003/T-009）。
-        val moreTryCard =
-            unAbleUseCards.filter { it.cost() <= warManage.getCost() && it.passesSecondRoundCandidate() && !(isFull && it.isMinion()) }
-        if (moreTryCard.isEmpty()) return false
-
-        val bestCombos = UsePlanOrderer.order(
-            usePlanBuilder.build(
-                DefaultFindBestCombination.findBestCombination(moreTryCard, warManage.getCost()),
-                WarInfoEnv(warManage)
-            )
-        )
-        //todo 还会存在打不出的情况
-        for (bestCombo in bestCombos) {
-            if (useCardAndIsReload(bestCombo)) return true
-        }
-
-        return false
-    }
-
-    /**
      * 出牌策略
      */
     fun outCardStrategy() {
@@ -168,15 +127,37 @@ class ComboDomain : KoinComponent {
     private fun executeUseCard(weightResult: EndWeightResult) {
         val bestCombination = weightResult.bestCombination
         myLog.info { "能够使用的卡牌:${weightResult.lessAbleUseCards()}" }
-        val extLessCost = warManage.getCost() - weightResult.costSum()
-        val result = useCombo(bestCombination)
-        //重新执行
-        if (result) return
+        // T-011/Q-009：bestCombination 已含主牌与余费牌（选牌层 fillSurplusCost 合并），
+        // useCombo 统一按 UseStage 排序后一次性打出；打失败/replan 由 useCardAndIsReload 兜底重规划。
+        if (useCombo(bestCombination)) return
+        // Q-015：主组合有牌打失败（succeeded=false）时费用可能未用尽，用落选卡在剩余费用内补打。
+        compensateFailedCards(weightResult)
+    }
 
-        val realLessCost = warManage.getCost()
-        if (realLessCost > extLessCost) //说明有些牌没打出去,进行补偿
-            processLessCost(weightResult)
-
+    /**
+     * Q-015 失败补偿：主组合中某张牌打失败导致费用未用尽时，用落选卡（[EndWeightResult.lessAbleUseCards]）
+     * 在剩余费用内补打。设计要点：
+     * - 贪心补打，不用 findStrategy 搜索——剩余可选范围很小（通常 1~3 费），背包/惩罚逻辑是过度设计。
+     * - 名字不叫 processLessCost：旧名语义模糊（余费填充 + 失败补偿混在一起），曾导致补偿被误当失败残留删除。
+     *   这里只做「失败补偿」一件事，余费填充已由选牌层 fillSurplusCost 承担。
+     * - 补打在主组合完整打完后进行，不打断 UseStage 顺序；补打牌再失败会 unUse（powerWeight < 0），
+     *   被 passesSecondRoundCandidate 挡掉，天然防死循环。
+     *
+     * // ARCH-UNSETTLED use-intent-model/U-001: 贪心 vs findStrategy 选择未收敛——贪心基于「剩余可选范围很小」的假设，
+     * // 若对局出现剩余费用大、落选卡多且需协同的组合（如两个低费牌一起补比单张高费牌更好），需重新评估是否改回
+     * // findStrategy 搜索。暂以贪心实现，观察对局后再定。
+     */
+    private fun compensateFailedCards(weightResult: EndWeightResult) {
+        val remaining = warManage.getCost()
+        if (remaining <= 0) return
+        val fallbackCards = weightResult.lessAbleUseCards()
+            .filter { it.passesSurplusCandidate(remaining, warManage.isFull) }
+            .sortedByDescending { it.powerWeight }
+        for (card in fallbackCards) {
+            // 实时校验：上一步补打可能已消耗费用/改变战场
+            if (card.cost() > warManage.getCost()) continue
+            if (useCardAndIsReload(card)) return // replan 已在 useCardAndIsReload 内部触发 findAndUse
+        }
     }
 
     /**
@@ -223,7 +204,11 @@ class ComboDomain : KoinComponent {
      */
     fun useCardAndIsReload(card: ComboCard): Boolean {
         val result = useDomain.useCard(card)
-        val shouldReplan = !result.succeeded || result.shouldReplan
+        // D-005：打失败（succeeded=false）不再强制 reLoad。打失败时 isChangeByUseSuccess 收到 null 返回 false
+        // → stateChanged/shouldReplan 均为 false；若用 `!succeeded` 强制 reLoad，会经 reLoadHandCards 重建 ComboCard
+        // 丢失 unUse 状态，打不出的牌反复复活重试 → 死循环。打失败的牌已在 tryUseCard 尾部 unUse()，
+        // 本周期内不再进候选；只有真正状态变化（打出成功/抽牌等）才需要 reLoad 重规划。
+        val shouldReplan = result.shouldReplan
         if (shouldReplan) {
             warManage.reLoad()
             findAndUse()

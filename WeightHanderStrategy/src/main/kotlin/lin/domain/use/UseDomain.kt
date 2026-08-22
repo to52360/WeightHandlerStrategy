@@ -34,7 +34,7 @@ class UseDomain(val warManage: MyWarManage) {
                 if (context.useSucceeded) {
                     //超过指定测试应该不要等待时间了
                     myLog.info { "打出等待动画" }
-                    //todo 增加等待时间看看效果
+                    // 增加等待时间看看效果
                     Thread.sleep(UseAnimationTime + context.extraAwaitMillis)
                     //select 暂时这样处理发现,看一下有没有问题
                     discoverSync.waitFallbackIfNeeded()

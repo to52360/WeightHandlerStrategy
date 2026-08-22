@@ -80,8 +80,9 @@ class ComboCard(
         get() = baseValue + extPowerWeight
     var extPowerWeight: Double = BaseWeight
 
-    // 评估树战术分（Q-008/T-007）：仅评估树 TACTICAL 通道的分，由 weightEvaluator 写入。
-    // 候选门控（T-008）读 tacticalScore > 0 判断"战术命中"，与七路混合的 extPowerWeight 解耦。
+    // 评估树战术信号（D-007 回归「树分皆战术信号」：全树分 general+tactical，由 weightEvaluator 写入）。
+    // 消费方：第一轮候选门控（T-008）、余费将就门绕行、fillValue 溢价（×TacticalScoreScale，封顶 G）。
+    // Q-008/T-007 的通道分离已无独立消费者（双费数模型取代其使命），通道字段遗留待清理（T-018）。
     var tacticalScore: Double = 0.0
 
     /**

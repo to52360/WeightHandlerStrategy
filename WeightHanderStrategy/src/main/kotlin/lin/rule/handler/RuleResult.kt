@@ -19,7 +19,9 @@ sealed class RuleResult {
      * 本类型不携带任何控制分支。
      *
      * Q-008：按评分通道分离——[generalScore]（一般价值）与 [tacticalScore]（战术价值）。
-     * [score] 保留为两者之和，兼容旧消费方；候选门控读 [tacticalScore] 而非 [score] 正负。
+     * [score] = 两者之和。
+     * D-007（2026-08-22）回归「树分皆战术信号」：战术信号消费方（门控/绕门/fillValue 溢价）已改读 [score]（全树分），
+     * 通道分离无独立消费者，遗留待清理（TRACKER T-018）。
      */
     data class Accumulate(
         val generalScore: Double,

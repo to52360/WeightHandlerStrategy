@@ -2,10 +2,13 @@ package lin.ui.card_purpose
 
 import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
+import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagId
 import lin.dao.CardGroupJsonParser
 import lin.repository.HsCardRepository
+import lin.repository.card_purpose.CardPurposeEntity
 import lin.repository.card_purpose.CardPurposeRepository
+import java.time.LocalDate
 
 class CardPurposeStore(
     private val repository: CardPurposeRepository,
@@ -144,7 +147,7 @@ class CardPurposeStore(
     /**
      * 批量或单卡保存卡牌战略用途配置
      *
-    /**
+
      * 保存卡牌用途配置（包含多选批量覆盖支持）。
      *
      * @param candidatePolicy 候选策略值：当 overrideCandidatePolicy 为 true 时作为新值覆盖（null 表示跟随标签默认）；
@@ -154,8 +157,8 @@ class CardPurposeStore(
         cardIds: List<String>,
         tagsToApply: Map<PurposeTagId, Boolean?>,
         replanAfterUse: Boolean?,
-    candidatePolicy: CandidatePolicy? = null,
-    overrideCandidatePolicy: Boolean = true
+        candidatePolicy: CandidatePolicy? = null,
+        overrideCandidatePolicy: Boolean = true
     ) {
         if (cardIds.isEmpty()) return
 

@@ -27,7 +27,7 @@ class WarView(private val warInfo: WarInfo) {
 fun WarInfo.toWarView() = WarView(this)
 
 // ── 私有计算函数 ─────────────────────────────────────────
-//todo 是否私有还要再研究一下
+// 是否私有还要再研究一下
 private fun computeAbleAtcSum(resource: Int, meBlood: Int, heroHealth: Int): Int {
     if (heroHealth == 0) return 0
     val base = acceptableRivalAttack(resource)

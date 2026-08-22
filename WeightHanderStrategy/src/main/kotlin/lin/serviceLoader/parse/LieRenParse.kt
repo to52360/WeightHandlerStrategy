@@ -9,7 +9,7 @@ class LieRenParse : ParseCardWeightInfo {
 
 
         /**
-         * todo 临时 战士
+         *  临时 战士
          */
         infoMap["WW_367"]?.toDie = true
         //   infoMap["CORE_EX1_407"]?.addUseStrategy(AwaitAnimationStrategy)

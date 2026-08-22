@@ -16,7 +16,7 @@ class COINProvide : CardWeightInfoProvide {
         val coinKey = MetadataKey<Int>("COIN")
     }
     /**
-     * todo 存在魔数
+     *  存在魔数
      */
     override fun getInfos(): Map<String, CardWeightInfo> {
         // 硬币基础价值=0（不占配置费用分），"额外费用 + 最后打"由 useGroupId=COINGroupId + cardContext[coinKey] 通道承载，

@@ -9,7 +9,7 @@ package lin.bean.usePlan
  * val tags = store.tags[cardId]
  * ```
  *
- * ## 写入策略（TODO - 后续评估）
+ * ## 写入策略（ - 后续评估）
  *
  * 当前采用 `var + 不可变 Map`：运行时更新通过替换整个引用完成。
  * 写入方式：`store.tags = store.tags + ("cardId" to setOf(PurposeTagId.CLEAN))`

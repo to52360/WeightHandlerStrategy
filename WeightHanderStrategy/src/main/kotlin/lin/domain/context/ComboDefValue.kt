@@ -16,7 +16,6 @@ val NotWeight: Double get() = EngineConfig.notWeight
 val BaseWeight: Double get() = EngineConfig.baseWeight
 val OrderWeight: Double get() = EngineConfig.orderWeight
 val UnUseWeight: Double get() = EngineConfig.unUseWeight
-val UseSkillWeight: Double get() = EngineConfig.useSkillWeight
 
 val PenaltyRatioExponent: Double get() = EngineConfig.penaltyRatioExponent
 val PenaltyWeight: Double get() = EngineConfig.penaltyWeight
@@ -25,6 +24,9 @@ val CostValueWeight: Double get() = EngineConfig.costValueWeight
 val CostValueExponent: Double get() = EngineConfig.costValueExponent
 val CostValueMaxCost: Double get() = EngineConfig.costValueMaxCost
 val SpellCostValueWeight: Double get() = EngineConfig.spellCostValueWeight
+
+// D-007 双费数模型：战术分(分)→费 全局换算（fillValue = fallback + min(G, tacticalScore×TacticalScoreScale)）
+val TacticalScoreScale: Double get() = EngineConfig.tacticalScoreScale
 
 // 费用价值凹函数：costValue(cost, weight) = weight * min(cost, MaxCost)^CostValueExponent。
 // 表达炉石「低费抢节奏溢价、高费卡手/怕解贬值」的非线性经济规律（指数 0.5 = √cost）。
