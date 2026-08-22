@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import lin.bean.usePlan.GroupUseOverride
-import lin.rule.tree.CardGroupBehavior.OverrideBehavior
-import lin.rule.tree.CardGroupBehavior.UseActionBehavior
+import lin.rule.tree.CardGroupBehavior
+import lin.rule.tree.CardGroupBehavior.*
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import java.util.*
@@ -36,10 +36,13 @@ class CardGroupService(private val repository: CardGroupRepository) {
             .associate { it.bindingId to mapper.readValue<GroupUseOverride>(it.payload) }
         val useActionByBinding = repository.findBehaviorsByManager(managerId, GroupBehaviorType.USE_ACTION)
             .associate { it.bindingId to parseUseActionPayload(it.payload) }
+        val surplusGateByBinding = repository.findBehaviorsByManager(managerId, GroupBehaviorType.SURPLUS_GATE)
+            .associate { it.bindingId to SurplusGateBehavior(mapper.readValue<SurplusGatePayload>(it.payload).idleThreshold) }
         return bindingEntities.map { entity ->
             val behaviors = buildList {
                 overrideByBinding[entity.id]?.let { add(OverrideBehavior(it)) }
                 useActionByBinding[entity.id]?.let { add(it) }
+                surplusGateByBinding[entity.id]?.let { add(it) }
             }
             entity.toDomain(behaviors)
         }
@@ -93,13 +96,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
         repository.deleteBehaviorsByManager(id)
         bindings.forEach { binding ->
             binding.behaviors.forEach { b ->
-                val entity = when (b) {
-                    is OverrideBehavior -> if (b.override.isDefault()) null
-                        else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.OVERRIDE, mapper.writeValueAsString(b.override))
-                    is UseActionBehavior -> if (b.useActions.isEmpty()) null
-                        else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.USE_ACTION, toUseActionPayload(b))
-                }
-                entity?.let { repository.saveBehavior(it) }
+                toBehaviorEntity(binding.id, b)?.let { repository.saveBehavior(it) }
             }
         }
         return id
@@ -145,13 +142,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
         // 覆盖写 card_group_behavior：先清该 Binding 全部旧行为行，再按当前行为列表重填
         repository.deleteBehaviorsByBinding(binding.id)
         binding.behaviors.forEach { b ->
-            val entity = when (b) {
-                is OverrideBehavior -> if (b.override.isDefault()) null
-                    else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.OVERRIDE, mapper.writeValueAsString(b.override))
-                is UseActionBehavior -> if (b.useActions.isEmpty()) null
-                    else CardGroupBehaviorEntity(binding.id, GroupBehaviorType.USE_ACTION, toUseActionPayload(b))
-            }
-            entity?.let { repository.saveBehavior(it) }
+            toBehaviorEntity(binding.id, b)?.let { repository.saveBehavior(it) }
         }
     }
 
@@ -176,6 +167,18 @@ class CardGroupService(private val repository: CardGroupRepository) {
 
     // ─────────────────────── 序列化工具 ──────────────────────────────────────
 
+    /** 领域行为 → card_group_behavior 实体行；无需持久化的（default 覆盖 / 空 useActions）返回 null。 */
+    private fun toBehaviorEntity(bindingId: String, b: CardGroupBehavior): CardGroupBehaviorEntity? = when (b) {
+        is OverrideBehavior -> if (b.override.isDefault()) null
+        else CardGroupBehaviorEntity(bindingId, GroupBehaviorType.OVERRIDE, mapper.writeValueAsString(b.override))
+
+        is UseActionBehavior -> if (b.useActions.isEmpty()) null
+        else CardGroupBehaviorEntity(bindingId, GroupBehaviorType.USE_ACTION, toUseActionPayload(b))
+
+        is SurplusGateBehavior ->
+            CardGroupBehaviorEntity(bindingId, GroupBehaviorType.SURPLUS_GATE, toSurplusGatePayload(b))
+    }
+
     /** 反序列化 USE_ACTION 的 payload，兼容旧格式（纯 List<String>）和新格式（{useActions, extraConfig}）。 */
     @Suppress("UNCHECKED_CAST")
     private fun parseUseActionPayload(payload: String): UseActionBehavior {
@@ -193,6 +196,13 @@ class CardGroupService(private val repository: CardGroupRepository) {
     /** 序列化 USE_ACTION 为 JSON payload */
     private fun toUseActionPayload(b: UseActionBehavior): String =
         mapper.writeValueAsString(mapOf("useActions" to b.useActions, "extraConfig" to b.extraConfig))
+
+    /** SURPLUS_GATE 的 payload 反序列化载体（sealed 子类不作为 Jackson 目标类型，避免 sealed 多态解析）。 */
+    private data class SurplusGatePayload(val idleThreshold: Int)
+
+    /** 序列化 SURPLUS_GATE 为 JSON payload */
+    private fun toSurplusGatePayload(b: SurplusGateBehavior): String =
+        mapper.writeValueAsString(mapOf("idleThreshold" to b.idleThreshold))
 
     // ─────────────────────── 转换工具 ──────────────────────────────────────
 

@@ -33,6 +33,9 @@ class CardCombinedConfigBuilder {
     val baseInfos = HashMap<String, CardWeightInfo>()
     val groupMap = HashMap<String, MutableSet<String>>()
     val groupOverrides = HashMap<String, GroupUseOverride>()
+
+    // 分组级空闲放行门槛：groupId → N（SURPLUS_GATE 行为，T-019）
+    val groupSurplusGates = HashMap<String, Int>()
     // 配置侧声明的使用动作：cardId → 原始策略列表（含 UseBefore/UseAfter，build 时按类型拆分）
     val useStrategiesByCardId = HashMap<String, MutableList<UseStrategy>>()
 
@@ -66,16 +69,21 @@ class CardCombinedConfigBuilder {
                 purposeTags = cardPurposes[cardId]?.purposeTags ?: emptySet(),
                 conditionalStage = groupMap[cardId].orEmpty()
                     .firstNotNullOfOrNull { groupOverrides[it]?.conditionalStage },
+                groupSurplusIdleThreshold = groupMap[cardId].orEmpty()
+                    .firstNotNullOfOrNull { groupSurplusGates[it] },
             )
         }
     }
 
-    /** 展开分组 OVERRIDE 行为 → [groupOverrides]。USE_ACTION 走 slices，不在此处理。 */
+    /** 展开分组 OVERRIDE / SURPLUS_GATE 行为。USE_ACTION 走 slices，不在此处理。 */
     private fun expandGroupBehaviors() {
         for (binding in groupBehaviors) {
             for (behavior in binding.behaviors) {
-                if (behavior is CardGroupBehavior.OverrideBehavior)
-                    groupOverrides[binding.id] = behavior.override
+                when (behavior) {
+                    is CardGroupBehavior.OverrideBehavior -> groupOverrides[binding.id] = behavior.override
+                    is CardGroupBehavior.SurplusGateBehavior -> groupSurplusGates[binding.id] = behavior.idleThreshold
+                    is CardGroupBehavior.UseActionBehavior -> {} // 走 slices
+                }
             }
         }
     }

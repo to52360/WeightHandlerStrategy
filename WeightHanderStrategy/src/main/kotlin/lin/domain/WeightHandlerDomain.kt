@@ -120,7 +120,7 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
             comboCard.updateIntent(treeResult.actions)
         }
         // D-007 回归「树分皆战术信号」：全树分进出牌总权重，同时整体作为战术信号存 ComboCard
-        //（第一轮门控 / 将就门绕行 / fillValue 溢价消费）。Q-008 通道分离遗留待清理（T-018）。
+        //（第一轮门控 / 余费门槛绕行 / fillValue 溢价消费）。Q-008 通道分离遗留待清理（T-018）。
         total += treeResult.score
         comboCard.tacticalScore = treeResult.score
 

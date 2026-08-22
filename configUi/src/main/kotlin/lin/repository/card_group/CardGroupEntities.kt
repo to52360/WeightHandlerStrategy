@@ -51,6 +51,7 @@ data class CardBindingEntity(
 object GroupBehaviorType {
     const val USE_ACTION = "USE_ACTION"
     const val OVERRIDE = "OVERRIDE"
+    const val SURPLUS_GATE = "SURPLUS_GATE"
 }
 
 /**

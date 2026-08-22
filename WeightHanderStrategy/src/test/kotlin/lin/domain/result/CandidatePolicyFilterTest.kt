@@ -60,7 +60,7 @@ class CandidatePolicyFilterTest {
 
     @Test
     fun `第二轮 TACTICS_DOMINANT 按正总分判断（D-005 放宽）`() {
-        // 有正底分但无战术命中：余费内可将就出白板（不再死捏）
+        // 有正底分但无战术命中：余费内可垫出白板（不再死捏）
         assertTrue(
             buildCard(
                 CandidatePolicy.TACTICS_DOMINANT,

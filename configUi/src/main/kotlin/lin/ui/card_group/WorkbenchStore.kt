@@ -143,4 +143,9 @@ class WorkbenchStore(private val service: CardGroupService) {
         val idx = state.selectedBindingIndex ?: return
         dispatch(WorkbenchActions.updateBindingStatDimensions(idx, dimensions))
     }
+
+    fun updateBindingSurplusGate(idleThreshold: Int?) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingSurplusGate(idx, idleThreshold))
+    }
 }

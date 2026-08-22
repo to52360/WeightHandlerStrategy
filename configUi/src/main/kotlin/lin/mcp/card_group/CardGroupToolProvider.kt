@@ -7,6 +7,7 @@ import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.CardManagerEntity
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.findOverride
+import lin.rule.tree.findSurplusGate
 import lin.ui.service.TreeConfigService
 
 /**
@@ -137,7 +138,8 @@ internal fun bindingView(b: CardGroupBinding): Map<String, Any?> = mapOf(
             "stage" to cs.stage.name,
             "elseStage" to cs.elseStage?.name
         )
-    }
+    },
+    "surplusIdleThreshold" to b.behaviors.findSurplusGate()?.idleThreshold
 )
 
 private data class CardGroupProgressInput(

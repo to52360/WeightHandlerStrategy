@@ -31,6 +31,10 @@ sealed class CardGroupBehavior {
         val useActions: List<String>,
         val extraConfig: Map<String, Any> = emptyMap()
     ) : CardGroupBehavior()
+
+    /** SURPLUS_GATE 行：分组级余费门槛 N（D-007 空闲放行门槛）——一类牌统一捏、不用逐卡设置（如解牌组统一 N=4）。
+     * 由 [lin.bean.CandidatePolicyFilter.surplusIdleThreshold] 解析链兜底（逐卡小数位 > 分组行为 > 默认 1）。 */
+    data class SurplusGateBehavior(val idleThreshold: Int) : CardGroupBehavior()
 }
 
 /**

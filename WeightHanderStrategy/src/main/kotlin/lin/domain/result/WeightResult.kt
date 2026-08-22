@@ -133,7 +133,7 @@ class EndWeightResult(
     /**
      * T-011/Q-009：余费统筹填充（选牌算法第二梯队，非执行阶段断层）。
      *
-     * 主牌已选后，在剩余费用内填充余费候选（[passesSurplusCandidate] 含 D-007 将就门：空闲 > G 或战术命中），
+     * 主牌已选后，在剩余费用内填充余费候选（[passesSurplusCandidate] 含 D-007 余费门槛：空闲 ≥ N 或战术命中），
      * 目标函数 `max Σ surplusFillValue`（D-007 费数机会成本，[SurplusFillCombination]），
      * 合并进 [bestCombination]。排序与出牌由 UsePlanOrderer / useCombo 统一处理。
      * 战场已满时不出随从（isFull && isMinion），与执行层 UseFunction 的硬拦截一致。

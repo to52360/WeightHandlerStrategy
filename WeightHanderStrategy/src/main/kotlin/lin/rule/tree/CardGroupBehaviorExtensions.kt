@@ -9,6 +9,9 @@ fun List<CardGroupBehavior>.findOverride(): GroupUseOverride? =
 fun List<CardGroupBehavior>.findUseActionBehavior(): CardGroupBehavior.UseActionBehavior? =
     firstOrNull { it is CardGroupBehavior.UseActionBehavior } as? CardGroupBehavior.UseActionBehavior
 
+fun List<CardGroupBehavior>.findSurplusGate(): CardGroupBehavior.SurplusGateBehavior? =
+    firstOrNull { it is CardGroupBehavior.SurplusGateBehavior } as? CardGroupBehavior.SurplusGateBehavior
+
 fun List<CardGroupBehavior>.findUseActions(): List<String> =
     findUseActionBehavior()?.useActions ?: emptyList()
 
@@ -30,4 +33,11 @@ fun List<CardGroupBehavior>.withUseActions(
     val without = filter { it !is CardGroupBehavior.UseActionBehavior }
     return if (actions.isEmpty() && extraConfig.isEmpty()) without
     else without + CardGroupBehavior.UseActionBehavior(actions, extraConfig)
+}
+
+/** 以不可变方式写入/移除 SURPLUS_GATE 行为：idleThreshold 为 null 时移除该行。 */
+fun List<CardGroupBehavior>.withSurplusGate(idleThreshold: Int?): List<CardGroupBehavior> {
+    val without = filter { it !is CardGroupBehavior.SurplusGateBehavior }
+    return if (idleThreshold == null) without
+    else without + CardGroupBehavior.SurplusGateBehavior(idleThreshold)
 }

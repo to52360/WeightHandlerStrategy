@@ -12,6 +12,7 @@ import lin.repository.condition_tree.createConditionTreeConfigMapper
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.findOverride
+import lin.rule.tree.withSurplusGate
 import lin.utils.nextShortId
 
 /**
@@ -126,7 +127,8 @@ class SaveCardGroupToolProvider(
             } else {
                 emptyMap()
             }
-            // 分步语义：只更新分组定义（cardIds/description），保留已有策略（behaviors）——策略由 save_group_override 单独维护。
+            // 分步语义：只更新分组定义（cardIds/description/surplusIdleThreshold），保留已有策略（behaviors）——
+            // 出牌阶段策略由 save_group_override 单独维护；surplusIdleThreshold 提供则设置分组级余费门槛（缺省保留原值）。
             val bindings = input.bindings.map { bi ->
                 val existing = existingBindingsByName[bi.name]
                 CardGroupBinding(
@@ -135,7 +137,11 @@ class SaveCardGroupToolProvider(
                     name = bi.name,
                     cardIds = bi.cardIds,
                     description = bi.description,
-                    behaviors = existing?.behaviors ?: emptyList()
+                    behaviors = if (bi.surplusIdleThreshold != null) {
+                        (existing?.behaviors ?: emptyList()).withSurplusGate(bi.surplusIdleThreshold)
+                    } else {
+                        existing?.behaviors ?: emptyList()
+                    }
                 )
             }
             val managerId = groupService.saveManager(
@@ -293,7 +299,9 @@ private data class SaveCardGroupBindingInput(
     @field:JsonPropertyDescription("该分组包含的卡牌 ID 列表")
     val cardIds: List<String>,
     @field:JsonPropertyDescription("分组说明（战术定位/联动动机）。出牌策略（stageOverride/conditionalStage）由 save_group_override 单独配置。")
-    val description: String? = null
+    val description: String? = null,
+    @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-007 空闲放行门槛）——一类牌统一捏、不用逐卡设置（如解牌组统一 4 = 空闲 3 捏 4 放，取值 1~9）。提供则设置，缺省保留原值；空=未配置=随时可垫（逐卡小数位仍优先）。清除需在分组编辑界面操作。")
+    val surplusIdleThreshold: Int? = null
 )
 
 private data class SaveGroupOverrideInput(

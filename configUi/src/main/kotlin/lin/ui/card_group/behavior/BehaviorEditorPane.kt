@@ -19,6 +19,7 @@ class BehaviorTabPane(
 
     private val overridePane = OverridePane(store, disableWhen)
     private val useActionPane = UseActionPane(store, disableWhen)
+    private val surplusGatePane = SurplusGatePane(store, disableWhen)
 
     init {
         val tabPane = TabPane().apply {
@@ -52,7 +53,16 @@ class BehaviorTabPane(
         }
         val tab3 = Tab("⚡ 使用动作", tab3Content)
 
-        tabPane.tabs.addAll(tab1, tab2, tab3)
+        // ── Tab 4：🚪 余费门槛（分组级，空闲费 ≥ N 才放行垫牌）──
+        val tab4Content = VBox(14.0).apply {
+            padding = Insets(14.0)
+            children.addAll(
+                surplusGatePane.node
+            )
+        }
+        val tab4 = Tab("🚪 余费门槛", tab4Content)
+
+        tabPane.tabs.addAll(tab1, tab2, tab3, tab4)
         node = tabPane
     }
 }

@@ -14,7 +14,7 @@ import kotlin.math.max
  * - 第二轮余费门控（D-007 后双通道，正交互补）：
  *   ① [passesSecondRoundCandidate]（powerWeight > 0）= **动态亏模兜底**——评估树/规则给负分（这局面打出去亏）
  *     的牌挡在余费外，兼 unUse 防死循环；
- *   ② [passesSurplusGate]（空闲 ≥ N）= **静态惜售**——捏到几费才将就出（D-007 双费数模型）。
+ *   ② [passesSurplusGate]（空闲 ≥ N）= **静态持有意愿**——捏到几费才放行垫牌（D-007 双费数模型）。
  *
  * 注意：候选门控只做「进不进候选」，不调用 `unUse()`/Banned——那是 EvalOutcome.Banned 硬禁语义（永久禁出），
  * 与本软门控（暂时不出）互不重叠。
@@ -28,13 +28,13 @@ fun ComboCard.passesFirstRoundCandidate(): Boolean = when (candidatePolicy()) {
 /** 第二轮余费候选资格：费用门槛由调用方（fillSurplusCost）按 cost <= remainingCost 控制。 */
 fun ComboCard.passesSecondRoundCandidate(): Boolean = when (candidatePolicy()) {
     // 负分动态亏模兜底（树/规则负分 → 不出）+ unUse 防死循环；D-005 时期的「放宽」注释已作废——
-    // 静态惜售职责已移交 D-007 将就门（passesSurplusGate），本检查只保留负分通道职责。
+    // 静态持有意愿职责已移交 D-007 余费门槛（passesSurplusGate），本检查只保留负分通道职责。
     CandidatePolicy.TACTICS_DOMINANT, CandidatePolicy.SURPLUS_ONLY, CandidatePolicy.NORMAL -> powerWeight > NotWeight
 }
 
 /**
  * 余费候选完整判定（T-011 fillSurplusCost / T-013 compensateFailedCards 共享的集中变化点）：
- * 费用门槛（cost <= remainingCost）+ 第二轮候选资格（[passesSecondRoundCandidate]）+ 将就门（D-007）+ 满场随从排除。
+ * 费用门槛（cost <= remainingCost）+ 第二轮候选资格（[passesSecondRoundCandidate]）+ 余费门槛（D-007）+ 满场随从排除。
  * 战场满时不出随从，与执行层 UseFunction 硬拦截语义一致。
  */
 fun ComboCard.passesSurplusCandidate(remainingCost: Int, isFull: Boolean): Boolean =
@@ -62,10 +62,15 @@ fun ComboCard.equivalentCostValue(): Double {
 }
 
 /**
- * 空闲放行门槛 N：空闲费 ≥ N 才允许将就出。未配置 = 1（随时可垫，D-005「无战术不死捏」——
+ * 余费门槛 N：空闲费 ≥ N 才允许垫牌放行。未配置 = 1（随时可垫，D-005「无战术不死捏」——
  * 不设「普遍亏模」默认档，持有意愿一律显式配置）。
+ * 解析链（T-019）：逐卡小数位（[CardWeightInfo.surplusIdleThreshold]）> 分组行为（[CardCombinedConfig.groupSurplusIdleThreshold]）
+ * > 默认 1。分组级解决「一类牌统一捏、不用逐卡设置」（如解牌组统一 N=4）。
  */
-fun ComboCard.surplusIdleThreshold(): Int = cardWeightInfo?.surplusIdleThreshold ?: 1
+fun ComboCard.surplusIdleThreshold(): Int =
+    cardWeightInfo?.surplusIdleThreshold
+        ?: combinedConfig?.groupSurplusIdleThreshold
+        ?: 1
 
 /**
  * fillValue（填充交付费值）= 等效费 E + 战术溢价（tacticalScore×[TacticalScoreScale]）。
@@ -75,7 +80,7 @@ fun ComboCard.surplusFillValue(): Double =
     equivalentCostValue() + max(tacticalScore, 0.0) * TacticalScoreScale
 
 /**
- * 将就门（D-007）：战术已命中（tacticalScore > 0）= 现在就是战术价值，直接放行；
+ * 余费门槛（D-007）：战术已命中（tacticalScore > 0）= 现在就是战术价值，直接放行；
  * 否则空闲费 ≥ N 才放行（N=4 即「3捏4放行」；「不贪心」= 直接配更小的 N）。
  */
 fun ComboCard.passesSurplusGate(idleCost: Int): Boolean =

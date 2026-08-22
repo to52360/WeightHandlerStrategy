@@ -205,6 +205,17 @@ object WorkbenchActions {
         state.copy(currentBindings = newList)
     }
 
+    fun updateBindingSurplusGate(index: Int, idleThreshold: Int?): Action = { state ->
+        val newList = state.currentBindings.toMutableList()
+        if (index in newList.indices) {
+            val old = newList[index]
+            newList[index] = old.copy(
+                behaviors = old.behaviors.withSurplusGate(idleThreshold)
+            )
+        }
+        state.copy(currentBindings = newList)
+    }
+
     fun toggleCard(cardId: String, isSelected: Boolean): Action = { state ->
         val newCards = if (isSelected) {
             state.selectedCards + cardId

@@ -91,7 +91,7 @@ class SkillFindStrategy : AbsFindStrategy(findRule = { false }), UseAfterStrateg
     }
 
     /**
-     * D-007/T-016/T-020：技能 = 池外余费将就牌，`UseSkillWeight=-7` 负权重 hack 退役。
+     * D-007/T-016/T-020：技能 = 池外余费垫牌，`UseSkillWeight=-7` 负权重 hack 退役。
      *
      * T-016：旧 hack 机制（-7 → canUse=false → isNotCalculate 挡在组合外，仅空结果强制打出）与被其压死的
      * 「配置技能竞争路径」（copyResult 组合替换，需等效费≥9 才可能获胜的死代码）一并移除。

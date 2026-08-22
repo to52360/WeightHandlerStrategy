@@ -9,7 +9,7 @@ import org.junit.Test
 
 /**
  * D-007 双费数机会成本模型 v3（T-015）：等效费 E（D-014 原语义，不含战术溢价）+ 空闲放行门槛 N（直接配）
- * → 将就门（空闲 ≥ N / 战术命中绕门）+ fillValue = E + 树分×scale（费单位，无 G/fallback 中间量）。
+ * → 余费门槛（空闲 ≥ N / 战术命中绕门）+ fillValue = E + 树分×scale（费单位，无 G/fallback 中间量）。
  *
  * 语义锚点（用户拍板例）：① 门槛 N=4 即「3捏4放行」；②「不贪心」= 本来 4 费放行的卡直接配 N=2；
  * ③ 未配置 = 随时可垫（无「普遍亏模」默认档）；④ 等效费用是固有语义（6 费牌等效 5 = 略亏模），不含战术溢价。
@@ -22,6 +22,7 @@ class SurplusGateFillTest {
         cost: Int,
         powerWeight: Double,
         idleThreshold: Int? = null,
+        groupIdleThreshold: Int? = null,
         tacticalScore: Double = 0.0
     ): ComboCard {
         val info = CardWeightInfo(
@@ -32,7 +33,8 @@ class SurplusGateFillTest {
         val card = ComboCard(
             combinedConfig = CardCombinedConfig(
                 weightInfo = info,
-                useIntent = UseIntent(candidatePolicy = policy)
+                useIntent = UseIntent(candidatePolicy = policy),
+                groupSurplusIdleThreshold = groupIdleThreshold
             ),
             card = createMockCard(cardId = cardId, cost = cost)
         )
@@ -41,7 +43,7 @@ class SurplusGateFillTest {
         return card
     }
 
-    // ===== 将就门 =====
+    // ===== 余费门槛 =====
 
     @Test
     fun `配置档 N=4 即 3捏4放行`() {
@@ -63,6 +65,28 @@ class SurplusGateFillTest {
         // 不配门槛 = N=1：D-005「无战术不死捏」，持有意愿一律显式配置
         val card = buildCard("T3", CandidatePolicy.TACTICS_DOMINANT, cost = 1, powerWeight = 3.0)
         assertTrue(card.passesSurplusCandidate(remainingCost = 1, isFull = false))
+    }
+
+    // ===== 分组级门槛（T-019 SURPLUS_GATE）：一类牌统一捏、不用逐卡设置 =====
+
+    @Test
+    fun `分组级门槛生效 空闲3捏4放行`() {
+        // 无逐卡门槛、分组 N=4：解牌组统一捏到 4 费才放行垫牌
+        val card =
+            buildCard("G1", CandidatePolicy.TACTICS_DOMINANT, cost = 2, powerWeight = 5.0, groupIdleThreshold = 4)
+        assertFalse(card.passesSurplusCandidate(remainingCost = 3, isFull = false))
+        assertTrue(card.passesSurplusCandidate(remainingCost = 4, isFull = false))
+    }
+
+    @Test
+    fun `逐卡小数位优先于分组行为`() {
+        // 逐卡 N=2 覆盖分组 N=4：特殊卡比组内其他牌更不贪心
+        val card = buildCard(
+            "G2", CandidatePolicy.TACTICS_DOMINANT, cost = 2,
+            powerWeight = 5.0, idleThreshold = 2, groupIdleThreshold = 4
+        )
+        assertFalse(card.passesSurplusCandidate(remainingCost = 1, isFull = false))
+        assertTrue(card.passesSurplusCandidate(remainingCost = 2, isFull = false))
     }
 
     @Test
@@ -108,7 +132,7 @@ class SurplusGateFillTest {
     // ===== 填充目标 max Σ fillValue =====
 
     @Test
-    fun `同槽位高等效费白板胜亏模将就牌`() {
+    fun `同槽位高等效费白板胜亏模垫牌`() {
         val vanilla = buildCard("V", CandidatePolicy.NORMAL, cost = 2, powerWeight = 2.0)   // E=2
         val tactical = buildCard(
             "T5", CandidatePolicy.TACTICS_DOMINANT, cost = 2,
@@ -119,7 +143,7 @@ class SurplusGateFillTest {
     }
 
     @Test
-    fun `白板填不满时将就牌补空隙`() {
+    fun `白板填不满时垫牌补空隙`() {
         val tactical = buildCard(
             "T6", CandidatePolicy.TACTICS_DOMINANT, cost = 2,
             powerWeight = 1.0, idleThreshold = 2
@@ -142,7 +166,7 @@ class SurplusGateFillTest {
     // ===== 端到端：fillSurplusCost 走新目标 =====
 
     @Test
-    fun `主牌选完后将就门与费数目标端到端生效`() {
+    fun `主牌选完后余费门槛与费数目标端到端生效`() {
         val main = buildCard("M", CandidatePolicy.NORMAL, cost = 3, powerWeight = 3.0)
         main.extPowerWeight = 5.0
         val tactical = buildCard(
@@ -154,7 +178,7 @@ class SurplusGateFillTest {
         result.processWeightAfter(tactical)
         result.findBestCombination()
 
-        // 主牌 3 费（第一轮 TACTICS_DOMINANT 无战术被排除），剩 2 费：门槛 4 未到，捏住不将就
+        // 主牌 3 费（第一轮 TACTICS_DOMINANT 无战术被排除），剩 2 费：门槛 4 未到，捏住不放
         assertEquals(listOf(main), result.bestCombination)
     }
 
