@@ -91,7 +91,7 @@ data class CardWeightInfo(
 
     private var _intentEvaluatorRoots: MutableList<EvaluatorTreeRoot>? = null
 
-    /** 评估树根 + 评分通道（Q-008）。channel 在绑定任务实例化时静态解析。 */
+    /** 评估树根。绑定任务实例化后注入。 */
     val intentEvaluatorRoots: List<EvaluatorTreeRoot>
         get() = _intentEvaluatorRoots ?: emptyList()
 

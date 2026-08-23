@@ -12,7 +12,6 @@ package lin.bean.usePlan
  * @param defaultReplanAfterUse 使用后是否需重新规划
  * @param priority 优先级（数值越大越优先匹配）
  * @param defaultCandidatePolicy 候选策略默认值；null = 未声明，回落 NORMAL。多标签声明冲突需显式覆盖。
- *   同时作为评估树评分通道缺省的推导来源（见 [ScoreChannel.fromCandidatePolicy]），无独立 defaultChannel 字段。
  */
 data class PurposeTagIntentRule(
     val tagId: PurposeTagId,

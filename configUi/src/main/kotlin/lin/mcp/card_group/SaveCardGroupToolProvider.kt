@@ -300,7 +300,7 @@ private data class SaveCardGroupBindingInput(
     val cardIds: List<String>,
     @field:JsonPropertyDescription("分组说明（战术定位/联动动机）。出牌策略（stageOverride/conditionalStage）由 save_group_override 单独配置。")
     val description: String? = null,
-    @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-007 空闲放行门槛）——一类牌统一捏、不用逐卡设置（如解牌组统一 4 = 空闲 3 捏 4 放，取值 1~9）。提供则设置，缺省保留原值；空=未配置=随时可垫（逐卡小数位仍优先）。清除需在分组编辑界面操作。")
+    @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-007 空闲放行门槛）——一类牌统一捏、不用逐卡设置（如解牌组统一 4 = 空闲 3 捏 4 放，取值 1~9）。提供则设置，缺省保留原值；空=未配置=随时可垫（逐卡小数位仍优先）。清除需在分组编辑界面操作。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由候选策略（candidatePolicy）决定，「只走余费填充」需另配 SURPLUS_ONLY（save_group_override / 用途标签通道）。")
     val surplusIdleThreshold: Int? = null
 )
 

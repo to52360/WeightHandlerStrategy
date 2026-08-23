@@ -2,7 +2,6 @@ package lin.ai.config.draft
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.ai.config.ValidationReport
-import lin.bean.usePlan.ScoreChannel
 import lin.rule.tree.EvaluatorLeafConfig
 import lin.rule.tree.EvaluatorNode
 import lin.rule.tree.EvaluatorTreeBindingType
@@ -41,9 +40,7 @@ data class CreateDraftRequest(
     )
     val managerId: String? = null,
     @field:JsonPropertyDescription("克隆已有评估树的 id（由 evaluator_tree(action=LIST) 获取）。与 root 互斥：提供 cloneFrom 时 root 留空。非空时以该配置为蓝本创建草稿，叶子节点参数预填，missingNodeIds 为空，可直接 commit 或用 put_draft_leaf 覆盖差异节点。")
-    val cloneFrom: String? = null,
-    @field:JsonPropertyDescription("评分通道显式声明（评估树级，Q-008）。可选值：GENERAL, TACTICAL；null=跟随绑定目标候选策略推导。TACTICS_DOMINANT 卡的战术分树应声明 TACTICAL。")
-    val channel: ScoreChannel? = null
+    val cloneFrom: String? = null
 ) {
     fun toQuery(): DraftCreationQuery {
         val cloneFrom = cloneFrom

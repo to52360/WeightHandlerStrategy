@@ -43,7 +43,7 @@ class SurplusGatePane(
                 children.addAll(
                     Label("空闲放行门槛 N:").apply { style = "-fx-font-weight: bold;" },
                     gateField,
-                    Label("空闲费 ≥ N 才放行垫牌（如 N=4：空闲 3 捏 4 放；空 = 未配置，随时可垫）")
+                    Label("空闲费 ≥ N 才放行垫牌（如 N=4：空闲 3 捏 4 放；空 = 未配置，随时可垫）。只管余费垫牌，不改主搜索资格——「只走余费」需另配候选策略 SURPLUS_ONLY")
                         .apply { style = "-fx-text-fill: #6c757d; -fx-font-size: 11px;" }
                 )
             }

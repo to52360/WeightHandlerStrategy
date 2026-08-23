@@ -18,18 +18,11 @@ sealed class RuleResult {
      * "不参与评分"由 missValue=0 表达，全局禁止经 EvalSignal.Banned 异常穿透，
      * 本类型不携带任何控制分支。
      *
-     * Q-008：按评分通道分离——[generalScore]（一般价值）与 [tacticalScore]（战术价值）。
-     * [score] = 两者之和。
-     * D-007（2026-08-22）回归「树分皆战术信号」：战术信号消费方（门控/绕门/fillValue 溢价）已改读 [score]（全树分），
-     * 通道分离无独立消费者，遗留待清理（TRACKER T-018）。
+     * D-007（2026-08-22）「树分皆战术信号」：全树分单值聚合，无通道分桶
+     * （Q-008 的 general/tactical 双通道字段已随 T-018 清理，消费方读 [score]）。
      */
     data class Accumulate(
-        val generalScore: Double,
-        val tacticalScore: Double,
+        val score: Double,
         val actions: List<ComboCardAction>
-    ) : RuleResult() {
-        /** 旧语义总分数 = general + tactical（兼容既有消费方） */
-        val score: Double
-            get() = generalScore + tacticalScore
-    }
+    )
 }

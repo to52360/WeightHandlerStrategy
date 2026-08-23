@@ -1,0 +1,13 @@
+-- 2026-08-23 T-018 数据库迁移脚本
+-- 目标库: weightHandlerStrategy.db
+-- 用途: 清除 tree_config.channel 列（Q-008 评分通道已随 D-007「树分皆战术信号」+ T-018 整体退役，
+--       新库 CREATE TABLE 已不含该列，本脚本仅供旧库清理遗留列，不执行也不影响运行——代码已不再读写该列）
+--
+-- 用法: sqlite3 weightHandlerStrategy.db < 本文件
+--      或手动在 sqlite3 中执行。
+--
+-- 检查: PRAGMA table_info(tree_config);
+-- 若存在 channel 列，执行:
+--   ALTER TABLE tree_config DROP COLUMN channel;
+-- （需 SQLite >= 3.35；旧版 sqlite3 报错可忽略，保留死列无害）
+-- 若报 no such column 说明列已不存在，可忽略。

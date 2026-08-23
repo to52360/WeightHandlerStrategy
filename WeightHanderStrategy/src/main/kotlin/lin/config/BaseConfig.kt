@@ -26,10 +26,9 @@ data class Rules(val rules: List<WeightRule>) : Rule {
     constructor(rule: WeightRule) : this(listOf(rule))
 }
 
-/** 评估树根节点 + 评分通道。channel 在绑定任务实例化时解析为最终值，随根注入 CardWeightInfo。 */
+/** 评估树根节点。绑定任务实例化后随根注入 CardWeightInfo。 */
 data class EvaluatorTreeRoot(
-    val root: EvaluatorInstanceNode,
-    val channel: lin.bean.usePlan.ScoreChannel = lin.bean.usePlan.ScoreChannel.GENERAL
+    val root: EvaluatorInstanceNode
 ) : Rule
 
 /**

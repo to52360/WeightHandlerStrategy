@@ -195,6 +195,6 @@ private data class CardWeightItemInput(
     val weight: Double? = null,
     @field:JsonPropertyDescription("开局换牌权重 changeWeight（可选，正数偏好保留，负数偏好换掉，如 15.0 或 -100.0）")
     val changeWeight: Double? = null,
-    @field:JsonPropertyDescription("配置等效费用 powerWeight（可选，>0 时该卡基础价值 = costValue(powerWeight)，覆盖身材/费用兜底。如 5.0 表示该卡等效 5 费）")
+    @field:JsonPropertyDescription("配置等效费用 powerWeight（可选，>0 时该卡基础价值 = costValue(powerWeight)，覆盖身材/费用兜底。如 5.0 表示该卡等效 5 费。仅支持 1 位小数编码余费门槛：5.4 = 等效 5 费 + 空闲 ≥4 才放行垫牌（D-007）；门槛只影响余费垫牌，主搜索资格由候选策略决定）")
     val powerWeight: Double? = null
 )
