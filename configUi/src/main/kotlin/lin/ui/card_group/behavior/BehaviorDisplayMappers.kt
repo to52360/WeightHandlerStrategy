@@ -1,5 +1,6 @@
 package lin.ui.card_group.behavior
 
+import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.UseStage
 import lin.domain.MatchState
 
@@ -36,6 +37,26 @@ object BehaviorDisplayMappers {
     }
 
     fun allStageLabels(): List<String> = listOf("(不覆盖)") + UseStage.entries.map { stageToLabel(it.name) }
+
+    // ── 候选策略 (CandidatePolicy，D-003) ──
+    private const val POLICY_UNSET_LABEL = "(不覆盖)"
+
+    private val policyLabelMap = mapOf(
+        CandidatePolicy.NORMAL to "正常 (NORMAL)",
+        CandidatePolicy.TACTICS_DOMINANT to "战术主导 (TACTICS_DOMINANT)",
+        CandidatePolicy.SURPLUS_ONLY to "余费专用 (SURPLUS_ONLY)"
+    )
+    private val labelToPolicyMap = policyLabelMap.entries.associate { (policy, label) -> label to policy }
+
+    fun policyToLabel(policy: CandidatePolicy?): String =
+        policy?.let { policyLabelMap[it] ?: it.name } ?: POLICY_UNSET_LABEL
+
+    fun labelToPolicy(label: String?): CandidatePolicy? {
+        if (label == null || label == POLICY_UNSET_LABEL) return null
+        return labelToPolicyMap[label] ?: runCatching { CandidatePolicy.valueOf(label) }.getOrNull()
+    }
+
+    fun allPolicyLabels(): List<String> = listOf(POLICY_UNSET_LABEL) + CandidatePolicy.entries.map { policyToLabel(it) }
 
     // ── 使用动作 (UseAction) ──
     private val actionLabelMap = mapOf(

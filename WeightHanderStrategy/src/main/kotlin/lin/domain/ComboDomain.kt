@@ -16,7 +16,6 @@ import lin.domain.use.plan.UsePlanBuilder
 import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
 import lin.rule.context.WarInfoEnv
-import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.warExt.my.base.getCost
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -40,7 +39,6 @@ class ComboDomain : KoinComponent {
     private val useDomain = get<UseDomain>()
     private val findComboStrategyList = getKoin().getAll<FindComboStrategy>().sortedBy { it.priority() }
     private val findPlanner = get<FindPlanner>()
-    private val skillFindStrategy = get<SkillFindStrategy>()
     private val classLoaderScope = get<ClassLoaderScope>()
     private val cycleController = get<ComboCycleController>()
 
@@ -80,8 +78,6 @@ class ComboDomain : KoinComponent {
         myLog.info { "执行出牌策略" }
         executeEnvironment {
             findAndUse()
-            //todo 临时不使用技能解决方案
-            skillFindStrategy.useSkill(warManage)
         }
     }
 
@@ -107,6 +103,9 @@ class ComboDomain : KoinComponent {
 
                     is EmptyWeightResult -> {
                         log.info { "没有可用卡牌,剩余费用:${warManage.getCost()}" }
+                        // T-021b/D-009：技能兜底迁入（原 SkillFindStrategy.emptyResultAction）——
+                        // 无候选防空转，「一次机会」防死循环；Banned/负分语义见 MyWarManage.skillFallbackUse
+                        warManage.skillFallbackUse()
                     }
                 }
             }

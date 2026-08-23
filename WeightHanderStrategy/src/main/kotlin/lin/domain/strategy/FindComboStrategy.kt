@@ -25,7 +25,6 @@ interface FindComboStrategy {
     companion object {
         const val EXT_COST_PRIORITY = 5
         const val DEF_PRIORITY = 10
-        const val SKILL_PRIORITY = 15
     }
 
     fun priority(): Int

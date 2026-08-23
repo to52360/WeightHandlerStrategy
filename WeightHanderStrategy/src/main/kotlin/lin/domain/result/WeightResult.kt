@@ -52,16 +52,12 @@ class EndWeightResult(
     /** 主组合：第一轮（快路全收 / backtrack 搜索）选出 */
     private var mainCombination: List<ComboCard> = emptyList()
 
-    /** 余费填充组合：fillSurplusCost 选出 / 晚到候选重试更新（T-020） */
+    /** 余费填充组合：fillSurplusCost 选出（T-021b 后技能入池同通道竞争，晚到候选重试机制已退役） */
     private var fillCombination: List<ComboCard> = emptyList()
 
     /** 最终组合 = 主组合 + 填充组合（既有消费方统一视角，T-020 拆分内部存储不动外部契约） */
     val bestCombination: List<ComboCard>
         get() = mainCombination + fillCombination
-
-    // T-020：填充重试上下文——fillSurplusCost 定型时快照，供晚到候选（技能）同池竞争
-    private var fillBudget: Int = 0
-    private var fillCandidates: List<ComboCard> = emptyList()
 
     var extWeight = 0.0
 
@@ -141,22 +137,10 @@ class EndWeightResult(
     private fun fillSurplusCost(isFull: Boolean) {
         val remainingCost = cost - costSum()
         if (remainingCost < 0) return // 理论不可达（主牌总费用 ≤ cost），防御
-        fillBudget = remainingCost
-        fillCandidates = (_canUseCardsByHandler - bestCombination.toSet())
+        val candidates = (_canUseCardsByHandler - bestCombination.toSet())
             .filter { it.passesSurplusCandidate(remainingCost, isFull) }
-        if (fillCandidates.isEmpty()) return
-        this.fillCombination = SurplusFillCombination.findBestCombination(fillCandidates, remainingCost)
-    }
-
-    /**
-     * T-020：晚到候选（池外卡，如技能）参与填充竞争。技能等池外卡不在 `canUseCards` 池、
-     * 不进第一轮主组合（主牌位是第一轮赢来的，池外资源只争余费）——调用方须先完成单卡评估
-     * （树分/负分/unUse 就位），本方法按 [passesSurplusCandidate] 门控后与垫牌同池按 fillValue 重搜。
-     */
-    fun retryFillWithLateCandidate(lateCard: ComboCard, isFull: Boolean) {
-        if (fillBudget <= 0) return
-        if (!lateCard.passesSurplusCandidate(fillBudget, isFull)) return
-        fillCombination = SurplusFillCombination.findBestCombination(fillCandidates + lateCard, fillBudget)
+        if (candidates.isEmpty()) return
+        this.fillCombination = SurplusFillCombination.findBestCombination(candidates, remainingCost)
     }
 
     fun addUseCard(comboCard: ComboCard) {

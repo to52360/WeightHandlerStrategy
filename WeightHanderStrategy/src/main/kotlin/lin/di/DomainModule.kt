@@ -13,7 +13,6 @@ import lin.domain.strategy.ExtCostStrategy
 import lin.domain.strategy.FindComboStrategy
 import lin.domain.strategy.FindPlanner
 import lin.domain.use.UseDomain
-import lin.serviceLoader.findCombo.SkillFindStrategy
 import lin.serviceLoader.weightRule.utils.war.CleanWarUtils
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
@@ -38,7 +37,6 @@ private val findStrategyModule = module {
     singleOf(::ExtCostStrategy) bind FindComboStrategy::class
     //singleOf(::ForgeFindStrategy) bind FindComboStrategy::class
     singleOf(::DefFindStrategy) bind FindComboStrategy::class
-    singleOf(::SkillFindStrategy) bind FindComboStrategy::class
 }
 
 private val utilsModule = module {

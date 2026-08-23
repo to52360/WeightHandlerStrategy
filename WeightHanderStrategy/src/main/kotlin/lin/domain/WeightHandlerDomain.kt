@@ -79,22 +79,6 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
     }
 
     /**
-     * T-020：池外单卡评估（如英雄技能）——与 [processWeight] 同一编排（条件树 + aura + legacy handler），
-     * 使技能的评估树/Banned/负分/tacticalScore 真正生效。调用方负责先 cleanWeight 防重复累计。
-     */
-    fun evaluateStandaloneCard(comboCard: ComboCard) {
-        val ruleEnv = WarInfoEnv(warManage)
-        val calWeight = weightEvaluator(comboCard, warManage, ruleEnv)
-        if (calWeight != NotWeight) {
-            if (calWeight == UnUseWeight) {
-                comboCard.unUse()
-            } else {
-                comboCard.addWeight(calWeight)
-            }
-        }
-    }
-
-    /**
      * 单入口编排函数：先条件树求值，后 legacy handler 链。
      */
     private fun weightEvaluator(

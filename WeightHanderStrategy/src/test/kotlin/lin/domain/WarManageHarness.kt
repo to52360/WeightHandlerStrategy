@@ -48,8 +48,9 @@ class WarManageHarness {
             })
         }
         warManage = MyWarManage(buildWar(handCards, powerCard))
-        warManage.reLoad()
         setUsableResource(usableResource)
+        // 资源须在 reLoad 前就位：reLoad 会按当前费用过滤池（含 T-021a 技能候选）
+        warManage.reLoad()
     }
 
     fun stop() {

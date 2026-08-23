@@ -1,6 +1,7 @@
 package lin.ui.card_group
 
 import javafx.beans.property.SimpleObjectProperty
+import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.ConditionalStageOverride
 import lin.dao.CardGroupJsonParser
 import lin.domain.MatchState
@@ -127,6 +128,11 @@ class WorkbenchStore(private val service: CardGroupService) {
     fun updateBindingOrderWeight(weight: Double) {
         val idx = state.selectedBindingIndex ?: return
         dispatch(WorkbenchActions.updateBindingOrderWeight(idx, weight))
+    }
+
+    fun updateBindingCandidatePolicy(policy: CandidatePolicy?) {
+        val idx = state.selectedBindingIndex ?: return
+        dispatch(WorkbenchActions.updateBindingCandidatePolicy(idx, policy))
     }
 
     fun updateBindingConditionalStage(conditionalStage: ConditionalStageOverride?) {
