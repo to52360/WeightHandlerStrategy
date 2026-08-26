@@ -2,7 +2,6 @@ package lin.ui.card_purpose
 
 import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
-import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagId
 import lin.dao.CardGroupJsonParser
 import lin.repository.HsCardRepository
@@ -100,7 +99,6 @@ class CardPurposeStore(
                 name = entity.name ?: "未知卡牌",
                 purposeTags = entity.toDomain().purposeTags,
                 replanAfterUse = entity.replanAfterUse,
-                candidatePolicy = entity.candidatePolicy,
                 createdDate = entity.createdDate,
                 isDbOnly = false
             )
@@ -147,18 +145,12 @@ class CardPurposeStore(
     /**
      * 批量或单卡保存卡牌战略用途配置
      *
-
      * 保存卡牌用途配置（包含多选批量覆盖支持）。
-     *
-     * @param candidatePolicy 候选策略值：当 overrideCandidatePolicy 为 true 时作为新值覆盖（null 表示跟随标签默认）；
-     * @param overrideCandidatePolicy 是否覆盖 candidatePolicy：true = 覆盖（支持重置为 null），false = 保持原值
      */
     fun saveCardPurpose(
         cardIds: List<String>,
         tagsToApply: Map<PurposeTagId, Boolean?>,
-        replanAfterUse: Boolean?,
-        candidatePolicy: CandidatePolicy? = null,
-        overrideCandidatePolicy: Boolean = true
+        replanAfterUse: Boolean?
     ) {
         if (cardIds.isEmpty()) return
 
@@ -180,15 +172,12 @@ class CardPurposeStore(
 
             // 合并重规划
             val mergedReplan = replanAfterUse ?: currentItem.replanAfterUse
-    // 合并候选策略（三态：overrideCandidatePolicy=true 时覆盖，包括设为 null 跟随默认）
-    val mergedPolicy = if (overrideCandidatePolicy) candidatePolicy else currentItem.candidatePolicy
 
             val entity = CardPurposeEntity(
                 cardId = cardId,
                 name = currentItem.name,
                 purposeTags = mergedTags.joinToString(",") { it.value },
                 replanAfterUse = mergedReplan,
-                candidatePolicy = mergedPolicy,
                 createdDate = currentItem.createdDate ?: LocalDate.now().toString()
             )
             entitiesToSave.add(entity)
@@ -225,7 +214,6 @@ class CardPurposeStore(
             name = name,
             purposeTags = tagsString,
             replanAfterUse = replan,
-            candidatePolicy = dbEntity?.candidatePolicy,
             createdDate = currentDate
         )
         repository.save(entity)

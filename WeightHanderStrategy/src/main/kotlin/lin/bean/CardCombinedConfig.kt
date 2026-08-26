@@ -22,6 +22,6 @@ class CardCombinedConfig(
     // 条件化阶段覆盖：唯一来源是 GroupBehaviorStep（OverrideBehavior.conditionalStage 透传）。启动期透传，运行期只读。
     val conditionalStage: ConditionalStageOverride? = null,
     // 分组级余费门槛 N（D-007，T-019）：唯一来源是 GroupBehaviorStep（SurplusGateBehavior 透传）。
-    // surplusIdleThreshold() 解析链兜底用：逐卡小数位（weightInfo.surplusIdleThreshold）> 本分组行为 > 默认 1。
+    // surplusIdleThreshold() 解析链兜底用：逐卡小数位（weightInfo.surplusIdleThreshold）> 本分组行为 > 默认 0（D-012）。
     val groupSurplusIdleThreshold: Int? = null,
 )

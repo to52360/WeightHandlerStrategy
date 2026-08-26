@@ -11,8 +11,8 @@ import lin.rule.tree.findSurplusGate
 import lin.ui.card_group.WorkbenchStore
 
 /**
- * SURPLUS_GATE 类型行为编辑面板：分组级余费门槛 N（D-007 空闲放行门槛）。
- * 一类牌统一捏、不用逐卡设置（如解牌组统一 N=4）；空 = 未配置 = 随时可垫（逐卡小数位仍优先）。
+ * SURPLUS_GATE 类型行为编辑面板：分组级余费门槛 N（D-012 垫后余量语义）。
+ * 一类牌统一捏、不用逐卡设置（如解牌组统一 N=2 = 垫出后仍须剩 2 费）；空 = 未配置 = 付得起即垫（逐卡小数位仍优先）。
  * 自包含 UI 构造、编辑→State、State→UI 双向同步。
  */
 class SurplusGatePane(
@@ -41,9 +41,9 @@ class SurplusGatePane(
             val row = HBox(10.0).apply {
                 alignment = Pos.CENTER_LEFT
                 children.addAll(
-                    Label("空闲放行门槛 N:").apply { style = "-fx-font-weight: bold;" },
+                    Label("垫后余量门槛 N:").apply { style = "-fx-font-weight: bold;" },
                     gateField,
-                    Label("空闲费 ≥ N 才放行垫牌（如 N=4：空闲 3 捏 4 放；空 = 未配置，随时可垫）。只管余费垫牌，不改主搜索资格——「只走余费」需另配候选策略 SURPLUS_ONLY")
+                    Label("放行 ⟺ 空闲 ≥ 牌费 + N（垫出后仍须剩 N 费；如 2 费牌 N=2：空闲 4 才垫）。空 = 未配置 = 付得起即垫。只管余费垫牌，不改主搜索资格——主搜索资格由战术分（评估树 ts>0）决定")
                         .apply { style = "-fx-text-fill: #6c757d; -fx-font-size: 11px;" }
                 )
             }

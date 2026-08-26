@@ -5,6 +5,7 @@ import lin.bean.ComboCard
 import lin.domain.MyWarManage
 import lin.domain.WeightHandlerDomain
 import lin.domain.context.CostWeight
+import lin.domain.surplusDespairNDelta
 import lin.domain.context.NotWeight
 import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy.Companion.DEF_PRIORITY
@@ -153,7 +154,8 @@ class FindPlanner(val warManage: MyWarManage, val weightHandlerDomain: WeightHan
             if (noHasFindRule.isEmpty()) return EmptyWeightResult
             val newWeight = EndWeightResult(noHasFindRule, sumExtCost)
             newWeight.addAll(noHasFindRule)
-            newWeight.findBestCombination(warManage.isFull)
+            // D-011：绝望门槛减量同源传入（额外费用子结果与主结果同轮判定）
+            newWeight.findBestCombination(warManage.isFull, warManage.surplusDespairNDelta())
             return newWeight
         }
         throw RuntimeException("额外费用事务失败")

@@ -1,7 +1,6 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.PurposeTagIntentRuleProvider
 import lin.mcp.action.ActionResources
 import lin.mcp.action.GetAction
@@ -27,8 +26,7 @@ import java.time.LocalDate
 data class PurposeTagCardInfoDto(
     val cardId: String,
     val name: String?,
-    val replanAfterUse: Boolean,
-    val candidatePolicy: String? = null // 三态：null=跟随标签默认，显式值=覆盖
+    val replanAfterUse: Boolean
 )
 
 /** 用途标签绑定的评估树摘要 */
@@ -47,8 +45,8 @@ data class PurposeTagSummaryDto(
     @field:JsonPropertyDescription("默认映射的出牌阶段。可选值：RESOURCE, SETUP, CLEAR, DEFEND, COMBO, GENERAL, END")
     val defaultStage: String,
     val priority: Int,
-    @field:JsonPropertyDescription("该标签默认候选策略。可选值：NORMAL, TACTICS_DOMINANT, SURPLUS_ONLY；null=未声明回落 NORMAL")
-    val defaultCandidatePolicy: String? = null,
+    @field:JsonPropertyDescription("该标签默认余费门槛 N（惜售声明）。null=未声明回落 0（付得起即垫）；N>0=平时惜售，战术命中（评估树 ts>0）兑现即放行，未命中需空闲 ≥ 牌费+N 才垫")
+    val defaultSurplusIdleThreshold: Int? = null,
     val associatedCardCount: Int
 )
 
@@ -61,8 +59,8 @@ data class PurposeTagDetailDto(
     val defaultOrderWeight: Double,
     val defaultReplanAfterUse: Boolean,
     val priority: Int,
-    @field:JsonPropertyDescription("该标签默认候选策略。可选值：NORMAL, TACTICS_DOMINANT, SURPLUS_ONLY；null=未声明回落 NORMAL")
-    val defaultCandidatePolicy: String? = null,
+    @field:JsonPropertyDescription("该标签默认余费门槛 N（惜售声明）。null=未声明回落 0（付得起即垫）；N>0=平时惜售，战术命中（评估树 ts>0）兑现即放行，未命中需空闲 ≥ 牌费+N 才垫")
+    val defaultSurplusIdleThreshold: Int? = null,
     val associatedCards: List<PurposeTagCardInfoDto>,
     val boundEvaluatorTrees: List<BoundTreeSummaryDto>
 )
@@ -76,10 +74,7 @@ data class SaveCardPurposeInput(
     val purposeTags: List<String> = emptyList(),
 
     @field:JsonPropertyDescription("使用后是否需要重新规划（replanAfterUse）。null 表示不修改当前值。")
-    val replanAfterUse: Boolean? = null,
-
-    @field:JsonPropertyDescription("候选策略覆盖（candidatePolicy）。可选值：NORMAL, TACTICS_DOMINANT, SURPLUS_ONLY。null=不修改当前值（三态：null 跟随标签默认，显式值覆盖）")
-    val candidatePolicy: String? = null
+    val replanAfterUse: Boolean? = null
 )
 
 // ── Provider ──
@@ -123,13 +118,6 @@ class PurposeTagToolProvider(
             throw McpBadInput("未知用途标签: $unknownTags。当前可用标签: $availableTagIds")
         }
 
-        // 校验候选策略合法性（三态：null 不修改，枚举值覆盖）
-        val policy = input.candidatePolicy?.let { raw ->
-            runCatching { CandidatePolicy.valueOf(raw) }.getOrElse {
-                throw McpBadInput("candidatePolicy 非法: $raw。可选值: ${CandidatePolicy.entries.joinToString { it.name }}")
-            }
-        }
-
         val now = LocalDate.now().toString()
         val entities = input.cardIds.distinct().map { cardId ->
             val existing = cardPurposeRepository.findByCardId(cardId)
@@ -138,7 +126,6 @@ class PurposeTagToolProvider(
                 name = existing?.name,
                 purposeTags = input.purposeTags.joinToString(","),
                 replanAfterUse = input.replanAfterUse ?: existing?.replanAfterUse ?: false,
-                candidatePolicy = policy ?: existing?.candidatePolicy,
                 createdDate = existing?.createdDate ?: now
             )
         }
@@ -149,8 +136,7 @@ class PurposeTagToolProvider(
                 "cardId" to e.cardId,
                 "name" to e.name,
                 "purposeTags" to e.purposeTags.split(",").filter { it.isNotBlank() },
-                "replanAfterUse" to e.replanAfterUse,
-                "candidatePolicy" to e.candidatePolicy?.name
+                "replanAfterUse" to e.replanAfterUse
             )
         }
         return mcpSuccess(mapOf("savedCount" to result.size, "cards" to result))
@@ -182,7 +168,7 @@ class PurposeTagToolProvider(
                     displayName = tagDef.displayName,
                     defaultStage = rule?.defaultStage?.name ?: "GENERAL",
                     priority = rule?.priority ?: 100,
-                    defaultCandidatePolicy = rule?.defaultCandidatePolicy?.name,
+                    defaultSurplusIdleThreshold = rule?.defaultSurplusIdleThreshold,
                     associatedCardCount = cardTagSets.count { it.contains(tagIdStr) }
                 )
             }
@@ -211,8 +197,7 @@ class PurposeTagToolProvider(
                     PurposeTagCardInfoDto(
                         cardId = entity.cardId,
                         name = entity.name,
-                        replanAfterUse = entity.replanAfterUse,
-                        candidatePolicy = entity.candidatePolicy?.name
+                        replanAfterUse = entity.replanAfterUse
                     )
                 }
 
@@ -238,7 +223,7 @@ class PurposeTagToolProvider(
                 defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
                 defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,
                 priority = rule?.priority ?: 100,
-                defaultCandidatePolicy = rule?.defaultCandidatePolicy?.name,
+                defaultSurplusIdleThreshold = rule?.defaultSurplusIdleThreshold,
                 associatedCards = associatedCards,
                 boundEvaluatorTrees = boundTrees
             )

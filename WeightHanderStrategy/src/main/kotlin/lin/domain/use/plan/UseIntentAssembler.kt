@@ -28,9 +28,7 @@ class UseIntentAssembler(
             stageOverride = groupOverride?.stageOverride,
             replanAfterUse = groupOverride?.replanAfterUse
                 ?: cardPurpose.replanAfterUse,
-            orderWeight = groupOverride?.orderWeight ?: 0.0,
-            candidatePolicy = groupOverride?.candidatePolicy
-                ?: cardPurpose.candidatePolicy
+            orderWeight = groupOverride?.orderWeight ?: 0.0
         )
         return deriver.derive(config)
     }

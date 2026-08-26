@@ -21,16 +21,16 @@ class UseIntentDeriver(
      * 根据配置推导运行时意图。
      *
      * stageOverride 优先级最高；没有显式指定时，按规则表推导默认阶段。
-     * candidatePolicy 按显式覆盖 > 唯一标签默认 > NORMAL 推导（见 [resolveCandidatePolicy]）。
+     * tagDefaultSurplusIdleThreshold 按多标签 defaultSurplusIdleThreshold 取 max（见 [resolveTagDefaultSurplusIdleThreshold]）。
      */
     fun derive(config: CardUseConfig): UseIntent {
-        val candidatePolicy = resolveCandidatePolicy(config)
+        val tagDefaultN = resolveTagDefaultSurplusIdleThreshold(config)
         if (config.stageOverride != null) {
             return UseIntent(
                 stage = config.stageOverride,
                 replanAfterUse = config.replanAfterUse,
                 orderWeight = config.orderWeight,
-                candidatePolicy = candidatePolicy
+                tagDefaultSurplusIdleThreshold = tagDefaultN
             )
         }
 
@@ -44,35 +44,27 @@ class UseIntentDeriver(
                 stage = bestRule.defaultStage,
                 replanAfterUse = config.replanAfterUse,
                 orderWeight = if (config.orderWeight == 0.0) bestRule.defaultOrderWeight else config.orderWeight,
-                candidatePolicy = candidatePolicy
+                tagDefaultSurplusIdleThreshold = tagDefaultN
             )
         } else {
             UseIntent(
                 stage = UseStage.GENERAL,
                 replanAfterUse = config.replanAfterUse,
                 orderWeight = config.orderWeight,
-                candidatePolicy = candidatePolicy
+                tagDefaultSurplusIdleThreshold = tagDefaultN
             )
         }
     }
 
     /**
-     * 候选策略解析：显式覆盖 > 唯一标签默认 > NORMAL。
-     *
-     * 用途标签 defaultCandidatePolicy 仅作为隐式默认值（建议/fallback）：
-     * 命中多个不同建议时软降级为 NORMAL，不抛崩溃异常，显式指定（单卡/分组）拥有最高优先。
+     * tag 默认余费门槛 N 推导（T-026，替代原 resolveCandidatePolicy）：多标签命中的
+     * defaultSurplusIdleThreshold 取 **max**（有战术身份即惜售，保守方向——原 candidatePolicy
+     * 冲突软回落 NORMAL 的语义现被 max 覆盖：任一标签声明惜售即整体惜售）。
      */
-    private fun resolveCandidatePolicy(config: CardUseConfig): CandidatePolicy {
-        config.candidatePolicy?.let { return it }
-        val declared = config.purposeTags
-            .mapNotNull { ruleIndex[it]?.defaultCandidatePolicy }
-            .distinct()
-        return when (declared.size) {
-            0 -> CandidatePolicy.NORMAL
-            1 -> declared.first()
-            else -> CandidatePolicy.NORMAL // 隐式默认值冲突安全回落 NORMAL
-        }
-    }
+    private fun resolveTagDefaultSurplusIdleThreshold(config: CardUseConfig): Int? =
+        config.purposeTags
+            .mapNotNull { ruleIndex[it]?.defaultSurplusIdleThreshold }
+            .maxOrNull()
 }
 
 

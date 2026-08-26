@@ -92,12 +92,12 @@ class EndWeightResult(
 
     fun lessAbleUseCards(): List<ComboCard> {
         // T-011/Q-009：不再因 isLessCost() 截断。落选卡 = 可用卡 - 已选组合，
-        // 无论快路与否都是余费候选源（SURPLUS_ONLY 等被第一轮候选过滤挡掉的卡）。
+        // 无论快路与否都是余费候选源（T-026 后被第一轮候选过滤挡掉的惜售牌等）。
         return _canUseCardsByHandler - bestCombination.toSet()
     }
 
-    fun findBestCombination(isFull: Boolean = false) {
-        // T-008：第一轮候选过滤——NORMAL 全纳、TACTICS_DOMINANT 需战术命中、SURPLUS_ONLY 排除。
+    fun findBestCombination(isFull: Boolean = false, nDelta: Int = 0) {
+        // T-008 + T-026：第一轮候选过滤——战术兑现（ts>0）或未配余费门槛（N==0）才进主组合；N>0 且战术未命中惜售。
         // 与 EvalOutcome.Banned 硬禁区分：只进不出候选，不改 unUse，卡保持可用。
         val firstRoundCandidates = _canUseCardsByHandler.filter { it.passesFirstRoundCandidate() }
         val fastPath = isLessCost()
@@ -109,7 +109,7 @@ class EndWeightResult(
 
         // T-011/Q-009：同轮余费统筹填充——主牌选完后，用剩余费用填充余费牌并合并进同一组合，
         // 交由 UsePlanOrderer 全局按 UseStage 排序后一次性打出（否决两轮物理断层出牌）。
-        fillSurplusCost(isFull)
+        fillSurplusCost(isFull, nDelta)
 
         if (fastPath) {
             // 快路 penalty 需在余费填充后重算：余费填充减少了剩余费用，penalty 应基于填充后的组合。
@@ -129,16 +129,17 @@ class EndWeightResult(
     /**
      * T-011/Q-009：余费统筹填充（选牌算法第二梯队，非执行阶段断层）。
      *
-     * 主牌已选后，在剩余费用内填充余费候选（[passesSurplusCandidate] 含 D-007 余费门槛：空闲 ≥ N 或战术命中），
-     * 目标函数 `max Σ surplusFillValue`（D-007 费数机会成本，[SurplusFillCombination]），
+     * 主牌已选后，在剩余费用内填充余费候选（[passesSurplusCandidate] 含 D-007/D-012 余费门槛：空闲 ≥ 牌费+N 或战术命中；
+     * D-011 nDelta 绝望门槛减量按血量阶梯降低 N，地板 1），目标函数 `max Σ surplusFillValue`
+     * （D-007 费数机会成本，[SurplusFillCombination]），
      * 合并进 [bestCombination]。排序与出牌由 UsePlanOrderer / useCombo 统一处理。
      * 战场已满时不出随从（isFull && isMinion），与执行层 UseFunction 的硬拦截一致。
      */
-    private fun fillSurplusCost(isFull: Boolean) {
+    private fun fillSurplusCost(isFull: Boolean, nDelta: Int = 0) {
         val remainingCost = cost - costSum()
         if (remainingCost < 0) return // 理论不可达（主牌总费用 ≤ cost），防御
         val candidates = (_canUseCardsByHandler - bestCombination.toSet())
-            .filter { it.passesSurplusCandidate(remainingCost, isFull) }
+            .filter { it.passesSurplusCandidate(remainingCost, isFull, nDelta) }
         if (candidates.isEmpty()) return
         this.fillCombination = SurplusFillCombination.findBestCombination(candidates, remainingCost)
     }

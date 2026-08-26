@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * D-007 小数位编码 v2 解码（phase-1 存储侧约定）：
- * `powerWeight = 等效费 + 空闲放行门槛/10`（5.4 = 等效 5 费 / 空闲 ≥4 放行「3捏4放行」），整数 = 未配置（随时可垫）。
+ * `powerWeight = 等效费 + 垫后余量门槛/10`（5.4 = 等效 5 费 / 垫出后仍须剩 4 费，D-012），整数 = 未配置（N=0 付得起即垫）。
  */
 class DecodeCostValueTest {
 

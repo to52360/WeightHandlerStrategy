@@ -28,10 +28,10 @@ const val FirstUseGroupId = 20
  * @param powerWeight 配置等效费用（D-014 原语义：卡牌**固有**等效费用，**不含**战术溢价；如 6 费牌等效 5 = 略亏模）：
  *   >0 表示显式配置，基础价值 = costValue(powerWeight)（费用价值凹函数）；=0 表示无配置，走身材/法术兜底。
  *   **D-007 小数位编码 v3（phase-1，存储侧约定）**：上游存储把「等效费(整数位) + 空闲放行门槛 N(小数位)」压在同一个数里
- *   （如 5.4 = 等效 5 费 / 空闲 ≥4 才放行垫牌，即「3捏4放」），由 DefCardWeightInfoProvide 解码拆分为
+ *   （如 5.4 = 等效 5 费 / 垫后余量 4 费，D-012），由 DefCardWeightInfoProvide 解码拆分为
  *   本字段（floor 后整数）+ [surplusIdleThreshold]。本字段经解码后恒为整数。
  * @param surplusIdleThreshold 空闲放行门槛 N（余费门槛，D-007 v3）：空闲费 ≥ N 才允许垫牌放行；
- *   null = 未配置 = 随时可垫（D-005「无战术不死捏」）。解码自 powerWeight 小数位，取值 1~9。
+ *   null = 未配置 = 0 付得起即垫（D-005「无战术不死捏」）。解码自 powerWeight 小数位，取值 1~9。
  *   垫的价值 fillValue = 等效费 + 树分×scale（战术溢价另算，不占本编码位）。
  *   「不贪心」下调（本来 4 费放行的卡 2 费就考虑）= 直接配更小的 N；
  *   局面动态调 N 暂无载体（Q-022）；死捏 = Banned（评估树）或大 N。

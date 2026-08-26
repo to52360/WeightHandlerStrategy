@@ -149,8 +149,10 @@ class ComboDomain : KoinComponent {
     private fun compensateFailedCards(weightResult: EndWeightResult) {
         val remaining = warManage.getCost()
         if (remaining <= 0) return
+        // D-011：绝望门槛减量现算传入（血量阶梯 → N−Δ，与 fillSurplusCost 同源判定）
+        val nDelta = warManage.surplusDespairNDelta()
         val fallbackCards = weightResult.lessAbleUseCards()
-            .filter { it.passesSurplusCandidate(remaining, warManage.isFull) }
+            .filter { it.passesSurplusCandidate(remaining, warManage.isFull, nDelta) }
             .sortedByDescending { it.powerWeight }
         for (card in fallbackCards) {
             // 实时校验：上一步补打可能已消耗费用/改变战场

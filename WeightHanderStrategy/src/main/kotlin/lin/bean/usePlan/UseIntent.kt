@@ -7,8 +7,7 @@ data class CardUseConfig(
     val purposeTags: Set<PurposeTagId> = emptySet(), // 战略用途：规则/评估语义，不表达真实出牌顺序
     val stageOverride: UseStage? = null,          // 默认留空由 UseIntentDeriver 推导，特例时手动指定
     val replanAfterUse: Boolean = false,          // 使用后是否需要重新规划
-    val orderWeight: Double = 0.0,                // 同阶段内的人工排序偏好
-    val candidatePolicy: CandidatePolicy? = null  // null = 未显式覆盖，回落用途标签默认 / NORMAL
+    val orderWeight: Double = 0.0                 // 同阶段内的人工排序偏好
 )
 
 /**
@@ -21,7 +20,7 @@ data class UseIntent(
     val stage: UseStage = UseStage.GENERAL,
     val replanAfterUse: Boolean = false,
     val orderWeight: Double = 0.0,
-    val candidatePolicy: CandidatePolicy = CandidatePolicy.NORMAL // 启动期预推导，候选门控消费
+    val tagDefaultSurplusIdleThreshold: Int? = null // T-026：tag 推导的默认余费门槛 N，null = 未声明回落 0
 )
 
 /**
@@ -33,8 +32,7 @@ data class UseIntent(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class CardPurpose(
     val purposeTags: Set<PurposeTagId> = emptySet(),
-    val replanAfterUse: Boolean = false,
-    val candidatePolicy: CandidatePolicy? = null
+    val replanAfterUse: Boolean = false
 ) {
     @JsonIgnore
     fun isDefault(): Boolean = this == EMPTY
@@ -68,8 +66,7 @@ data class GroupUseOverride(
     val stageOverride: UseStage? = null,
     val replanAfterUse: Boolean? = null,
     val orderWeight: Double? = null,
-    val conditionalStage: ConditionalStageOverride? = null,
-    val candidatePolicy: CandidatePolicy? = null
+    val conditionalStage: ConditionalStageOverride? = null
 ) {
     @JsonIgnore
     fun isDefault(): Boolean = this == EMPTY

@@ -148,7 +148,8 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
      */
     fun findBestCombination(weightResult: EndWeightResult): EndWeightResult {
         // T-011：传入战场是否已满，供余费填充排除满场随从（与执行层 UseFunction 硬拦截语义一致）。
-        weightResult.findBestCombination(warManage.isFull)
+        // D-011：全局绝望门槛减量现算传入（血量阶梯 → N−Δ，一次一判无缓存）。
+        weightResult.findBestCombination(warManage.isFull, warManage.surplusDespairNDelta())
         return weightResult
     }
 

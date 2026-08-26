@@ -51,7 +51,9 @@ fun createMockCard(
 fun createMockWar(
     handCards: List<Card> = emptyList(),
     playCards: List<Card> = emptyList(),
-    rivalPlayCards: List<Card> = emptyList()
+    rivalPlayCards: List<Card> = emptyList(),
+    meHero: Card? = null,
+    meResource: Int? = null
 ): War {
     val war = unsafe.allocateInstance(War::class.java) as War
     val me = unsafe.allocateInstance(Player::class.java) as Player
@@ -79,6 +81,8 @@ fun createMockWar(
     setAreaCards(meHand, handCards)
     setAreaCards(mePlay, playCards)
     setAreaCards(rivalPlay, rivalPlayCards)
+    meHero?.let { setField(mePlay, "hero", it) }
+    meResource?.let { setField(me, "resources", it) }
 
     return war
 }
@@ -86,12 +90,15 @@ fun createMockWar(
 fun createMockWarInfo(
     handCards: List<Card> = emptyList(),
     playCards: List<Card> = emptyList(),
-    rivalPlayCards: List<Card> = emptyList()
+    rivalPlayCards: List<Card> = emptyList(),
+    handComboCards: List<ComboCard> = emptyList(),
+    meHero: Card? = null,
+    meResource: Int? = null
 ): WarInfo {
-    val mockWar = createMockWar(handCards, playCards, rivalPlayCards)
+    val mockWar = createMockWar(handCards, playCards, rivalPlayCards, meHero, meResource)
     return object : WarInfo {
         override val war: War = mockWar
-        override val handComboCards: List<ComboCard> = emptyList()
+        override val handComboCards: List<ComboCard> = handComboCards
         override val canUseCards: List<ComboCard> = emptyList()
         override val playComboCards: List<ComboCard> = emptyList()
         override val infoMap: Map<String, CardCombinedConfig> = emptyMap()

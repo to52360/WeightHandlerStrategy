@@ -11,8 +11,6 @@ import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
 import lin.bean.addSafe
 import lin.bean.cardExt.base.isMinion
-import lin.bean.usePlan.CandidatePolicy
-import lin.bean.usePlan.UseIntent
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
 import lin.domain.use.UseAfterStrategy
@@ -238,14 +236,14 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
     }
 
     /**
-     * 技能卡解析 + 缺省注入单点（D-009 第 3 条）：无配置 → 等效费 1 / 余费门槛 N=2（Q-013 语义，
-     * 「空闲≥2 才垫」由 cost 门天然保证）+ 显式 SURPLUS_ONLY（未配置技能兜底 = 余费填充）。
-     * 配置的技能走正常 infoMap 链（policy 由配置声明，可进第一轮）；解析链零技能知识。
+     * 技能卡解析 + 缺省注入单点（D-009 第 3 条，D-012 修订；T-026 删 SURPLUS_ONLY 注入）：无配置 → 等效费 1 /
+     * N=0 全自由（付得起即垫，「空闲≥技能费才垫」由 cost 门天然保证，Q-013 语义不变）——第一轮自然入池竞争
+     * （权重 1.0 挤不走高权重手牌牌位），全手牌卡手时由「Empty→skillFallbackUse 强用」简化为「自然入池直接选出」。
+     * 配置的技能走正常 infoMap 链；解析链零技能知识。
      */
     private fun parseSkillCard(power: Card): ComboCard {
         val config = infoMap[power.cardId] ?: CardCombinedConfig(
-            weightInfo = CardWeightInfo(cardId = power.cardId, powerWeight = 1.0, surplusIdleThreshold = 2),
-            useIntent = UseIntent(candidatePolicy = CandidatePolicy.SURPLUS_ONLY),
+            weightInfo = CardWeightInfo(cardId = power.cardId, powerWeight = 1.0),
         )
         return ComboCard(
             combinedConfig = config,

@@ -57,13 +57,6 @@ class OverridePane(
         disableProperty().bind(disableWhen)
     }
 
-    // ── 候选策略控件（D-003 CandidatePolicy，组级覆盖 → GroupUseOverride.candidatePolicy）──
-    private val policyCombo = ComboBox<String>().apply {
-        items.setAll(BehaviorDisplayMappers.allPolicyLabels())
-        promptText = "候选策略"
-        disableProperty().bind(disableWhen)
-    }
-
     // ── 动态条件阶段控件 ──
     private val enableCSCheckBox = CheckBox("启用条件阶段控制 (Conditional Stage)").apply {
         style = "-fx-font-weight: bold; -fx-text-fill: #343a40;"
@@ -103,7 +96,6 @@ class OverridePane(
     private var isUpdatingFromState = false
 
     val baseBlock: HBox = buildBaseBlock()
-    val policyBlock: HBox = buildPolicyBlock()
     val conditionalBlock: VBox = buildConditionalBlock(disableWhen)
 
     init {
@@ -125,18 +117,6 @@ class OverridePane(
                 Label("阶段覆盖:").apply { style = "-fx-font-weight: bold;" }, stageCombo,
                 Label("重规划:").apply { style = "-fx-font-weight: bold;" }, replanCombo,
                 Label("排序权重:").apply { style = "-fx-font-weight: bold;" }, weightField
-            )
-        }
-    }
-
-    private fun buildPolicyBlock(): HBox {
-        return HBox(12.0).apply {
-            alignment = Pos.CENTER_LEFT
-            padding = Insets(4.0, 0.0, 4.0, 0.0)
-            children.addAll(
-                Label("候选策略:").apply { style = "-fx-font-weight: bold;" }, policyCombo,
-                Label("决定这组牌进哪一轮候选：正常=两轮都参与 / 战术主导=战术命中才进主搜索 / 余费专用=只在余费阶段垫出。 不改变出牌阶段与排序；余费垫牌放行门槛在「🚪 余费门槛」tab 配置")
-                    .apply { style = "-fx-text-fill: #6c757d; -fx-font-size: 11px;" }
             )
         }
     }
@@ -246,11 +226,6 @@ class OverridePane(
                 newValue.toDoubleOrNull()?.let { store.updateBindingOrderWeight(it) }
             }
         }
-        policyCombo.valueProperty().addListener { _, _, newValue ->
-            if (!isUpdatingFromState && newValue != null) {
-                store.updateBindingCandidatePolicy(BehaviorDisplayMappers.labelToPolicy(newValue))
-            }
-        }
 
         enableCSCheckBox.selectedProperty().addListener { _, _, isSelected ->
             if (!isUpdatingFromState) {
@@ -295,9 +270,6 @@ class OverridePane(
             val weightStr = weightVal?.toString() ?: ""
             if (weightField.text != weightStr) weightField.text = weightStr
 
-            val policyLabel = BehaviorDisplayMappers.policyToLabel(binding.behaviors.findOverride()?.candidatePolicy)
-            if (policyCombo.value != policyLabel) policyCombo.value = policyLabel
-
             val cs = binding.behaviors.findOverride()?.conditionalStage
             if (cs != null) {
                 enableCSCheckBox.isSelected = true
@@ -326,7 +298,6 @@ class OverridePane(
             stageCombo.value = null
             replanCombo.value = null
             weightField.clear()
-            policyCombo.value = null
             enableCSCheckBox.isSelected = false
             conditionTreeCombo.value = null
             conditionStageCombo.value = null

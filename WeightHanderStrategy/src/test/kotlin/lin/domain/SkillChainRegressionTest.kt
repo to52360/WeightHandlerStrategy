@@ -86,12 +86,12 @@ class SkillChainRegressionTest {
     @Test
     fun `零分技能按空闲门槛放行，战术命中绕过门槛`() {
         val (power, _) = WarManageHarness.powerCard()
-        harness.config(power, skillConfig(surplusIdleThreshold = 5)) // 捏到 5 费
+        harness.config(power, skillConfig(surplusIdleThreshold = 5)) // 垫后须剩 5 费（D-012）
         harness.setPower(power)
         harness.reLoad()
 
         val skill = harness.warManage.parseComboCard(power)
-        // 空闲 2（= 技能费）< N=5 且无战术命中 → 挡
+        // 空闲 2（= 技能费）< 技能费+N=5 且无战术命中 → 挡（垫后须剩 5 费）
         assertFalse(skill.passesSurplusCandidate(remainingCost = 2, isFull = false))
 
         // 战术命中（ts > 0）= 现在就是战术价值 → 绕门放行（升级通道）

@@ -5,7 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * T-006：UseIntentAssembler 三层覆盖测试——GroupUseOverride > CardPurpose > 用途标签默认。
+ * T-026：UseIntentAssembler 装配测试——tag 默认余费门槛 N 由用途标签推导；
+ * GroupUseOverride（T-026 后无 candidatePolicy 字段）只影响 stage/replanAfterUse/orderWeight，不触碰 N。
  */
 class UseIntentAssemblerTest {
 
@@ -13,7 +14,7 @@ class UseIntentAssemblerTest {
         override fun rules(): List<PurposeTagIntentRule> = ruleList
     }
 
-    /** CLEAN 标签默认 TACTICS_DOMINANT */
+    /** CLEAN 标签默认 N=1（惜售声明） */
     private val tagDeriver = UseIntentDeriver(
         TagRuleProvider(
             listOf(
@@ -21,52 +22,47 @@ class UseIntentAssemblerTest {
                     tagId = PurposeTagId.CLEAN,
                     defaultStage = UseStage.CLEAR,
                     priority = 300,
-                    defaultCandidatePolicy = CandidatePolicy.TACTICS_DOMINANT
+                    defaultSurplusIdleThreshold = 1
                 )
             )
         )
     )
 
     @Test
-    fun `标签默认候选策略生效`() {
+    fun `标签默认余费门槛生效`() {
         val asm = UseIntentAssembler(
             cardPurposes = mapOf("c1" to CardPurpose(purposeTags = setOf(PurposeTagId.CLEAN))),
             groupMap = emptyMap(),
             groupOverrides = emptyMap(),
             deriver = tagDeriver
         )
-        assertEquals(CandidatePolicy.TACTICS_DOMINANT, asm.assemble("c1").candidatePolicy)
+        assertEquals(1, asm.assemble("c1").tagDefaultSurplusIdleThreshold)
+        assertEquals(UseStage.CLEAR, asm.assemble("c1").stage)
     }
 
     @Test
-    fun `单卡显式覆盖优先于标签默认`() {
+    fun `分组覆盖改阶段但N仍由tag推导`() {
         val asm = UseIntentAssembler(
-            cardPurposes = mapOf(
-                "c1" to CardPurpose(
-                    purposeTags = setOf(PurposeTagId.CLEAN),
-                    candidatePolicy = CandidatePolicy.SURPLUS_ONLY
-                )
-            ),
+            cardPurposes = mapOf("c1" to CardPurpose(purposeTags = setOf(PurposeTagId.CLEAN))),
+            groupMap = mapOf("c1" to setOf("g1")),
+            groupOverrides = mapOf("g1" to GroupUseOverride(stageOverride = UseStage.SETUP)),
+            deriver = tagDeriver
+        )
+        val intent = asm.assemble("c1")
+        assertEquals(UseStage.SETUP, intent.stage)
+        assertEquals(1, intent.tagDefaultSurplusIdleThreshold)
+    }
+
+    @Test
+    fun `无标签无覆盖回落null与默认阶段`() {
+        val asm = UseIntentAssembler(
+            cardPurposes = emptyMap(),
             groupMap = emptyMap(),
             groupOverrides = emptyMap(),
             deriver = tagDeriver
         )
-        assertEquals(CandidatePolicy.SURPLUS_ONLY, asm.assemble("c1").candidatePolicy)
-    }
-
-    @Test
-    fun `分组覆盖优先于单卡`() {
-        val asm = UseIntentAssembler(
-            cardPurposes = mapOf(
-                "c1" to CardPurpose(
-                    purposeTags = setOf(PurposeTagId.CLEAN),
-                    candidatePolicy = CandidatePolicy.SURPLUS_ONLY
-                )
-            ),
-            groupMap = mapOf("c1" to setOf("g1")),
-            groupOverrides = mapOf("g1" to GroupUseOverride(candidatePolicy = CandidatePolicy.TACTICS_DOMINANT)),
-            deriver = tagDeriver
-        )
-        assertEquals(CandidatePolicy.TACTICS_DOMINANT, asm.assemble("c1").candidatePolicy)
+        val intent = asm.assemble("c1")
+        assertEquals(null, intent.tagDefaultSurplusIdleThreshold)
+        assertEquals(UseStage.GENERAL, intent.stage)
     }
 }

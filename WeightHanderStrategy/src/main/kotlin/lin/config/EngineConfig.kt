@@ -28,6 +28,12 @@ object EngineConfig {
     // 唯一量纲标定常数（Q-019~021 缩水残余）：典型满命中树分 8~10 分 × 0.4 ≈ 3.2 费，覆盖常见 G≤3 饱和到满值。
     val tacticalScoreScale get() = store.double("scoring.tactical.score.scale", 0.4)
 
+    // D-011 全局绝望规则 v2：前置（场面承压+手牌无战术牌）成立时，按血量阶梯降低余费门槛 N（地板 1）。
+    // ladder 格式 `blood:delta` 逗号分隔（血量 < blood → 门槛减 delta，多档取最大），二值绝望是退化特例。
+    // enabled 默认 false——阶梯档位是未实战校准的估值（@verify），校准后再考虑默认开。
+    val surplusDespairEnabled get() = store.boolean("scoring.surplus.despair.enabled", false)
+    val surplusDespairLadder get() = store.raw("scoring.surplus.despair.ladder") ?: "15:1,10:2,5:9"
+
     init {
         require(penaltyWeight < costWeight) {
             "penaltyWeight ($penaltyWeight) 必须小于 costWeight ($costWeight)，否则会导致低费单卡严重负分偏见"

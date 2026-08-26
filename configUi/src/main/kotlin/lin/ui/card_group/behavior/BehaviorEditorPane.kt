@@ -26,12 +26,11 @@ class BehaviorTabPane(
             tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
         }
 
-        // ── Tab 1：🏷️ 阶段与排序（含候选策略——同属 OVERRIDE 行数据，策略+N 同弹窗可配，Q-025）──
+        // ── Tab 1：🏷️ 阶段与排序（基础覆盖：阶段/重规划/排序权重）──
         val tab1Content = VBox(14.0).apply {
             padding = Insets(14.0)
             children.addAll(
-                overridePane.baseBlock,
-                overridePane.policyBlock
+                overridePane.baseBlock
             )
         }
         val tab1 = Tab("🏷️ 阶段与排序", tab1Content)

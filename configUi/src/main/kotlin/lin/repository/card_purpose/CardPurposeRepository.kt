@@ -1,6 +1,5 @@
 package lin.repository.card_purpose
 
-import lin.bean.usePlan.CandidatePolicy
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 
@@ -17,7 +16,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
                 card_id          TEXT PRIMARY KEY,
                 purpose_tags     TEXT NOT NULL,
                 replan_after_use INTEGER NOT NULL DEFAULT 0,
-                candidate_policy TEXT,
                 created_date     TEXT
             );
             """.trimIndent()
@@ -32,8 +30,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             name = rs.getString("name"),
             purposeTags = rs.getString("purpose_tags"),
             replanAfterUse = rs.getInt("replan_after_use") != 0,
-            candidatePolicy = rs.getString("candidate_policy")
-                ?.let { runCatching { CandidatePolicy.valueOf(it) }.getOrNull() },
             createdDate = rs.getString("created_date")
         )
     }
@@ -44,12 +40,11 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             jdbcTemplate.update("DELETE FROM card_purpose WHERE card_id = ?", entity.cardId)
         } else {
             val sql = """
-                INSERT INTO card_purpose (card_id, purpose_tags, replan_after_use, candidate_policy, created_date)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO card_purpose (card_id, purpose_tags, replan_after_use, created_date)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(card_id) DO UPDATE SET
                     purpose_tags     = excluded.purpose_tags,
                     replan_after_use = excluded.replan_after_use,
-                    candidate_policy = excluded.candidate_policy,
                     created_date     = excluded.created_date
             """.trimIndent()
             jdbcTemplate.update(
@@ -57,7 +52,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
                 entity.cardId,
                 entity.purposeTags,
                 if (entity.replanAfterUse) 1 else 0,
-                entity.candidatePolicy?.name,
                 entity.createdDate
             )
         }
@@ -68,7 +62,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             SELECT p.card_id, h.name,
                    p.purpose_tags,
                    p.replan_after_use,
-                   p.candidate_policy,
                    p.created_date
             FROM card_purpose p
             LEFT JOIN hs.cards h ON p.card_id = h.cardId
@@ -81,7 +74,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             SELECT h.cardId as card_id, h.name,
                    p.purpose_tags as purpose_tags,
                    p.replan_after_use as replan_after_use,
-                   p.candidate_policy,
                    p.created_date
             FROM hs.cards h
             LEFT JOIN card_purpose p ON h.cardId = p.card_id
@@ -97,7 +89,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             SELECT p.card_id, h.name,
                    p.purpose_tags,
                    p.replan_after_use,
-                   p.candidate_policy,
                    p.created_date
             FROM card_purpose p
             LEFT JOIN hs.cards h ON p.card_id = h.cardId
@@ -132,12 +123,11 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             }
             if (customs.isNotEmpty()) {
                 val insertSql = """
-                    INSERT INTO card_purpose (card_id, purpose_tags, replan_after_use, candidate_policy, created_date)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO card_purpose (card_id, purpose_tags, replan_after_use, created_date)
+                    VALUES (?, ?, ?, ?)
                     ON CONFLICT(card_id) DO UPDATE SET
                         purpose_tags     = excluded.purpose_tags,
                         replan_after_use = excluded.replan_after_use,
-                        candidate_policy = excluded.candidate_policy,
                         created_date     = excluded.created_date
                 """.trimIndent()
                 jdbcTemplate.batchUpdate(
@@ -148,8 +138,7 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
                             ps.setString(1, entity.cardId)
                             ps.setString(2, entity.purposeTags)
                             ps.setInt(3, if (entity.replanAfterUse) 1 else 0)
-                            ps.setString(4, entity.candidatePolicy?.name)
-                            ps.setString(5, entity.createdDate)
+                            ps.setString(4, entity.createdDate)
                         }
 
                         override fun getBatchSize() = customs.size
@@ -230,7 +219,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             SELECT h.cardId as card_id, h.name,
                    p.purpose_tags as purpose_tags,
                    p.replan_after_use as replan_after_use,
-                   p.candidate_policy,
                    p.created_date
             FROM hs.cards h
             LEFT JOIN card_purpose p ON h.cardId = p.card_id
@@ -301,7 +289,6 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
             SELECT p.card_id, h.name,
                    p.purpose_tags,
                    p.replan_after_use,
-                   p.candidate_policy,
                    p.created_date
             FROM card_purpose p
             LEFT JOIN hs.cards h ON p.card_id = h.cardId

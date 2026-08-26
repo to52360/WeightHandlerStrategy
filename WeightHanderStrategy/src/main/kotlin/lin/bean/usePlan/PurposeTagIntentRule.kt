@@ -11,7 +11,9 @@ package lin.bean.usePlan
  * @param defaultOrderWeight 默认排序权重
  * @param defaultReplanAfterUse 使用后是否需重新规划
  * @param priority 优先级（数值越大越优先匹配）
- * @param defaultCandidatePolicy 候选策略默认值；null = 未声明，回落 NORMAL。多标签声明冲突需显式覆盖。
+ * @param defaultSurplusIdleThreshold 默认余费门槛 N（T-026，替代原 candidatePolicy 预设）；null = 未声明，回落 0。
+ *   语义 = 声明「此牌未来有更大收益，平时惜售」：战术命中（ts>0）兑现即放行，未命中时需空闲 ≥ 牌费+N 才垫。
+ *   多标签命中取 max（有战术身份即惜售，保守方向），见 [lin.domain.use.plan.UseIntentDeriver]。
  */
 data class PurposeTagIntentRule(
     val tagId: PurposeTagId,
@@ -19,7 +21,7 @@ data class PurposeTagIntentRule(
     val defaultOrderWeight: Double = 0.0,
     val defaultReplanAfterUse: Boolean = false,
     val priority: Int = 100,
-    val defaultCandidatePolicy: CandidatePolicy? = null
+    val defaultSurplusIdleThreshold: Int? = null
 )
 
 /**
@@ -37,10 +39,9 @@ interface PurposeTagIntentRuleProvider {
  * 作为 [PurposeTagIntentRuleProvider] 的 fallback 实现；
  * 后续可替换为数据库驱动或其他外部配置加载实现。
  *
- * defaultCandidatePolicy 映射（review T-005 建议）：战术功能标签（保命/解场/斩杀/成长/过牌）
- * → TACTICS_DOMINANT，普通价值与硬币 → NORMAL。
- * 注意：预设后，一张卡若同时命中「不同 defaultCandidatePolicy 的标签」且未显式覆盖，
- * 启动期推导将抛冲突异常（fail-fast），需在单卡/分组显式覆盖 candidatePolicy。
+ * defaultSurplusIdleThreshold 映射（T-026，替代原 candidatePolicy 预设）：战术功能标签（保命/解场/斩杀/成长/过牌）
+ * → N=1（有未来收益声明，平时惜售），普通价值与硬币 → null（N=0 全自由）。
+ * 预设值先设后实战校准（Q-026 拍板②）；多标签命中取 max（UseIntentDeriver），无冲突异常。
  */
 class DefaultPurposeTagIntentRuleProvider : PurposeTagIntentRuleProvider {
     override fun rules(): List<PurposeTagIntentRule> = listOf(
@@ -48,43 +49,43 @@ class DefaultPurposeTagIntentRuleProvider : PurposeTagIntentRuleProvider {
             tagId = PurposeTagId.SAVE_LIFE,
             defaultStage = UseStage.DEFEND,
             priority = 400,
-            defaultCandidatePolicy = CandidatePolicy.TACTICS_DOMINANT
+            defaultSurplusIdleThreshold = 1
         ),
         PurposeTagIntentRule(
             tagId = PurposeTagId.CLEAN,
             defaultStage = UseStage.CLEAR,
             priority = 300,
-            defaultCandidatePolicy = CandidatePolicy.TACTICS_DOMINANT
+            defaultSurplusIdleThreshold = 1
         ),
         PurposeTagIntentRule(
             tagId = PurposeTagId.FINISH,
             defaultStage = UseStage.END,
             priority = 200,
-            defaultCandidatePolicy = CandidatePolicy.TACTICS_DOMINANT
+            defaultSurplusIdleThreshold = 1
         ),
         PurposeTagIntentRule(
             tagId = PurposeTagId.GREED,
             defaultStage = UseStage.SETUP,
             priority = 100,
-            defaultCandidatePolicy = CandidatePolicy.TACTICS_DOMINANT
+            defaultSurplusIdleThreshold = 1
         ),
         PurposeTagIntentRule(
             tagId = PurposeTagId.VALUE,
             defaultStage = UseStage.GENERAL,
             priority = 50,
-            defaultCandidatePolicy = CandidatePolicy.NORMAL
+            defaultSurplusIdleThreshold = null
         ),
         PurposeTagIntentRule(
             tagId = PurposeTagId.EXTRA_COST,
             defaultStage = UseStage.GENERAL,
             priority = 50,
-            defaultCandidatePolicy = CandidatePolicy.NORMAL
+            defaultSurplusIdleThreshold = null
         ),
         PurposeTagIntentRule(
             tagId = PurposeTagId.DRAW_CARD,
             defaultStage = UseStage.GENERAL,
             priority = 60,
-            defaultCandidatePolicy = CandidatePolicy.TACTICS_DOMINANT
+            defaultSurplusIdleThreshold = 1
         )
     )
 }

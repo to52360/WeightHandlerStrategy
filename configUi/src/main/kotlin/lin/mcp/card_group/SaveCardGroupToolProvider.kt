@@ -1,7 +1,6 @@
 package lin.mcp.card_group
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import lin.bean.usePlan.CandidatePolicy
 import lin.bean.usePlan.ConditionalStageOverride
 import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.UseStage
@@ -20,7 +19,7 @@ import lin.utils.nextShortId
  * 卡组策略配置域 MCP 工具提供者（save_card_group + save_group_override）。
  * 分步语义（2026-08-10 用户拍板）：**分组归分组、卡组策略归策略**——
  * - `save_card_group` 只做分组定义（name/cardIds/description），更新时保留已有策略（behaviors），不碰出牌阶段；
- * - `group_override` 单独配置/清除分组的出牌阶段与候选策略（stageOverride / conditionalStage / candidatePolicy，clearOverride 清除）。
+ * - `group_override` 单独配置/清除分组的出牌阶段与动态条件阶段（stageOverride / conditionalStage，clearOverride 清除）。
  * 对照 architecture-context/config-tooling/ 文档。
  *
  * ARCH-UNSETTLED mcp-tool-shaping/U-001: group_override 的 clearOverride（SET+清除合一）属"字段存在性/布尔隐含语义"形态，
@@ -37,7 +36,6 @@ class SaveCardGroupToolProvider(
     /** override 展示视图（clearOverride 返回 previousOverride 用，与 SET 返回结构一致；含全部可恢复字段）。 */
     private fun overrideView(override: GroupUseOverride?): Map<String, Any?> = mapOf(
         "stageOverride" to override?.stageOverride?.name,
-        "candidatePolicy" to override?.candidatePolicy?.name,
         "replanAfterUse" to override?.replanAfterUse,
         "orderWeight" to override?.orderWeight,
         "conditionalStage" to override?.conditionalStage?.let { cs ->
@@ -172,19 +170,17 @@ class SaveCardGroupToolProvider(
         // 卡组策略归策略（本工具 SET 策略 / clearOverride 清除）。追踪见 architecture-context/config-tooling/。
         typedTool<SaveGroupOverrideInput>(
             name = "group_override",
-            description = """配置或清除分组的出牌阶段与候选策略（stageOverride / conditionalStage / candidatePolicy）——分组定义与策略分步提交。
+            description = """配置或清除分组的出牌阶段与动态条件阶段（stageOverride / conditionalStage）——分组定义与策略分步提交。
 bindingId 由 card_group(action=GET) 的 bindings[].id 获取。
-【清除】clearOverride=true：清除该分组的全部出牌策略（stageOverride/candidatePolicy/conditionalStage），保留其他行为（如 useActions），
+【清除】clearOverride=true：清除该分组的全部出牌策略（stageOverride/conditionalStage），保留其他行为（如 useActions），
 返回 previousOverride（清除前的原始 override，含全部字段）——误清可用 SET 模式按此值恢复。缺省 false。
 【配置】clearOverride=false（缺省）时：
 stageOverride：覆盖出牌阶段（RESOURCE/SETUP/CLEAR/DEFEND/COMBO/GENERAL/END），缺省保留原值。
-candidatePolicy：候选策略（NORMAL=两轮候选都参与 / TACTICS_DOMINANT=战术命中才进主搜索 / SURPLUS_ONLY=只在余费阶段打出），
-决定这组牌进哪一轮候选，优先级：分组 > 卡牌用途(card_purpose) > 标签默认。缺省保留原值；单字段清除走 UI（与 surplusIdleThreshold 同边界）。
 conditionalStage：条件化阶段——conditionalStageConditionId 或 conditionalStageConditionTreeJson（二选一）+
 conditionalStageStage（必填）+ conditionalStageElseStage（可选）；条件树命中→conditionalStageStage，未命中→elseStage
 （缺省沿用默认推导）。不提供 conditionalStage 相关字段则保留原值。
 典型场景：莱妮莎/奥尔多侍从/斩星巨刃等引擎牌设 stageOverride=SETUP 使其优先打出；过牌与增幅牌顺序随手牌动态反转；
-解牌组配 candidatePolicy=TACTICS_DOMINANT + 🚪余费门槛 N（save_card_group）实现「战术才动、空闲不够不将就」的整组意图。"""
+解牌组配 🚪余费门槛 N（save_card_group，垫后余量语义）实现「战术才动、垫后余量不够不将就」的整组意图。"""
         ) { input ->
             val binding = groupService.loadAll()
                 .flatMap { it.bindings }
@@ -249,21 +245,11 @@ conditionalStageStage（必填）+ conditionalStageElseStage（可选）；条�
                 existingOverride?.conditionalStage
             }
 
-            // candidatePolicy：提供则解析覆盖，缺省保留原值（单字段清除走 UI，与 surplusIdleThreshold 同边界）
-            val newCandidatePolicy = input.candidatePolicy?.takeIf { it.isNotBlank() }?.let { p ->
-                try {
-                    CandidatePolicy.valueOf(p)
-                } catch (_: IllegalArgumentException) {
-                    throw McpBadInput("candidatePolicy 无效: '$p'，支持: ${CandidatePolicy.entries.joinToString { it.name }}")
-                }
-            } ?: existingOverride?.candidatePolicy
-
             // 重建 behaviors：保留非 Override 行为（如 UseActionBehavior），替换 Override 为新值。
             // 基于 existingOverride.copy 合并（未提供字段保留原值）——此前直接新建会丢 replanAfterUse/orderWeight 等未暴露字段
             val newOverride = (existingOverride ?: GroupUseOverride()).copy(
                 stageOverride = newStageOverride,
-                conditionalStage = newConditionalStage,
-                candidatePolicy = newCandidatePolicy
+                conditionalStage = newConditionalStage
             )
             val newBehaviors = binding.behaviors
                 .filterNot { it is CardGroupBehavior.OverrideBehavior } +
@@ -275,7 +261,6 @@ conditionalStageStage（必填）+ conditionalStageElseStage（可选）；条�
                     "bindingId" to binding.id,
                     "bindingName" to binding.name,
                     "stageOverride" to newStageOverride?.name,
-                    "candidatePolicy" to newCandidatePolicy?.name,
                     "conditionalStage" to newConditionalStage?.let { cs ->
                         mapOf(
                             "conditionId" to cs.conditionId,
@@ -313,7 +298,7 @@ private data class SaveCardGroupBindingInput(
     val cardIds: List<String>,
     @field:JsonPropertyDescription("分组说明（战术定位/联动动机）。出牌策略（stageOverride/conditionalStage）由 save_group_override 单独配置。")
     val description: String? = null,
-    @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-007 空闲放行门槛）——一类牌统一捏、不用逐卡设置（如解牌组统一 4 = 空闲 3 捏 4 放，取值 1~9）。提供则设置，缺省保留原值；空=未配置=随时可垫（逐卡小数位仍优先）。清除需在分组编辑界面操作。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由候选策略（candidatePolicy）决定，「只走余费填充」需另配 SURPLUS_ONLY（save_group_override / 用途标签通道）。")
+    @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-012 垫后余量语义：放行 ⟺ 空闲 ≥ 牌费 + N，垫出后仍须剩 N 费）——一类牌统一捏、不用逐卡设置（如解牌组统一 2 = 垫出后仍剩 2 费才肯垫，取值 1~9）。提供则设置，缺省保留原值；空=未配置=付得起即垫（逐卡小数位仍优先）。清除需在分组编辑界面操作。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由战术分（评估树 ts>0）决定，超低收益牌想「不进主搜索」需让评估树给非正分并配 N 控制垫出。")
     val surplusIdleThreshold: Int? = null
 )
 
@@ -324,8 +309,6 @@ private data class SaveGroupOverrideInput(
     val clearOverride: Boolean = false,  // ARCH-UNSETTLED mcp-tool-shaping/U-001: SET+清除合一，布尔隐含语义，观察中勿扩散
     @field:JsonPropertyDescription("可选：覆盖出牌阶段（RESOURCE/SETUP/CLEAR/DEFEND/COMBO/GENERAL/END）。缺省保留原值。")
     val stageOverride: String? = null,
-    @field:JsonPropertyDescription("可选：候选策略（NORMAL=两轮候选都参与 / TACTICS_DOMINANT=战术命中才进主搜索 / SURPLUS_ONLY=只在余费阶段打出）。优先级：分组 > 卡牌用途 > 标签默认。缺省保留原值；清除走 UI 分组编辑界面或 clearOverride 全清。")
-    val candidatePolicy: String? = null,
     @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树 id（condition_tree(action=LIST) 获取）。与 conditionalStageConditionTreeJson 互斥。")
     val conditionalStageConditionId: String? = null,
     @field:JsonPropertyDescription("可选：条件化出牌阶段的条件树内联 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}。与 conditionalStageConditionId 互斥。")
