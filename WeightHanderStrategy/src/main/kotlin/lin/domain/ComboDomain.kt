@@ -11,7 +11,6 @@ import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy
 import lin.domain.strategy.FindPlanner
 import lin.domain.use.UseDomain
-import lin.domain.use.order.UseOrderPlanner
 import lin.domain.use.plan.UsePlanBuilder
 import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
@@ -27,11 +26,6 @@ import org.koin.core.component.get
 const val MaxStackNum: Int = 10
 
 class ComboDomain : KoinComponent {
-    //todo 重构之后,新的排序怎么处理
-    companion object {
-        val USE_ORDER: Comparator<ComboCard> = UseOrderPlanner.BASE_ORDER
-    }
-
     private lateinit var warManage: MyWarManage
     private lateinit var weightHandlerDomain: WeightHandlerDomain
     private val usePlanBuilder = get<UsePlanBuilder>()

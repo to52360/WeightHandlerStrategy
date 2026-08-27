@@ -20,7 +20,11 @@ import lin.warExt.my.base.resource
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
-abstract class CleanWar(val useGroupId: Int) : AbsWeightCondition(), KoinComponent, UseAfterStrategy, ExtConfig {
+abstract class CleanWar(
+    // T-002：旧排序通道弃用——该 useGroupId 仅经 UseConfig 写入 CardWeightInfo.useGroupId，已无排序消费方，
+    // 保留不改以适配旧配置；新解场/释放排序语义走 UseStage（DEFEND/CLEAR）与 stageOverride。
+    val useGroupId: Int
+) : AbsWeightCondition(), KoinComponent, UseAfterStrategy, ExtConfig {
     companion object {
         //无伤害视为全部清理
         const val ALL_CLEAN: Int = 0

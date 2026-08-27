@@ -12,6 +12,8 @@ sealed interface BaseConfig : CardConfig
 sealed interface CardAttributeConfig : BaseConfig
 
 data class UseConfig(
+    // T-002：旧排序通道弃用——排序已全切 UseStage/UsePlanOrderer；
+    // 字段仅保留供硬币识别（useGroupId==COINGroupId）与旧 DB 兼容，勿新增消费方。
     val useGroupId: Int? = null,
     val useGroupOrder: Double? = null,
     val useStrategyList: List<UseStrategy> = emptyList()

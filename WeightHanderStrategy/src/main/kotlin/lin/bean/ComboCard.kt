@@ -69,10 +69,11 @@ class ComboCard(
 
     var useAfterStrategy: MutableList<UseAfterStrategy>? = mergeStrategies()
     var useBeforeStrategy: MutableList<UseBeforeStrategy>? = mergeStrategies()
-    //使用卡牌分组和排序
+
+    // T-002：旧排序通道弃用（同 CardWeightInfo.useGroupId），仅保留兼容写入；排序归属于 UseStage/stageOverride。
     var useGroupId: Int = cardWeightInfo?.useGroupId ?: DefUseGroupId
 
-    //同组优先级
+    // T-002：旧排序通道弃用（同 useGroupId）；不再参与任何排序/权重（T-009 已断 addWeight 污染）。
     var useGroupOrder: Double = baseValue
 
     // 出牌权重（最终决策依据）：powerWeight = baseValue（基础价值） + extPowerWeight（战术溢价）。

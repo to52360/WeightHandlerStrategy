@@ -213,11 +213,13 @@ class SurplusGateFillTest {
 
     @Test
     fun `绝对不打 -100 不进余费`() {
-        // 极端 -100 = 绝对禁（isUnUse 语义）：extPowerWeight=-100 → powerWeight 深负 → passesSecondRoundCandidate 挡死
+        // 极端 -100 = 绝对禁（isUnUse 语义）：extPowerWeight=-100 → powerWeight 深负 → passesSecondRoundCandidate 挡死。
+        // 第一轮门按 T-027「命中=ts≠0」：-100 也命中（降权竞争入口），绝对不打由 isUnUse 硬禁在候选链前抽离，
+        // 本门不负责剔除（与该文件「ts 负分 第一轮降权竞争入口」用例一致）。
         val card = buildCard("ABS", cost = 2, powerWeight = 5.0, tacticalScore = -100.0)
         card.extPowerWeight = -100.0
         assertFalse(card.passesSurplusCandidate(remainingCost = 20, isFull = false))
-        assertFalse(card.passesFirstRoundCandidate())
+        assertTrue(card.passesFirstRoundCandidate())
     }
 
     // ===== 填充目标 max Σ fillValue =====

@@ -8,8 +8,7 @@ import lin.domain.use.UseBeforeStrategy
  * 暂时通用一个,后续太复杂采取config里面的模式
  */
 data class ComboCardAction(
-    // 使用 Int 和 Double 的可空版本来表示“可选更新”
-    // 如果为 null，则不更新对应字段
+    // T-002：旧排序通道弃用（同 UseConfig.useGroupId），规则动作不再经其影响排序，仅保留写入以兼容旧数据。
     val useGroupId: Int? = null,
     val useGroupOrder: Double? = null,
 

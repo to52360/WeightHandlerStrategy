@@ -9,6 +9,8 @@ import lin.myLog
 // 使用编排已调整
 interface ComboParse {
     companion object {
+        // T-002：LAST/FIRST 为旧排序通道 comboType（弃用标记，仅兼容旧 DB 数据解析）；
+        // 新「先打/后打」顺序约束走 ComboPlanDefinition.relation → MustUseGroupBefore（UsePlanOrderer 消费）。
         const val LAST = "last"
         const val BEFORE = "before"
         const val DEF = "def"
