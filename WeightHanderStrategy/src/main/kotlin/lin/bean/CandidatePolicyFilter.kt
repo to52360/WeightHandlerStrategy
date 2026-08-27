@@ -1,6 +1,7 @@
 package lin.bean
 
 import lin.bean.cardExt.base.isMinion
+import lin.bean.usePlan.NegativeScorePolicy
 import lin.domain.context.NotWeight
 import lin.domain.context.TacticalScoreScale
 
@@ -8,9 +9,10 @@ import lin.domain.context.TacticalScoreScale
  * 候选门控过滤（T-008，D-003；T-026 枚举退役后 (N, ts) 二元组模型）：
  *
  * 候选资格决定一张牌「能否进入哪一轮」，与 `UseStage`（排序）/`replanAfterUse`（执行生命周期）互不推导。
- * 三态候选策略枚举已被 (N, ts) 完全吸收（Q-026 方案 C + T-027）：
+ * 三态候选策略枚举已被 (N, ts) 完全吸收（Q-026 方案 C + T-027/T-028）：
  * - **第一轮**（主组合竞争）：ts ≠ 0（有战术立场，**含 ts<0 降权竞争入口**）或 N == 0 才进；ts == 0 且 N > 0 则惜售。
- * - **第二轮**（余费填充）：仅 ts > 0（兑现）绕 N 优先填充；ts ≤ 0（含亏模）尊重 N（余费门槛=惜售）。
+ * - **第二轮**（余费填充）：ts > 0（兑现）绕 N 优先填充；ts ≤ 0（含亏模）默认尊重 N（T-028：[NegativeScorePolicy] 控制——
+ *   NORMAL 同 ts==0 尊重 N，AGGRESSIVE 也绕 N 折价补位）。
  * - 极端 -100 = 绝对不打，走 isUnUse 硬禁，候选链前即被抽离，本门不涉及。
  * 第二轮余费门控（D-007 后双通道，正交互补）：
  *   ① [passesSecondRoundCandidate]（powerWeight > 0）= **动态亏模兜底**——评估树/规则给负分（这局面打出去亏）
@@ -87,9 +89,13 @@ fun ComboCard.surplusFillValue(): Double =
  * 余费门槛（D-007 + D-012 垫后余量语义）：战术兑现（tacticalScore > 0）= 此刻价值兑现，直接放行（**优先填充**）；
  * 否则（含 ts<0 亏模、ts==0 无立场）空闲 ≥ 牌费 + N 才放行（N=「垫出后仍须剩 N 费」；「不贪心」= 直接配更小的 N）。
  * D-011：nDelta（绝望门槛减量）降低 N，地板 0（付得起即垫；D-005「无普遍死捏」地板由未配置=0 表达）。
- * T-027（Q-026 §2.4）：命中=ts≠0 仅作用于**第一轮**（降权竞争入口）；**填充期只认 ts>0（兑现）绕 N**——
- * ts<0（战术未满足=亏模）不优先填充：尊重 N（余费门槛=惜售），N>0 则 held，除非空闲 ≥ cost+N 或绝望松门；
- * 「余费门槛 + 减权重」并存牌的降权只影响第一轮竞争，不能让它插队填充。绝对不打（-100）走 isUnUse 硬禁。
+ * T-028：ts<0 在第二轮的行为由 [NegativeScorePolicy] 控制——
+ * - NORMAL（默认）：ts<0 尊重 N，同 ts==0（N=0 折价补位 / N>0 惜售 held）；
+ * - AGGRESSIVE：ts<0 也绕 N，以 `E + ts×scale` 折价补位（不浪费费，但覆盖 N>0 惜售保护）。
+ * 绝对不打（-100）走 isUnUse 硬禁。
  */
-fun ComboCard.passesSurplusGate(idleCost: Int, nDelta: Int = 0): Boolean =
-    tacticalScore > 0.0 || idleCost >= cost() + (surplusIdleThreshold() - nDelta).coerceAtLeast(0)
+fun ComboCard.passesSurplusGate(idleCost: Int, nDelta: Int = 0): Boolean {
+    val bypassCondition = if (useIntent()?.negativeScorePolicy == NegativeScorePolicy.AGGRESSIVE)
+        tacticalScore != 0.0 else tacticalScore > 0.0
+    return bypassCondition || idleCost >= cost() + (surplusIdleThreshold() - nDelta).coerceAtLeast(0)
+}

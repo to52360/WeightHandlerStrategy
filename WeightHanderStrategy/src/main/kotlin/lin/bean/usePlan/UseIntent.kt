@@ -20,7 +20,8 @@ data class UseIntent(
     val stage: UseStage = UseStage.GENERAL,
     val replanAfterUse: Boolean = false,
     val orderWeight: Double = 0.0,
-    val tagDefaultSurplusIdleThreshold: Int? = null // T-026：tag 推导的默认余费门槛 N，null = 未声明回落 0
+    val tagDefaultSurplusIdleThreshold: Int? = null, // T-026：tag 推导的默认余费门槛 N，null = 未声明回落 0
+    val negativeScorePolicy: NegativeScorePolicy = NegativeScorePolicy.NORMAL // T-028：ts<0 在第二轮的语义策略，默认保守
 )
 
 /**

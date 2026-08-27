@@ -2,10 +2,9 @@ package lin.domain.result
 
 import condition.createMockCard
 import lin.bean.*
+import lin.bean.usePlan.NegativeScorePolicy
 import lin.bean.usePlan.UseIntent
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 /**
@@ -121,6 +120,46 @@ class CandidatePolicyFilterTest {
     fun `passesSurplusGate 未命中需空闲达标`() {
         // N=2 的 3 费牌：空闲 ≥ 3+2=5 才垫（垫出后仍须剩 2 费）
         val card = buildCard(n = 2, cost = 3)
+        assertFalse(card.passesSurplusGate(idleCost = 4))
+        assertTrue(card.passesSurplusGate(idleCost = 5))
+    }
+
+    // ── T-028：NegativeScorePolicy ──
+
+    @Test
+    fun `AGGRESSIVE ts负分绕N 空闲不够也放行`() {
+        // AGGRESSIVE 下 ts<0 绕 N：N=2 的 3 费牌，空闲 4 < 3+2=5 本该 held，但 ts≠0 放行
+        val card = ComboCard(
+            combinedConfig = CardCombinedConfig(
+                weightInfo = CardWeightInfo("agg1", 1.0, surplusIdleThreshold = 2),
+                useIntent = UseIntent(negativeScorePolicy = NegativeScorePolicy.AGGRESSIVE)
+            ),
+            card = createMockCard(cardId = "agg1", cost = 3),
+            baseValue = 5.0
+        )
+        card.tacticalScore = -2.0
+        assertTrue(card.passesSurplusGate(idleCost = 4))
+    }
+
+    @Test
+    fun `AGGRESSIVE ts正分 绕N不变`() {
+        // AGGRESSIVE 下 ts>0 也绕 N（与 NORMAL 一致）
+        val card = ComboCard(
+            combinedConfig = CardCombinedConfig(
+                weightInfo = CardWeightInfo("agg2", 1.0, surplusIdleThreshold = 2),
+                useIntent = UseIntent(negativeScorePolicy = NegativeScorePolicy.AGGRESSIVE)
+            ),
+            card = createMockCard(cardId = "agg2", cost = 3),
+            baseValue = 5.0
+        )
+        card.tacticalScore = 3.0
+        assertTrue(card.passesSurplusGate(idleCost = 0))
+    }
+
+    @Test
+    fun `NORMAL默认 ts负分 尊重N`() {
+        // 默认 NORMAL 不受影响：ts<0 同 ts==0，尊重 N
+        val card = buildCard(n = 2, cost = 3, tacticalScore = -2.0)
         assertFalse(card.passesSurplusGate(idleCost = 4))
         assertTrue(card.passesSurplusGate(idleCost = 5))
     }

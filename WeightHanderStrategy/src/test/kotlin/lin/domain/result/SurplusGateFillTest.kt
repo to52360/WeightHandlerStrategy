@@ -2,6 +2,7 @@ package lin.domain.result
 
 import condition.createMockCard
 import lin.bean.*
+import lin.bean.usePlan.NegativeScorePolicy
 import lin.bean.usePlan.UseIntent
 import org.junit.Assert.*
 import org.junit.Test
@@ -24,7 +25,8 @@ class SurplusGateFillTest {
         powerWeight: Double,
         idleThreshold: Int? = null,
         groupIdleThreshold: Int? = null,
-        tacticalScore: Double = 0.0
+        tacticalScore: Double = 0.0,
+        useIntent: UseIntent = UseIntent()
     ): ComboCard {
         val info = CardWeightInfo(
             cardId = cardId,
@@ -34,7 +36,7 @@ class SurplusGateFillTest {
         val card = ComboCard(
             combinedConfig = CardCombinedConfig(
                 weightInfo = info,
-                useIntent = UseIntent(),
+                useIntent = useIntent,
                 groupSurplusIdleThreshold = groupIdleThreshold
             ),
             card = createMockCard(cardId = cardId, cost = cost)
@@ -140,7 +142,9 @@ class SurplusGateFillTest {
         assertEquals(9.0, base(10.0).surplusFillValue(), 1e-9)
     }
 
-    // ===== T-027（Q-026 §2.1 修正）：战术命中 = ts≠0（不论正负），命中不论 N；极端 -100 = 绝对不打走 isUnUse =====
+    // ===== T-028：NegativeScorePolicy 控制 ts<0 在第二轮的语义 =====
+    // NORMAL（默认）：ts<0 尊重 N，同 ts==0（N=0 折价补位 / N>0 惜售 held）
+    // AGGRESSIVE：ts<0 也绕 N，折价补位
 
     @Test
     fun `fillValue 负分象限 恒等式 E加ts乘scale 不再被max抹平`() {
@@ -149,38 +153,67 @@ class SurplusGateFillTest {
     }
 
     @Test
-    fun `ts 负分 命中折价补位 非绝对禁`() {
-        // 命中=ts≠0：ts=-2 也是战术立场，余费可垫（fillValue 折价 → 低优先级补位，不浪费剩余费）
+    fun `NORMAL默认 ts负分且N0 空闲充裕通过N路径`() {
+        // N=0（无门槛），ts=-2 尊重 N：空闲 >= cost+0 即放行（折价补位，不浪费费）
         val card = buildCard("NEG1", cost = 2, powerWeight = 5.0, tacticalScore = -2.0)
         assertTrue(card.passesSurplusCandidate(remainingCost = 20, isFull = false))
     }
 
     @Test
-    fun `ts 负分 命中不论N 忽略惜售门槛`() {
-        // 命中不论 N：即便配大 N=9（常态惜售），ts≠0 直接放行
-        val card = buildCard("NEG2", cost = 2, powerWeight = 5.0, idleThreshold = 9, tacticalScore = -2.0)
+    fun `NORMAL默认 ts负分且N大于0 空闲不够被held`() {
+        // N=2，ts=-2：NORMAL 下 ts<0 尊重 N，空闲 3 < cost 2+N 2=4 → 惜售 held
+        val card = buildCard("NEG2", cost = 2, powerWeight = 5.0, idleThreshold = 2, tacticalScore = -2.0)
+        assertFalse(card.passesSurplusCandidate(remainingCost = 3, isFull = false))
+    }
+
+    @Test
+    fun `NORMAL默认 ts负分且N大于0 空闲够才放行`() {
+        // N=2，ts=-2：空闲 4 >= cost 2+N 2=4 → 放行（通过 N 路径，非 ts 绕行）
+        val card = buildCard("NEG2b", cost = 2, powerWeight = 5.0, idleThreshold = 2, tacticalScore = -2.0)
+        assertTrue(card.passesSurplusCandidate(remainingCost = 4, isFull = false))
+    }
+
+    @Test
+    fun `AGGRESSIVE ts负分绕N 忽略惜售门槛`() {
+        // AGGRESSIVE：ts<0 也绕 N，N=9 大门槛也不拦
+        val card = buildCard(
+            "AGG1", cost = 2, powerWeight = 5.0, idleThreshold = 9, tacticalScore = -2.0,
+            useIntent = UseIntent(negativeScorePolicy = NegativeScorePolicy.AGGRESSIVE)
+        )
         assertTrue(card.passesSurplusCandidate(remainingCost = 20, isFull = false))
     }
 
     @Test
-    fun `ts 负分 nDelta 与否都恒定放行`() {
-        // 命中恒定放行，与绝望松门无涉（nDelta 只作用于「无战术立场」的 N 惜售）
-        val card = buildCard("NEG3", cost = 2, powerWeight = 5.0, tacticalScore = -2.0)
-        assertTrue(card.passesSurplusCandidate(remainingCost = 100, isFull = false, nDelta = 0))
-        assertTrue(card.passesSurplusCandidate(remainingCost = 100, isFull = false, nDelta = 9))
+    fun `AGGRESSIVE ts负分绕N 空闲极小也放行`() {
+        // AGGRESSIVE：ts<0 绕 N，即使空闲 < cost+N 也放行（折价补位优先）
+        val card = buildCard(
+            "AGG2", cost = 2, powerWeight = 5.0, idleThreshold = 9, tacticalScore = -2.0,
+            useIntent = UseIntent(negativeScorePolicy = NegativeScorePolicy.AGGRESSIVE)
+        )
+        assertTrue(card.passesSurplusCandidate(remainingCost = 2, isFull = false))
     }
 
     @Test
-    fun `ts 负分 命中第一轮降权竞争入口`() {
-        // 第一轮：命中不论 N，ts<0 也进主组合——N=0 与 N=1 都进（解「两轮都不进」死局，靠压低 powerWeight 降权）
+    fun `AGGRESSIVE ts负分 nDelta无关`() {
+        // AGGRESSIVE 下命中恒定放行，nDelta 只作用于 NORMAL 下无立场牌的 N 惜售
+        val card = buildCard(
+            "AGG3", cost = 2, powerWeight = 5.0, idleThreshold = 9, tacticalScore = -2.0,
+            useIntent = UseIntent(negativeScorePolicy = NegativeScorePolicy.AGGRESSIVE)
+        )
+        assertTrue(card.passesSurplusCandidate(remainingCost = 2, isFull = false, nDelta = 0))
+        assertTrue(card.passesSurplusCandidate(remainingCost = 2, isFull = false, nDelta = 9))
+    }
+
+    @Test
+    fun `ts 负分 第一轮降权竞争入口 不论N不变`() {
+        // 第一轮不受 NegativeScorePolicy 影响，ts≠0 恒进（降权竞争入口）
         assertTrue(buildCard("F3", cost = 2, powerWeight = 5.0, tacticalScore = -2.0).passesFirstRoundCandidate())
         assertTrue(buildCard("F3b", cost = 2, powerWeight = 5.0, idleThreshold = 1, tacticalScore = -2.0).passesFirstRoundCandidate())
     }
 
     @Test
     fun `绝对不打 -100 不进余费`() {
-        // 极端 -100 = 绝对禁（isUnUse 语义）：extPowerWeight=-100 → powerWeight 深负 → passesSecondRoundCandidate 挡死，
-        // 与「命中折价补位」的轻度 ts<0 区分
+        // 极端 -100 = 绝对禁（isUnUse 语义）：extPowerWeight=-100 → powerWeight 深负 → passesSecondRoundCandidate 挡死
         val card = buildCard("ABS", cost = 2, powerWeight = 5.0, tacticalScore = -100.0)
         card.extPowerWeight = -100.0
         assertFalse(card.passesSurplusCandidate(remainingCost = 20, isFull = false))
