@@ -155,6 +155,15 @@ class ComboPlanEditor : VBox(12.0) {
             )
         }
 
+        // T-035：引擎侧 UsePlanOrderer 尚未消费强相邻语义（ComboPlanDefinition.mustAdjacent 仅落库），
+        // 勾选不产生任何效果。禁用并说明，避免「配了没反应」被误判为模型失效。
+        mustAdjacentCheck.apply {
+            isDisable = true
+            text = "必须相邻使用 (Adjacent) —— 未实现"
+            tooltip =
+                Tooltip("引擎当前不支持强相邻约束：UsePlanOrderer 不消费 mustAdjacent 字段。\n强相邻需先设计「组块/窗口」模型后再启用。")
+        }
+
         // 动作按钮区域
         btnSave.apply {
             maxWidth = Double.MAX_VALUE

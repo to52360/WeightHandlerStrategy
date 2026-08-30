@@ -1,4 +1,4 @@
-package lin.domain.use.plan
+﻿package lin.domain.use.plan
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -108,12 +108,12 @@ class UsePlanBuilderTest {
     fun testConditionMissUsesElseStage() {
         val tree = handCountLteTree("tree_lte_3", 3)
         val card = ampCard(
-            ConditionalStageOverride(conditionId = tree.id, stage = UseStage.SETUP, elseStage = UseStage.RESOURCE)
+            ConditionalStageOverride(conditionId = tree.id, stage = UseStage.SETUP, elseStage = UseStage.FIRST)
         )
         // 手牌 5 张 → 未命中 → elseStage=RESOURCE
         val env = fakeRuleEnv(createMockWarInfo(handCards = List(5) { createMockCard() }))
         val plan = buildBuilder(tree).build(listOf(card), env)
-        assertEquals(UseStage.RESOURCE, plan.intents.getValue(card).stage)
+        assertEquals(UseStage.FIRST, plan.intents.getValue(card).stage)
     }
 
     @Test

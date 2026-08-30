@@ -71,6 +71,7 @@ class DefaultOperatorProvider : OperatorProvider {
         CardRaceMatchOp,
         CardBelongsToGroupOp,
         CardHasPurposeTagOp,
-        ContainsRaceOp
+        ContainsRaceOp,
+        HasCardFeatureOp
     )
 }

@@ -28,7 +28,7 @@ class UseIntentAssembler(
             stageOverride = groupOverride?.stageOverride,
             replanAfterUse = groupOverride?.replanAfterUse
                 ?: cardPurpose.replanAfterUse,
-            orderWeight = groupOverride?.orderWeight ?: 0.0
+            orderWeight = groupOverride?.orderWeight // T-039：可空透传，null 交由 deriver 回落标签默认
         )
         return deriver.derive(config)
     }

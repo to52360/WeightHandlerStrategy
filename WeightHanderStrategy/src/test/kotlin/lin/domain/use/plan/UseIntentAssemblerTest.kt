@@ -1,4 +1,4 @@
-package lin.domain.use.plan
+﻿package lin.domain.use.plan
 
 import lin.bean.usePlan.*
 import org.junit.Assert.assertEquals
@@ -20,7 +20,7 @@ class UseIntentAssemblerTest {
             listOf(
                 PurposeTagIntentRule(
                     tagId = PurposeTagId.CLEAN,
-                    defaultStage = UseStage.CLEAR,
+                    defaultStage = UseStage.MID,
                     priority = 300,
                     defaultSurplusIdleThreshold = 1
                 )
@@ -37,7 +37,7 @@ class UseIntentAssemblerTest {
             deriver = tagDeriver
         )
         assertEquals(1, asm.assemble("c1").tagDefaultSurplusIdleThreshold)
-        assertEquals(UseStage.CLEAR, asm.assemble("c1").stage)
+        assertEquals(UseStage.MID, asm.assemble("c1").stage)
     }
 
     @Test

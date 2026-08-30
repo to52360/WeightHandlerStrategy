@@ -1,4 +1,4 @@
-package lin.mcp
+﻿package lin.mcp
 
 import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.UseStage
@@ -58,11 +58,11 @@ class GroupOverrideMergeRegressionTest : McpTestEnv() {
         service.saveBinding(binding.copy(behaviors = withHidden))
 
         // 3. MCP 只改 stageOverride → replanAfterUse/orderWeight 必须保留（修复前重建 GroupUseOverride 会丢）
-        val resp = call("group_override", """{"bindingId":"$bid","stageOverride":"CLEAR"}""")
+        val resp = call("group_override", """{"bindingId":"$bid","stageOverride":"MID"}""")
         assertFalse(resp.isError)
         val after = overrideOf(mid, bid)
         assertNotNull(after)
-        assertEquals(UseStage.CLEAR, after!!.stageOverride)
+        assertEquals(UseStage.MID, after!!.stageOverride)
         assertEquals(true, after.replanAfterUse)
         assertEquals(2.5, after.orderWeight!!, 1e-9)
     }

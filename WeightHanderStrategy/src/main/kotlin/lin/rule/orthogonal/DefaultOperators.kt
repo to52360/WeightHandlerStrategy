@@ -206,3 +206,34 @@ val ContainsRaceOp = operator<Set<CardRaceEnum>, ContainsRaceParams>(
 ) { input, params ->
     input.contains(params.targetRace)
 }
+
+data class HasCardFeatureParams(
+    @lin.rule.parse.RuleField(
+        name = "卡牌特征",
+        description = "匹配的卡牌特征（嘲讽/亡语/圣盾/冲锋/突袭/吸血等）",
+        required = true,
+        dataSource = "card_features"
+    )
+    val feature: CardFeature
+)
+
+/**
+ * 集合包含特征卡牌算子 (has_card_feature)：判定输入的卡牌集合中是否存在具备指定特征的卡牌。
+ *
+ * 典型用法（T-031）：`hand_combo_cards → has_card_feature(TAUNT)` → 「手牌里有嘲讽牌吗」。
+ * 输入 List<ComboCard> 或 List<Card>，输出 Boolean。
+ */
+val HasCardFeatureOp = operator<Collection<*>, HasCardFeatureParams>(
+    id = "has_card_feature",
+    name = "包含特征卡牌",
+    description = "判定输入的卡牌列表中是否存在具备指定特征（嘲讽/亡语/圣盾等）的卡牌",
+    categories = setOf(OperatorCategories.COLLECTION, OperatorCategories.EXISTENCE)
+) { input, params ->
+    input.any { item ->
+        when (item) {
+            is ComboCard -> params.feature.matches(item.card)
+            is Card -> params.feature.matches(item)
+            else -> false
+        }
+    }
+}

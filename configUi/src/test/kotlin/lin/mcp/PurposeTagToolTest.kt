@@ -17,7 +17,7 @@ class PurposeTagToolTest : McpTestEnv() {
         assertTrue("应包含 GREED", json.contains("GREED"))
         assertTrue("应包含 VALUE", json.contains("VALUE"))
         assertTrue("应包含 EXTRA_COST", json.contains("EXTRA_COST"))
-        assertTrue("应包含默认阶段 DEFEND", json.contains("DEFEND"))
+        assertTrue("应包含默认阶段 LATE", json.contains("LATE"))
     }
 
     @Test
@@ -27,7 +27,7 @@ class PurposeTagToolTest : McpTestEnv() {
         val json = resp.contentJson
         assertTrue("应包含 SAVE_LIFE", json.contains("SAVE_LIFE"))
         assertTrue("应包含保命显示名", json.contains("保命"))
-        assertTrue("应包含出牌阶段 DEFEND", json.contains("DEFEND"))
+        assertTrue("应包含出牌阶段 LATE", json.contains("LATE"))
         assertTrue("应包含 priority", json.contains("priority"))
     }
 

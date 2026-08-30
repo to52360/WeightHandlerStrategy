@@ -104,5 +104,23 @@ class DefaultOrthogonalComponentsTest {
         val nonEmptyCol: Collection<*> = listOf(minionCard)
         assertTrue("空列表判定 is_empty 应为 true", IsEmptyOp.evaluate(emptyCol, Unit))
         assertTrue("非空列表判定 is_not_empty 应为 true", IsNotEmptyOp.evaluate(nonEmptyCol, Unit))
+
+        // T-031：测试 HasCardFeatureOp（集合级特征存在性判定）
+        val tauntCard = createMockCard(cardId = "TEST_TAUNT2", isTaunt = true)
+        val featureCards: Collection<*> = listOf(minionCard, tauntCard)
+        assertTrue(
+            "集合含嘲讽卡应判定 has_card_feature(TAUNT) 为 true",
+            HasCardFeatureOp.evaluate(featureCards, HasCardFeatureParams(CardFeature.TAUNT))
+        )
+        assertFalse(
+            "集合无亡语卡应判定 has_card_feature(DEATHRATTLE) 为 false",
+            HasCardFeatureOp.evaluate(featureCards, HasCardFeatureParams(CardFeature.DEATHRATTLE))
+        )
+        // ComboCard 包装输入也应生效
+        val comboCardList: Collection<*> = listOf(ComboCard(card = tauntCard))
+        assertTrue(
+            "ComboCard 集合含嘲讽应判定 true",
+            HasCardFeatureOp.evaluate(comboCardList, HasCardFeatureParams(CardFeature.TAUNT))
+        )
     }
 }

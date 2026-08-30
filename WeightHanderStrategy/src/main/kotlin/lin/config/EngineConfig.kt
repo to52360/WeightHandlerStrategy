@@ -1,8 +1,13 @@
 package lin.config
 
+import lin.bean.usePlan.UseStage
+
 /** 引擎层配置：加键只在本文件加一行。 */
 object EngineConfig {
     private val store = ConfigStore("engine.properties")
+
+    /** Q-032：出牌阶段排序值配置键，供外部 properties / `-D` 覆盖。 */
+    private const val STAGE_ORDER_KEY = "stage.order"
 
     // scoring (双轨制轻量微调基准与安全惩罚)
     val costWeight get() = store.double("scoring.cost.weight", 0.5)
@@ -39,6 +44,18 @@ object EngineConfig {
             "penaltyWeight ($penaltyWeight) 必须小于 costWeight ($costWeight)，否则会导致低费单卡严重负分偏见"
         }
     }
+
+    // Q-032 出牌阶段排序值：解耦「阶段语义」与「阶段先后顺序」。
+    // 默认等于枚举 ordinal——阶段全序原本硬编码在 [lin.bean.usePlan.UseStage] 的声明顺序里，
+    // 无法为不同卡组表达不同顺序（如控制卡组要 LATE < MID 保命优先，快攻要 MID < LATE 解场优先）。
+    // 配置化后只改本项即可调整全局波段先后，无需改代码；未列出的阶段回落其 ordinal。
+    // 格式 `阶段:排序值` 逗号分隔，排序值升序即出牌先后；可为负、可并列（并列则退化为段内权重竞争）。
+    // 粒度说明：当前为**全局**一份（未做卡组级），待出现真实的多卡组顺序差异需求再扩展。
+    val stageOrder
+        get() = store.raw(STAGE_ORDER_KEY)
+            ?.takeIf { it.isNotBlank() }
+            ?: UseStage.entries.joinToString(",") { "${it.name}:${it.ordinal}" }
+
     // timing
     val awaitAnimationTime get() = store.long("timing.await.animation", 1000)
     val useAnimationTime get() = store.long("timing.use.animation", 1500)

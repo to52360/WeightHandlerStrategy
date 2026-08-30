@@ -20,40 +20,32 @@ class UseIntentDeriver(
     /**
      * 根据配置推导运行时意图。
      *
-     * stageOverride 优先级最高；没有显式指定时，按规则表推导默认阶段。
-     * tagDefaultSurplusIdleThreshold 按多标签 defaultSurplusIdleThreshold 取 max（见 [resolveTagDefaultSurplusIdleThreshold]）。
+     * **逐字段独立解析**（T-039）：每个字段各自按「显式配置 > 标签默认 > 内建兜底」三级回落，
+     * 互不阻断。原实现以 `stageOverride != null` 提前 return，导致显式指定阶段时
+     * `defaultOrderWeight` 被一并跳过——阶段轴与排序权重轴本应正交（同 N / replan 的既有约定）。
+     *
+     * - `stage`：显式 stageOverride > 最优标签规则 defaultStage > GENERAL
+     * - `orderWeight`：显式配置（null 表未配置）> 最优标签规则 defaultOrderWeight > 0.0
+     * - `replanAfterUse`：显式声明 OR 标签兜底（见 [resolveTagDefaultReplanAfterUse]）
+     * - `tagDefaultSurplusIdleThreshold`：多标签取 max（见 [resolveTagDefaultSurplusIdleThreshold]）
      */
     fun derive(config: CardUseConfig): UseIntent {
-        val tagDefaultN = resolveTagDefaultSurplusIdleThreshold(config)
-        if (config.stageOverride != null) {
-            return UseIntent(
-                stage = config.stageOverride,
-                replanAfterUse = config.replanAfterUse,
-                orderWeight = config.orderWeight,
-                tagDefaultSurplusIdleThreshold = tagDefaultN
-            )
-        }
-
         // 按 priority 降序在配置标签中查找最优匹配规则
         val bestRule = config.purposeTags
             .mapNotNull { ruleIndex[it] }
             .maxByOrNull { it.priority }
 
-        return if (bestRule != null) {
-            UseIntent(
-                stage = bestRule.defaultStage,
-                replanAfterUse = config.replanAfterUse,
-                orderWeight = if (config.orderWeight == 0.0) bestRule.defaultOrderWeight else config.orderWeight,
-                tagDefaultSurplusIdleThreshold = tagDefaultN
-            )
-        } else {
-            UseIntent(
-                stage = UseStage.GENERAL,
-                replanAfterUse = config.replanAfterUse,
-                orderWeight = config.orderWeight,
-                tagDefaultSurplusIdleThreshold = tagDefaultN
-            )
-        }
+        // T-036：OR 合并——标签全局兜底 / 分组 / 单卡任一声明即 replan。
+        // 多评估一次安全，漏评估会让后续牌按过时战场信息决策（清场场景）。
+        val tagReplan = resolveTagDefaultReplanAfterUse(config)
+        return UseIntent(
+            stage = config.stageOverride ?: bestRule?.defaultStage ?: UseStage.GENERAL,
+            replanAfterUse = config.replanAfterUse || tagReplan,
+            // T-039：orderWeight 可空后，"显式配 0 覆盖标签默认 1" 才成为可能
+            orderWeight = config.orderWeight ?: bestRule?.defaultOrderWeight ?: 0.0,
+            tagDefaultSurplusIdleThreshold = resolveTagDefaultSurplusIdleThreshold(config),
+            tagDefaultReplanAfterUse = tagReplan
+        )
     }
 
     /**
@@ -65,6 +57,18 @@ class UseIntentDeriver(
         config.purposeTags
             .mapNotNull { ruleIndex[it]?.defaultSurplusIdleThreshold }
             .maxOrNull()
+
+    /**
+     * tag 全局兜底「打出后重新评估」推导（T-036）：多标签命中取 **any**。
+     *
+     * 与 [resolveTagDefaultSurplusIdleThreshold] 的 max 同构——同为「保守方向」合并：
+     * N 取 max（任一标签惜售即惜售），replan 取 any（任一标签要求重评估即重评估）。
+     *
+     * 注意：本推导**不因 stageOverride 而跳过**——replan 属于执行生命周期轴，
+     * 与阶段轴正交（同 [resolveTagDefaultSurplusIdleThreshold]）。
+     */
+    private fun resolveTagDefaultReplanAfterUse(config: CardUseConfig): Boolean =
+        config.purposeTags.any { ruleIndex[it]?.defaultReplanAfterUse == true }
 }
 
 

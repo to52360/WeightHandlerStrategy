@@ -7,7 +7,9 @@ data class CardUseConfig(
     val purposeTags: Set<PurposeTagId> = emptySet(), // 战略用途：规则/评估语义，不表达真实出牌顺序
     val stageOverride: UseStage? = null,          // 默认留空由 UseIntentDeriver 推导，特例时手动指定
     val replanAfterUse: Boolean = false,          // 使用后是否需要重新规划
-    val orderWeight: Double = 0.0                 // 同阶段内的人工排序偏好
+    // 同阶段内的人工排序偏好。T-039：改可空以区分「未配置」与「显式配 0」——
+    // 原 0.0 当哨兵时无法显式配 0 去覆盖标签默认的 1，null 才表示未配置（回落标签默认）
+    val orderWeight: Double? = null
 )
 
 /**
@@ -20,8 +22,13 @@ data class UseIntent(
     val stage: UseStage = UseStage.GENERAL,
     val replanAfterUse: Boolean = false,
     val orderWeight: Double = 0.0,
-    val tagDefaultSurplusIdleThreshold: Int? = null, // T-026：tag 推导的默认余费门槛 N，null = 未声明回落 0
-    val negativeScorePolicy: NegativeScorePolicy = NegativeScorePolicy.NORMAL // T-028：ts<0 在第二轮的语义策略，默认保守
+    // T-026：tag 推导的默认余费门槛 N，null = 未声明回落 0
+    val tagDefaultSurplusIdleThreshold: Int? = null,
+    // T-036：tag 推导的「打出后必须重新评估」全局兜底声明。与卡级/分组级 replanAfterUse 取 OR 合并。
+    // 存在理由：isChangeByUseSuccess 的手牌数量启发式漏判「清场」等只改战场不改手牌数的情形。
+    val tagDefaultReplanAfterUse: Boolean = false,
+    // T-028：ts<0 在第二轮的语义策略，默认保守
+    val negativeScorePolicy: NegativeScorePolicy = NegativeScorePolicy.NORMAL
 )
 
 /**

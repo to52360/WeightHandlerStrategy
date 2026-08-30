@@ -27,7 +27,9 @@ class DefaultPurposeTagProvider : PurposeTagProvider {
         PurposeTagDef(PurposeTagId.SAVE_LIFE, "保命"),
         PurposeTagDef(PurposeTagId.CLEAN, "解场/清场"),
         PurposeTagDef(PurposeTagId.GREED, "成长/贪婪"),
-        PurposeTagDef(PurposeTagId.FINISH, "斩杀/收尾"),
+        // Q-033 收口：去掉原「收尾」措辞——FINISH 已不承担编排映射（无 END 阶段映射），
+        // 「收尾」暗示时序会误导。现仅作查询标签：「这张牌能用于斩杀」，何时斩杀由评估树判定。
+        PurposeTagDef(PurposeTagId.FINISH, "斩杀"),
         PurposeTagDef(PurposeTagId.VALUE, "普通价值"),
         PurposeTagDef(PurposeTagId.EXTRA_COST, "额外费用"),
         PurposeTagDef(PurposeTagId.DRAW_CARD, "过牌")

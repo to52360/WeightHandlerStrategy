@@ -1,4 +1,4 @@
-package lin.ui.card_group.behavior
+﻿package lin.ui.card_group.behavior
 
 import lin.bean.usePlan.UseStage
 import lin.domain.MatchState
@@ -9,14 +9,16 @@ import lin.domain.MatchState
 object BehaviorDisplayMappers {
 
     // ── 出牌阶段 (UseStage) ──
+    // Q-032：阶段已改用时时序中性命名，显示名同步为「时序位置」而非「用途」。
+    // 原因：原显示名（资源/铺场/解场/防御/斩杀）照搬用途，导致「过牌牌放进解场阶段」读来自相矛盾。
+    // 阶段只回答「大概什么时候出」，不回答「这牌是干什么用的」。
     private val stageLabelMap = mapOf(
-        UseStage.RESOURCE to "资源 (RESOURCE)",
-        UseStage.SETUP to "铺场 (SETUP)",
-        UseStage.CLEAR to "解场 (CLEAR)",
-        UseStage.DEFEND to "防御 (DEFEND)",
-        UseStage.COMBO to "斩杀 (COMBO)",
+        UseStage.FIRST to "最先 (FIRST)",
+        UseStage.SETUP to "铺垫 (SETUP)",
+        UseStage.MID to "中段 (MID)",
+        UseStage.LATE to "中后段 (LATE)",
         UseStage.GENERAL to "常规 (GENERAL)",
-        UseStage.END to "回合结束 (END)"
+        UseStage.LAST to "压轴 (LAST)"
     )
     private val labelToStageNameMap = stageLabelMap.entries.associate { (stage, label) -> label to stage.name }
 

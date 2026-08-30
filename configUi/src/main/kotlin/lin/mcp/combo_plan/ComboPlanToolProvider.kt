@@ -124,15 +124,15 @@ private data class SaveComboPlanInput(
     @field:JsonPropertyDescription("依赖卡牌分组 ID 列表（绑定条目 id），不能为空。Combo 方案必须包含核心组与依赖组才能构成协同")
     val depGroupIds: List<String> = emptyList(),
 
-    @field:JsonPropertyDescription("Combo 额外权重/加分（如 3.0，负值如 -2.0 可表达软惩罚）")
+    @field:JsonPropertyDescription("Combo 加分（如 3.0，负值如 -2.0 表达软惩罚）。【纯排序配方：固定 0】仅表达先后顺序不加分时必填 0，此时配合 relation=CORE_BEFORE_DEP/DEP_BEFORE_CORE 即为纯排序（如「先铺场再清场」的出牌次序），不会扭曲权重竞争")
     val score: Double = 0.0,
 
-    @field:JsonPropertyDescription("核心组内互斥：同 Combo 下多个核心组候选不能同时打出时置为 true，默认 true")
+    @field:JsonPropertyDescription("核心组内互斥：同 Combo 下多个核心组候选不能同时打出时置为 true。⚠️陷阱：默认 true——纯排序配方必须显式置 false，否则多核心组会被互斥剪枝、只剩一组参与排序")
     val coreMutex: Boolean = true,
 
-    @field:JsonPropertyDescription("顺序关系：SCORE_ONLY（纯加分无顺序）, CORE_BEFORE_DEP（核心组先手）, DEP_BEFORE_CORE（依赖组先手），默认 SCORE_ONLY")
+    @field:JsonPropertyDescription("顺序关系：SCORE_ONLY（纯加分无顺序）/ CORE_BEFORE_DEP（核心组先出）/ DEP_BEFORE_CORE（依赖组先出），默认 SCORE_ONLY。【纯排序配方】score=0 + coreMutex=false + relation=二者之一：表达「A 组的牌恒先于 B 组的牌」，与 orderWeight 的区别是可跨阶段拉动（拓扑约束跑在阶段排序之上）")
     val relation: String = "SCORE_ONLY",
 
-    @field:JsonPropertyDescription("必须连续/相邻打出，默认 false")
+    @field:JsonPropertyDescription("【当前版本无效，请勿配置】必须连续/相邻打出。引擎侧 UsePlanOrderer 尚未消费该语义（强相邻需先设计组块/窗口模型），配置后不产生任何效果，默认 false")
     val mustAdjacent: Boolean = false
 )

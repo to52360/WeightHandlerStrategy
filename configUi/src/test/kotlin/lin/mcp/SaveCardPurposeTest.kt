@@ -2,9 +2,7 @@ package lin.mcp
 
 import com.fasterxml.jackson.databind.JsonNode
 import lin.repository.card_purpose.CardPurposeRepository
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import org.koin.core.context.GlobalContext
 
@@ -73,9 +71,24 @@ class SaveCardPurposeTest : McpTestEnv() {
 
     @Test
     fun `purpose_tag get 展示 defaultSurplusIdleThreshold`() {
-        // DRAW_CARD 标签引擎侧预设 N=1（DefaultPurposeTagIntentRuleProvider）
-        val detail = call("get", """{"resource":"purpose_tag","id":"DRAW_CARD"}""")
+        // Q-033 收窄后 N=1 仅保留给「晚出可能更有价值」的 SAVE_LIFE / CLEAN。
+        // （原用 DRAW_CARD，但其 N 已改 null：过牌早过牌早赚，惜售与过牌目的相反）
+        val detail = call("get", """{"resource":"purpose_tag","id":"SAVE_LIFE"}""")
         val json: JsonNode = mapper.readTree(detail.contentJson)
         assertEquals(1, json.get("defaultSurplusIdleThreshold")?.asInt())
+    }
+
+    @Test
+    fun `过牌与成长标签不设惜售门槛`() {
+        // Q-033：N 是局面属性而非用途固有属性，不再对战术标签一律置 1
+        for (tag in listOf("DRAW_CARD", "GREED")) {
+            val json: JsonNode = mapper.readTree(
+                call("get", """{"resource":"purpose_tag","id":"$tag"}""").contentJson
+            )
+            assertTrue(
+                "$tag 不应设 N（期望 null）",
+                json.get("defaultSurplusIdleThreshold")?.isNull ?: true
+            )
+        }
     }
 }

@@ -90,14 +90,14 @@ class CardCombinedConfigBuilder {
 
     /** 统一解析所有来源的 [SliceEntry]，按 scope 展开到 cardId → [useStrategiesByCardId]。 */
     private fun expandSlices(tagIndex: Map<PurposeTagId, Set<String>>) {
-        for (entry in slices) {
-            val cardIds = when (entry.scope) {
+        for ((scope, s) in slices) {
+            val cardIds = when (scope) {
                 is ConfigSliceScope.Group -> groupBehaviors
-                    .find { it.id == entry.scope.groupId }?.cardIds.orEmpty()
-                is ConfigSliceScope.Tag -> tagIndex[entry.scope.tagId].orEmpty()
-                is ConfigSliceScope.Card -> listOf(entry.scope.cardId)
+                    .find { it.id == scope.groupId }?.cardIds.orEmpty()
+
+                is ConfigSliceScope.Tag -> tagIndex[scope.tagId].orEmpty()
+                is ConfigSliceScope.Card -> listOf(scope.cardId)
             }
-            val s = entry.slice
             if (s.useStrategies.isNotEmpty())
                 cardIds.forEach { cardId -> addStrategiesForCard(cardId, s.useStrategies) }
         }
