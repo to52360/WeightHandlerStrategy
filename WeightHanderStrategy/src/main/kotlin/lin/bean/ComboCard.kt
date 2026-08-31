@@ -2,12 +2,15 @@ package lin.bean
 
 
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
+import lin.bean.usePlan.CardComboEntry
+import lin.bean.usePlan.CardComboUseBinding
 import lin.domain.context.BaseWeight
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
 import lin.domain.use.UseAfterStrategy
 import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
+import lin.domain.use.plan.ComboRuntime
 import lin.domain.use.plan.GroupMembershipRuntime
 
 
@@ -67,11 +70,42 @@ class ComboCard(
         if (dynamic.isEmpty()) static else static + dynamic
     }
 
+    /**
+     * 运行时 combo 条目 = 静态预算 ∪ 谓词组命中（T-012）。
+     *
+     * **谓词判定只在 [predicateGroupIds] 发生一次**，本字段与 [runtimeComboUseBindings] 共享
+     * 该结果派生——不重复求值（防性能退化），也不建聚合 Context（防伪包装）。
+     *
+     * 命中谓词组时用 [ComboRuntime] 对 [allGroupIds] **全量重算**：因其与静态预算同源
+     * （见 [lin.utils.startup.ComboStep]），结果是静态预算的超集，故不需要第三份合并逻辑；
+     * coreMutex 的「本组过滤」随之覆盖谓词组，互斥判定自动生效。
+     *
+     * 未命中谓词组（含全部存量配置）→ 直接返回静态预算引用，**零额外计算**。
+     */
+    val runtimeComboEntries: List<CardComboEntry> by lazy {
+        if (predicateGroupIds.isEmpty()) {
+            combinedConfig?.comboEntries.orEmpty()
+        } else {
+            ComboRuntime.entries(allGroupIds)
+        }
+    }
+
+    /** 出牌顺序绑定，同 [runtimeComboEntries] 的合并与短路语义（T-012）。 */
+    val runtimeComboUseBindings: List<CardComboUseBinding> by lazy {
+        if (predicateGroupIds.isEmpty()) {
+            combinedConfig?.comboUseBindings.orEmpty()
+        } else {
+            ComboRuntime.bindings(allGroupIds)
+        }
+    }
+
     fun useIntent() = combinedConfig?.useIntent
 
-    fun comboEntries() = combinedConfig?.comboEntries ?: emptyList()
+    /** T-012：改读运行时合并结果（静态预算 ∪ 谓词组命中），详见 [runtimeComboEntries]。 */
+    fun comboEntries() = runtimeComboEntries
 
-    fun comboUseBindings() = combinedConfig?.comboUseBindings ?: emptyList()
+    /** T-012：同 [comboEntries]，详见 [runtimeComboUseBindings]。 */
+    fun comboUseBindings() = runtimeComboUseBindings
 
     val combo = cardWeightInfo?.combos
     //指定目标
