@@ -103,7 +103,9 @@ data class CardWeightInfo(
     //使用相关：use 策略统一走 combinedConfig（UseConfigHandler 写入），CardWeightInfo 不再持有
 
     /**
-     *  T-002：旧排序通道弃用（已全切 UseStage/UsePlanOrderer）；保留仅因旧 DB 数据写入 + 硬币识别（COINGroupId）。
+     *  T-002：旧排序通道弃用（已全切 UseStage/UsePlanOrderer）。
+     *  T-004 后运行时零读者（硬币识别已迁 EXTRA_COST 标签通道）；保留仅因旧 DB 数据写入兼容，
+     *  待 Q-003 收口删除（含 COINProvide 的写入与 COINGroupId 常量）。
      *  combo相关
      */
     var useGroupId = DefUseGroupId

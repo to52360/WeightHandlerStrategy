@@ -17,7 +17,12 @@ class CardCombinedConfig(
     // before/after 是同一关注点的执行时机子类型，配置元组层不平铺，由消费端（ComboCard/UseDomain）按类型分流。
     // 启动装配期由 GroupBehaviorStep 一次性写入，运行期只读，故用不可变 List。
     val useStrategies: List<UseStrategy> = emptyList(),
-    // 用途标签：唯一来源是 PurposeStep（从 CardPurposeProvider 加载）。启动期透传，运行期只读。
+    // 运行时判定的组级使用动作：groupId → 策略列表（T-002，谓词组专用）。
+    // 谓词组成员在运行时才确定，expandSlices 无法展开成 cardId，故保留「组级作用域」，
+    // 由 ComboCard 构造时用 hasGroup(groupId) 判定后与 useStrategies 合并。
+    // 所有卡共享同一个不可变 Map 实例（全局一份，非每卡拷贝）。
+    val groupStrategies: Map<String, List<UseStrategy>> = emptyMap(),
+    // 用途标签：唯一来源是 PurposeStep（CardPurposeProvider 用户配置 + 机制牌硬编码注入合并，T-003）。启动期透传，运行期只读。
     val purposeTags: Set<PurposeTagId> = emptySet(),
     // 条件化阶段覆盖：唯一来源是 GroupBehaviorStep（OverrideBehavior.conditionalStage 透传）。启动期透传，运行期只读。
     val conditionalStage: ConditionalStageOverride? = null,

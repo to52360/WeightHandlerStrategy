@@ -3,8 +3,10 @@
 import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.UseStage
 import lin.repository.card_group.CardGroupService
+import lin.repository.card_group.ManagerSaveCommand
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.GroupMembership
 import lin.rule.tree.findOverride
 import org.junit.Assert.*
 import org.junit.Test
@@ -24,13 +26,15 @@ class GroupOverrideMergeRegressionTest : McpTestEnv() {
             id = "t026_${name}",
             managerId = "",
             name = "组_$name",
-            cardIds = emptyList()
+            membership = GroupMembership.Static(emptyList())
         )
         managerId = GlobalContext.get().get<CardGroupService>().saveManager(
-            name = "t026_fixture_$name",
-            sourceFile = "t026_fixture_$name",
-            enabled = true,
-            bindings = listOf(binding)
+            ManagerSaveCommand(
+                name = "t026_fixture_$name",
+                sourceFile = "t026_fixture_$name",
+                enabled = true,
+                bindings = listOf(binding)
+            )
         )
         return managerId!! to binding.id
     }

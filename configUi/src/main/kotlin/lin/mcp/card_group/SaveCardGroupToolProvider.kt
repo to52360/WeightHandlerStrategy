@@ -7,12 +7,10 @@ import lin.bean.usePlan.UseStage
 import lin.dao.CardGroupJsonParser
 import lin.mcp.*
 import lin.repository.card_group.CardGroupService
+import lin.repository.card_group.ManagerSaveCommand
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
-import lin.rule.tree.CardGroupBehavior
-import lin.rule.tree.CardGroupBinding
-import lin.rule.tree.findOverride
-import lin.rule.tree.withSurplusGate
+import lin.rule.tree.*
 import lin.utils.nextShortId
 
 /**
@@ -77,22 +75,27 @@ class SaveCardGroupToolProvider(
                         id = nextShortId(),
                         managerId = "",
                         name = b.name,
-                        cardIds = b.cardIds,
+                        // 整份 membership 复制（而非 cardIds）：谓词组克隆后仍是谓词组，不丢条件
+                        membership = b.membership,
                         description = b.description,
                         behaviors = b.behaviors
                     )
                 }
 
                 val managerId = groupService.saveManager(
-                    name = managerName,
-                    sourceFile = effectiveSourceFile,
-                    enabled = true,
-                    bindings = clonedBindings,
-                    existingId = null,
-                    // 克隆副本缺省继承源方案的 meta（与更新模式"缺省不覆盖"语义一致）
-                    managerDescription = input.managerDescription?.takeIf { it.isNotBlank() }
-                        ?: sourceManager.description,
-                    managerStatus = input.managerStatus?.takeIf { it.isNotBlank() } ?: sourceManager.status
+                    ManagerSaveCommand(
+                        name = managerName,
+                        sourceFile = effectiveSourceFile,
+                        enabled = true,
+                        bindings = clonedBindings,
+                        existingId = null,
+                        // 克隆副本缺省继承源方案的 meta（与更新模式"缺省不覆盖"语义一致）
+                        managerDescription = input.managerDescription?.takeIf { it.isNotBlank() }
+                            ?: sourceManager.description,
+                        managerStatus = input.managerStatus?.takeIf { it.isNotBlank() } ?: sourceManager.status,
+                        // 克隆同样继承卡组级谓词组默认值（谓词组克隆后沿用同一覆盖链）
+                        defaultIncludeDerived = sourceManager.defaultIncludeDerived
+                    )
                 )
                 return@typedTool mcpSuccess(
                     mapOf(
@@ -137,7 +140,14 @@ class SaveCardGroupToolProvider(
                     id = existing?.id ?: nextShortId(),
                     managerId = "",
                     name = bi.name,
-                    cardIds = bi.cardIds,
+                    // T-001：本工具当前只录入静态组。但若该分组已存在且是谓词组（条件定义成员），
+                    // 且本次未传 cardIds，则保留其 membership——saveManager 是整体 replaceBindings，
+                    // 不做这个保护会让谓词组在"用本工具改同方案其他分组"时被静默清成空静态组。
+                    membership = if (bi.cardIds.isEmpty() && existing?.membership is GroupMembership.Predicate) {
+                        existing.membership
+                    } else {
+                        GroupMembership.Static(bi.cardIds)
+                    },
                     description = bi.description,
                     behaviors = if (bi.surplusIdleThreshold != null) {
                         (existing?.behaviors ?: emptyList()).withSurplusGate(bi.surplusIdleThreshold)
@@ -147,13 +157,15 @@ class SaveCardGroupToolProvider(
                 )
             }
             val managerId = groupService.saveManager(
-                name = managerName,
-                sourceFile = sourceFile,
-                enabled = true,
-                bindings = bindings,
-                existingId = existingId,
-                managerDescription = input.managerDescription,
-                managerStatus = input.managerStatus
+                ManagerSaveCommand(
+                    name = managerName,
+                    sourceFile = sourceFile,
+                    enabled = true,
+                    bindings = bindings,
+                    existingId = existingId,
+                    managerDescription = input.managerDescription,
+                    managerStatus = input.managerStatus
+                )
             )
             mcpSuccess(
                 mapOf(

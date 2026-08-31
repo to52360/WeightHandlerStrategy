@@ -31,6 +31,7 @@ val ruleModule = module {
     single<ConfigBindingStep> { WeightInfoStep() }
     single<ConfigBindingStep> { GroupIndexStep() }
     single<ConfigBindingStep> { GroupBehaviorStep() }
+    single<ConfigBindingStep> { PredicateGroupStep() }
     single<ConfigBindingStep> { PurposeStep() }
     single<ConfigBindingStep> { CardPurposeBehaviorStep() }
     single<ConfigBindingStep> { ComboStep() }

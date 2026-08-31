@@ -182,8 +182,8 @@ fun ComboCard.updateIntent(actions: List<ComboCardAction>) {
             this.useBeforeStrategy = (this.useBeforeStrategy ?: mutableListOf()).apply { addAll(it) }
         }
 
-        // T-002：旧排序通道写入保留（useGroupId/useGroupOrder 无排序消费方，仅硬币识别认 useGroupId==COINGroupId）；
-        // 勿扩展此通道，排序语义归属于 UseStage/orderWeight。
+        // T-002：旧排序通道写入保留（useGroupId/useGroupOrder 无排序消费方；硬币识别 T-004 后亦不再读此通道，
+        // 仅剩旧 DB 兼容）。勿扩展此通道，排序语义归属于 UseStage/orderWeight。
         intent.useGroupId?.let {
             this.useGroupId = it
         }

@@ -1,7 +1,7 @@
 package lin.serviceLoader.provider
 
-import lin.bean.usePlan.GroupUseOverride
 import lin.config.find.def.BindInfo
+import lin.domain.use.plan.PredicateGroupDef
 import lin.rule.tree.CardGroupBinding
 
 /**
@@ -36,4 +36,16 @@ interface CardGroupIndexProvider {
  */
 interface GroupBehaviorProvider {
     fun provide(): List<CardGroupBinding> = emptyList()
+}
+
+/**
+ * 提供「谓词组」（[lin.rule.tree.GroupMembership.Predicate]，条件定义成员的分组）的运行时定义。
+ *
+ * **覆盖链由配置侧解析完毕**：`组级 includeDerived > 卡组级 defaultIncludeDerived > 内建兜底 false`
+ * 在读库时算好，引擎侧只见最终布尔值、不感知层级——配置语义归配置侧，引擎侧只消费。
+ *
+ * 默认空实现：未注册该 Provider 时等价于「没有谓词组」，全部走静态组路径。
+ */
+interface PredicateGroupProvider {
+    fun provide(): List<PredicateGroupDef> = emptyList()
 }

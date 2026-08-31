@@ -1,9 +1,6 @@
 package lin.repository.card_group
 
-import lin.rule.tree.CardGroupBehavior
-import lin.rule.tree.CardGroupBinding
-import lin.rule.tree.findSurplusGate
-import lin.rule.tree.withSurplusGate
+import lin.rule.tree.*
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -37,16 +34,19 @@ class CardGroupSurplusGateRoundTripTest {
 
     private fun binding(id: String, managerId: String, name: String, gate: Int?) = CardGroupBinding(
         id = id, managerId = managerId, name = name,
-        cardIds = listOf("CARD_A"), behaviors = emptyList<CardGroupBehavior>().withSurplusGate(gate)
+        membership = GroupMembership.Static(listOf("CARD_A")),
+        behaviors = emptyList<CardGroupBehavior>().withSurplusGate(gate)
     )
 
     @Test
     fun `多分组各自落行并往返还原`() {
         val managerId = service.saveManager(
-            name = "测试方案", sourceFile = "test.cardgroup", enabled = true,
-            bindings = listOf(
-                binding("b1", "m1", "分组 1", gate = 1),
-                binding("b2", "m1", "分组 2", gate = 4)
+            ManagerSaveCommand(
+                name = "测试方案", sourceFile = "test.cardgroup", enabled = true,
+                bindings = listOf(
+                    binding("b1", "m1", "分组 1", gate = 1),
+                    binding("b2", "m1", "分组 2", gate = 4)
+                )
             )
         )
 
@@ -63,8 +63,10 @@ class CardGroupSurplusGateRoundTripTest {
     @Test
     fun `gate为null时移除行为行`() {
         val managerId = service.saveManager(
-            name = "测试方案", sourceFile = "test.cardgroup", enabled = true,
-            bindings = listOf(binding("b1", "m1", "分组 1", gate = 4))
+            ManagerSaveCommand(
+                name = "测试方案", sourceFile = "test.cardgroup", enabled = true,
+                bindings = listOf(binding("b1", "m1", "分组 1", gate = 4))
+            )
         )
         assertEquals(4, service.loadBindings(managerId).first().behaviors.findSurplusGate()?.idleThreshold)
 
@@ -72,8 +74,10 @@ class CardGroupSurplusGateRoundTripTest {
         val noGate = binding("b1", "m1", "分组 1", gate = null)
         val existingId = service.loadAllManagers().first().id
         service.saveManager(
-            name = "测试方案", sourceFile = "test.cardgroup", enabled = true,
-            bindings = listOf(noGate), existingId = existingId
+            ManagerSaveCommand(
+                name = "测试方案", sourceFile = "test.cardgroup", enabled = true,
+                bindings = listOf(noGate), existingId = existingId
+            )
         )
         assertNull(service.loadBindings(managerId).first().behaviors.findSurplusGate())
     }
@@ -81,14 +85,17 @@ class CardGroupSurplusGateRoundTripTest {
     @Test
     fun `混合行为保存时SURPLUS_GATE与其他行为共存`() {
         val mixed = CardGroupBinding(
-            id = "b1", managerId = "m1", name = "分组 1", cardIds = listOf("CARD_A"),
+            id = "b1", managerId = "m1", name = "分组 1",
+            membership = GroupMembership.Static(listOf("CARD_A")),
             behaviors = listOf(
                 CardGroupBehavior.UseActionBehavior(listOf("RECORD_PLAY")),
                 CardGroupBehavior.SurplusGateBehavior(4)
             )
         )
         val managerId = service.saveManager(
-            name = "测试方案", sourceFile = "test.cardgroup", enabled = true, bindings = listOf(mixed)
+            ManagerSaveCommand(
+                name = "测试方案", sourceFile = "test.cardgroup", enabled = true, bindings = listOf(mixed)
+            )
         )
         val reloaded = service.loadBindings(managerId).first()
         assertNotNull(reloaded.behaviors.findSurplusGate())

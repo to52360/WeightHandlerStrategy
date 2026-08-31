@@ -1,15 +1,16 @@
 package lin.domain.strategy
 
-import lin.bean.COINGroupId
 import lin.bean.ComboCard
+import lin.bean.hasPurposeTag
+import lin.bean.usePlan.PurposeTagId
 import lin.domain.MyWarManage
 import lin.domain.WeightHandlerDomain
 import lin.domain.context.CostWeight
-import lin.domain.surplusDespairNDelta
 import lin.domain.context.NotWeight
 import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy.Companion.DEF_PRIORITY
 import lin.domain.strategy.FindComboStrategy.Companion.EXT_COST_PRIORITY
+import lin.domain.surplusDespairNDelta
 import lin.domain.use.tryUseCard
 import lin.myLog
 import lin.serviceLoader.cardInfoProvide.COINProvide
@@ -70,7 +71,10 @@ fun ComboCard.extCost(): Int {
 class ExtCostStrategy : FindComboStrategy {
 
     companion object {
-        val extCostPredicate: FindRule = { it.useGroupId == COINGroupId }
+        // T-004：识别迁 EXTRA_COST 标签通道（原 useGroupId == COINGroupId 旧通道）。
+        // 标签即路由声明——持有者由本策略接管（双世界比较，出牌时机写死在 find 阶段先于组合，不进 UsePlanOrderer）。
+        // 机制牌（硬币）由 COINProvide.mechanismPurposes 启动期硬编码注入，用户亦可在配置面给其他牌打此标签。
+        val extCostPredicate: FindRule = { it.hasPurposeTag(PurposeTagId.EXTRA_COST) }
         val extCostConfig: ExtCostConfig = { cost, extCostCards ->
             var reduceWeight = NotWeight
             val extCost = extCostCards.sumOf { it.extCost() }

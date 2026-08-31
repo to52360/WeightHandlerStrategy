@@ -8,6 +8,7 @@ import lin.domain.context.UnUseWeight
 import lin.domain.use.UseAfterStrategy
 import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
+import lin.domain.use.plan.GroupMembershipRuntime
 
 
 typealias ComboRule = (ComboCard) -> Double
@@ -34,6 +35,38 @@ class ComboCard(
 
     val cardWeightInfo = combinedConfig?.weightInfo
 
+    /**
+     * 谓词组（条件定义成员的分组，T-002）的运行时判定结果。
+     *
+     * **per-实例缓存一次**：ComboCard 每轮重建、属性快照固定，故这是正确的缓存粒度——
+     * 既保证「被减费的卡」拿到当前费用下的判定结果（按 cardId 缓存会拿到减费前的旧结果，
+     * 条件涉及费用时静默错判），又做到每轮每卡只求值一次。
+     *
+     * 静态组成员在 [CardCombinedConfig.groupIds]（启动期预算），两者由 `groupIds()` 合并。
+     */
+    val predicateGroupIds: Set<String> by lazy {
+        if (GroupMembershipRuntime.isEmpty()) {
+            emptySet()
+        } else {
+            // 卡池外的卡（衍生/发现/随机生成）：combinedConfig 为 null，
+            // infoMap 按卡池构建，查不到即卡池外——这是 includeDerived 判定的依据。
+            GroupMembershipRuntime.resolve(this, isDerived = combinedConfig == null)
+        }
+    }
+
+    /**
+     * 完整分组归属 = 静态组（启动期预算）∪ 谓词组（运行时求值），per-实例缓存一次。
+     *
+     * [lin.bean.groupIds] 等读取入口的统一底座（缓存需要字段承载，故放本体）。
+     * `UsePlanOrderer` 约束比较、`group_filter` 算子等高频读取不再重复分配合并 Set。
+     */
+    val allGroupIds: Set<String> by lazy {
+        val static = combinedConfig?.groupIds.orEmpty()
+        val dynamic = predicateGroupIds
+        // 绝大多数卡不在任何谓词组里，短路掉 Set 合并的分配开销
+        if (dynamic.isEmpty()) static else static + dynamic
+    }
+
     fun useIntent() = combinedConfig?.useIntent
 
     fun comboEntries() = combinedConfig?.comboEntries ?: emptyList()
@@ -54,14 +87,35 @@ class ComboCard(
     fun cardId() = card.cardId
     fun cost() = card.cost
     //select 暂定直接修改,缺点:状态修改到处是无法追踪,要验证状态变化将很复杂,
-    // 合并配置侧声明动作（combinedConfig.useStrategies），before/after 按类型分流；无数据则为 null，惰性创建避免空列表分配
+    /**
+     * 合并配置侧声明动作，before/after 按类型分流；无数据则为 null，惰性创建避免空列表分配。
+     *
+     * 两个来源：
+     * - `combinedConfig.useStrategies`：cardId 级，启动期由 expandSlices 展开；
+     * - `combinedConfig.groupStrategies`：组级，仅谓词组（成员运行时判定才知），
+     *   此处用 [predicateGroupIds] 判定归属后合并（T-002）。
+     */
     private inline fun <reified T : UseStrategy> mergeStrategies(): MutableList<T>? {
-        val source = combinedConfig?.useStrategies ?: return null
+        val config = combinedConfig ?: return null
         var result: MutableList<T>? = null
-        for (s in source) {
+
+        // 静态：cardId 级（启动期 expandSlices 展开）
+        for (s in config.useStrategies) {
             if (s is T) {
                 if (result == null) result = mutableListOf()
                 result.add(s)
+            }
+        }
+
+        // 谓词组级：成员运行时判定，此处按 groupId 归属合并。先短路掉绝大多数卡。
+        if (config.groupStrategies.isNotEmpty() && predicateGroupIds.isNotEmpty()) {
+            for (groupId in predicateGroupIds) {
+                for (s in config.groupStrategies[groupId].orEmpty()) {
+                    if (s is T) {
+                        if (result == null) result = mutableListOf()
+                        result.add(s)
+                    }
+                }
             }
         }
         return result

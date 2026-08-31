@@ -19,12 +19,13 @@ class CardGroupRepository(
         jdbcTemplate.execute(
             """
             CREATE TABLE IF NOT EXISTS card_group_manager (
-                id                  TEXT    PRIMARY KEY,
-                name                TEXT    NOT NULL,
-                source_file         TEXT    NOT NULL,
-                enabled             INTEGER NOT NULL DEFAULT 1,
-                manager_description TEXT,
-                manager_status      TEXT
+                id                      TEXT    PRIMARY KEY,
+                name                    TEXT    NOT NULL,
+                source_file             TEXT    NOT NULL,
+                enabled                 INTEGER NOT NULL DEFAULT 1,
+                manager_description     TEXT,
+                manager_status          TEXT,
+                default_include_derived INTEGER
             );
             """.trimIndent()
         )
@@ -37,10 +38,16 @@ class CardGroupRepository(
                 manager_id      TEXT    NOT NULL,
                 name            TEXT    NOT NULL,
                 card_ids        TEXT    NOT NULL,
-                description     TEXT
+                description     TEXT,
+                member_type     TEXT    NOT NULL DEFAULT 'STATIC',
+                condition_id    TEXT,
+                include_derived INTEGER
             );
             """.trimIndent()
         )
+        // ⚠️ 存量库不会因 CREATE TABLE IF NOT EXISTS 而加列。
+        //    旧库升级需手动执行 docs/sql/migrations/ 下的迁移脚本（用 sqlite3 CLI），
+        //    不要在此处写自动 ALTER——迁移的时机与验证应留在人工可控的脚本里。
     }
 
     // ─────────────────────── Manager CRUD ──────────────────────────────────
@@ -52,24 +59,38 @@ class CardGroupRepository(
             sourceFile = rs.getString("source_file"),
             enabled = rs.getInt("enabled") == 1,
             description = rs.getString("manager_description"),
-            status = rs.getString("manager_status")
+            status = rs.getString("manager_status"),
+            defaultIncludeDerived = readNullableBoolean(rs, "default_include_derived")
         )
+    }
+
+    /**
+     * 读可空布尔列。SQLite 无原生 BOOLEAN，存的是 INTEGER，
+     * 直接用 `getObject(...) as? Boolean` 会拿到 Integer 而安全转换失败返回 null，
+     * 把显式 false 误读成"未声明"——故统一走 getInt + wasNull。
+     */
+    private fun readNullableBoolean(rs: java.sql.ResultSet, column: String): Boolean? {
+        val value = rs.getInt(column)
+        return if (rs.wasNull()) null else value == 1
     }
 
     fun saveManager(entity: CardManagerEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_manager (id, name, source_file, enabled, manager_description, manager_status)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO card_group_manager
+                (id, name, source_file, enabled, manager_description, manager_status, default_include_derived)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                name                = excluded.name,
-                source_file         = excluded.source_file,
-                enabled             = excluded.enabled,
-                manager_description = excluded.manager_description,
-                manager_status      = excluded.manager_status
+                name                    = excluded.name,
+                source_file             = excluded.source_file,
+                enabled                 = excluded.enabled,
+                manager_description     = excluded.manager_description,
+                manager_status          = excluded.manager_status,
+                default_include_derived = excluded.default_include_derived
             """.trimIndent(),
             entity.id, entity.name, entity.sourceFile, if (entity.enabled) 1 else 0,
-            entity.description, entity.status
+            entity.description, entity.status,
+            entity.defaultIncludeDerived?.let { if (it) 1 else 0 }
         )
     }
 
@@ -109,23 +130,31 @@ class CardGroupRepository(
             id = rs.getString("id"),
             managerId = rs.getString("manager_id"),
             name = rs.getString("name"),
-            cardIds = rs.getString("card_ids"),
-            description = rs.getString("description")
+            cardIds = rs.getString("card_ids") ?: "[]",
+            description = rs.getString("description"),
+            memberType = rs.getString("member_type") ?: MemberType.STATIC,
+            conditionId = rs.getString("condition_id"),
+            includeDerived = readNullableBoolean(rs, "include_derived")
         )
     }
 
     fun saveBinding(entity: CardBindingEntity) {
         jdbcTemplate.update(
             """
-            INSERT INTO card_group_binding (id, manager_id, name, card_ids, description)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO card_group_binding
+                (id, manager_id, name, card_ids, description, member_type, condition_id, include_derived)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name            = excluded.name,
                 card_ids        = excluded.card_ids,
-                description     = excluded.description
+                description     = excluded.description,
+                member_type     = excluded.member_type,
+                condition_id    = excluded.condition_id,
+                include_derived = excluded.include_derived
             """.trimIndent(),
             entity.id, entity.managerId, entity.name, entity.cardIds,
-            entity.description
+            entity.description, entity.memberType, entity.conditionId,
+            entity.includeDerived?.let { if (it) 1 else 0 }
         )
     }
 

@@ -100,6 +100,10 @@ class DefaultPurposeTagIntentRuleProvider : PurposeTagIntentRuleProvider {
             priority = 50,
             defaultSurplusIdleThreshold = null
         ),
+        // T-003/T-004：特殊查询牌——持有 EXTRA_COST 标签的牌由 ExtCostStrategy 接管（额外费用双世界比较），
+        // 出牌时机写死在 find 阶段先于组合打出，不进 UsePlanOrderer → stage 不被消费，
+        // GENERAL 仅作意图模型的惰性默认落点（"无特殊时序要求"恰好成立：时序由别处决定）。
+        // 机制牌（硬币）由 COINProvide.mechanismPurposes 启动期硬编码注入，不依赖 DB 配置。
         PurposeTagIntentRule(
             tagId = PurposeTagId.EXTRA_COST,
             defaultStage = UseStage.GENERAL,

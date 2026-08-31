@@ -6,7 +6,9 @@ import lin.dao.CardGroupJsonParser
 import lin.domain.MatchState
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.CardManagerEntity
+import lin.repository.card_group.ManagerSaveCommand
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.GroupMembership
 import java.util.*
 
 class WorkbenchStore(private val service: CardGroupService) {
@@ -63,11 +65,13 @@ class WorkbenchStore(private val service: CardGroupService) {
 
         // 收集数据并保存
         val id = service.saveManager(
-            name = state.managerName,
-            sourceFile = state.managerSourceFile,
-            enabled = state.managerEnabled,
-            bindings = state.currentBindings,
-            existingId = if (currentItem.isDraft) null else currentItem.entity?.id
+            ManagerSaveCommand(
+                name = state.managerName,
+                sourceFile = state.managerSourceFile,
+                enabled = state.managerEnabled,
+                bindings = state.currentBindings,
+                existingId = if (currentItem.isDraft) null else currentItem.entity?.id
+            )
         )
 
         // 保存后重新加载整体列表
@@ -104,7 +108,7 @@ class WorkbenchStore(private val service: CardGroupService) {
             id = UUID.randomUUID().toString().substring(0, 8),
             managerId = state.selectedManagerItem?.entity?.id ?: "",
             name = "分组 $nextNum",
-            cardIds = emptyList()
+            membership = GroupMembership.Static(emptyList())
         )
         dispatch(WorkbenchActions.addBinding(binding))
     }

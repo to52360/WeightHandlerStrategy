@@ -12,6 +12,22 @@ import java.util.*
 
 // 由于 sourceFile 移到了 Manager，Binding 不再需要独立的 Draft/View 包装，直接使用领域对象 CardGroupBinding 即可。
 
+/**
+ * [CardGroupService.saveManager] 的入参载体（manager 级保存命令）。
+ * 参数原平铺在方法签名上，随字段增加持续膨胀（8 个），封装收敛；
+ * 可空字段 null = 缺省不覆盖已有值（见 saveManager 内「保持原值」逻辑）。
+ */
+data class ManagerSaveCommand(
+    val name: String,
+    val sourceFile: String,
+    val enabled: Boolean,
+    val bindings: List<CardGroupBinding>,
+    val existingId: String? = null,
+    val managerDescription: String? = null,
+    val managerStatus: String? = null,
+    val defaultIncludeDerived: Boolean? = null
+)
+
 class CardGroupService(private val repository: CardGroupRepository) {
 
     private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -48,17 +64,10 @@ class CardGroupService(private val repository: CardGroupRepository) {
         }
     }
 
-    fun saveManager(
-        name: String,
-        sourceFile: String,
-        enabled: Boolean,
-        bindings: List<CardGroupBinding>,
-        existingId: String? = null,
-        managerDescription: String? = null,
-        managerStatus: String? = null
-    ): String {
+    fun saveManager(command: ManagerSaveCommand): String {
+        val (name, sourceFile, enabled, bindings) = command
         val allManagers = repository.findAllManagers()
-        val id = existingId
+        val id = command.existingId
             ?: allManagers.firstOrNull { it.name == name || it.sourceFile == sourceFile }?.id
             ?: UUID.randomUUID().toString().substring(0, 8)
 
@@ -75,21 +84,15 @@ class CardGroupService(private val repository: CardGroupRepository) {
                 name = name,
                 sourceFile = sourceFile,
                 enabled = enabled,
-                description = managerDescription?.takeIf { it.isNotBlank() } ?: existingMeta?.description,
-                status = managerStatus?.takeIf { it.isNotBlank() } ?: existingMeta?.status
+                description = command.managerDescription?.takeIf { it.isNotBlank() } ?: existingMeta?.description,
+                status = command.managerStatus?.takeIf { it.isNotBlank() } ?: existingMeta?.status,
+                // 未显式传入时保持原值（null 表"未声明"，不应用 null 覆盖已有设置）
+                defaultIncludeDerived = command.defaultIncludeDerived ?: existingMeta?.defaultIncludeDerived
             )
         )
 
         // 整体替换该 Manager 下的 Binding（行为覆盖/使用动作已迁到 card_group_behavior 表）
-        val entities = bindings.map { binding ->
-            CardBindingEntity(
-                id = binding.id,
-                managerId = id,
-                name = binding.name,
-                cardIds = mapper.writeValueAsString(binding.cardIds),
-                description = binding.description
-            )
-        }
+        val entities = bindings.map { CardBindingEntity.fromDomain(it.copy(managerId = id)) }
         repository.replaceBindings(id, entities)
 
         // 覆盖写 card_group_behavior：先清该 Manager 全部旧行为行，再按当前 Binding 重填
@@ -130,15 +133,7 @@ class CardGroupService(private val repository: CardGroupRepository) {
     // ─────────────────────── 单条 Binding ──────────────────────────────────
 
     fun saveBinding(binding: CardGroupBinding) {
-        repository.saveBinding(
-            CardBindingEntity(
-                id = binding.id,
-                managerId = binding.managerId,
-                name = binding.name,
-                cardIds = mapper.writeValueAsString(binding.cardIds),
-                description = binding.description
-            )
-        )
+        repository.saveBinding(CardBindingEntity.fromDomain(binding))
         // 覆盖写 card_group_behavior：先清该 Binding 全部旧行为行，再按当前行为列表重填
         repository.deleteBehaviorsByBinding(binding.id)
         binding.behaviors.forEach { b ->
@@ -211,6 +206,9 @@ class CardGroupService(private val repository: CardGroupRepository) {
             cardGroupManagerId = id,
             name = name,
             bindings = bindings,
-            enabled = enabled
+            enabled = enabled,
+            // P0-2 修复（2026-08-31 审查）：此前漏传 → 写入端能存、读出恒 null，
+            // 两级覆盖链（组级 > 卡组级 > false）中间层在读路径断裂。
+            defaultIncludeDerived = defaultIncludeDerived
         )
 }

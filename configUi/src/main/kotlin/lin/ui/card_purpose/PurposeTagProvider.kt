@@ -31,6 +31,8 @@ class DefaultPurposeTagProvider : PurposeTagProvider {
         // 「收尾」暗示时序会误导。现仅作查询标签：「这张牌能用于斩杀」，何时斩杀由评估树判定。
         PurposeTagDef(PurposeTagId.FINISH, "斩杀"),
         PurposeTagDef(PurposeTagId.VALUE, "普通价值"),
+        // T-003/T-004：特殊查询标签——持有者由引擎 ExtCostStrategy 接管（额外费用双世界比较，出牌先于组合），
+        // 不参与常规排序（stage 不被消费）。硬币等机制牌由引擎启动期硬编码注入，无需用户配置。
         PurposeTagDef(PurposeTagId.EXTRA_COST, "额外费用"),
         PurposeTagDef(PurposeTagId.DRAW_CARD, "过牌")
     )

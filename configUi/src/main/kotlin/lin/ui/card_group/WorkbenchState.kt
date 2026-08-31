@@ -227,7 +227,14 @@ object WorkbenchActions {
         val idx = state.selectedBindingIndex
         val newBindings = if (idx != null && idx in state.currentBindings.indices) {
             val oldBinding = state.currentBindings[idx]
-            val newBinding = oldBinding.copy(cardIds = newCards.toList())
+            // 谓词组（条件定义成员）没有可手动勾选的成员清单，勾选对之不生效，保持原条件。
+            // 谓词组的 UI 编辑面见 T-007。
+            val newBinding = when (oldBinding.membership) {
+                is GroupMembership.Static ->
+                    oldBinding.copy(membership = GroupMembership.Static(newCards.toList()))
+
+                is GroupMembership.Predicate -> oldBinding
+            }
             val list = state.currentBindings.toMutableList()
             list[idx] = newBinding
             list
