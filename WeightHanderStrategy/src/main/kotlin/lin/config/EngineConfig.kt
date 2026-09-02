@@ -17,7 +17,12 @@ object EngineConfig {
     val costWeight get() = store.double("scoring.cost.weight", 0.5)
     val maxCostWeight get() = store.double("scoring.max.cost.weight", 1.0)
     val notWeight get() = store.double("scoring.not.weight", 0.0)
-    val baseWeight get() = store.double("scoring.base.weight", 1.0)
+
+    // T-041：ExtPowerWeight 初始值（默认 0.0，即无初始常数补贴）。
+    // 历史值为 +1.0/张，会进主搜索 currentWeight → 构成「多打牌」的线性补贴，
+    // 与 comboPenalty（防堆砌）正面冲突且量级压倒它，违反 D-013「堆砌惩罚统一由 comboPenalty 承担」。
+    // 配置项保留仅为 A/B 回退（改回 1.0 即恢复旧行为），长期应随本项稳定而删除。
+    val baseWeight get() = store.double("scoring.base.weight", 0.0)
     val orderWeight get() = store.double("scoring.order.weight", 1.0)
     val unUseWeight get() = store.double("scoring.unuse.weight", -100.0)
     val penaltyRatioExponent get() = store.double("scoring.penalty.ratio.exponent", 0.5)

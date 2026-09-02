@@ -13,7 +13,6 @@ import org.koin.core.component.get
 
 const val DefUseGroupOrder = 10.0
 
-const val COINGroupId = 1
 const val ChangeGroupId = 10
 const val CleanWarId = 15
 
@@ -104,21 +103,12 @@ data class CardWeightInfo(
 
     /**
      *  T-002：旧排序通道弃用（已全切 UseStage/UsePlanOrderer）。
-     *  T-004 后运行时零读者（硬币识别已迁 EXTRA_COST 标签通道）；保留仅因旧 DB 数据写入兼容，
-     *  待 Q-003 收口删除（含 COINProvide 的写入与 COINGroupId 常量）。
+     *  运行时零读者（硬币识别已迁 EXTRA_COST 标签通道，T-004）；Q-003 收口（2026-09-02）：
+     *  COINProvide 写入与 COINGroupId 常量已删，字段仅为旧 DB 数据反序列化兼容保留。
      *  combo相关
      */
     var useGroupId = DefUseGroupId
     var useGroupOrder = DefUseGroupOrder
-
-    private var _combos: MutableList<Combo>? = null
-
-    val combos: List<Combo>?
-        get() = _combos
-
-    fun addCombo(combo: Combo) {
-        _combos = _combos.addSafe(combo)
-    }
 
     var cardContext: CardContext? = null
 

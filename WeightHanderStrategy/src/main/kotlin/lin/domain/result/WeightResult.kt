@@ -144,6 +144,13 @@ class EndWeightResult(
         this.fillCombination = SurplusFillCombination.findBestCombination(candidates, remainingCost)
     }
 
+    /**
+     * ⚠️ T-041：当前**无调用方**（死代码）。
+     *
+     * 它是 [ComboCard.canUse] 的唯一生产消费方，因此「BaseWeight 归零会让低分牌跌破
+     * `powerWeight >= NotWeight` 门槛」这一担忧在生产路径上不成立——本方法没人调用。
+     * 保留仅为未来「中途插牌」场景；启用前需重新评估 canUse 的门槛语义。
+     */
     fun addUseCard(comboCard: ComboCard) {
         //myLog.info { "中途添加卡牌,卡牌为:${comboCard}" }
         if (comboCard.canUse()) fillCombination += comboCard

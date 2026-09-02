@@ -27,8 +27,8 @@
 权重按照评分树,再通过评分选出最优组合
 2.大概计算规则  
 组权重由weightHandlerStrategy.db配置  
-总权重由combo权重 (表combo_info)+组权重 (表weight_group)+单卡权重决定（条件规则经 condition_tree_config / tree_config
-评估树配置驱动）
+总权重由combo编排权重 (表combo_plan_definition)+单卡权重决定（条件规则经 condition_tree_config，评估树配置经 tree_config
+驱动）
 
 ## 问题
 
@@ -42,12 +42,19 @@
 6.程序主体没有扩展接口(没有想情况需要什么扩展接口)
 7.不支持热加载,改配置需要重启软件
 
-### combo_info特别说明
+### combo 编排说明
 
-comboWeight多种语义(对扩展和维护有麻烦,暂时没空整理)  
-1.当换牌只用到正负,负数互斥  
-2.最后打出作为打出顺序使用  
-3.作为一起打出的组,组加权
+combo 编排由 `combo_plan_definition` 表承载，语义拆成正交字段（不再挤在一个字段里）：
+
+- `coreGroupIds` / `depGroupIds`：核心组与依赖组，引用分组 binding id
+- `score`：同组加权
+- `coreMutex`：硬互斥，同一 combo 下多个核心候选不能同时进入本轮组合（该字段同时被起手换牌消费）
+- `relation`：组级顺序，`SCORE_ONLY` / `CORE_BEFORE_DEP` / `DEP_BEFORE_CORE`
+
+历史（已于 2026-09-02 拆除）：早期用 `combo_info` 一张表承载全部 combo 语义，并把 「换牌互斥 / 出牌顺序 / 同组加权」三种语义塞进同一个
+`combo_weight` 字段，
+`combo_type` 也是字符串、运行期按名字派发解析实现——扩展和维护都很麻烦。 该旧体系（`ComboParse` 一族 / `ParseCombo` /
+`ComboInfoDao` 及 `combo_info` 表）已随新体系落地整体删除。
 
 
 

@@ -1,8 +1,6 @@
 package lin.di
 
-import lin.bean.CardCombinedConfig
 import lin.domain.use.plan.UsePlanBuilder
-import lin.rule.RuleInfoRegister
 import lin.rule.handler.*
 import lin.serviceLoader.provider.AuraBoostConfigProvider
 import lin.serviceLoader.provider.ConditionTreeConfigProvider
@@ -12,11 +10,6 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val ruleModule = module {
-    single<RuleInfoRegister> {
-        val infos = get<Map<String, CardCombinedConfig>>(named("weightInfo")).values.map { it.weightInfo }
-        RuleInfoRegister(infos, get())
-    }
-
     single<UsePlanBuilder> { UsePlanBuilder(get()) }
 
     // 🌟 先注册配置组装，后注册规则树绑定，保证 StartupTask 执行顺序

@@ -2,7 +2,6 @@ package lin.serviceLoader.cardInfoProvide
 
 
 import club.xiaojiawei.hsscriptcardsdk.data.COIN_CARD_ID
-import lin.bean.COINGroupId
 import lin.bean.CardWeightInfo
 import lin.bean.MetadataKey
 import lin.bean.addSafe
@@ -34,8 +33,6 @@ class COINProvide : CardWeightInfoProvide {
         // 硬币基础价值=0（不占配置费用分）；额外费用数值由 cardContext[coinKey] 承载（识别已迁 EXTRA_COST 标签，T-004），
         // 不再用 -20.0 负权重污染 powerWeight 字段。
         val coin = CardWeightInfo(COIN_CARD_ID, 0.0)
-        //旧通道残留：仅旧 DB 数据兼容用途，运行时读者已迁标签通道（Q-003 收口时删除）
-        coin.useGroupId = COINGroupId
         coin.cardContext = coin.cardContext.addSafe(coinKey, 1)
         return mapOf(coin.cardId to coin )
     }

@@ -126,7 +126,6 @@ class ComboCard(
     /** T-012：同 [comboEntries]，详见 [runtimeComboUseBindings]。 */
     fun comboUseBindings() = runtimeComboUseBindings
 
-    val combo = cardWeightInfo?.combos
     //指定目标
     var pointCard: Card? = null
 
@@ -186,6 +185,10 @@ class ComboCard(
     // 出牌权重（最终决策依据）：powerWeight = baseValue（基础价值） + extPowerWeight（战术溢价）。
     val powerWeight: Double
         get() = baseValue + extPowerWeight
+
+    // 运行时加分累加器，初值 = BaseWeight（T-041 归零为 0.0，即无初始常数补贴）。
+    // 注意它会进主搜索的 currentWeight，所以初值每 +1 就等于给「每张入选的牌」发 1 分线性补贴
+    // ——与 comboPenalty（防堆砌）冲突，详见 EngineConfig.baseWeight 注释。
     var extPowerWeight: Double = BaseWeight
 
     // 评估树战术信号（D-007 回归「树分皆战术信号」：全树分 general+tactical，由 weightEvaluator 写入）。
@@ -202,6 +205,12 @@ class ComboCard(
         // 与运行时权重（extPowerWeight）正交；运行时分数变化不再隐式改写排序。
     }
 
+    /**
+     * 重置为初始值。
+     *
+     * ⚠️ T-041：当前**无生产调用方**——reLoad 会重建 ComboCard，重置由重建天然完成。
+     * 保留仅为未来「原地复用实例」场景；删除前请先确认无扩展方依赖。
+     */
     fun cleanWeight() {
         extPowerWeight = BaseWeight
     }
@@ -209,7 +218,11 @@ class ComboCard(
     /**
      * 判断当前是否处于"基础分"状态：extPowerWeight 尚未被任何规则 addWeight 加分。
      * baseValue（基础价值）是构造时注入的基础分，不属于"规则加分"，故只看 extPowerWeight。
-     * （注：基础价值基于 D-013 统一叠加模型无条件生效，不再依赖此方法判断）。
+     *
+     * ⚠️ T-041 语义变化：BaseWeight 归零后本方法退化为 `extPowerWeight == 0.0`——
+     * 若某组规则的加减分恰好抵消回 0，会**误判为「未被加分」**（旧值 1.0 时该误判概率低得多）。
+     * 当前**无生产调用方**（HaloRule 仅在 KDoc 引用本符号，代码未调用），故无实际影响；
+     * 若未来要启用，应改为显式标记（Boolean 脏位）而非数值判等。
      */
     fun isBaseWeight(): Boolean {
         return extPowerWeight == BaseWeight
@@ -219,16 +232,6 @@ class ComboCard(
      * 战场相关
      */
     fun toDie() = cardWeightInfo?.toDie ?: false
-
-
-    //todo 同组加权现在怎么处理 在同一组会增加权重
-    fun comboAddWeight(comboCard: ComboCard): Double {
-        var weight = NotWeight
-        combo?.forEach {
-            weight += it.comboProcess(this, comboCard)
-        }
-        return weight
-    }
 
 
     /**
