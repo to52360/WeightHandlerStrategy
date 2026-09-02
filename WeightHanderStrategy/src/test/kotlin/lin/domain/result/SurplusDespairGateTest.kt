@@ -99,9 +99,10 @@ class SurplusDespairGateTest {
         val card = buildCard("D3", cost = 2, powerWeight = 5.0, idleThreshold = 4)
         card.extPowerWeight = -1.0 // 树/规则负分：powerWeight = -1（非硬禁，未 unUse）
         assertFalse(card.passesSurplusCandidate(remainingCost = 3, isFull = false)) // 常态 N=4：需空闲 6
+        // JUnit 4 的 assertTrue 是 (message, condition) 顺序，与 JUnit 5 相反
         assertTrue(
-            card.passesSurplusCandidate(remainingCost = 3, isFull = false, nDelta = 9),
-            "非硬禁负分不再被第二轮门挡：nDelta=9 → N=0 → 空闲 3 ≥ 2 放行进候选池"
+            "非硬禁负分不再被第二轮门挡：nDelta=9 → N=0 → 空闲 3 ≥ 2 放行进候选池",
+            card.passesSurplusCandidate(remainingCost = 3, isFull = false, nDelta = 9)
         )
     }
 

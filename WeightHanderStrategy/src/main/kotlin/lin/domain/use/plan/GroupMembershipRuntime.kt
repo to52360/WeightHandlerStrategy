@@ -69,6 +69,9 @@ object GroupMembershipRuntime {
      * 装配期调用：注入谓词组定义与条件逻辑解析器。
      * 重复调用会重置（重新装载配置时）。
      *
+     * 同时按 defs 是否为空翻转全局运行模式（T-014 构造期分发）：空 → [StaticGroupRuntimeMode]
+     * （查询期零谓词分支），非空 → [PredicateGroupRuntimeMode]。**删光谓词组重新装载即自动切回最初模式。**
+     *
      * @param resolveLogic 条件树 id → 判定逻辑；返回 null 表示找不到/编译失败。
      *   生产侧传 `{ id -> guardCompiler.compileTree(id) }`。
      */
@@ -79,6 +82,8 @@ object GroupMembershipRuntime {
         state = RuntimeState(defs, resolveLogic)
         logicCache.clear()
         warned.clear()
+        GroupRuntimeModes.current =
+            if (defs.isEmpty()) StaticGroupRuntimeMode else PredicateGroupRuntimeMode
     }
 
     /** 由 [GuardCompiler] 装配（生产路径，PredicateGroupStep 调用）。 */

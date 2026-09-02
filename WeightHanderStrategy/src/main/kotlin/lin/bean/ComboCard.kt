@@ -12,9 +12,7 @@ import lin.domain.context.UnUseWeight
 import lin.domain.use.UseAfterStrategy
 import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
-import lin.domain.use.plan.ComboRuntime
-import lin.domain.use.plan.GroupBehaviorRuntime
-import lin.domain.use.plan.GroupMembershipRuntime
+import lin.domain.use.plan.GroupRuntimeModes
 
 
 typealias ComboRule = (ComboCard) -> Double
@@ -48,16 +46,11 @@ class ComboCard(
      * 既保证「被减费的卡」拿到当前费用下的判定结果（按 cardId 缓存会拿到减费前的旧结果，
      * 条件涉及费用时静默错判），又做到每轮每卡只求值一次。
      *
+     * 静态模式下（卡组无谓词组，T-014 构造期分发）恒空集，根本不进求值器；
      * 静态组成员在 [CardCombinedConfig.groupIds]（启动期预算），两者由 `groupIds()` 合并。
      */
     val predicateGroupIds: Set<String> by lazy {
-        if (GroupMembershipRuntime.isEmpty()) {
-            emptySet()
-        } else {
-            // 卡池外的卡（衍生/发现/随机生成）：combinedConfig 为 null，
-            // infoMap 按卡池构建，查不到即卡池外——这是 includeDerived 判定的依据。
-            GroupMembershipRuntime.resolve(this, isDerived = combinedConfig == null)
-        }
+        GroupRuntimeModes.current.predicateGroupIds(this)
     }
 
     /**
@@ -65,12 +58,10 @@ class ComboCard(
      *
      * [lin.bean.groupIds] 等读取入口的统一底座（缓存需要字段承载，故放本体）。
      * `UsePlanOrderer` 约束比较、`group_filter` 算子等高频读取不再重复分配合并 Set。
+     * 静态模式下直读静态组，零合并分支。
      */
     val allGroupIds: Set<String> by lazy {
-        val static = combinedConfig?.groupIds.orEmpty()
-        val dynamic = predicateGroupIds
-        // 绝大多数卡不在任何谓词组里，短路掉 Set 合并的分配开销
-        if (dynamic.isEmpty()) static else static + dynamic
+        GroupRuntimeModes.current.allGroupIds(this)
     }
 
     /**
@@ -79,47 +70,34 @@ class ComboCard(
      * **谓词判定只在 [predicateGroupIds] 发生一次**，本字段与 [runtimeComboUseBindings] 共享
      * 该结果派生——不重复求值（防性能退化），也不建聚合 Context（防伪包装）。
      *
-     * 命中谓词组时用 [ComboRuntime] 对 [allGroupIds] **全量重算**：因其与静态预算同源
+     * 模式分发见 [GroupRuntimeModes]（T-014）：静态模式直读静态预算引用（零额外计算）；
+     * 谓词模式下命中时对 [allGroupIds] **全量重算**——因与静态预算同源
      * （见 [lin.utils.startup.ComboStep]），结果是静态预算的超集，故不需要第三份合并逻辑；
      * coreMutex 的「本组过滤」随之覆盖谓词组，互斥判定自动生效。
-     *
-     * 未命中谓词组（含全部存量配置）→ 直接返回静态预算引用，**零额外计算**。
      */
     val runtimeComboEntries: List<CardComboEntry> by lazy {
-        if (predicateGroupIds.isEmpty()) {
-            combinedConfig?.comboEntries.orEmpty()
-        } else {
-            ComboRuntime.entries(allGroupIds)
-        }
+        GroupRuntimeModes.current.comboEntries(this)
     }
 
-    /** 出牌顺序绑定，同 [runtimeComboEntries] 的合并与短路语义（T-012）。 */
+    /** 出牌顺序绑定，同 [runtimeComboEntries] 的模式分发与短路语义（T-012）。 */
     val runtimeComboUseBindings: List<CardComboUseBinding> by lazy {
-        if (predicateGroupIds.isEmpty()) {
-            combinedConfig?.comboUseBindings.orEmpty()
-        } else {
-            ComboRuntime.bindings(allGroupIds)
-        }
+        GroupRuntimeModes.current.comboUseBindings(this)
     }
 
     /**
      * 运行时条件化阶段覆盖（T-013）：谓词组挂的 conditionalStage 对成员生效。
      *
-     * 与 [runtimeComboEntries] 同为「未命中 → 静态预算 / 命中 → 全量重算」的短路模式。
-     * 全量重算基于 [allGroupIds]（静态在前、谓词在后），故**静态组声明优先于谓词组**。
-     *
+     * 谓词模式下全量重算基于 [allGroupIds]（静态在前、谓词在后），故**静态组声明优先于谓词组**。
      * 口径与启动期**逐字一致**（取第一个 conditionalStage 非空的 override，而非先取 override
      * 再读字段）——否则「有 override 但 conditionalStage 为空」的组会挡掉后面组的条件覆盖。
      */
     val runtimeConditionalStage: ConditionalStageOverride? by lazy {
-        if (predicateGroupIds.isEmpty()) combinedConfig?.conditionalStage
-        else GroupBehaviorRuntime.resolveConditionalStage(allGroupIds)
+        GroupRuntimeModes.current.conditionalStage(this)
     }
 
     /** 运行时组级余费门槛 N（T-013）：谓词组挂的 SURPLUS_GATE 对成员生效。 */
     val runtimeGroupSurplusIdleThreshold: Int? by lazy {
-        if (predicateGroupIds.isEmpty()) combinedConfig?.groupSurplusIdleThreshold
-        else GroupBehaviorRuntime.resolveSurplusGate(allGroupIds)
+        GroupRuntimeModes.current.groupSurplusIdleThreshold(this)
     }
 
     /**
@@ -130,18 +108,7 @@ class ComboCard(
      * + 完整组集合下的组级 override，配方与启动期 [lin.domain.use.plan.UseIntentAssembler] 一致。
      */
     val runtimeUseIntent: UseIntent? by lazy {
-        val config = combinedConfig
-        if (predicateGroupIds.isEmpty()) {
-            config?.useIntent
-        } else {
-            // 命中谓词组即全量重算。config 可为 null（衍生卡 / 卡池外）——此时用空卡级输入，
-            // 组级 override 仍应生效（与 T-012 衍生卡经谓词组参与 combo 的处理一致）。
-            GroupBehaviorRuntime.resolveUseIntent(
-                allGroupIds,
-                config?.purposeTags ?: emptySet(),
-                config?.purposeReplanAfterUse ?: false
-            ) ?: config?.useIntent
-        }
+        GroupRuntimeModes.current.useIntent(this)
     }
 
     /** T-013：改读运行时结果（静态预算 ∪ 谓词组行为），详见 [runtimeUseIntent]。 */
