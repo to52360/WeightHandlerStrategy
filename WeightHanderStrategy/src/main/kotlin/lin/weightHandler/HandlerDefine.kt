@@ -22,7 +22,6 @@ interface Priority {
 
 /**
  * todo-future 看有没有必要,还没有考虑实现方案 之后权重处理器
- * 1.融合在ConditionWeightHandler能快速发现,语义和扩展会有问题
  */
 interface WeightHandlerAfter : Priority {
     fun afterCardWeightCompute(callCard: ComboCard, warManage: MyWarManage)

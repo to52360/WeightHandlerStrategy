@@ -7,10 +7,6 @@ import lin.domain.context.CostWeight
  * [club.xiaojiawei.hsscriptcardsdk.bean.CardWeight.weight]整数部分条件组
  * 配置组权重信息位置
  * [lin.serviceLoader.weightRule.WeightCondition]
- * 生成位置
- * [lin.weightHandler.condition.config.GroupStrategyDao.getAll]
- * 设置位置
- * [lin.rule.RuleInfoRegister.processDep]
  *
  * 存储位置
  * [lin.serviceLoader.weightRule.utils.abs.AbsWeightCondition]
