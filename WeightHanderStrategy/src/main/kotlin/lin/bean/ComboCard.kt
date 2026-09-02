@@ -4,6 +4,8 @@ package lin.bean
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.usePlan.CardComboEntry
 import lin.bean.usePlan.CardComboUseBinding
+import lin.bean.usePlan.ConditionalStageOverride
+import lin.bean.usePlan.UseIntent
 import lin.domain.context.BaseWeight
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
@@ -11,6 +13,7 @@ import lin.domain.use.UseAfterStrategy
 import lin.domain.use.UseBeforeStrategy
 import lin.domain.use.UseStrategy
 import lin.domain.use.plan.ComboRuntime
+import lin.domain.use.plan.GroupBehaviorRuntime
 import lin.domain.use.plan.GroupMembershipRuntime
 
 
@@ -99,7 +102,56 @@ class ComboCard(
         }
     }
 
-    fun useIntent() = combinedConfig?.useIntent
+    /**
+     * 运行时条件化阶段覆盖（T-013）：谓词组挂的 conditionalStage 对成员生效。
+     *
+     * 与 [runtimeComboEntries] 同为「未命中 → 静态预算 / 命中 → 全量重算」的短路模式。
+     * 全量重算基于 [allGroupIds]（静态在前、谓词在后），故**静态组声明优先于谓词组**。
+     *
+     * 口径与启动期**逐字一致**（取第一个 conditionalStage 非空的 override，而非先取 override
+     * 再读字段）——否则「有 override 但 conditionalStage 为空」的组会挡掉后面组的条件覆盖。
+     */
+    val runtimeConditionalStage: ConditionalStageOverride? by lazy {
+        if (predicateGroupIds.isEmpty()) combinedConfig?.conditionalStage
+        else GroupBehaviorRuntime.resolveConditionalStage(allGroupIds)
+    }
+
+    /** 运行时组级余费门槛 N（T-013）：谓词组挂的 SURPLUS_GATE 对成员生效。 */
+    val runtimeGroupSurplusIdleThreshold: Int? by lazy {
+        if (predicateGroupIds.isEmpty()) combinedConfig?.groupSurplusIdleThreshold
+        else GroupBehaviorRuntime.resolveSurplusGate(allGroupIds)
+    }
+
+    /**
+     * 运行时出牌意图（T-013）：谓词组挂的 OVERRIDE（stageOverride / replanAfterUse /
+     * orderWeight）对成员生效。
+     *
+     * 重算输入 = 静态快照（[CardCombinedConfig.purposeTags] / `purposeReplanAfterUse`）
+     * + 完整组集合下的组级 override，配方与启动期 [lin.domain.use.plan.UseIntentAssembler] 一致。
+     */
+    val runtimeUseIntent: UseIntent? by lazy {
+        val config = combinedConfig
+        if (predicateGroupIds.isEmpty()) {
+            config?.useIntent
+        } else {
+            // 命中谓词组即全量重算。config 可为 null（衍生卡 / 卡池外）——此时用空卡级输入，
+            // 组级 override 仍应生效（与 T-012 衍生卡经谓词组参与 combo 的处理一致）。
+            GroupBehaviorRuntime.resolveUseIntent(
+                allGroupIds,
+                config?.purposeTags ?: emptySet(),
+                config?.purposeReplanAfterUse ?: false
+            ) ?: config?.useIntent
+        }
+    }
+
+    /** T-013：改读运行时结果（静态预算 ∪ 谓词组行为），详见 [runtimeUseIntent]。 */
+    fun useIntent() = runtimeUseIntent
+
+    /** T-013：条件化阶段覆盖，详见 [runtimeConditionalStage]。 */
+    fun conditionalStage() = runtimeConditionalStage
+
+    /** T-013：组级余费门槛 N，详见 [runtimeGroupSurplusIdleThreshold]。 */
+    fun groupSurplusIdleThreshold() = runtimeGroupSurplusIdleThreshold
 
     /** T-012：改读运行时合并结果（静态预算 ∪ 谓词组命中），详见 [runtimeComboEntries]。 */
     fun comboEntries() = runtimeComboEntries

@@ -9,6 +9,10 @@ object EngineConfig {
     /** Q-032：出牌阶段排序值配置键，供外部 properties / `-D` 覆盖。 */
     private const val STAGE_ORDER_KEY = "stage.order"
 
+    /** T-037：兜底排序键（stage 与 orderWeight 都相同时的最后 tie-break）的载体与方向配置键。 */
+    private const val ORDER_FALLBACK_KEY = "order.fallback.key"
+    private const val ORDER_FALLBACK_DIRECTION = "order.fallback.direction"
+
     // scoring (双轨制轻量微调基准与安全惩罚)
     val costWeight get() = store.double("scoring.cost.weight", 0.5)
     val maxCostWeight get() = store.double("scoring.max.cost.weight", 1.0)
@@ -55,6 +59,17 @@ object EngineConfig {
         get() = store.raw(STAGE_ORDER_KEY)
             ?.takeIf { it.isNotBlank() }
             ?: UseStage.entries.joinToString(",") { "${it.name}:${it.ordinal}" }
+
+    // T-037 兜底排序键：stage 与 orderWeight 都分不出先后时的最后 tie-break，是同段内顺序的实际主导键。
+    // 旧行为硬编码 powerWeight 降序——powerWeight 是选牌层混合评分（baseValue + 树分 + 光环 + legacy + BaseWeight），
+    // 其中只有树分对「谁先出」有实质贡献，光环/legacy/常数是噪声（legacy 量级可能压倒一切）。
+    // 载体（有序链，direction 作用于整条链）：
+    //   tactical（默认）= tacticalScore → baseValue：战术层自动涌现，降低逐卡编排要求；ts 并列/为 0 退回价值锚。
+    //   base = 只看 baseValue，最可复现。weight = powerWeight，旧行为，仅 A/B 回退通道。
+    // 方向：desc（默认，价值高者先出，旧行为）/ asc（价值低者先出，保留剩余费用弹性）。
+    // 两个旋钮即是校准手段——方向与战术层均未实战校准（@verify use-intent-model/K-001、K-002）。
+    val orderFallbackKey get() = store.raw(ORDER_FALLBACK_KEY)?.takeIf { it.isNotBlank() }
+    val orderFallbackDirection get() = store.raw(ORDER_FALLBACK_DIRECTION)?.takeIf { it.isNotBlank() }
 
     // timing
     val awaitAnimationTime get() = store.long("timing.await.animation", 1000)

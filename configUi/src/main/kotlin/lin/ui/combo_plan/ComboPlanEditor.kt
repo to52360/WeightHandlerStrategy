@@ -12,6 +12,7 @@ import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.ComboRelation
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
+import lin.ui.GroupDisplay
 
 class ComboPlanEditor : VBox(12.0) {
 
@@ -154,6 +155,15 @@ class ComboPlanEditor : VBox(12.0) {
                 mustAdjacentCheck
             )
         }
+
+        // 核心组互斥为出牌/起手双消费字段：取消勾选会连带取消起手换牌的保留互斥，
+        // 纯排序配方须显式取消。tooltip 写明连带影响，防配置踩坑。
+        coreMutexCheck.tooltip =
+            Tooltip(
+                "出牌侧：同 Combo 下多个核心组的牌不能同时打出一组。\n" +
+                        "纯排序配方（score=0 + 顺序关系）必须取消勾选，否则多核心组被剪枝只剩一组。\n" +
+                        "⚠️ 该开关同时作用于起手换牌：取消后起手阶段也不会再阻止这些核心牌同时保留在手中。"
+            )
 
         // T-035：引擎侧 UsePlanOrderer 尚未消费强相邻语义（ComboPlanDefinition.mustAdjacent 仅落库），
         // 勾选不产生任何效果。禁用并说明，避免「配了没反应」被误判为模型失效。
@@ -312,7 +322,8 @@ class ComboPlanEditor : VBox(12.0) {
             val isDep = selectedPlan?.depGroupIds?.contains(binding.id) == true
             BindingUiRow(
                 binding = binding,
-                name = binding.name,
+                // T-007：展示层显式区分成员类型——谓词组加「[谓词组]」标记
+                name = GroupDisplay.displayNameWithType(binding),
                 coreProperty = SimpleBooleanProperty(isCore),
                 depProperty = SimpleBooleanProperty(isDep)
             )

@@ -6,6 +6,7 @@ import lin.mcp.action.GetAction
 import lin.mcp.action.ResourceAction
 import lin.repository.card_group.CardGroupService
 import lin.rule.tree.EvaluatorTreeBindingType
+import lin.rule.tree.GroupMembership
 
 /**
  * 负责评估树生成的渐进式/草稿池 MCP 工具暴露。
@@ -52,6 +53,18 @@ class AiDraftTreeToolProvider(
                     return@typedTool mcpError(
                         "以下 bindingIds 不属于卡组方案 \"${manager.name}\": $invalidIds。" +
                                 "该方案的有效绑定条目为: ${manager.bindings.map { "${it.name}(${it.id})" }}"
+                    )
+                }
+                // Q-003：谓词组（条件定义成员）暂不支持绑定评估树——GROUP 绑定按静态成员解析，
+                // 谓词组解析到空成员会静默不生效，故保存侧直接拦截（改绑静态组或换绑定类型）。
+                val predicateIds = manager.bindings
+                    .filter { it.membership is GroupMembership.Predicate }
+                    .map { it.id }
+                    .toSet().intersect(request.bindingIds)
+                if (predicateIds.isNotEmpty()) {
+                    return@typedTool mcpError(
+                        "以下分组是谓词组（由条件树定义成员），暂不支持绑定评估树，绑定后不会对任何卡生效: " +
+                                predicateIds.joinToString() + "。请改绑静态组（成员为显式卡列表的分组）。"
                     )
                 }
             }

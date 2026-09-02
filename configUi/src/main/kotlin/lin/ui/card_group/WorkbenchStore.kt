@@ -113,6 +113,22 @@ class WorkbenchStore(private val service: CardGroupService) {
         dispatch(WorkbenchActions.addBinding(binding))
     }
 
+    /**
+     * T-007：快速建组入口——新建一个谓词组（成员由条件树运行时判定，无显式卡列表）。
+     * [includeDerived] null = 未声明，回落卡组级 defaultIncludeDerived（再回落 false）。
+     */
+    fun addPredicateBinding(name: String, conditionId: String, includeDerived: Boolean?) {
+        val binding = CardGroupBinding(
+            id = UUID.randomUUID().toString().substring(0, 8),
+            managerId = state.selectedManagerItem?.entity?.id ?: "",
+            name = name,
+            membership = GroupMembership.Predicate(conditionId = conditionId, includeDerived = includeDerived)
+        )
+        dispatch(WorkbenchActions.addBinding(binding))
+        // 建组后自动选中新组（谓词组选中态会禁用选卡区并提示条件来源）
+        selectBinding(state.currentBindings.lastIndex)
+    }
+
     fun updateBindingName(newName: String) {
         val idx = state.selectedBindingIndex ?: return
         dispatch(WorkbenchActions.updateBindingName(idx, newName))

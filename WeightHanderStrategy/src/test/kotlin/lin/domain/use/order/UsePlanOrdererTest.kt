@@ -111,19 +111,48 @@ class UsePlanOrdererTest {
     }
 
     /**
-     * 锁定兜底键现状：orderWeight 相同时按 powerWeight **降序**，即高价值（贵）的牌先出。
+     * 锁定兜底键（T-037）：默认档 `tactical`，链为 `tacticalScore 降序 → baseValue 降序`。
+     * 本用例两张牌 treeScore 都为 0（未配评估树）→ 退到第二档 baseValue，即价值（贵）的牌先出。
      *
-     * 这是同段内顺序的**实际主导键**——现有 7 条标签规则的 defaultOrderWeight 全为 0.0，
-     * 分组 override 大多也不配，因此落到第三键。方向目前未经论证（直觉上「先小牌试探」常更优）。
-     * 若后续调整兜底键方向，本用例即必须同步更新的回归网。
+     * 这是同段内顺序的**实际主导键**——现有 7 条标签规则里 6 条 defaultOrderWeight 为 0.0，
+     * 分组 override 大多也不配，因此落到第三键。载体与方向已配置化（`order.fallback.key` /
+     * `order.fallback.direction`，默认 `tactical`/`desc`），本用例锁定默认组合。
      */
     @Test
-    fun `order orderWeight 相同时按 powerWeight 降序`() {
+    fun `order orderWeight 相同时无树分则按 baseValue 降序`() {
         val cards = listOf(
             card("cheap", stage = UseStage.GENERAL, baseValue = 2.0),
             card("pricey", stage = UseStage.GENERAL, baseValue = 8.0)
         )
         assertEquals(listOf("pricey", "cheap"), ids(UsePlanOrderer.order(plan(cards))))
+    }
+
+    /**
+     * 战术层（T-037 核心收益）：评估树分高的牌先出，**压过**物理价值。
+     * 这是「降低逐卡编排要求」的兑现——不用给每张牌配 stage/orderWeight，
+     * 评估树判定「此刻这张牌有用」即可自动排到同段前面。
+     */
+    @Test
+    fun `order 树分高的牌先出，压过物理价值`() {
+        val cards = listOf(
+            card("priceyNoTactic", stage = UseStage.GENERAL, baseValue = 9.0),
+            card("cheapTacticHit", stage = UseStage.GENERAL, baseValue = 2.0, treeScore = 5.0)
+        )
+        assertEquals(listOf("cheapTacticHit", "priceyNoTactic"), ids(UsePlanOrderer.order(plan(cards))))
+    }
+
+    /**
+     * 去污染（T-037 / D-002 两阶段分离）：**非树分**的运行时加分（光环 / legacy handler）不参与排序。
+     * `tacticalBonus` 走 `addWeight` → 只进 `extPowerWeight`，不进 `tacticalScore`；
+     * 旧行为读 `powerWeight` 时下面这张低价值高加分的牌会反超，现在它必须按 baseValue 排在后面。
+     */
+    @Test
+    fun `order 光环与legacy加分不参与排序`() {
+        val cards = listOf(
+            card("buffed", stage = UseStage.GENERAL, baseValue = 2.0, tacticalBonus = 10.0),
+            card("pricey", stage = UseStage.GENERAL, baseValue = 8.0)
+        )
+        assertEquals(listOf("pricey", "buffed"), ids(UsePlanOrderer.order(plan(cards))))
     }
 
     @Test
@@ -214,12 +243,91 @@ class UsePlanOrdererTest {
         assertEquals(parsed[UseStage.MID], parsed[UseStage.LATE])
     }
 
+    // ==================== T-037：兜底键（载体 + 方向）配置化 ====================
+    // 与 stage.order 同构：解析是纯函数可测多组配置；实际生效值有 lazy 缓存，不适合在单测内切换。
+
+    @Test
+    fun `兜底键载体解析与非法回落`() {
+        // 未配置 → tactical（含战术层）
+        assertEquals(UsePlanOrderer.FallbackKey.TACTICAL, UsePlanOrderer.parseFallbackKey(null))
+        assertEquals(UsePlanOrderer.FallbackKey.TACTICAL, UsePlanOrderer.parseFallbackKey(" TACTICAL "))
+        assertEquals(UsePlanOrderer.FallbackKey.BASE, UsePlanOrderer.parseFallbackKey("base"))
+        assertEquals(UsePlanOrderer.FallbackKey.WEIGHT, UsePlanOrderer.parseFallbackKey("weight"))
+        // 非法值回落 tactical 而非抛错——与 stage.order 的宽松风格一致，配置写错不阻断对局
+        assertEquals(UsePlanOrderer.FallbackKey.TACTICAL, UsePlanOrderer.parseFallbackKey("power"))
+    }
+
+    @Test
+    fun `兜底键方向解析与非法回落`() {
+        assertEquals(UsePlanOrderer.FallbackDirection.DESC, UsePlanOrderer.parseFallbackDirection(null))
+        assertEquals(UsePlanOrderer.FallbackDirection.DESC, UsePlanOrderer.parseFallbackDirection("descending"))
+        assertEquals(UsePlanOrderer.FallbackDirection.ASC, UsePlanOrderer.parseFallbackDirection("ASC"))
+        assertEquals(UsePlanOrderer.FallbackDirection.DESC, UsePlanOrderer.parseFallbackDirection("sideways"))
+    }
+
+    @Test
+    fun `兜底比较器方向可翻转且载体可切换`() {
+        val cheap = card("cheap", baseValue = 2.0)
+        val pricey = card("pricey", baseValue = 8.0)
+        val buffed = card("buffed", baseValue = 2.0, tacticalBonus = 10.0)
+        val hit = card("hit", baseValue = 2.0, treeScore = 5.0)
+
+        // base 载体：desc 价值高者先出，asc 反之
+        assert(
+            UsePlanOrderer.fallbackComparator(UsePlanOrderer.FallbackKey.BASE, UsePlanOrderer.FallbackDirection.DESC)
+                .compare(pricey, cheap) < 0
+        )
+        assert(
+            UsePlanOrderer.fallbackComparator(UsePlanOrderer.FallbackKey.BASE, UsePlanOrderer.FallbackDirection.ASC)
+                .compare(pricey, cheap) > 0
+        )
+
+        // weight 载体：读 powerWeight，非树分加分重新参与排序（旧行为，仅作 A/B 对比通道）
+        assert(
+            UsePlanOrderer.fallbackComparator(UsePlanOrderer.FallbackKey.WEIGHT, UsePlanOrderer.FallbackDirection.DESC)
+                .compare(buffed, pricey) < 0
+        )
+
+        // tactical 载体：树分优先，方向翻转后树分低的先出
+        assert(
+            UsePlanOrderer.fallbackComparator(
+                UsePlanOrderer.FallbackKey.TACTICAL,
+                UsePlanOrderer.FallbackDirection.DESC
+            )
+                .compare(hit, pricey) < 0
+        )
+        assert(
+            UsePlanOrderer.fallbackComparator(UsePlanOrderer.FallbackKey.TACTICAL, UsePlanOrderer.FallbackDirection.ASC)
+                .compare(hit, pricey) > 0
+        )
+    }
+
+    /**
+     * 战术层用**序数**而非基数：树分 5 vs 8 与 1 vs 2 的先后一致，只取决于「谁更命中」。
+     * 这是分层（ts → base）优于合成（E + ts×scale）的关键——树分跨卡标定不一致时，
+     * 合成体可能因标定差 2 倍而翻转顺序，分层不会（待 Q-024 量纲费化后再考虑合成）。
+     */
+    @Test
+    fun `战术层只比较树分序数`() {
+        val lowScale = card("a", baseValue = 5.0, treeScore = 1.0)
+        val lowScaleHit = card("b", baseValue = 1.0, treeScore = 2.0)
+        val cmp = UsePlanOrderer.fallbackComparator(
+            UsePlanOrderer.FallbackKey.TACTICAL, UsePlanOrderer.FallbackDirection.DESC
+        )
+        // 树分 2 > 1 → b 先出，即使它 baseValue 只有 1（合成体在此处会被 baseValue 拉平甚至翻转）
+        assert(cmp.compare(lowScaleHit, lowScale) < 0)
+    }
+
     private fun card(
         id: String,
         stage: UseStage = UseStage.GENERAL,
         orderWeight: Double = 0.0,
         baseValue: Double = 0.0,
-        groups: Set<String> = emptySet()
+        groups: Set<String> = emptySet(),
+        // 走 addWeight → 只进 extPowerWeight（模拟光环分 / legacy handler 分），不进 tacticalScore
+        tacticalBonus: Double = 0.0,
+        // 直接写 tacticalScore（模拟评估树分，由 WeightHandlerDomain 在运行期写入）
+        treeScore: Double = 0.0
     ): ComboCard = ComboCard(
         card = createMockCard(cardId = id),
         combinedConfig = CardCombinedConfig(
@@ -228,7 +336,10 @@ class UsePlanOrdererTest {
             useIntent = UseIntent(stage = stage, orderWeight = orderWeight)
         ),
         baseValue = baseValue
-    )
+    ).also {
+        if (tacticalBonus != 0.0) it.addWeight(tacticalBonus)
+        if (treeScore != 0.0) it.tacticalScore = treeScore
+    }
 
     /** 与 UsePlanBuilder.build 同构：无 UseIntent 的卡不进 intents map。 */
     private fun plan(cards: List<ComboCard>, vararg constraints: UseConstraint): UsePlan = UsePlan(

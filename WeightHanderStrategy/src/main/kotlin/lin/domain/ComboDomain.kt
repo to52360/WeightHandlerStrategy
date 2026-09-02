@@ -14,7 +14,6 @@ import lin.domain.use.UseDomain
 import lin.domain.use.plan.UsePlanBuilder
 import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
-import lin.rule.context.WarInfoEnv
 import lin.warExt.my.base.getCost
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -133,8 +132,8 @@ class ComboDomain : KoinComponent {
      * - 贪心补打，不用 findStrategy 搜索——剩余可选范围很小（通常 1~3 费），背包/惩罚逻辑是过度设计。
      * - 名字不叫 processLessCost：旧名语义模糊（余费填充 + 失败补偿混在一起），曾导致补偿被误当失败残留删除。
      *   这里只做「失败补偿」一件事，余费填充已由选牌层 fillSurplusCost 承担。
-     * - 补打在主组合完整打完后进行，不打断 UseStage 顺序；补打牌再失败会 unUse（powerWeight < 0），
-     *   被 passesSecondRoundCandidate 挡掉，天然防死循环。
+     * - 补打在主组合完整打完后进行，不打断 UseStage 顺序；补打牌再失败会 unUse（isUnUse 硬禁，
+     *   Q-036/D-020），被 passesSecondRoundCandidate 挡掉，天然防死循环。
      *
      * // ARCH-UNSETTLED use-intent-model/U-001: 贪心 vs findStrategy 选择未收敛——贪心基于「剩余可选范围很小」的假设，
      * // 若对局出现剩余费用大、落选卡多且需协同的组合（如两个低费牌一起补比单张高费牌更好），需重新评估是否改回
@@ -176,9 +175,10 @@ class ComboDomain : KoinComponent {
          * 上下文判断入口
          * [MyWarManage.parseCombo]
          */
+        // 复用评估阶段那一批次快照（warManage.ruleEnv）：评估→排序之间无出牌动作，战场口径一致，
+        // 且 crossCard 分段管道缓存得以共享（原先各自 new 一个 WarInfoEnv）。
         val bestCombinationCombo =
-            //todo-future 需要额外创建WarInfoEnv,评估已经有一个
-            UsePlanOrderer.order(usePlanBuilder.build(bestCombination, WarInfoEnv(warManage)))
+            UsePlanOrderer.order(usePlanBuilder.build(bestCombination, warManage.ruleEnv))
 
         myLog.info {
             val finalWeight = bestCombinationCombo.sumOf { it.powerWeight }

@@ -6,6 +6,7 @@ import lin.mcp.action.*
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.CardManagerEntity
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.GroupMembership
 import lin.rule.tree.findOverride
 import lin.rule.tree.findSurplusGate
 import lin.ui.service.TreeConfigService
@@ -93,6 +94,8 @@ managerId 由 list(resource=card_group) 获取。"""
                     "sourceFile" to manager.sourceFile, "enabled" to manager.enabled,
                     "description" to manager.description,
                     "status" to manager.status,
+                    // T-005：回读卡组级谓词组默认值（覆盖链：组级 includeDerived > 此值 > false）
+                    "defaultIncludeDerived" to manager.defaultIncludeDerived,
                     "bindings" to bindings
                 )
             )
@@ -130,7 +133,14 @@ internal fun bindingView(b: CardGroupBinding): Map<String, Any?> = mapOf(
     "id" to b.id,
     "name" to b.name,
     "description" to b.description,
+    // T-005：显式区分成员类型——谓词组 cardIds 恒空，不补 memberType 会被误读成「空静态组」
+    "memberType" to when (b.membership) {
+        is GroupMembership.Static -> "STATIC"
+        is GroupMembership.Predicate -> "PREDICATE"
+    },
     "cardIds" to b.cardIds,
+    "conditionId" to (b.membership as? GroupMembership.Predicate)?.conditionId,
+    "includeDerived" to (b.membership as? GroupMembership.Predicate)?.includeDerived,
     "stageOverride" to b.behaviors.findOverride()?.stageOverride?.name,
     "conditionalStage" to b.behaviors.findOverride()?.conditionalStage?.let { cs ->
         mapOf(

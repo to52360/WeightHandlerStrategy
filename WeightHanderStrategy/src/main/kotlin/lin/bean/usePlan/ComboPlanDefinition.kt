@@ -10,6 +10,10 @@ data class ComboPlanDefinition(
      *
      * 如果只是"不希望同时出，但特殊情况下可以接受"，不要用 coreMutex；
      * 用负 score 表达软惩罚即可，例如 coreGroupIds 和 depGroupIds 指向同一类组。
+     *
+     * ⚠️ 该值同时被起手换牌消费（ChangeCardSelector.hasCoreMutexConflict 借同一字段
+     * 做「不能同时保留」约束）。置 false 会连带取消起手侧互斥——
+     * 「出牌不互斥但起手要互斥」的诉求当前无法表达（见 Q-010）。
      */
     val coreMutex: Boolean = true,
     /**

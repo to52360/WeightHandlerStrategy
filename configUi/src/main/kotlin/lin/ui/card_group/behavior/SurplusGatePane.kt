@@ -38,16 +38,24 @@ class SurplusGatePane(
 
     init {
         node = VBox(8.0).apply {
+            // 输入行只放「标签 + 输入框」——描述文字很长，放同一行会被 HBox 挤压导致输入框不可用
             val row = HBox(10.0).apply {
                 alignment = Pos.CENTER_LEFT
                 children.addAll(
                     Label("垫后余量门槛 N:").apply { style = "-fx-font-weight: bold;" },
-                    gateField,
-                    Label("放行 ⟺ 空闲 ≥ 牌费 + N（垫出后仍须剩 N 费；如 2 费牌 N=2：空闲 4 才垫）。空 = 未配置 = 付得起即垫。只管余费垫牌，不改主搜索资格——主搜索资格由战术分（评估树 ts>0）决定")
-                        .apply { style = "-fx-text-fill: #6c757d; -fx-font-size: 11px;" }
+                    gateField
                 )
             }
-            children.add(row)
+            // 长描述独立一行，换行展示，不参与输入行空间分配
+            val hint = Label(
+                "放行 ⟺ 空闲 ≥ 牌费 + N（垫出后仍须剩 N 费；如 2 费牌 N=2：空闲 4 才垫）。" +
+                        "空 = 未配置 = 付得起即垫。只管余费垫牌，不改主搜索资格——主搜索资格由战术分（评估树 ts>0）决定"
+            ).apply {
+                style = "-fx-text-fill: #6c757d; -fx-font-size: 11px;"
+                isWrapText = true
+                maxWidth = Double.MAX_VALUE
+            }
+            children.addAll(row, hint)
         }
 
         gateField.textProperty().addListener { _, _, newValue ->

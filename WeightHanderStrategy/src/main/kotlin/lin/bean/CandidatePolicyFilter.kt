@@ -2,7 +2,6 @@ package lin.bean
 
 import lin.bean.cardExt.base.isMinion
 import lin.bean.usePlan.NegativeScorePolicy
-import lin.domain.context.NotWeight
 import lin.domain.context.TacticalScoreScale
 
 /**
@@ -15,8 +14,9 @@ import lin.domain.context.TacticalScoreScale
  *   NORMAL 同 ts==0 尊重 N，AGGRESSIVE 也绕 N 折价补位）。
  * - 极端 -100 = 绝对不打，走 isUnUse 硬禁，候选链前即被抽离，本门不涉及。
  * 第二轮余费门控（D-007 后双通道，正交互补）：
- *   ① [passesSecondRoundCandidate]（powerWeight > 0）= **动态亏模兜底**——评估树/规则给负分（这局面打出去亏）
- *     的牌挡在余费外，兼 unUse 防死循环；
+ *   ① [passesSecondRoundCandidate]（!isUnUse，Q-036/D-020）= **硬禁防线**——只挡 Banned/打出失败的牌
+ *     （[lin.domain.ComboDomain] 补打路径贪心补打的防死循环承重）；「负分值不值得垫」不再用权重算术判断，
+ *     交给 fillValue 地板（费量纲，[lin.domain.result.SurplusFillCombination]）+ N 门槛 + NegativeScorePolicy（T-028）；
  *   ② [passesSurplusGate]（仅 ts>0 绕 N；否则看空闲 ≥ 牌费 + N）= **静态持有意愿 + 亏模不插队**——无战术立场(ts==0)
  *     或战术未满足(ts<0)都尊重 N 惜售（D-007 + D-012），ts<0 的降权只作用第一轮竞争，不优先填充。
  *
@@ -26,15 +26,21 @@ import lin.domain.context.TacticalScoreScale
 fun ComboCard.passesFirstRoundCandidate(): Boolean =
     tacticalScore != 0.0 || surplusIdleThreshold() == 0
 
-/** 第二轮余费候选资格：费用门槛由调用方（fillSurplusCost）按 cost <= remainingCost 控制。 */
-fun ComboCard.passesSecondRoundCandidate(): Boolean =
-    powerWeight > NotWeight
+/**
+ * 第二轮余费候选资格（Q-036 收口，D-020）：仅挡硬禁（[isUnUse]，Banned/打出失败）——
+ * 是 compensateFailedCards 贪心补打路径防死循环重试失败牌的唯一防线（该路径不过 SurplusFillCombination 的
+ * fillValue 地板）。负分亏模不再由本门用权重算术判断：值不值得垫交给 fillValue 地板（费量纲）+ N 门槛 +
+ * NegativeScorePolicy（T-028）。原 `powerWeight > 0` 门是 T-008 时代（fillValue 模型诞生前）的过渡产物。
+ * 费用门槛由调用方（fillSurplusCost）按 cost <= remainingCost 控制。
+ */
+fun ComboCard.passesSecondRoundCandidate(): Boolean = !isUnUse()
 
 /**
  * 余费候选完整判定（T-011 fillSurplusCost / T-013 compensateFailedCards 共享的集中变化点）：
  * 费用门槛（cost <= remainingCost）+ 第二轮候选资格（[passesSecondRoundCandidate]）+ 余费门槛（D-007/D-012）+ 满场随从排除。
  * 战场满时不出随从，与执行层 UseFunction 硬拦截语义一致。
- * D-011：nDelta（全局绝望门槛减量，[lin.domain.surplusDespairNDelta]）按血量阶梯降低 N——不豁免负分亏模与满场排除。
+ * D-011：nDelta（全局绝望门槛减量，[lin.domain.surplusDespairNDelta]）按血量阶梯降低 N——不豁免满场排除；
+ * 亏模判断不在此层（Q-036/D-020：候选门只挡 isUnUse，fillValue 地板由 [SurplusFillCombination] 承担）。
  */
 fun ComboCard.passesSurplusCandidate(
     remainingCost: Int,
@@ -71,7 +77,8 @@ fun ComboCard.equivalentCostValue(): Double {
  */
 fun ComboCard.surplusIdleThreshold(): Int =
     cardWeightInfo?.surplusIdleThreshold
-        ?: combinedConfig?.groupSurplusIdleThreshold
+    // T-013：走 ComboCard 读取入口（含谓词组运行时解析），勿读 combinedConfig 静态预算
+        ?: groupSurplusIdleThreshold()
         ?: useIntent()?.tagDefaultSurplusIdleThreshold
         ?: 0
 

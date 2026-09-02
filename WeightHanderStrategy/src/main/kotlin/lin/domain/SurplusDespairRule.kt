@@ -17,8 +17,9 @@ import lin.rule.context.toWarView
  *   语义 = 血量 < blood 时该档 delta 生效，多档命中取最大；非法片段忽略（warn 日志零、静默跳过，
  *   与 ConfigStore 宽松风格一致）。二值绝望（某档 delta=9）是阶梯的退化特例。
  * - 费域整数对整数，无分→费量纲桥（D-011 原否决理由限定于 ScoreEffect 树内桥接，配置阶梯不涉）。
- * - 不豁免：负分动态亏模（powerWeight ≤ 0）、Banned、满场随从——绝望只松第二轮门
- *   （「不值也垫」），不动资格轴，也不主动亏模。
+ * - 不豁免：Banned（isUnUse 硬禁，候选门挡）、满场随从——绝望只松第二轮 N 门槛，不动资格轴；
+ *   负分亏模的判断已移交填充搜索层 FILL_VALUE_FLOOR（Q-036/D-020），nDelta 不与之交互
+ *   （垫出一个 fillValue 非正的牌 = 主动亏模，依旧不可能）。
  * - 无状态：调用点（fillSurplusCost 前 / compensateFailedCards）现算，一次一判。
  * - enabled/ladder 默认参数仅为单测注入（ConfigStore 启动期加载一次，运行期不可变）。
  * - 待议子项（用户暂未想好，勿擅自实施）：① 阶梯的 UI/MCP 自由配置入口；② 分组级「无配合条件」

@@ -24,6 +24,10 @@ class CardCombinedConfig(
     val groupStrategies: Map<String, List<UseStrategy>> = emptyMap(),
     // 用途标签：唯一来源是 PurposeStep（CardPurposeProvider 用户配置 + 机制牌硬编码注入合并，T-003）。启动期透传，运行期只读。
     val purposeTags: Set<PurposeTagId> = emptySet(),
+    // 卡级「使用后重新规划」声明（CardPurpose.replanAfterUse 的静态快照，T-013）。
+    // 与 purposeTags 同为运行时重算 useIntent 的输入——组级 override 未声明时回落此值，
+    // 故必须留存，否则谓词组命中重算时会丢失卡级兜底。
+    val purposeReplanAfterUse: Boolean = false,
     // 条件化阶段覆盖：唯一来源是 GroupBehaviorStep（OverrideBehavior.conditionalStage 透传）。启动期透传，运行期只读。
     val conditionalStage: ConditionalStageOverride? = null,
     // 分组级余费门槛 N（D-007，T-019）：唯一来源是 GroupBehaviorStep（SurplusGateBehavior 透传）。

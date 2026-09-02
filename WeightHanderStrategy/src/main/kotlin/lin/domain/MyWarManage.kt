@@ -20,6 +20,8 @@ import lin.domain.use.tryUseCard
 import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
+import lin.rule.context.RuleEnv
+import lin.rule.context.WarInfoEnv
 import lin.serviceLoader.weightRule.utils.war.WarStatus
 import lin.utils.database.dao.CardInfoDao
 import lin.warExt.action.activeLocation
@@ -185,6 +187,36 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         baseCostCache.getOrPut(cardId) { cardInfoDao.queryCardCostById(cardId) ?: 0 }
 
 
+    // ══ 决策批次级 RuleEnv（统一生命周期）══
+    //
+    // 改造前：评估（WeightHandlerDomain.processWeight）与排序（UsePlanBuilder/UsePlanOrderer）
+    // 各自 `new WarInfoEnv(warManage)`——同一批决策里两份快照，crossCard 分段管道缓存不共享、
+    // WarView 重复计算，且理论上可能出现「评估认为条件命中、排序认为不命中」的口径分叉。
+    //
+    // 改造后：一个决策批次共享一份。批次 = 「评估 → 排序」这段区间，其间**无任何出牌动作**，
+    // 战场快照一致，共享是安全的。
+    //
+    // **失效契约**（关键）：任何改变战场/手牌的动作都必须失效本快照，否则缓存即脏数据。
+    // 两个收口点，二者必须同时维护：
+    //   1. [reLoad] —— 手牌/战场重解析；
+    //   2. [lin.domain.use.tryUseCard] —— 所有出牌的唯一收口（UseDomain / skillFallbackUse /
+    //      ExtCostStrategy 打硬币均经此）。
+    // 策略是**保守失效**：宁可多重建一次（少复用一点缓存），绝不复用过期的战场快照。
+    //
+    // @verify use-intent-model/K-003: 失效点是否完备尚未穷举验证——若新增绕过 tryUseCard/reLoad
+    // 的战场变更路径（如直接调 card.action 的牌效回调），必须在此补第三个失效点。
+
+    private var batchRuleEnv: WarInfoEnv? = null
+
+    /** 决策批次的规则求值环境（惰性创建，见上方失效契约）。 */
+    val ruleEnv: RuleEnv
+        get() = batchRuleEnv ?: WarInfoEnv(this).also { batchRuleEnv = it }
+
+    /** 使当前决策批次快照失效（下次访问 [ruleEnv] 时重建）。 */
+    internal fun invalidateRuleEnv() {
+        batchRuleEnv = null
+    }
+
     /**
      * todo-future 暂时重新读取数据,性能太差或者有空 改成复杂状态管理
      * 重新加载
@@ -193,6 +225,8 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         //todo-future 临时方案,使用手牌改变战场,重新更新数组,但是不知道有没有普适性
         //之前位置在clean方法里
         registryInfo.clear()
+        // 手牌/战场重解析 → 决策批次快照失效（见 [ruleEnv] 失效契约）
+        invalidateRuleEnv()
 
         //select 先转换后再过滤考虑存在费用变更情况
         reLoadHandCards()

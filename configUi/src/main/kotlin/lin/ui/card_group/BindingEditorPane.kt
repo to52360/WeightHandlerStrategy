@@ -1,6 +1,5 @@
 package lin.ui.card_group
 
-import javafx.beans.property.ReadOnlyIntegerWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
@@ -11,7 +10,9 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.dao.CardWeightConfig
 import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.GroupMembership
 import lin.rule.tree.findOverride
+import lin.ui.GroupDisplay
 import lin.ui.card_group.behavior.BehaviorDisplayMappers
 
 /**
@@ -63,6 +64,11 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 val btnAdd = Button("添加分组").apply {
                     setOnAction { store.addBinding() }
                 }
+                val btnAddPredicate = Button("🧬 按条件建组").apply {
+                    style = "-fx-background-color: #6f42c1; -fx-text-fill: white; -fx-font-weight: bold;"
+                    tooltip = Tooltip("用条件树定义组成员（谓词组），无需枚举卡牌")
+                    setOnAction { PredicateGroupDialog(store).showAndWait() }
+                }
                 val btnRemove = Button("移除选中").apply {
                     setOnAction {
                         val idx = bindingTableView.selectionModel.selectedIndex
@@ -79,7 +85,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                         }
                     }
                 }
-                children.addAll(btnAdd, btnRemove, btnEditBehavior)
+                children.addAll(btnAdd, btnAddPredicate, btnRemove, btnEditBehavior)
             }
 
             bindingTableView.isEditable = true
@@ -102,8 +108,29 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 }
                 prefWidth = 180.0
             }
-            val colCardCount = TableColumn<CardGroupBinding, Number>("已选卡数").apply {
-                setCellValueFactory { ReadOnlyIntegerWrapper(it.value.cardIds.size) }
+            // T-007：成员概要显式区分成员类型——静态组=卡数；谓词组=「条件组」（cardIds 恒空，不能显示 0 张失真）
+            val colCardCount = TableColumn<CardGroupBinding, String>("成员").apply {
+                setCellValueFactory {
+                    val binding = it.value
+                    ReadOnlyStringWrapper(GroupDisplay.memberSummary(binding))
+                }
+                setCellFactory { _ ->
+                    object : TableCell<CardGroupBinding, String>() {
+                        override fun updateItem(item: String?, empty: Boolean) {
+                            super.updateItem(item, empty)
+                            if (empty || item == null) {
+                                text = null
+                                tooltip = null
+                            } else {
+                                text = item
+                                val membership = tableRow?.item?.membership
+                                tooltip = if (membership is GroupMembership.Predicate)
+                                    Tooltip("成员由条件树定义 (conditionId: ${membership.conditionId})\n运行时判定命中，无需枚举卡牌")
+                                else null
+                            }
+                        }
+                    }
+                }
                 prefWidth = 80.0
             }
             val colStage = TableColumn<CardGroupBinding, String>("阶段覆盖").apply {
@@ -170,6 +197,15 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         }
 
         // 3. 底部选卡区 (左右两栏 SplitPane)
+        // T-007：谓词组由条件树定义成员，选中时禁用选卡区并提示条件来源，避免「点了卡却不生效」的静默失真
+        val predicateNoteLabel = Label("🧬 谓词组由条件树定义成员，无需手动选卡（成员运行时判定命中）。").apply {
+            style =
+                "-fx-background-color: #fff3cd; -fx-text-fill: #856404; -fx-padding: 6px; -fx-background-radius: 4px;"
+            isWrapText = true
+            isVisible = false
+            maxWidth = Double.MAX_VALUE
+        }
+
         val cardSelectPane = SplitPane().apply {
             cardPoolListView.items = obsCardPool
             // 格式化卡池列表的显示
@@ -215,7 +251,9 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         // 垂直分割面板：给表格与选卡区各自分配充足的可调节空间
         val mainSplitPane = SplitPane().apply {
             orientation = javafx.geometry.Orientation.VERTICAL
-            items.addAll(tableBox, cardSelectPane)
+            items.addAll(tableBox, VBox(predicateNoteLabel, cardSelectPane).apply {
+                setVgrow(cardSelectPane, Priority.ALWAYS)
+            })
             setDividerPositions(0.45)
         }
 
@@ -249,6 +287,12 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 if (oldState.selectedCards != newState.selectedCards) {
                     obsSelectedCards.setAll(newState.selectedCards)
                 }
+
+                // T-007：谓词组选中时禁用选卡区并提示条件来源（成员由条件树运行时判定，手动选卡不生效）
+                val selectedBinding = newState.selectedBindingIndex?.let { newState.currentBindings.getOrNull(it) }
+                val isPredicate = selectedBinding?.membership is GroupMembership.Predicate
+                predicateNoteLabel.isVisible = isPredicate
+                cardSelectPane.isDisable = isPredicate
             } finally {
                 isUpdatingFromState = false
             }

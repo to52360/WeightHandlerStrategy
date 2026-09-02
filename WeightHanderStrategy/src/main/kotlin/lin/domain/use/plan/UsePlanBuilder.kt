@@ -45,7 +45,8 @@ class UsePlanBuilder(
      * 编译强制 crossCard=true → 同一决策 pass 内多卡共享分段管道缓存（与 AuraBoost conditionId 对齐）。
      */
     private fun applyConditionalStage(card: ComboCard, base: UseIntent, ruleEnv: RuleEnv): UseIntent {
-        val cs = card.combinedConfig?.conditionalStage ?: return base
+        // T-013：走 ComboCard 读取入口（含谓词组运行时解析），勿读 combinedConfig 静态预算
+        val cs = card.conditionalStage() ?: return base
         val logic =
             treeLogicCache.getOrPut(cs.conditionId) { guardCompiler.compileTree(cs.conditionId, crossCard = true) }
         val matched = logic(RuleContext(card), ruleEnv)

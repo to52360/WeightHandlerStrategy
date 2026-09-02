@@ -48,11 +48,14 @@ class SaveCardGroupToolProvider(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<SaveCardGroupInput>(
             name = "save_card_group",
-            description = """创建或更新卡牌分组方案（**仅分组定义**：name/cardIds/description）。
+            description = """创建或更新卡牌分组方案（**仅分组定义**：name/cardIds/description，或谓词组的条件）。
 - 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案，为空则自动按 managerName/sourceFile 覆盖更新已有方案
 - 克隆模式：提供 cloneFrom，以该方案为蓝本创建副本，含所有 binding 与 behavior，managerName 缺省自动加「副本」后缀
-- **分步提交**：本工具只提交分组归属（cardIds），不设置出牌策略；分组更新时保留已配置的策略（stageOverride/conditionalStage）。
+- **分步提交**：本工具只提交分组归属（cardIds 或谓词组条件），不设置出牌策略；分组更新时保留已配置的策略（stageOverride/conditionalStage）。
   出牌阶段策略用 `group_override` 单独配置。
+- **谓词组（条件定义成员）**：binding 提供 conditionId（引用已有条件树）或 conditionTreeJson（内联树）即建谓词组，
+  成员由条件树对每张候选卡运行时判定（如「所有法术」），无需枚举 cardIds；cardIds 会被忽略。
+  可选 includeDerived 控制是否纳入卡池外卡（衍生/发现），缺省回落卡组级 defaultIncludeDerived（再回落 false）。
 
 【恢复/修改上下文最佳实践】
 在任何重启任务或续接对话的场景中，强烈建议先调用 `card_group(action="LIST")` 获取已有的 managerId，并调用 `card_group(action="GET", managerId="...")` 探查现有分组及其 bindingIds；如需更新则传入 existingId。若未传 existingId 但 managerName/sourceFile 相同，系统也会自动覆盖同名方案，不会产生多余重复项。
@@ -114,6 +117,14 @@ class SaveCardGroupToolProvider(
                 ?: return@typedTool mcpError("sourceFile not found: $sourceFile")
             val validCardIds = cardPool.cards.map { it.cardId }.toSet()
             input.bindings.forEachIndexed { i, bi ->
+                // 谓词组（提供条件）不校验 cardIds——成员由条件树运行时判定，无显式卡列表
+                val isPredicate = !bi.conditionId.isNullOrBlank() || !bi.conditionTreeJson.isNullOrBlank()
+                if (isPredicate) {
+                    if (bi.conditionId != null && bi.conditionTreeJson != null) {
+                        return@typedTool mcpError("bindings[$i] (${bi.name}) conditionId 与 conditionTreeJson 互斥，只能提供一个")
+                    }
+                    return@forEachIndexed
+                }
                 val invalidIds = bi.cardIds.filter { it !in validCardIds }
                 if (invalidIds.isNotEmpty()) {
                     return@typedTool mcpError("bindings[$i] contains cardIds not in sourceFile '$sourceFile': $invalidIds")
@@ -136,18 +147,31 @@ class SaveCardGroupToolProvider(
             // 出牌阶段策略由 save_group_override 单独维护；surplusIdleThreshold 提供则设置分组级余费门槛（缺省保留原值）。
             val bindings = input.bindings.map { bi ->
                 val existing = existingBindingsByName[bi.name]
+                // 谓词组：提供条件（conditionId 或内联 treeJson）→ 生成 Predicate 成员资格。
+                val membership = if (!bi.conditionId.isNullOrBlank() || !bi.conditionTreeJson.isNullOrBlank()) {
+                    val cid = resolveConditionTreeReference(
+                        service = conditionTreeService,
+                        mapper = conditionTreeMapper,
+                        conditionId = bi.conditionId?.takeIf { it.isNotBlank() },
+                        treeJson = bi.conditionTreeJson?.takeIf { it.isNotBlank() },
+                        defaultName = "pred_${bi.name}",
+                        label = "binding[${bi.name}] 谓词组条件树",
+                        managerId = targetManagerId ?: ""
+                    )
+                    GroupMembership.Predicate(conditionId = cid, includeDerived = bi.includeDerived)
+                } else if (bi.cardIds.isEmpty() && existing?.membership is GroupMembership.Predicate) {
+                    // T-001 保护：该分组已存在且是谓词组、本次未传 cardIds 也未传条件，
+                    // 保留其 membership——saveManager 是整体 replaceBindings，
+                    // 不做这个保护会让谓词组在"用本工具改同方案其他分组"时被静默清成空静态组。
+                    existing.membership
+                } else {
+                    GroupMembership.Static(bi.cardIds)
+                }
                 CardGroupBinding(
                     id = existing?.id ?: nextShortId(),
                     managerId = "",
                     name = bi.name,
-                    // T-001：本工具当前只录入静态组。但若该分组已存在且是谓词组（条件定义成员），
-                    // 且本次未传 cardIds，则保留其 membership——saveManager 是整体 replaceBindings，
-                    // 不做这个保护会让谓词组在"用本工具改同方案其他分组"时被静默清成空静态组。
-                    membership = if (bi.cardIds.isEmpty() && existing?.membership is GroupMembership.Predicate) {
-                        existing.membership
-                    } else {
-                        GroupMembership.Static(bi.cardIds)
-                    },
+                    membership = membership,
                     description = bi.description,
                     behaviors = if (bi.surplusIdleThreshold != null) {
                         (existing?.behaviors ?: emptyList()).withSurplusGate(bi.surplusIdleThreshold)
@@ -164,7 +188,9 @@ class SaveCardGroupToolProvider(
                     bindings = bindings,
                     existingId = existingId,
                     managerDescription = input.managerDescription,
-                    managerStatus = input.managerStatus
+                    managerStatus = input.managerStatus,
+                    // T-005：卡组级谓词组默认值录入入口（覆盖链：组级 includeDerived > 此值 > false）
+                    defaultIncludeDerived = input.defaultIncludeDerived
                 )
             )
             mcpSuccess(
@@ -300,16 +326,24 @@ private data class SaveCardGroupInput(
     @field:JsonPropertyDescription("可选：卡组总体描述/规划（战术主题、配置目标），供续接时恢复上下文。")
     val managerDescription: String? = null,
     @field:JsonPropertyDescription("可选：配置进度状态（PLANNED=已规划未开始 / IN_PROGRESS=配置中 / CONFIGURED=已完成可运行）。缺省不覆盖原值。")
-    val managerStatus: String? = null
+    val managerStatus: String? = null,
+    @field:JsonPropertyDescription("可选：卡组级「谓词组是否纳入卡池外卡（衍生/发现/随机生成）」默认值。true=纳入、false=仅卡池内。仅对未在组级显式声明 includeDerived 的谓词组生效（覆盖链：组级 > 此值 > false）。缺省保留原值。")
+    val defaultIncludeDerived: Boolean? = null
 )
 
 private data class SaveCardGroupBindingInput(
     @field:JsonPropertyDescription("分组名称")
     val name: String,
-    @field:JsonPropertyDescription("该分组包含的卡牌 ID 列表")
-    val cardIds: List<String>,
+    @field:JsonPropertyDescription("该分组包含的卡牌 ID 列表。静态组必填；谓词组（提供 conditionId/conditionTreeJson）时忽略此字段（成员由条件树运行时判定）。")
+    val cardIds: List<String> = emptyList(),
     @field:JsonPropertyDescription("分组说明（战术定位/联动动机）。出牌策略（stageOverride/conditionalStage）由 save_group_override 单独配置。")
     val description: String? = null,
+    @field:JsonPropertyDescription("可选：谓词组（条件定义成员）的条件树 id（condition_tree(action=LIST) 获取）。提供后本分组为谓词组，成员由条件运行时判定，cardIds 忽略。与 conditionTreeJson 互斥。")
+    val conditionId: String? = null,
+    @field:JsonPropertyDescription("可选：谓词组的内联条件树 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}。与 conditionId 互斥。")
+    val conditionTreeJson: String? = null,
+    @field:JsonPropertyDescription("可选：谓词组是否纳入卡池外的卡（衍生/发现/随机生成）。true=纳入、false=仅卡池内、缺省回落卡组级 defaultIncludeDerived（再回落 false）。仅谓词组有效，静态组忽略。")
+    val includeDerived: Boolean? = null,
     @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-012 垫后余量语义：放行 ⟺ 空闲 ≥ 牌费 + N，垫出后仍须剩 N 费）——一类牌统一捏、不用逐卡设置（如解牌组统一 2 = 垫出后仍剩 2 费才肯垫，取值 1~9）。提供则设置，缺省保留原值；空=未配置=付得起即垫（逐卡小数位仍优先）。清除需在分组编辑界面操作。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由战术分（评估树 ts>0）决定，超低收益牌想「不进主搜索」需让评估树给非正分并配 N 控制垫出。")
     val surplusIdleThreshold: Int? = null
 )

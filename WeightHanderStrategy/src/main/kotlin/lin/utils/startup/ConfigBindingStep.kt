@@ -10,6 +10,8 @@ import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.PurposeTagId
 import lin.domain.use.UseStrategy
 import lin.domain.use.plan.ComboAssembler
+import lin.domain.use.plan.GroupBehaviorIndex
+import lin.domain.use.plan.GroupBehaviorRuntime
 import lin.domain.use.plan.UseIntentAssembler
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
@@ -70,21 +72,28 @@ class CardCombinedConfigBuilder {
         expandSlices(tagIndex)
         val useIntentAsm = UseIntentAssembler(cardPurposes, groupMap, groupOverrides)
         val comboAsm = ComboAssembler(groupMap, comboDefinitions)
+        // T-013：组级行为索引——静态预算与运行时索引**同源且原子**（同一份 groupOverrides /
+        // groupSurplusGates / deriver），故运行时对完整组集合重算的结果必是静态预算的超集，
+        // 不需要第三份「预算 ∪ 增量」合并逻辑（与 T-012 的 ComboIndex 同构）。
+        val behaviorIndex = GroupBehaviorIndex(groupOverrides, groupSurplusGates)
+        GroupBehaviorRuntime.configure(behaviorIndex)
         return baseInfos.mapValues { (cardId, weightInfo) ->
             val strategies = useStrategiesByCardId[cardId].orEmpty()
+            val staticGroupIds = groupMap[cardId].orEmpty()
             CardCombinedConfig(
                 weightInfo = weightInfo,
-                groupIds = groupMap[cardId].orEmpty(),
+                groupIds = staticGroupIds,
                 useIntent = useIntentAsm.assemble(cardId),
                 comboEntries = comboAsm.entries(cardId),
                 comboUseBindings = comboAsm.bindings(cardId),
                 useStrategies = strategies,
                 groupStrategies = groupSlices,
                 purposeTags = cardPurposes[cardId]?.purposeTags ?: emptySet(),
-                conditionalStage = groupMap[cardId].orEmpty()
-                    .firstNotNullOfOrNull { groupOverrides[it]?.conditionalStage },
-                groupSurplusIdleThreshold = groupMap[cardId].orEmpty()
-                    .firstNotNullOfOrNull { groupSurplusGates[it] },
+                // 运行时重算 useIntent 的输入快照（cardPurpose.replanAfterUse 的静态值）
+                purposeReplanAfterUse = cardPurposes[cardId]?.replanAfterUse ?: false,
+                // 以下三项与运行时走**同一解析实现**（GroupBehaviorIndex），仅组集合来源不同
+                conditionalStage = behaviorIndex.resolveConditionalStage(staticGroupIds),
+                groupSurplusIdleThreshold = behaviorIndex.resolveSurplusGate(staticGroupIds),
             )
         }
     }

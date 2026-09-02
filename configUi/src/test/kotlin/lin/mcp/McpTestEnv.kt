@@ -97,6 +97,8 @@ abstract class McpTestEnv {
                         cleaned++
                         println("   删除 tree_config: $tid")
                     }
+                    // 连带删除该 manager 内联创建的谓词组条件树（condition_tree_config，manager_id 挂在此）
+                    jdbc.update("DELETE FROM condition_tree_config WHERE manager_id = ?", mgrId)
                     jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mgrId)
                     jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mgrId)
                     cleaned++
@@ -119,6 +121,7 @@ abstract class McpTestEnv {
                         jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", tid)
                         jdbc.update("DELETE FROM tree_config WHERE id = ?", tid)
                     }
+                    jdbc.update("DELETE FROM condition_tree_config WHERE manager_id = ?", mgrId)
                     jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mgrId)
                     jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mgrId)
                     cleaned++
@@ -169,17 +172,30 @@ abstract class McpTestEnv {
     /** 本次创建的所有 tree config ID 列表（用于实战演练追踪） */
     protected val allTreeIds: MutableList<String> = mutableListOf()
 
+    /** 本次创建的谓词组条件树 ID（condition_tree_config 表），供 cleanup 统一清理，防测试残留垃圾数据 */
+    protected val conditionTreeIds: MutableList<String> = mutableListOf()
+
+    /** 登记一条本测试创建的条件树 ID（含 save_condition_tree 建的模板树），cleanup 时统一删除 */
+    protected fun trackConditionTree(id: String) {
+        if (id.isNotBlank()) conditionTreeIds += id
+    }
+
     // ── 公共方法 ──
 
     /**
      * 调用指定名称的 MCP tool，传入 JSON string 参数。
      * 自动 pretty-print 响应到 stdout。
+     * 成功时统一自动追踪「本次创建的条件树」id（save_condition_tree 的 id / save_card_group 谓词组的 conditionId），
+     * 由 [cleanup] 统一删除——防谓词组条件树残留为全局垃圾数据（T-005 谓词组录入的测试副作用统一收口）。
      */
     fun call(name: String, json: String = "{}"): McpToolResult {
         val handler = tools[name] ?: error("tool not found: $name (available: ${tools.keys})")
         val args = mapper.readValue(json, Map::class.java) as Map<String, Any?>
         return try {
             val result = handler.call(args)
+            if (!result.isError) {
+                trackCreatedConditionTrees(name, result.contentJson)
+            }
             val pretty = runCatching {
                 mapper.writeValueAsString(mapper.readValue(result.contentJson, Any::class.java))
             }.getOrElse { result.contentJson }
@@ -193,6 +209,26 @@ abstract class McpTestEnv {
         }
     }
 
+    /** 从成功响应中提取本次创建的条件树 id 并登记到 [conditionTreeIds]（幂等）。 */
+    private fun trackCreatedConditionTrees(toolName: String, contentJson: String) {
+        runCatching {
+            val root = mapper.readValue(contentJson, Map::class.java)
+            when (toolName) {
+                // save_condition_tree：模板树
+                "save_condition_tree" -> (root["id"] as? String)?.let { trackConditionTree(it) }
+                // save_card_group：谓词组的内联/引用条件树（conditionId）
+                "save_card_group" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    (root["bindings"] as? List<Map<String, Any?>>)?.forEach { b ->
+                        if (b["memberType"] == "PREDICATE") {
+                            (b["conditionId"] as? String)?.let { trackConditionTree(it) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * 清理本次测试产生的 DB 记录和文件。
      * 可在 @Test 的 finally 块显式调用，也可依赖 [tearDownCleanup] @After 兜底（两者幂等）。
@@ -201,23 +237,28 @@ abstract class McpTestEnv {
     fun cleanup() {
         runCatching {
             val jdbc = GlobalContext.get().get<JdbcTemplate>()
+            // 0. 清理谓词组条件树（condition_tree_config，含 save_condition_tree 建的模板树）——防测试残留
+            conditionTreeIds.distinct().forEach { id ->
+                jdbc.update("DELETE FROM condition_tree_config WHERE id = ?", id)
+            }
             // 1. 按追踪 id 删树（兼容 managerId 未设置时的孤儿树）
             listOfNotNull(treeId, codedTreeId).distinct().forEach { id ->
                 jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", id)
                 jdbc.update("DELETE FROM tree_config WHERE id = ?", id)
             }
-            // 2. manager 级联删除（全部关联树 + bindings）
+            // 2. manager 级联删除（全部关联树 + bindings + 该 manager 内联创建的谓词组条件树）
             managerId?.let { mid ->
                 jdbc.update(
                     "DELETE FROM evaluator_leaf_config WHERE config_id IN (SELECT id FROM tree_config WHERE manager_id = ?)",
                     mid
                 )
                 jdbc.update("DELETE FROM tree_config WHERE manager_id = ?", mid)
+                jdbc.update("DELETE FROM condition_tree_config WHERE manager_id = ?", mid)
                 jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mid)
                 jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mid)
             }
             savedFile?.let { Files.deleteIfExists(it) }
-            println(">>> cleanup done (treeId=$treeId, codedTreeId=$codedTreeId, managerId=$managerId, savedFile=$savedFile)")
+            println(">>> cleanup done (treeId=$treeId, codedTreeId=$codedTreeId, managerId=$managerId, conditionTreeIds=$conditionTreeIds, savedFile=$savedFile)")
         }.onFailure { e -> println(">>> cleanup failed: ${e.message}") }
     }
 

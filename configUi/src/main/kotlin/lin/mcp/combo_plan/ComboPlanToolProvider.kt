@@ -127,7 +127,7 @@ private data class SaveComboPlanInput(
     @field:JsonPropertyDescription("Combo 加分（如 3.0，负值如 -2.0 表达软惩罚）。【纯排序配方：固定 0】仅表达先后顺序不加分时必填 0，此时配合 relation=CORE_BEFORE_DEP/DEP_BEFORE_CORE 即为纯排序（如「先铺场再清场」的出牌次序），不会扭曲权重竞争")
     val score: Double = 0.0,
 
-    @field:JsonPropertyDescription("核心组内互斥：同 Combo 下多个核心组候选不能同时打出时置为 true。⚠️陷阱：默认 true——纯排序配方必须显式置 false，否则多核心组会被互斥剪枝、只剩一组参与排序")
+    @field:JsonPropertyDescription("核心组内互斥：同 Combo 下多个核心组候选不能同时打出时置为 true。⚠️陷阱一：默认 true——纯排序配方必须显式置 false，否则多核心组会被互斥剪枝、只剩一组参与排序。⚠️陷阱二：该值同时被起手换牌消费（多个核心组不能同时保留），置 false 会连带取消起手侧的保留互斥——若该 Combo 的核心牌在起手阶段也不希望同时留手，需另行确认")
     val coreMutex: Boolean = true,
 
     @field:JsonPropertyDescription("顺序关系：SCORE_ONLY（纯加分无顺序）/ CORE_BEFORE_DEP（核心组先出）/ DEP_BEFORE_CORE（依赖组先出），默认 SCORE_ONLY。【纯排序配方】score=0 + coreMutex=false + relation=二者之一：表达「A 组的牌恒先于 B 组的牌」，与 orderWeight 的区别是可跨阶段拉动（拓扑约束跑在阶段排序之上）")

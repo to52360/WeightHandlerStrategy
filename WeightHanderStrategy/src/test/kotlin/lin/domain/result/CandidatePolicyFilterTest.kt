@@ -10,7 +10,8 @@ import org.junit.Test
 /**
  * T-026：候选门控过滤（(N, ts) 二元组模型，替代三态 CandidatePolicy 枚举）。
  * 第一轮：tacticalScore != 0（战术命中，不论 N）或 N == 0 才进；ts == 0 且 N > 0 则惜售。
- * 第二轮：统一按 powerWeight > 0（正总分）判断（D-005）。
+ * 第二轮：仅挡硬禁 isUnUse（Q-036/D-020）——负总分仍进候选，值不值由 fillValue 地板
+ * （[SurplusFillCombination] FILL_VALUE_FLOOR）判断。
  * N 解析链：逐卡小数位 > 分组行为 > tag 默认 > 0。
  */
 class CandidatePolicyFilterTest {
@@ -102,11 +103,19 @@ class CandidatePolicyFilterTest {
     // ── 第二轮 ──
 
     @Test
-    fun `第二轮 正总分才通过`() {
-        // 有正底分但无战术命中：余费内可垫出白板（不再死捏）
+    fun `第二轮 负总分未硬禁仍通过`() {
+        // Q-036：powerWeight > 0 门退役——负总分（亏模）仍进候选，
+        // 值不值得垫由 fillValue 地板（搜索层）+ N 门槛 + NegativeScorePolicy 判断
         assertTrue(buildCard(n = null).passesSecondRoundCandidate())
-        // 负总分（亏模）：仍不出
-        assertFalse(buildCard(n = null, extPowerWeight = -10.0).passesSecondRoundCandidate())
+        assertTrue(buildCard(n = null, extPowerWeight = -10.0).passesSecondRoundCandidate())
+    }
+
+    @Test
+    fun `第二轮 unUse硬禁不通过`() {
+        // Banned/打出失败 → extPowerWeight = UnUseWeight(-100) → 候选门唯一硬禁语义
+        val card = buildCard(n = null)
+        card.unUse()
+        assertFalse(card.passesSecondRoundCandidate())
     }
 
     // ── 余费门槛 ──

@@ -67,7 +67,8 @@ class RuleTreeBindingTask : StartupTask, KoinComponent {
 
 /**
  * 对一张卡牌的所有意图评估根节点执行条件树求值。
- * 需要在 [RuleEnv] 作用域内调用（例如 `with(WarInfoEnv(warManage))`）。
+ * 需要一个 [RuleEnv] 作参数；生产环境统一用 `warManage.ruleEnv`（决策批次共享快照，
+ * 见 [lin.domain.MyWarManage.ruleEnv] 的失效契约），勿自行构造。
  *
  * 返回值是纯值聚合（[RuleResult.Accumulate]），不携带控制语义：
  * - "不参与评分"由守卫未命中 + missValue=0 表达（SCORE）。

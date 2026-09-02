@@ -7,6 +7,7 @@ import lin.config.PathConfig
 import lin.repository.CardIdNameText
 import lin.repository.card_group.CardGroupService
 import lin.rule.build.DynamicFieldOption
+import lin.rule.tree.GroupMembership
 import lin.serviceLoader.provider.SelectOptionProvider
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -165,8 +166,10 @@ class CardSelectOptionProvider : SelectOptionProvider, KoinComponent {
         val managers = service.loadAll(onlyEnabled = true)
 
         // 展平所有方案下的具体分组（Binding）
+        // Q-003：谓词组暂不支持绑定评估树（运行时条件与评估树静态解析不兼容，绑了静默不生效），
+        // 本提供者只服务评估树 GROUP 绑定面，故只展示有效范围（静态组）。
         return managers.flatMap { manager ->
-            manager.bindings.map { binding ->
+            manager.bindings.filter { it.membership is GroupMembership.Static }.map { binding ->
                 DynamicFieldOption(
                     value = binding.id,
                     label = binding.name
@@ -175,10 +178,10 @@ class CardSelectOptionProvider : SelectOptionProvider, KoinComponent {
         }
     }
 
-    /** 按 managerId 过滤，仅返回指定方案下的分组 */
+    /** 按 managerId 过滤，仅返回指定方案下的分组（同样只含静态组，谓词组不可绑评估树）。 */
     fun getOptionsByManager(managerId: String): List<DynamicFieldOption> {
         val bindings = service.loadBindings(managerId)
-        return bindings.map { binding ->
+        return bindings.filter { it.membership is GroupMembership.Static }.map { binding ->
             DynamicFieldOption(
                 value = binding.id,
                 label = binding.name

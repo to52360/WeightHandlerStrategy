@@ -9,7 +9,6 @@ import lin.domain.result.EndWeightResult
 import lin.domain.result.WeightResult
 import lin.myLog
 import lin.rule.context.RuleEnv
-import lin.rule.context.WarInfoEnv
 import lin.rule.handler.AuraBoostEvaluator
 import lin.rule.handler.EvalSignal
 import lin.rule.handler.evaluateCardRoots
@@ -64,7 +63,8 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
      * 调用权重规则
      */
     private fun processWeight(weightResult: EndWeightResult) {
-        val ruleEnv = WarInfoEnv(warManage)
+        // 决策批次共享快照（MyWarManage.ruleEnv）：评估与紧随的排序之间无出牌动作，口径一致。
+        val ruleEnv = warManage.ruleEnv
         weightResult.canUseCards.forEach { comboCard ->
             val calWeight = weightEvaluator(comboCard, warManage, ruleEnv)
             if (calWeight != NotWeight) {

@@ -13,6 +13,7 @@ import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.CardManagerEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.ActiveAware
+import lin.ui.GroupDisplay
 import lin.ui.card_group.ActiveManagerHolder
 import lin.utils.addColumn
 import org.koin.core.component.KoinComponent
@@ -204,7 +205,9 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
         val column = TableColumn<S, String>(title).apply {
             setCellValueFactory { cell ->
                 val ids = idsExtractor(cell.value)
-                val names = ids.mapNotNull { store.state.bindingMap[it]?.name }
+                // T-007：展示层显式区分成员类型——谓词组加「[谓词组]」标记（成员由条件树定义，无卡列表）
+                val names =
+                    ids.mapNotNull { id -> store.state.bindingMap[id]?.let { GroupDisplay.displayNameWithType(it) } }
                 SimpleStringProperty(if (names.isEmpty()) "空" else names.joinToString(", "))
             }
             prefWidth = width

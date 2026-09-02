@@ -34,6 +34,10 @@ fun WarInfo.isChangeByUseSuccess(useCard: () -> ComboCard?): Boolean {
 
 fun MyWarManage.tryUseCard(comboCard: ComboCard): Boolean {
     val card = comboCard.card
+    // 出牌是战场变更的唯一收口 → 决策批次快照立即失效（见 MyWarManage.ruleEnv 的失效契约）。
+    // 放在**入口**而非成功分支：失败路径也可能改变战场（发现/指向/战场满的二次尝试），
+    // 且无论成败，本次尝试之后的任何求值都必须基于新战场。保守失效，宁可多重建一次。
+    invalidateRuleEnv()
     //todo-future 使用unUse来判断是否可用是临时方案,应该统一管理动态变更为不能使用
     //随从已满
     if ((isFull && card.cardType == CardTypeEnum.MINION)) {

@@ -10,17 +10,16 @@ import lin.bean.usePlan.UseIntent
 import lin.domain.WarInfo
 import lin.domain.parseDespairLadder
 import lin.domain.surplusDespairNDelta
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 /**
  * D-011 全局绝望规则 v2（Q-022 收敛）：布尔前置（场面承压 excessDamage>0 且 ≥ ableAtcSum
  * + 手牌无 N>0 惜售牌）× 血量阶梯幅度（nDelta，门控按 D-012 减 N，地板 0）。
  *
- * 边界锚点：绝望 =「按严重度松门」，不等于「主动亏模也打」——负分亏模（powerWeight ≤ 0）、
- * 满场随从不豁免；只松第二轮门，不动第一轮资格轴（N>0 惜售牌排除照旧）。
+ * 边界锚点：绝望 =「按严重度松 N 门槛」，不等于「主动亏模也垫」——fillValue 非正
+ * （FILL_VALUE_FLOOR 剔除，Q-036/D-020 后亏模判断移交搜索层）、满场随从不豁免；
+ * 只松第二轮 N 门槛，不动第一轮资格轴（N>0 惜售牌排除照旧）。
  *
  * 门槛语义（D-012，用户问证锚点）：放行 ⟺ 空闲 ≥ 牌费 + N（N=「垫出后仍须剩 N 费」，跨卡费同义）。
  */
@@ -91,11 +90,19 @@ class SurplusDespairGateTest {
     }
 
     @Test
-    fun `nDelta不豁免负分亏模`() {
-        // 树/规则负分（powerWeight ≤ 0 = 这局面打出去亏）在绝望下仍挡：绝望 ≠ 主动亏模
+    fun `nDelta松门对非硬禁负分生效 亏模判断移交fillValue地板`() {
+        // Q-036/D-020：passesSecondRoundCandidate 退役 powerWeight>0 权重算术，改 !isUnUse()。
+        // 树/规则负分（powerWeight ≤ 0 但未 unUse 硬禁）不再被第二轮门挡；「这局打出亏不垫」的判断
+        // 移交填充搜索层 FILL_VALUE_FLOOR（fillValue ≤ 0 剔除，SurplusGateFillTest /
+        // SkillChainRegressionTest 覆盖），nDelta 不与之交互。
+        // 本例只锁定：绝望 nDelta 对非硬禁负分牌仍正常松 N（N=4 → nDelta=9 减到 0，付得起即垫进候选池）。
         val card = buildCard("D3", cost = 2, powerWeight = 5.0, idleThreshold = 4)
-        card.extPowerWeight = -1.0
-        assertFalse(card.passesSurplusCandidate(remainingCost = 3, isFull = false, nDelta = 9))
+        card.extPowerWeight = -1.0 // 树/规则负分：powerWeight = -1（非硬禁，未 unUse）
+        assertFalse(card.passesSurplusCandidate(remainingCost = 3, isFull = false)) // 常态 N=4：需空闲 6
+        assertTrue(
+            card.passesSurplusCandidate(remainingCost = 3, isFull = false, nDelta = 9),
+            "非硬禁负分不再被第二轮门挡：nDelta=9 → N=0 → 空闲 3 ≥ 2 放行进候选池"
+        )
     }
 
     @Test

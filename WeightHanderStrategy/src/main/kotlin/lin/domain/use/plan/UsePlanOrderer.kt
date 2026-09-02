@@ -6,6 +6,7 @@ import lin.bean.usePlan.MustUseGroupBefore
 import lin.bean.usePlan.UseIntent
 import lin.bean.usePlan.UseStage
 import lin.config.EngineConfig
+import lin.domain.use.plan.UsePlanOrderer.fallbackComparator
 import lin.domain.use.plan.UsePlanOrderer.stageOrderValue
 import lin.myLog
 import java.util.*
@@ -15,7 +16,7 @@ object UsePlanOrderer {
      * 对 UsePlan 中已选中的牌做最终使用排序。
      *
      * 排序规则：
-     * 1. 先按 UseStage / orderWeight / powerWeight 得到稳定基础顺序。
+     * 1. 先按 UseStage / orderWeight / 兜底键（[fallbackComparator]）得到稳定基础顺序。
      * 2. 再应用 MustUseGroupBefore 这类组级顺序约束。
      * 3. 如果约束成环，回退基础顺序，不阻断执行链路。
      */
@@ -40,7 +41,7 @@ object UsePlanOrderer {
     /**
      * 排序决策追溯日志：回答「这张牌为什么排在这个位置」。
      *
-     * 逐卡输出基础序三键的**实际取值**（stage / orderWeight / powerWeight，含 map 缺失时的兜底值），
+     * 逐卡输出基础序三键的**实际取值**（stage / orderWeight / 兜底键，含 map 缺失时的兜底值），
      * 并列出本轮真正生效的约束边。三类排序问题——阶段不对、同段先后不对、约束没生效——都靠这条日志定位。
      *
      * debug 级别：每轮决策调用一次，生产默认不输出；调顺序时把 lin.domain.use.plan 调到 debug 即可。
@@ -52,13 +53,14 @@ object UsePlanOrderer {
     ) {
         myLog.debug {
             buildString {
-                appendLine("出牌顺序决策（${ordered.size} 张）:")
+                appendLine("出牌顺序决策（${ordered.size} 张）: 兜底键=$fallbackKey/$fallbackDirection")
                 ordered.forEachIndexed { index, card ->
                     val intent = intents[card]
                     appendLine(
                         "  #$index ${card.cardId()}" +
                                 " stage=${intent?.stage ?: UseStage.GENERAL}" +
                                 " orderWeight=${intent?.orderWeight ?: 0.0}" +
+                                " baseValue=${card.baseValue}" +
                                 " powerWeight=${card.powerWeight}"
                     )
                 }
@@ -71,7 +73,7 @@ object UsePlanOrderer {
 
     /**
      * 默认顺序比较器。
-     * UseStage 是粗阶段，orderWeight 是同阶段内的人工偏好，powerWeight 是最后兜底。
+     * UseStage 是粗阶段，orderWeight 是同阶段内的人工偏好，[fallbackComparator] 是最后兜底。
      *
      * 阶段先后取自 [stageOrderValue]（Q-032 配置化），不再直接用枚举 ordinal——
      * 使「控制卡组 DEFEND < CLEAR」这类跨卡组的波段顺序差异无需改代码即可表达。
@@ -79,8 +81,88 @@ object UsePlanOrderer {
     private fun baseComparator(intents: Map<ComboCard, UseIntent>): Comparator<ComboCard> {
         return compareBy<ComboCard> { stageOrderValue(intents[it]?.stage ?: UseStage.GENERAL) }
             .thenByDescending { intents[it]?.orderWeight ?: 0.0 }
-            .thenByDescending { it.powerWeight }
+            .then(fallbackComparator())
     }
+
+    // ==================== 兜底键（T-037）====================
+    // stage 与 orderWeight 都分不出先后时的最后 tie-break。它是同段内顺序的**实际主导键**
+    // （7 条标签规则里 6 条 defaultOrderWeight=0，分组 override 大多不配），所以它的量纲必须干净、方向必须可配。
+    //
+    // 旧行为硬编码 `powerWeight` 降序。powerWeight = baseValue + 树分 + 光环分 + legacy handler 分 + BaseWeight，
+    // 是**选牌层**的混合评分。逐分量问「它对『谁先出』有贡献吗」：
+    //   - 树分 = 局面战术信号 → **有贡献**，且是唯一想要的（战术分高的先出，免费复用评估树已有的信息优先）；
+    //   - baseValue = 物理价值 → 有价值锚/稳定性，且与局面无关，用作并列时的 tie-break；
+    //   - 光环分 → 全局加成，与自身先后无关，**无贡献**；
+    //   - legacy handler 分 → 选牌信号量纲未知（可能几十分），**会压倒前两项**，引入不可解释抖动；
+    //   - BaseWeight(+1) → 所有牌相同，对相对序**零影响**。
+    // 结论：只取树分 + baseValue，排除光环/legacy/常数噪声。
+    //
+    // 载体三档（chain 形式，direction 作用于整条链）：
+    // - key = tactical（默认）：tacticalScore 降序 → baseValue 降序。战术层自动涌现，降低逐卡编排要求；
+    //   ts 相同/为 0（未配评估树）退回 baseValue，既解决大面积并列又保留稳定价值锚。
+    // - key = base：只看 baseValue，局面战术信号完全不参与排序（最可复现）。
+    // - key = weight：powerWeight，旧行为，仅作 A/B 回退通道（一标多义，不推荐长期使用）。
+    //
+    // 为什么是**分层**（ts 序数优先）而不是**合成**（E + ts×scale，如 surplusFillValue）：
+    // 分层只用树分的**序数**（谁更命中），合成要用树分的**基数**（具体几分）。树分跨卡可比目前是
+    // 未被验证的假设（TacticalScoreScale 的标定仅基于「典型满命中树分 8~10」的经验值），
+    // 标差 2 倍时合成体会翻转顺序而分层不会。待 Q-024 评估树量纲费化落地后再考虑合成。
+    //
+    // @verify use-intent-model/K-001: 方向本身仍未实战校准。desc 与 asc 各有论证（desc=高价值先落袋防中断；
+    // asc=逐张 replan 架构下先出低费保留选择面），未做对局对比，故保留现状 desc 并留配置开关。
+    // @verify use-intent-model/K-002: 战术层（key=tactical）默认启用未经实战校准。
+
+    enum class FallbackKey { TACTICAL, BASE, WEIGHT }
+
+    enum class FallbackDirection { DESC, ASC }
+
+    /** 解析兜底键载体配置（纯函数）：`tactical`（默认）/ `base` / `weight`，非法值回落 tactical 并告警。 */
+    internal fun parseFallbackKey(raw: String?): FallbackKey = when (raw?.trim()?.lowercase()) {
+        "weight", "powerweight" -> FallbackKey.WEIGHT
+        "base", "basevalue" -> FallbackKey.BASE
+        "tactical", "", null -> FallbackKey.TACTICAL
+        else -> {
+            myLog.warn { "order.fallback.key 配置值非法（可选 tactical/base/weight），已回落 tactical: $raw" }
+            FallbackKey.TACTICAL
+        }
+    }
+
+    /** 解析兜底键方向配置（纯函数）：`desc`（默认，价值高者先出）/ `asc`，非法值回落 desc 并告警。 */
+    internal fun parseFallbackDirection(raw: String?): FallbackDirection = when (raw?.trim()?.lowercase()) {
+        "asc", "ascending" -> FallbackDirection.ASC
+        "desc", "descending", "", null -> FallbackDirection.DESC
+        else -> {
+            myLog.warn { "order.fallback.direction 配置值非法（可选 desc/asc），已回落 desc: $raw" }
+            FallbackDirection.DESC
+        }
+    }
+
+    /**
+     * 按 (载体, 方向) 造比较器（纯函数），便于单测覆盖各档与两种方向而不依赖进程级配置。
+     *
+     * 载体是一条**有序链**：前一个键分出胜负就不再看后面；[FallbackDirection] 作用于整条链（同向）。
+     */
+    internal fun fallbackComparator(key: FallbackKey, direction: FallbackDirection): Comparator<ComboCard> {
+        val chain: List<(ComboCard) -> Double> = when (key) {
+            FallbackKey.TACTICAL -> listOf({ it.tacticalScore }, { it.baseValue })
+            FallbackKey.BASE -> listOf({ it.baseValue })
+            FallbackKey.WEIGHT -> listOf({ it.powerWeight })
+        }
+        val desc = direction == FallbackDirection.DESC
+        var comparator = chain.first().let { first ->
+            if (desc) compareByDescending(first) else compareBy(first)
+        }
+        for (selector in chain.drop(1)) {
+            comparator = if (desc) comparator.thenByDescending(selector) else comparator.thenBy(selector)
+        }
+        return comparator
+    }
+
+    /** 进程级缓存：配置是静态量，无需每轮决策重解析。 */
+    private val fallbackKey: FallbackKey by lazy { parseFallbackKey(EngineConfig.orderFallbackKey) }
+    private val fallbackDirection: FallbackDirection by lazy { parseFallbackDirection(EngineConfig.orderFallbackDirection) }
+
+    private fun fallbackComparator(): Comparator<ComboCard> = fallbackComparator(fallbackKey, fallbackDirection)
 
     /**
      * 解析阶段排序配置（`阶段:值` 逗号分隔，值越小越先出）。

@@ -2,6 +2,7 @@ package lin.domain
 
 import lin.bean.CardWeightInfo
 import lin.bean.passesSurplusCandidate
+import lin.domain.result.SurplusFillCombination
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -48,21 +49,43 @@ class SkillChainRegressionTest {
         )
     }
 
-    // ── 门控：负分/Banned 不进任何组合 ──
+    // ── 门控：负分不再由权重门挡，值不值由 fillValue 地板判断；Banned 硬禁仍挡 ──
 
     @Test
-    fun `负分技能被余费候选门挡住`() {
+    fun `负总分技能未硬禁仍进余费候选`() {
         val (power, _) = WarManageHarness.powerCard()
         harness.config(power, skillConfig(surplusIdleThreshold = 2))
         harness.setPower(power)
         harness.reLoad()
 
         val skill = harness.warManage.parseComboCard(power)
-        skill.addWeight(-5.0) // 评估树负分：这局面打出去亏
+        skill.addWeight(-5.0) // 评估树负分：这局面打出去亏（powerWeight < 0，但未 unUse 硬禁）
 
-        assertFalse(
+        assertTrue(
             skill.passesSurplusCandidate(remainingCost = 10, isFull = false),
-            "powerWeight ≤ 0 的技能不得垫入余费"
+            "Q-036：负总分未硬禁仍进余费候选——值不值得垫由 fillValue 地板（搜索层）判断，不再用权重算术门"
+        )
+    }
+
+    @Test
+    fun `fillValue非正的牌被填充搜索层软死捏`() {
+        val (power, _) = WarManageHarness.powerCard()
+        harness.config(power, skillConfig(surplusIdleThreshold = 2))
+        harness.setPower(power)
+        harness.reLoad()
+
+        val skill = harness.warManage.parseComboCard(power)
+        // 真实链路由 weightEvaluator 同时写 extPowerWeight 与 tacticalScore；此处只驱动 fillValue 输入
+        skill.tacticalScore = -3.0 // E=1（配置等效费），fillValue = 1 + (-3)×0.4 = -0.2 ≤ 0
+
+        assertTrue(
+            SurplusFillCombination.findBestCombination(listOf(skill), 10).isEmpty(),
+            "fillValue ≤ 0（费单位机会成本非正）→ 不垫（软死捏；硬死捏走 isUnUse 候选门）"
+        )
+
+        skill.tacticalScore = 0.0 // fillValue = E = 1 > 0 → 正常可垫
+        assertEquals(
+            listOf(skill.cardId()), SurplusFillCombination.findBestCombination(listOf(skill), 10).map { it.cardId() }
         )
     }
 
