@@ -26,7 +26,7 @@ class CardCombinedConfig(
 ### 为什么删了 `useConfig`
 
 原来的 `useConfig: CardUseConfig` 只在运行时供 `UseIntentDeriver.derive()` 消费。现在改为启动期一次性预推导为
-`useIntent: UseIntent`，`UsePlanBuilder` 直接读取 `card.useIntent()`，不再每次推导。`purposeTags` 的运行时访问走独立的
+`useIntent: UseIntent`，`UsePlanBuilder` 直接读取 `card.useIntent`，不再每次推导。`purposeTags` 的运行时访问走独立的
 `PurposeTagStore` Koin 单例。
 
 ## 组装管线
@@ -55,9 +55,13 @@ CardConfigBindingTask.execute()
 新增配置时不要继续给 `ComboCard` 本体加镜像字段或镜像方法：
 
 1. **跨领域高频读取** → `ComboCardConfigAccess.kt` 扩展函数（如 `groupIds()`、`hasGroup()`、`hasAnyGroup()`）
-2. **跨包消费 / 需要特定可空语义** → 直接作为 `ComboCard` 成员方法（如 `useIntent()` 返回 `UseIntent?`、
-   `comboUseBindings()`），避免 `internal` 扩展被成员方法 shadow 的警告
-3. **运行时可变状态** → 才放回 `ComboCard` 本体
+2. **运行时可变状态** → `ComboCard` 本体的 `var`（如 `extPowerWeight`、`tacticalScore`、`pointCard`）
+3. **需 per-实例缓存的派生只读值** → `ComboCard` 本体的 `by lazy` 字段（如 `predicateGroupIds`、
+   `allGroupIds`、`comboEntries`、`useIntent`）。 **扩展属性无法承载 per-instance 状态**（无字段可存）， 故这类 **必须**
+   放本体——它是缓存载体而非新职责，与「防膨胀」不冲突。
+
+   > 注：这 5 个曾以「成员方法转发 lazy 字段」的形态存在（如 `fun useIntent() = runtimeUseIntent`），
+   > 属纯伪包装，2026-09-03 已删除，改为字段直接对外。
 
 > 注意：不要对同一读取入口同时保留「成员方法 + 扩展函数」两份实现，Kotlin 中成员方法会 shadow 同名扩展，
 > 并触发 "extension is shadowed by a member" 警告。新增读取前先全局搜索确认尚无同名实现。

@@ -78,8 +78,8 @@ fun ComboCard.equivalentCostValue(): Double {
 fun ComboCard.surplusIdleThreshold(): Int =
     cardWeightInfo?.surplusIdleThreshold
     // T-013：走 ComboCard 读取入口（含谓词组运行时解析），勿读 combinedConfig 静态预算
-        ?: groupSurplusIdleThreshold()
-        ?: useIntent()?.tagDefaultSurplusIdleThreshold
+        ?: groupSurplusIdleThreshold
+        ?: useIntent?.tagDefaultSurplusIdleThreshold
         ?: 0
 
 /**
@@ -102,7 +102,7 @@ fun ComboCard.surplusFillValue(): Double =
  * 绝对不打（-100）走 isUnUse 硬禁。
  */
 fun ComboCard.passesSurplusGate(idleCost: Int, nDelta: Int = 0): Boolean {
-    val bypassCondition = if (useIntent()?.negativeScorePolicy == NegativeScorePolicy.AGGRESSIVE)
+    val bypassCondition = if (useIntent?.negativeScorePolicy == NegativeScorePolicy.AGGRESSIVE)
         tacticalScore != 0.0 else tacticalScore > 0.0
     return bypassCondition || idleCost >= cost() + (surplusIdleThreshold() - nDelta).coerceAtLeast(0)
 }

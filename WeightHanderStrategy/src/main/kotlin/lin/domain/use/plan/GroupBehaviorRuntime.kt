@@ -34,6 +34,12 @@ object GroupBehaviorRuntime {
         index = null
     }
 
+    /**
+     * 索引是否已装配、可提供重算，语义同 [ComboRuntime.isReady]——
+     * 未装配时消费方须回落静态预算，而非当成「无组级行为」。
+     */
+    fun isReady(): Boolean = index != null
+
     fun resolveOverride(groupIds: Set<String>): GroupUseOverride? =
         index?.resolveOverride(groupIds)
 

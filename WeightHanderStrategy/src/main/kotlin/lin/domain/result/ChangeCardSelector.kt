@@ -47,7 +47,7 @@ object ChangeCardSelector {
             source = this,
             cost = cost(),
             changeWeight = changeWeight(),
-            comboEntries = comboEntries()
+            comboEntries = comboEntries
         )
     }
 

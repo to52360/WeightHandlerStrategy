@@ -13,7 +13,7 @@ import lin.bean.usePlan.ComboPlanDefinition
  *
  * **T-012**：映射逻辑已抽到 [ComboIndex]，本类退化为「静态 groupMap → 完整组集合」的适配层。
  * 产出的仍是**静态部分预算**——谓词组命中的部分由 [ComboRuntime] 在运行时补上
- * （见 [lin.bean.ComboCard.runtimeComboEntries]），两者共用同一个 [ComboIndex] 实现，不漂移。
+ * （见 [lin.bean.ComboCard.comboEntries]），两者共用同一个 [ComboIndex] 实现，不漂移。
  */
 class ComboAssembler(
     private val groupMap: Map<String, Set<String>>,

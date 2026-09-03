@@ -10,8 +10,7 @@ import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.ComboRelation
 import lin.rule.condition.ConditionLogic
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 /**
@@ -79,11 +78,11 @@ class ComboRuntimeTest {
         val minion = card("M1", type = CardTypeEnum.MINION)
 
         // 断链修复的核心断言：法术（经谓词组 G_SPELL 命中）拿到 combo 条目
-        assertEquals(1, spell.comboEntries().size)
-        assertEquals("C_SPELL", spell.comboEntries().first().comboId)
-        assertEquals(5.0, spell.comboEntries().first().score, 0.0)
+        assertEquals(1, spell.comboEntries.size)
+        assertEquals("C_SPELL", spell.comboEntries.first().comboId)
+        assertEquals(5.0, spell.comboEntries.first().score, 0.0)
         // 随从不在此谓词组 → 无条目
-        assertTrue(minion.comboEntries().isEmpty())
+        assertTrue(minion.comboEntries.isEmpty())
     }
 
     @Test
@@ -102,7 +101,7 @@ class ComboRuntimeTest {
 
         val both = card("S1", type = CardTypeEnum.SPELL, staticGroups = setOf("G_STATIC"))
 
-        val own = both.comboEntries().first().coreMutexOwnGroupIds
+        val own = both.comboEntries.first().coreMutexOwnGroupIds
         // 运行时过滤基于 allGroupIds（静态 ∪ 谓词）→ 两组都在
         assertEquals(setOf("G_STATIC", "G_SPELL"), own.toSet())
     }
@@ -123,7 +122,7 @@ class ComboRuntimeTest {
         val both = card("S1", type = CardTypeEnum.SPELL, staticGroups = setOf("G_STATIC"))
 
         // 卡同时命中 core 静态组与 dep 谓词组 → 仍只归并出一条（不重复计分）
-        val entries = both.comboEntries()
+        val entries = both.comboEntries
         assertEquals(1, entries.size)
         assertEquals("C_BOTH", entries.first().comboId)
     }
@@ -143,8 +142,8 @@ class ComboRuntimeTest {
         val minion = card("M1", type = CardTypeEnum.MINION, staticGroups = setOf("G_STATIC"))
 
         // 静态预算为空（本测试未装配静态条目）→ 短路后仍为空，不进 ComboRuntime
-        assertTrue(minion.comboEntries().isEmpty())
-        assertTrue(minion.comboUseBindings().isEmpty())
+        assertTrue(minion.comboEntries.isEmpty())
+        assertTrue(minion.comboUseBindings.isEmpty())
     }
 
     @Test
@@ -163,8 +162,8 @@ class ComboRuntimeTest {
         val derived = card("D1", type = CardTypeEnum.SPELL, inCardPool = false)
 
         // 消解 Q-001 专项原「衍生卡不参与 combo 加分」的已知边界
-        assertEquals(1, derived.comboEntries().size)
-        assertEquals("C_SPELL", derived.comboEntries().first().comboId)
+        assertEquals(1, derived.comboEntries.size)
+        assertEquals("C_SPELL", derived.comboEntries.first().comboId)
     }
 
     @Test
@@ -174,9 +173,9 @@ class ComboRuntimeTest {
 
         val spell = card("S1", type = CardTypeEnum.SPELL)
 
-        assertTrue(ComboRuntime.isEmpty())
-        assertTrue(spell.comboEntries().isEmpty())
-        assertTrue(spell.comboUseBindings().isEmpty())
+        assertFalse(ComboRuntime.isReady())
+        assertTrue(spell.comboEntries.isEmpty())
+        assertTrue(spell.comboUseBindings.isEmpty())
     }
 
     @Test
@@ -195,11 +194,11 @@ class ComboRuntimeTest {
         val spell = card("S1", type = CardTypeEnum.SPELL)
         val minion = card("M1", type = CardTypeEnum.MINION)
 
-        val bindings = spell.comboUseBindings()
+        val bindings = spell.comboUseBindings
         assertEquals(1, bindings.size)
         assertEquals(CardComboUseBinding("C_ORDER", setOf("G_SPELL"), setOf("G_OTHER")), bindings.first())
         // 顺序绑定由 relation 生成，只有命中谓词组的卡才有
-        assertTrue(minion.comboUseBindings().isEmpty())
+        assertTrue(minion.comboUseBindings.isEmpty())
     }
 
     @Test
@@ -216,9 +215,9 @@ class ComboRuntimeTest {
 
         val spell = card("S1", type = CardTypeEnum.SPELL)
 
-        assertEquals(1, spell.comboEntries().size)
-        assertEquals(1, spell.comboEntries().size)
-        assertEquals(1, spell.comboEntries().size)
+        assertEquals(1, spell.comboEntries.size)
+        assertEquals(1, spell.comboEntries.size)
+        assertEquals(1, spell.comboEntries.size)
     }
 
     @Test
@@ -236,10 +235,10 @@ class ComboRuntimeTest {
         val spell = card("S1", type = CardTypeEnum.SPELL)
         val minion = card("M1", type = CardTypeEnum.MINION)
 
-        assertEquals(1, spell.comboEntries().size)
-        assertTrue(minion.comboEntries().isEmpty())
+        assertEquals(1, spell.comboEntries.size)
+        assertTrue(minion.comboEntries.isEmpty())
         // 再次读取仍然正确（缓存未串味）
-        assertEquals(1, spell.comboEntries().size)
-        assertTrue(minion.comboEntries().isEmpty())
+        assertEquals(1, spell.comboEntries.size)
+        assertTrue(minion.comboEntries.isEmpty())
     }
 }

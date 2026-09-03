@@ -20,7 +20,7 @@ object ComboUseConstraintBuilder {
      */
     fun build(cards: List<ComboCard>): ComboUseConstraints {
         val useConstraints = cards
-            .flatMap { it.comboUseBindings() }
+            .flatMap { it.comboUseBindings }
             .distinctBy { "${it.comboId}:${it.beforeGroupIds}:${it.afterGroupIds}" }
             .filter { cards.anyCardInGroups(it.beforeGroupIds) && cards.anyCardInGroups(it.afterGroupIds) }
             .map {

@@ -20,9 +20,11 @@ import lin.bean.usePlan.ComboPlanDefinition
  * 预算的**超集**，不会丢静态部分，无需「预算 ∪ 增量」的第三份合并逻辑。
  *
  * ## 短路与降级
- * - 未装配（index == null）：查询返回空列表。仅发生在未跑装配流程的测试用例。
- * - **消费侧短路**：谓词组未命中时 [lin.bean.ComboCard.runtimeComboEntries] 直接返回静态预算，
+ * - **消费侧短路**：谓词组未命中时 [lin.bean.ComboCard.comboEntries] 直接返回静态预算，
  *   根本不进本类——未建谓词组的配置零额外开销。
+ * - 未装配（[isReady] 为 false）：消费方**回落静态预算**，不可把空结果当「这张卡没有 combo」
+ *   ——那会连带丢掉启动期已算好的静态部分（守卫见 [lin.bean.ComboCard] 的重算守卫）。
+ *   仅发生在未跑装配流程的测试用例 / 装配步骤缺失。
  * - 本类**不做条件求值**，谓词判定与失败降级在 [GroupMembershipRuntime] 单点收口
  *   （求值失败 = 该组不在集合里），故本类无失败路径。
  */
@@ -42,8 +44,13 @@ object ComboRuntime {
         index = null
     }
 
-    /** 是否已装配。 */
-    fun isEmpty(): Boolean = index == null
+    /**
+     * 索引是否已装配、可提供重算。
+     *
+     * ⚠️ **未装配时消费方必须回落静态预算**，不能把空结果当「这张卡没有 combo」——
+     * 那会连带丢掉启动期已算好的静态部分（详见 [lin.bean.ComboCard] 的重算守卫）。
+     */
+    fun isReady(): Boolean = index != null
 
     fun entries(groupIds: Set<String>): List<CardComboEntry> =
         index?.entries(groupIds) ?: emptyList()

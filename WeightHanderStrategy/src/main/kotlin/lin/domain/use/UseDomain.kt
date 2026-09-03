@@ -25,7 +25,7 @@ class UseDomain(val warManage: MyWarManage) {
                 }
                 context.useSucceeded = warManage.tryUseCard(card)
                 myLog.info { "打出$card,使用结果:${context.useSucceeded}" }
-                if (context.useSucceeded && card.useIntent()?.replanAfterUse == true)
+                if (context.useSucceeded && card.useIntent?.replanAfterUse == true)
                     context.replanRequested = true
                 card.useAfterStrategy?.executeAfterAction(context, this)
                 if (context.replanRequested) {

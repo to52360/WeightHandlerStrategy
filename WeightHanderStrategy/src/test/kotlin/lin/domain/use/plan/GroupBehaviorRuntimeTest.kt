@@ -84,9 +84,9 @@ class GroupBehaviorRuntimeTest {
         val minion = card(id = "M1", type = CardTypeEnum.MINION)
 
         // 断链修复的核心断言：谓词组（所有法术）的出牌阶段覆盖生效
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
         // 随从不在谓词组 → 无覆盖，回落静态预算（默认 GENERAL）
-        assertEquals(UseStage.GENERAL, minion.useIntent()?.stage)
+        assertEquals(UseStage.GENERAL, minion.useIntent?.stage)
     }
 
     @Test
@@ -108,8 +108,8 @@ class GroupBehaviorRuntimeTest {
         val spell = card(type = CardTypeEnum.SPELL)
         val minion = card(id = "M1", type = CardTypeEnum.MINION)
 
-        assertEquals(cs, spell.conditionalStage())
-        assertNull(minion.conditionalStage())
+        assertEquals(cs, spell.conditionalStage)
+        assertNull(minion.conditionalStage)
     }
 
     @Test
@@ -124,7 +124,7 @@ class GroupBehaviorRuntimeTest {
         // 同时属于静态组与谓词组：allGroupIds 静态在前 → 静态声明优先
         val both = card(type = CardTypeEnum.SPELL, staticGroups = setOf("G_STATIC"))
 
-        assertEquals(UseStage.FIRST, both.useIntent()?.stage)
+        assertEquals(UseStage.FIRST, both.useIntent?.stage)
     }
 
     @Test
@@ -134,7 +134,7 @@ class GroupBehaviorRuntimeTest {
 
         val both = card(type = CardTypeEnum.SPELL, staticGroups = setOf("G_STATIC"))
 
-        assertEquals(UseStage.MID, both.useIntent()?.stage)
+        assertEquals(UseStage.MID, both.useIntent?.stage)
     }
 
     @Test
@@ -152,9 +152,9 @@ class GroupBehaviorRuntimeTest {
         val both = card(type = CardTypeEnum.SPELL, staticGroups = setOf("G_STATIC"))
 
         // 若先取 override（拿到 G_STATIC）再读字段，会得 null —— 此处验证不会
-        assertEquals(cs, both.conditionalStage())
+        assertEquals(cs, both.conditionalStage)
         // 且 stage 仍由静态组声明优先
-        assertEquals(UseStage.FIRST, both.useIntent()?.stage)
+        assertEquals(UseStage.FIRST, both.useIntent?.stage)
     }
 
     @Test
@@ -167,7 +167,7 @@ class GroupBehaviorRuntimeTest {
         val minion = card(id = "M1", type = CardTypeEnum.MINION, staticGate = 1)
 
         // 静态预算原样返回，不进 GroupBehaviorRuntime
-        assertEquals(UseStage.GENERAL, minion.useIntent()?.stage)
+        assertEquals(UseStage.GENERAL, minion.useIntent?.stage)
         assertEquals(1, minion.surplusIdleThreshold())
     }
 
@@ -181,7 +181,7 @@ class GroupBehaviorRuntimeTest {
         // combinedConfig == null 即卡池外的卡（衍生/发现/随机生成）
         val derived = ComboCard(card = createMockCard(cardId = "D1", cardType = CardTypeEnum.SPELL))
 
-        assertEquals(UseStage.LAST, derived.useIntent()?.stage)
+        assertEquals(UseStage.LAST, derived.useIntent?.stage)
     }
 
     @Test
@@ -191,10 +191,10 @@ class GroupBehaviorRuntimeTest {
 
         val spell = card(type = CardTypeEnum.SPELL)
 
-        assertNull(spell.conditionalStage())
-        assertNull(spell.groupSurplusIdleThreshold())
+        assertNull(spell.conditionalStage)
+        assertNull(spell.groupSurplusIdleThreshold)
         // useIntent 回落到静态预算（未装配 → resolveUseIntent 返回 null）
-        assertEquals(UseStage.GENERAL, spell.useIntent()?.stage)
+        assertEquals(UseStage.GENERAL, spell.useIntent?.stage)
     }
 
     @Test
@@ -204,8 +204,8 @@ class GroupBehaviorRuntimeTest {
         // 卡级声明 replan=true，谓词组 override 未声明该字段 → 应回落卡级 true（不能被吞掉）
         val spell = card(type = CardTypeEnum.SPELL, purposeReplan = true)
 
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
-        assertTrue(spell.useIntent()?.replanAfterUse == true)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
+        assertTrue(spell.useIntent?.replanAfterUse == true)
     }
 
     @Test
@@ -214,9 +214,9 @@ class GroupBehaviorRuntimeTest {
 
         val spell = card(type = CardTypeEnum.SPELL)
 
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
     }
 
     @Test
@@ -226,10 +226,10 @@ class GroupBehaviorRuntimeTest {
         val spell = card(type = CardTypeEnum.SPELL)
         val minion = card(id = "M1", type = CardTypeEnum.MINION)
 
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
-        assertEquals(UseStage.GENERAL, minion.useIntent()?.stage)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
+        assertEquals(UseStage.GENERAL, minion.useIntent?.stage)
         // 再次读取仍然正确（缓存未串味）
-        assertEquals(UseStage.LAST, spell.useIntent()?.stage)
-        assertEquals(UseStage.GENERAL, minion.useIntent()?.stage)
+        assertEquals(UseStage.LAST, spell.useIntent?.stage)
+        assertEquals(UseStage.GENERAL, minion.useIntent?.stage)
     }
 }

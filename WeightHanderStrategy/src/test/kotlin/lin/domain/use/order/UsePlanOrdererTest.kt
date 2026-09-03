@@ -1,4 +1,4 @@
-﻿package lin.domain.use.order
+package lin.domain.use.order
 
 import condition.createMockCard
 import lin.bean.CardCombinedConfig
@@ -157,7 +157,7 @@ class UsePlanOrdererTest {
 
     @Test
     fun `order 无 UseIntent 的卡回落 GENERAL`() {
-        // 无 combinedConfig → useIntent() 为 null → 不进 intents map → 比较器按 GENERAL 兜底
+        // 无 combinedConfig → useIntent 为 null → 不进 intents map → 比较器按 GENERAL 兜底
         val cards = listOf(
             card("end", stage = UseStage.LAST),
             ComboCard(card = createMockCard(cardId = "noConfig")),
@@ -344,7 +344,7 @@ class UsePlanOrdererTest {
     /** 与 UsePlanBuilder.build 同构：无 UseIntent 的卡不进 intents map。 */
     private fun plan(cards: List<ComboCard>, vararg constraints: UseConstraint): UsePlan = UsePlan(
         cards = cards,
-        intents = cards.mapNotNull { c -> c.useIntent()?.let { c to it } }.toMap(),
+        intents = cards.mapNotNull { c -> c.useIntent?.let { c to it } }.toMap(),
         useConstraints = constraints.toList()
     )
 

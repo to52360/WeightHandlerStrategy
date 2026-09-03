@@ -22,7 +22,7 @@ object DefaultFindBestCombination : FindBestCombination {
         )
         val cardsBindings: List<CardBindings> = targetList.map { card ->
             CardBindings(
-                entries = card.comboEntries(),
+                entries = card.comboEntries,
                 groupIds = card.groupIds()
             )
         }

@@ -25,9 +25,9 @@ class UsePlanBuilder(
 
     fun build(cards: List<ComboCard>, ruleEnv: RuleEnv): UsePlan {
         val intents = cards.mapNotNull { card ->
-            card.useIntent()?.let { base -> card to applyConditionalStage(card, base, ruleEnv) }
+            card.useIntent?.let { base -> card to applyConditionalStage(card, base, ruleEnv) }
         }.toMap()
-        val constraints = if (cards.none { it.comboUseBindings().isNotEmpty() }) {
+        val constraints = if (cards.none { it.comboUseBindings.isNotEmpty() }) {
             ComboUseConstraints(emptyList())
         } else {
             ComboUseConstraintBuilder.build(cards)
@@ -46,7 +46,7 @@ class UsePlanBuilder(
      */
     private fun applyConditionalStage(card: ComboCard, base: UseIntent, ruleEnv: RuleEnv): UseIntent {
         // T-013：走 ComboCard 读取入口（含谓词组运行时解析），勿读 combinedConfig 静态预算
-        val cs = card.conditionalStage() ?: return base
+        val cs = card.conditionalStage ?: return base
         val logic =
             treeLogicCache.getOrPut(cs.conditionId) { guardCompiler.compileTree(cs.conditionId, crossCard = true) }
         val matched = logic(RuleContext(card), ruleEnv)
