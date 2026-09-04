@@ -39,10 +39,12 @@ class ComboIndex(comboDefinitions: List<ComboPlanDefinition>) {
                 CardComboEntry(
                     comboId = def.id,
                     score = def.score,
+                    changeScore = def.changeScore,
                     coreMutexOwnGroupIds = if (def.coreMutex)
                         def.coreGroupIds.filter { it in groupIds }
                     else emptyList(),
-                    counterpartGroupIds = def.depGroupIds + def.coreGroupIds
+                    counterpartGroupIds = def.depGroupIds + def.coreGroupIds,
+                    coreGroupIds = def.coreGroupIds
                 )
             }
     }

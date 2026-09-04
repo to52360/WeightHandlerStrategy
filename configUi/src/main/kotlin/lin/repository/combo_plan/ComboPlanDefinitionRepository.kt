@@ -17,6 +17,7 @@ class ComboPlanDefinitionRepository(private val jdbcTemplate: JdbcTemplate) {
                 core_group_ids  TEXT    NOT NULL,
                 dep_group_ids   TEXT    NOT NULL,
                 score           REAL    NOT NULL,
+                change_score    REAL    NOT NULL DEFAULT 0,
                 core_mutex      INTEGER NOT NULL DEFAULT 1,
                 relation        TEXT    NOT NULL,
                 must_adjacent   INTEGER NOT NULL DEFAULT 0
@@ -35,6 +36,7 @@ class ComboPlanDefinitionRepository(private val jdbcTemplate: JdbcTemplate) {
             coreGroupIds = rs.getString("core_group_ids"),
             depGroupIds = rs.getString("dep_group_ids"),
             score = rs.getDouble("score"),
+            changeScore = rs.getDouble("change_score"),
             coreMutex = rs.getInt("core_mutex") == 1,
             relation = rs.getString("relation"),
             mustAdjacent = rs.getInt("must_adjacent") == 1
@@ -43,13 +45,14 @@ class ComboPlanDefinitionRepository(private val jdbcTemplate: JdbcTemplate) {
 
     fun save(entity: ComboPlanDefinitionEntity) {
         val sql = """
-            INSERT INTO combo_plan_definition (manager_id, id, core_group_ids, dep_group_ids, score, core_mutex, relation, must_adjacent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO combo_plan_definition (manager_id, id, core_group_ids, dep_group_ids, score, change_score, core_mutex, relation, must_adjacent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 manager_id      = excluded.manager_id,
                 core_group_ids  = excluded.core_group_ids,
                 dep_group_ids   = excluded.dep_group_ids,
                 score           = excluded.score,
+                change_score    = excluded.change_score,
                 core_mutex      = excluded.core_mutex,
                 relation        = excluded.relation,
                 must_adjacent   = excluded.must_adjacent
@@ -61,6 +64,7 @@ class ComboPlanDefinitionRepository(private val jdbcTemplate: JdbcTemplate) {
             entity.coreGroupIds,
             entity.depGroupIds,
             entity.score,
+            entity.changeScore,
             if (entity.coreMutex) 1 else 0,
             entity.relation,
             if (entity.mustAdjacent) 1 else 0

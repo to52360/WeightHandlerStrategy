@@ -33,6 +33,8 @@ data class ComboPlanSummaryDto(
     val coreGroup: ComboPlanGroupRef,
     val depGroup: ComboPlanGroupRef,
     val score: Double,
+    /** 起手换牌专用组合协同加分：核心组与依赖组同时保留时给保留子集加此分；0 = 不加成（不影响出牌评分） */
+    val changeScore: Double = 0.0,
     val relation: String,
     val coreMutex: Boolean,
     val mustAdjacent: Boolean
@@ -53,6 +55,8 @@ data class ComboPlanDetailDto(
     val coreGroups: List<ComboPlanGroupDto>,
     val depGroups: List<ComboPlanGroupDto>,
     val score: Double,
+    /** 起手换牌专用组合协同加分：核心组与依赖组同时保留时给保留子集加此分；0 = 不加成（不影响出牌评分） */
+    val changeScore: Double = 0.0,
     val relation: String,        // SCORE_ONLY, CORE_BEFORE_DEP, DEP_BEFORE_CORE
     val coreMutex: Boolean,
     val mustAdjacent: Boolean,

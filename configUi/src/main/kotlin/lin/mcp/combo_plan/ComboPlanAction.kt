@@ -55,6 +55,7 @@ class ComboPlanAction(
                 coreGroup = ComboPlanGroupRef(ids = entity.coreGroupIdSet(), names = coreGroupNames),
                 depGroup = ComboPlanGroupRef(ids = entity.depGroupIdSet(), names = depGroupNames),
                 score = entity.score,
+                changeScore = entity.changeScore,
                 relation = entity.relation,
                 coreMutex = entity.coreMutex,
                 mustAdjacent = entity.mustAdjacent
@@ -92,6 +93,7 @@ class ComboPlanAction(
             coreGroups = coreGroups,
             depGroups = depGroups,
             score = entity.score,
+            changeScore = entity.changeScore,
             relation = entity.relation,
             coreMutex = entity.coreMutex,
             mustAdjacent = entity.mustAdjacent,
@@ -125,6 +127,7 @@ class ComboPlanAction(
             coreGroup = ComboPlanGroupRef(ids = entity.coreGroupIdSet(), names = coreNames),
             depGroup = ComboPlanGroupRef(ids = entity.depGroupIdSet(), names = depNames),
             score = entity.score,
+            changeScore = entity.changeScore,
             relation = entity.relation,
             coreMutex = entity.coreMutex,
             mustAdjacent = entity.mustAdjacent

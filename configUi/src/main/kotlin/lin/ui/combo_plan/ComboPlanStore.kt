@@ -10,6 +10,25 @@ import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.card_group.ActiveManagerHolder
 import lin.utils.nextShortId
 
+/**
+ * Combo 编辑器表单快照：一次性承载「编辑器 → 保存」链路的全部字段。
+ *
+ * 存在意义：表单字段已达 9 项，若继续用平铺参数回调，新增一个字段就要改三处签名。
+ * 新增字段只在此处加一项，Editor 组装、Workbench 转发、Store 消费三处自动跟随。
+ */
+data class ComboPlanFormSnapshot(
+    val managerId: String,
+    val id: String?,
+    val coreGroupIds: Set<String>,
+    val depGroupIds: Set<String>,
+    val score: Double,
+    /** 起手换牌专用组合协同加分：核心组与依赖组同时保留时给保留子集加此分；0.0 = 不加成 */
+    val changeScore: Double = 0.0,
+    val relation: ComboRelation,
+    val coreMutex: Boolean,
+    val mustAdjacent: Boolean
+)
+
 class ComboPlanStore(
     private val repository: ComboPlanDefinitionRepository,
     private val cardGroupService: CardGroupService,
@@ -91,27 +110,19 @@ class ComboPlanStore(
     /**
      * 保存或新建 Combo 编排配置
      */
-    fun savePlan(
-        managerId: String,
-        id: String?,
-        coreGroupIds: Set<String>,
-        depGroupIds: Set<String>,
-        score: Double,
-        coreMutex: Boolean,
-        relation: ComboRelation,
-        mustAdjacent: Boolean
-    ) {
-        val finalId = id?.trim()?.takeIf { it.isNotEmpty() } ?: nextShortId()
+    fun savePlan(form: ComboPlanFormSnapshot) {
+        val finalId = form.id?.trim()?.takeIf { it.isNotEmpty() } ?: nextShortId()
 
         val entity = ComboPlanDefinitionEntity(
-            managerId = managerId,
+            managerId = form.managerId,
             id = finalId,
-            coreGroupIds = coreGroupIds.joinToString(","),
-            depGroupIds = depGroupIds.joinToString(","),
-            score = score,
-            coreMutex = coreMutex,
-            relation = relation.name,
-            mustAdjacent = mustAdjacent
+            coreGroupIds = form.coreGroupIds.joinToString(","),
+            depGroupIds = form.depGroupIds.joinToString(","),
+            score = form.score,
+            changeScore = form.changeScore,
+            coreMutex = form.coreMutex,
+            relation = form.relation.name,
+            mustAdjacent = form.mustAdjacent
         )
 
         repository.save(entity)

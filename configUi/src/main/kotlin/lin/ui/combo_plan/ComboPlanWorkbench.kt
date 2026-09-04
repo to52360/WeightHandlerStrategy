@@ -82,17 +82,8 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
         // =====================================================================
         // 2. 右侧编辑器交互回调绑定
         // =====================================================================
-        editor.onSave = { managerId, id, coreSelected, depSelected, score, relation, coreMutex, mustAdjacent ->
-            store.savePlan(
-                managerId = managerId,
-                id = id,
-                coreGroupIds = coreSelected,
-                depGroupIds = depSelected,
-                score = score,
-                coreMutex = coreMutex,
-                relation = relation,
-                mustAdjacent = mustAdjacent
-            )
+        editor.onSave = { form ->
+            store.savePlan(form)
             isCreatingMode = false
         }
 

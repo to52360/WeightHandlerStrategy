@@ -28,6 +28,7 @@ class ComboPlanEditor : VBox(12.0) {
 
     // 配置表单输入项
     private val scoreSpinner = Spinner<Double>(-100.0, 100.0, 0.0, 0.5)
+    private val changeScoreSpinner = Spinner<Double>(-100.0, 100.0, 0.0, 0.5)
     private val relationCombo = ComboBox<String>()
     private val coreMutexCheck = CheckBox("核心组同回合硬互斥 (Core Mutex)")
     private val mustAdjacentCheck = CheckBox("必须相邻使用 (Adjacent)")
@@ -41,8 +42,7 @@ class ComboPlanEditor : VBox(12.0) {
     private var selectedPlan: ComboPlanDefinition? = null
 
     // 暴露给外部组件的回调函数
-    var onSave: ((managerId: String, id: String?, coreSelected: Set<String>, depSelected: Set<String>, score: Double, relation: ComboRelation, coreMutex: Boolean, mustAdjacent: Boolean) -> Unit)? =
-        null
+    var onSave: ((form: ComboPlanFormSnapshot) -> Unit)? = null
     var onDelete: ((id: String) -> Unit)? = null
 
     init {
@@ -130,6 +130,24 @@ class ComboPlanEditor : VBox(12.0) {
             )
         }
 
+        changeScoreSpinner.apply {
+            isEditable = true
+            prefWidth = 140.0
+            // 起手与出牌是两条独立轴：这里只影响起手换牌，不出牌评分。
+            tooltip = Tooltip(
+                "起手换牌专用：核心组与依赖组的牌在起手同时保留时，额外加此分。\n" +
+                        "用于表达「A、B 单留都一般，一起留才值钱」——单卡 changeWeight 表达不了组合溢价。\n" +
+                        "⚠️ 不影响出牌评分（出牌协同加分是上面的「组合评分加权」），同一个 Combo 只计一次。"
+            )
+        }
+        val changeScoreBox = HBox(10.0).apply {
+            alignment = Pos.CENTER_LEFT
+            children.addAll(
+                Label("起手组合加分:").apply { style = "-fx-font-weight: bold; -fx-text-fill: #2c3e50;" },
+                changeScoreSpinner
+            )
+        }
+
         relationCombo.apply {
             items.addAll("仅评分", "核心优先", "依赖优先")
             value = "仅评分"
@@ -194,6 +212,7 @@ class ComboPlanEditor : VBox(12.0) {
                 selectorContainer,
                 tableContainer,
                 scoreBox,
+                changeScoreBox,
                 relationBox,
                 switchesContainer,
                 btnSave,
@@ -228,6 +247,7 @@ class ComboPlanEditor : VBox(12.0) {
 
         obsBindingRows.clear()
         scoreSpinner.valueFactory.value = 0.0
+        changeScoreSpinner.valueFactory.value = 0.0
         relationCombo.value = "仅评分"
         coreMutexCheck.isSelected = true
         mustAdjacentCheck.isSelected = false
@@ -263,6 +283,7 @@ class ComboPlanEditor : VBox(12.0) {
 
         // 初始化新建表单默认值
         scoreSpinner.valueFactory.value = 0.0
+        changeScoreSpinner.valueFactory.value = 0.0
         relationCombo.value = "仅评分"
         coreMutexCheck.isSelected = true
         mustAdjacentCheck.isSelected = false
@@ -308,6 +329,7 @@ class ComboPlanEditor : VBox(12.0) {
 
         // 同步表单控制参数
         scoreSpinner.valueFactory.value = plan.score
+        changeScoreSpinner.valueFactory.value = plan.changeScore
         relationCombo.value = plan.relation.toChineseDesc()
         coreMutexCheck.isSelected = plan.coreMutex
         mustAdjacentCheck.isSelected = plan.mustAdjacent
@@ -352,16 +374,25 @@ class ComboPlanEditor : VBox(12.0) {
             "依赖优先" -> ComboRelation.DEP_BEFORE_CORE
             else -> ComboRelation.SCORE_ONLY
         }
-        val coreMutex = coreMutexCheck.isSelected
-        val mustAdjacent = mustAdjacentCheck.isSelected
-
         val id = if (isCreatingMode) null else selectedPlan?.id
         val managerId = cardGroupSelector.value?.cardGroupManagerId
         if (managerId.isNullOrBlank()) {
             Alert(Alert.AlertType.WARNING, "请选择目标卡组方案！").showAndWait()
             return
         }
-        onSave?.invoke(managerId, id, coreSelected, depSelected, score, relation, coreMutex, mustAdjacent)
+        onSave?.invoke(
+            ComboPlanFormSnapshot(
+                managerId = managerId,
+                id = id,
+                coreGroupIds = coreSelected,
+                depGroupIds = depSelected,
+                score = score,
+                changeScore = changeScoreSpinner.value ?: 0.0,
+                relation = relation,
+                coreMutex = coreMutexCheck.isSelected,
+                mustAdjacent = mustAdjacentCheck.isSelected
+            )
+        )
 
         isCreatingMode = false
     }

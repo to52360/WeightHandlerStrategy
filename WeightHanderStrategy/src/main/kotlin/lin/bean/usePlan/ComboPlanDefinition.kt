@@ -6,6 +6,20 @@ data class ComboPlanDefinition(
     val depGroupIds: Set<String>,
     val score: Double = 0.0,
     /**
+     * 起手换牌专用的**组合协同加分**：本 combo 的核心组与依赖组在起手同时保留时，
+     * 给保留子集额外加一次该分值——表达「A、B 单留都一般，一起留才值钱」
+     * （单卡 `changeWeight` 是独立通道，只能表达单卡价值，表达不了组合溢价）。
+     *
+     * **单一作用**：只被 `ChangeCardSelector` 消费，**绝不参与出牌评分**。
+     * 出牌侧的协同加分是 [score]，两者互不相关、不可互相替代。
+     *
+     * **默认值 0.0 = 不加成**（与「未配置」运行时行为等价，是该加法的单位元），
+     * 故不需要可空/哨兵值——存在第三态（如卡组级默认起手协同分）时再改成 `Double?`。
+     *
+     * 协同判定复用出牌侧既有语义：`counterpart` 齐备即命中（见 `CardComboEntry.counterpartGroupIds`）。
+     */
+    val changeScore: Double = 0.0,
+    /**
      * 硬互斥：同一个 combo 下多个核心候选绝对不能同时进入本轮组合时才开启。
      *
      * 如果只是"不希望同时出，但特殊情况下可以接受"，不要用 coreMutex；

@@ -26,6 +26,8 @@ class ComboPlanToolTest : McpTestEnv() {
                 coreGroupIds = "binding_core_1,binding_core_2",
                 depGroupIds = "binding_dep_1",
                 score = 3.5,
+                // 起手协同加分（Q-009 / T-015）：只服务起手换牌，不影响出牌 score
+                changeScore = 8.5,
                 coreMutex = true,
                 relation = "CORE_BEFORE_DEP",
                 mustAdjacent = false
@@ -69,6 +71,28 @@ class ComboPlanToolTest : McpTestEnv() {
         assertTrue("get 应输出 managerId", json.contains(testManagerId))
         assertTrue("get 应生成先手核心组步骤说明", json.contains("先手核心组"))
         assertTrue("get 应包含 sequence 出牌步骤", json.contains("sequence"))
+    }
+
+    @Test
+    fun testChangeScoreRoundTrip() {
+        // 存储往返：实体 → 库 → 实体 → 领域对象（起手侧消费的是 toDomain 后的 changeScore）
+        val stored = repo.findById(testPlanId) ?: error("测试 Plan 未落库")
+        assertEquals(8.5, stored.changeScore, 0.0)
+        assertEquals(8.5, stored.toDomain().changeScore, 0.0)
+        // 出牌侧的 score 未被起手字段污染
+        assertEquals(3.5, stored.toDomain().score, 0.0)
+    }
+
+    @Test
+    fun testChangeScoreEchoedInGetAndList() {
+        val get = call("get", """{"resource":"combo_plan","id":"$testPlanId"}""")
+        assertFalse(get.isError)
+        assertTrue("get 应回显起手协同加分 changeScore", get.contentJson.contains("changeScore"))
+        assertTrue("get 的 changeScore 值应为 8.5", get.contentJson.contains("8.5"))
+
+        val list = call("list", """{"resource":"combo_plan"}""")
+        assertFalse(list.isError)
+        assertTrue("list 应回显 changeScore", list.contentJson.contains("changeScore"))
     }
 
     @Test

@@ -9,6 +9,8 @@ data class ComboPlanDefinitionEntity(
     val coreGroupIds: String, // 逗号分隔
     val depGroupIds: String,  // 逗号分隔
     val score: Double,
+    /** 起手换牌专用组合协同加分（引擎 `ComboPlanDefinition.changeScore`）；0.0 = 不加成 */
+    val changeScore: Double = 0.0,
     val coreMutex: Boolean,
     val relation: String,
     val mustAdjacent: Boolean
@@ -23,6 +25,7 @@ data class ComboPlanDefinitionEntity(
             coreGroupIds = coreGroupIdSet(),
             depGroupIds = depGroupIdSet(),
             score = score,
+            changeScore = changeScore,
             coreMutex = coreMutex,
             relation = try {
                 ComboRelation.valueOf(relation)

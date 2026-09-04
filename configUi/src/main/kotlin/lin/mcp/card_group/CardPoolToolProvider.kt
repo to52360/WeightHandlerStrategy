@@ -9,6 +9,8 @@ import lin.mcp.*
 import lin.mcp.action.*
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
+import lin.serviceLoader.cardInfoProvide.decodeCostValue
+import lin.serviceLoader.cardInfoProvide.encodeCostValue
 import lin.utils.HearthstoneDeckCodeParser
 import java.nio.file.Files
 
@@ -71,7 +73,7 @@ class CardPoolToolProvider(
         // ── save_card_pool_weights (卡牌权重与换牌权重更新设置工具) ──
         typedTool<SaveCardPoolWeightsInput>(
             name = "save_card_pool_weights",
-            description = "为指定 .cardgroup 卡池文件更新或设置单卡的静态出牌权重 weight、开局换牌权重 changeWeight、配置等效费用 powerWeight（>0 时该卡基础价值按 costValue(powerWeight) 计算，覆盖身材/费用兜底）。更新时会保留原卡池中的其他卡牌，仅增量更新或追加传入单卡的权重配置。"
+            description = "为指定 .cardgroup 卡池文件更新或设置单卡的静态出牌权重 weight、开局换牌权重 changeWeight、配置等效费用 equivalentCost 与逐卡余费门槛 surplusIdleThreshold。等效费用 >0 时该卡基础价值按 costValue(等效费) 计算、覆盖身材/费用兜底，支持 0.5 档（如 3.5 = 等效 3.5 费）；逐卡余费门槛 N = 空闲 ≥ 牌费 + N 才肯垫出。更新时会保留原卡池中的其他卡牌，仅增量更新或追加传入单卡的权重配置；两语义字段 null = 保留该卡原值，0 = 清除对应声明。"
         ) { input ->
             if (input.fileName.isBlank()) return@typedTool mcpError("fileName 参数不能为空")
             if (input.cards.isEmpty()) return@typedTool mcpError("cards 列表不能为空")
@@ -92,7 +94,14 @@ class CardPoolToolProvider(
                     name = cardName,
                     weight = item.weight ?: oldItem?.weight,
                     changeWeight = item.changeWeight ?: oldItem?.changeWeight,
-                    powerWeight = item.powerWeight ?: oldItem?.powerWeight
+                    // powerWeight = 「等效费(≤1 位小数) + 门槛 N(百分位)」v4 单数编码（D-007，sop-rework T-002）：
+                    // MCP 边界只收语义字段，编解码复用引擎单点（decodeCostValue/encodeCostValue），勿在本模块双实现。
+                    powerWeight = mergePowerWeight(
+                        oldRaw = oldItem?.powerWeight,
+                        newEquivalentCost = item.equivalentCost,
+                        newSurplusIdleThreshold = item.surplusIdleThreshold,
+                        cardId = cardId
+                    )
                 )
             }
 
@@ -180,7 +189,7 @@ private data class ParseDeckCodeInput(
 private data class SaveCardPoolWeightsInput(
     @field:JsonPropertyDescription("卡池文件名（不含 .cardgroup 后缀），如 real_libram_deck")
     val fileName: String,
-    @field:JsonPropertyDescription("需要更新权重的单卡列表。每张卡可指定 cardId, name, weight(静态出牌权重), changeWeight(开局换牌权重), powerWeight(配置等效费用)。未包含的既有卡牌将予以保留。")
+    @field:JsonPropertyDescription("需要更新权重的单卡列表。每张卡可指定 cardId, name, weight(静态出牌权重), changeWeight(开局换牌权重), equivalentCost(配置等效费用), surplusIdleThreshold(逐卡余费门槛)。未包含的既有卡牌将予以保留。")
     val cards: List<CardWeightItemInput>,
     @field:JsonPropertyDescription("文件是否启用，缺省保持原文件状态或默认 true")
     val enabled: Boolean? = null
@@ -195,6 +204,34 @@ private data class CardWeightItemInput(
     val weight: Double? = null,
     @field:JsonPropertyDescription("开局换牌权重 changeWeight（可选，正数偏好保留，负数偏好换掉，如 15.0 或 -100.0）")
     val changeWeight: Double? = null,
-    @field:JsonPropertyDescription("配置等效费用 powerWeight（可选，>0 时该卡基础价值 = costValue(powerWeight)，覆盖身材/费用兜底。如 5.0 表示该卡等效 5 费。仅支持 1 位小数编码余费门槛：5.4 = 等效 5 费 + 空闲 ≥4 才放行垫牌（D-007）；门槛只影响余费垫牌，主搜索资格由候选策略决定）")
-    val powerWeight: Double? = null
+    @field:JsonPropertyDescription("可选：配置等效费用 equivalentCost（>0 时该卡基础价值 = costValue(等效费)，覆盖身材/费用兜底；支持 0.5 档，如 3.5 = 等效 3.5 费，须为 0.1 的整数倍）。传 0 = 清除等效费声明（还原身材/费用兜底）；null = 保留原值。")
+    val equivalentCost: Double? = null,
+    @field:JsonPropertyDescription("可选：逐卡余费门槛 surplusIdleThreshold（惜售语义：空闲 ≥ 牌费 + N 才肯垫出，垫后仍须剩 N 费；只影响余费垫牌，主搜索资格由候选策略/评估树决定）。取值 1~9；传 0 = 清除门槛（还原随时可垫）；null = 保留原值。分组级统一门槛用 save_card_group 的 binding.surplusIdleThreshold。")
+    val surplusIdleThreshold: Int? = null
 )
+
+/**
+ * save_card_pool_weights 单卡 powerWeight 的语义合并：显式提供的字段才生效，null = 保留旧值。
+ * 返回编码后的 v4 单数（等效费 ≤1 位小数 + 门槛 N 占百分位）；null = 未配置（还原身材/费用兜底）。
+ */
+private fun mergePowerWeight(
+    oldRaw: Double?,
+    newEquivalentCost: Double?,
+    newSurplusIdleThreshold: Int?,
+    cardId: String
+): Double? {
+    if (newEquivalentCost == null && newSurplusIdleThreshold == null) return oldRaw
+    val oldDecoded = decodeCostValue(oldRaw ?: 0.0)
+    val eq = newEquivalentCost ?: oldDecoded.equivalentCostValue
+    val n = when {
+        newSurplusIdleThreshold == 0 -> null // 显式清除门槛（还原随时可垫）
+        newSurplusIdleThreshold != null -> newSurplusIdleThreshold
+        else -> oldDecoded.surplusIdleThreshold
+    }
+    return try {
+        if (eq == 0.0 && n == null) null // 清除整个等效费声明
+        else encodeCostValue(eq, n)
+    } catch (e: IllegalArgumentException) {
+        throw McpBadInput("cards[$cardId] 等效费用/门槛取值不合法: ${e.message}")
+    }
+}

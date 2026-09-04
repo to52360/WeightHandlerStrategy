@@ -89,8 +89,8 @@ fun evaluateCardRoots(
 
     card.intentEvaluatorRoots()?.let { roots ->
         val context = RuleContext(card)
-        for (root in roots) {
-            when (val res = evaluateConditionTree(root.root, context, ruleEnv, collectedActions)) {
+        for ((root1) in roots) {
+            when (val res = evaluateConditionTree(root1, context, ruleEnv, collectedActions)) {
                 is EvalOutcome.Matched -> totalScore += res.score
                 is EvalOutcome.Skipped -> totalScore += res.score
                 // 门控短路：该根树不贡献分（等价于整树 0 分），继续下一棵根树

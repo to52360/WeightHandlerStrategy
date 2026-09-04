@@ -3,6 +3,7 @@ package lin.ai.config
 import lin.dao.CardGroupJsonParser
 import lin.repository.CardDetail
 import lin.repository.HsCardRepository
+import lin.serviceLoader.cardInfoProvide.decodeCostValue
 
 /**
  * CardGroupQueryService 的默认实现。
@@ -30,6 +31,9 @@ class DefaultCardGroupQueryService(
             .associateBy { it.cardId }
         val cards = config.cards.map { weight ->
             val info = cardMap[weight.cardId]
+            // D-007 v4（sop-rework T-002）：解码回显语义字段（等效费支持 0.5 档），
+            // 不暴露「等效费 + 门槛挤一个数」的存储编码原值。
+            val decoded = weight.powerWeight?.takeIf { it > 0.0 }?.let { decodeCostValue(it) }
             CardGroupCard(
                 cardId = weight.cardId,
                 name = info?.name ?: weight.cardId,
@@ -41,7 +45,9 @@ class DefaultCardGroupQueryService(
                 race = info?.race,
                 cardClass = info?.cardClass,
                 weight = weight.weight,
-                changeWeight = weight.changeWeight
+                changeWeight = weight.changeWeight,
+                equivalentCost = decoded?.equivalentCostValue?.takeIf { it > 0.0 },
+                surplusIdleThreshold = decoded?.surplusIdleThreshold
             )
         }
         return CardGroupDetail(fileName = fileName, cards = cards)

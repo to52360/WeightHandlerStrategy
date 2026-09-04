@@ -123,6 +123,9 @@ data class CardGroupDetail(
  * 单张卡牌信息（含游戏属性，用于智能分组编排）。
  * cardId 为唯一标识，name 为卡牌名称，text 为卡牌效果描述（可能为 null）。
  * cost/type/attack/health/race/cardClass 来自 hs.cards 数据库，库中无记录时为 null。
+ *
+ * equivalentCost/surplusIdleThreshold（D-007 v4，sop-rework T-002）：从存储单数 powerWeight 解码出的
+ * 语义字段，get 回显语义而非编码原值——避免把「等效费 + 余费门槛挤一个数」的存储细节暴露给调用方。
  */
 data class CardGroupCard(
     val cardId: String,
@@ -135,7 +138,9 @@ data class CardGroupCard(
     val race: String? = null,
     val cardClass: String? = null,
     val weight: Double? = null,
-    val changeWeight: Double? = null
+    val changeWeight: Double? = null,
+    val equivalentCost: Double? = null,
+    val surplusIdleThreshold: Int? = null
 )
 
 fun FieldSpec.toAiFieldSpec(): AiFieldSpec {
