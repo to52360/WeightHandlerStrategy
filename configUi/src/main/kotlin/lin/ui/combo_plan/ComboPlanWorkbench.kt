@@ -1,6 +1,7 @@
 package lin.ui.combo_plan
 
 import javafx.beans.property.SimpleStringProperty
+import javafx.beans.value.ChangeListener
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.geometry.Pos
@@ -67,9 +68,15 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
             selectionModel.selectionMode = SelectionMode.SINGLE
 
             addColumn("ID", 80.0) { it.id }
-            addGroupColumn("核心组 (Core Groups)", 180.0) { it.coreGroupIds }
-            addGroupColumn("依赖组 (Dep Groups)", 180.0) { it.depGroupIds }
+            addGroupColumn("核心组", 80.0) { it.coreGroupIds }
+            addGroupColumn("依赖组", 80.0) { it.depGroupIds }
             addColumn("权重", 60.0, isCentered = true) { String.format("%.1f", it.score) }
+            addColumn("留牌权重", 70.0, isCentered = true) {
+                if (it.changeScore == 0.0) "—" else String.format(
+                    "%.1f",
+                    it.changeScore
+                )
+            }
             addColumn("核心互斥", 60.0, isCentered = true) { if (it.coreMutex) "是" else "否" }
             addColumn("出牌顺序", 90.0) { it.relation.toChineseDesc() }
 
@@ -163,7 +170,7 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
         store.loadInitialData()
         // 监听卡组切换，自动刷新数据
         if (managerListener == null) {
-            val listener = javafx.beans.value.ChangeListener<CardManagerEntity?> { _, _, _ ->
+            val listener = ChangeListener<CardManagerEntity?> { _, _, _ ->
                 store.loadInitialData()
             }
             activeManagerHolder.activeManagerProperty.addListener(listener)
