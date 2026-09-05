@@ -27,6 +27,7 @@ import lin.ui.service.TreeConfigService
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.springframework.transaction.support.TransactionTemplate
 
 /** MCP server 及 ToolProvider，仅 MCP 入口加载，不污染 UI 启动 */
 val mcpModule = module {
@@ -61,7 +62,8 @@ val mcpModule = module {
     single {
         CardGroupToolProvider(
             get<CardGroupService>(),
-            get<TreeConfigService>()
+            get<TreeConfigService>(),
+            get<TransactionTemplate>()
         )
     } bind McpToolProvider::class
     single {
@@ -88,7 +90,8 @@ val mcpModule = module {
     single {
         AuraBoostToolProvider(
             get<AuraBoostConfigService>(),
-            get<ConditionTreeConfigService>()
+            get<ConditionTreeConfigService>(),
+            get<TransactionTemplate>()
         )
     } bind McpToolProvider::class
     single {

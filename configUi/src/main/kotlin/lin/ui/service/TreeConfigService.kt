@@ -12,6 +12,7 @@ import lin.rule.condition.ConditionPayload
 import lin.rule.score.ScoreEffect
 import lin.rule.tree.*
 import lin.utils.json.registerLogicNodeMixin
+import org.springframework.transaction.support.TransactionTemplate
 import java.util.*
 
 fun createTreeConfigMapper(): ObjectMapper {
@@ -65,7 +66,9 @@ abstract class ScoreEffectMixin
 class TreeConfigService(
     private val repository: TreeConfigRepository,
     private val leafConfigRepository: EvaluatorLeafConfigRepository,
-    private val mapper: ObjectMapper
+    private val mapper: ObjectMapper,
+    /** T-008：tree_config 与 evaluator_leaf_config 两表写的事务边界。 */
+    private val tx: TransactionTemplate
 ) {
     /**
      * 避免 EvaluatorNode (typealias) 导致的 Jackson 泛型解析丢失。
@@ -73,6 +76,7 @@ class TreeConfigService(
      */
     private data class RootHolder(val root: LogicNode<EvaluatorPayload>)
 
+    /** T-008：`tree_config` + `evaluator_leaf_config` 两表写，包事务防"树存了、叶子没存全"。 */
     fun saveConfig(
         name: String,
         config: EvaluatorTreeConfig,
@@ -80,7 +84,7 @@ class TreeConfigService(
         enabled: Boolean = true,
         managerId: String? = null,
         description: String? = null
-    ): String {
+    ): String = tx.execute {
         val id = existingId ?: UUID.randomUUID().toString().substring(0, 8)
 
         // 仅序列化 root（树结构），leafConfigs 走独立表。
@@ -98,8 +102,8 @@ class TreeConfigService(
         )
         repository.save(entity)
         leafConfigRepository.saveAll(id, config.leafConfigs, mapper)
-        return id
-    }
+        id
+    }!!
 
     fun loadAll(): List<Pair<TreeConfigEntity, EvaluatorTreeConfig?>> {
         return repository.findAll().map { entity ->
@@ -155,9 +159,12 @@ class TreeConfigService(
         )
     }
 
+    /** T-008：叶子 + 树两表删，包事务防"叶子删了、树还在"（或反之）。 */
     fun delete(id: String) {
-        leafConfigRepository.deleteByConfigId(id)
-        repository.deleteById(id)
+        tx.execute {
+            leafConfigRepository.deleteByConfigId(id)
+            repository.deleteById(id)
+        }
     }
 
     /** 按 managerId 加载配置（包含全局共享） */

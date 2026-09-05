@@ -7,6 +7,7 @@ import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInput
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * Push 广播评分配置（aura-boost）域 MCP 工具提供者（写工具 + 动作同文件）：
@@ -19,7 +20,9 @@ import lin.repository.condition_tree.createConditionTreeConfigMapper
  */
 class AuraBoostToolProvider(
     private val service: AuraBoostConfigService,
-    private val conditionTreeService: ConditionTreeConfigService
+    private val conditionTreeService: ConditionTreeConfigService,
+    /** T-008：内联建条件树（0~2 棵）+ boost 行多步写的事务边界。 */
+    private val tx: TransactionTemplate
 ) : McpToolProvider {
 
     private val mapper = createConditionTreeConfigMapper()
@@ -44,34 +47,41 @@ class AuraBoostToolProvider(
                 managerId 关联卡组（消费方归属）；引用的条件树是全局资源。传 existingId 更新已有配置。
             """.trimIndent()
         ) { input ->
-            val conditionId = resolveConditionTreeReference(
-                service = conditionTreeService,
-                mapper = mapper,
-                conditionId = input.conditionId,
-                treeJson = input.conditionTreeJson,
-                defaultName = "${input.name ?: "boost"}_trigger",
-                label = "触发条件树",
-                managerId = input.managerId
-            )
-            val targetConditionId = resolveConditionTreeReference(
-                service = conditionTreeService,
-                mapper = mapper,
-                conditionId = input.targetConditionId,
-                treeJson = input.targetConditionTreeJson,
-                defaultName = "${input.name ?: "boost"}_target",
-                label = "受益过滤条件树",
-                managerId = input.managerId
-            )
-            val id = service.save(
-                SaveAuraBoostInput(
-                    name = input.name,
-                    conditionId = conditionId,
-                    targetConditionId = targetConditionId,
-                    score = input.score,
-                    managerId = input.managerId,
-                    existingId = input.existingId
+            // T-008：内联建条件树（0~2 棵）+ boost 行是多步写，包事务防"树建了、boost 没存"。
+            val (conditionId, targetConditionId, id) = tx.execute {
+                val triggerId = resolveConditionTreeReference(
+                    service = conditionTreeService,
+                    mapper = mapper,
+                    conditionId = input.conditionId,
+                    treeJson = input.conditionTreeJson,
+                    defaultName = "${input.name ?: "boost"}_trigger",
+                    label = "触发条件树",
+                    managerId = input.managerId
                 )
-            )
+                val targetId = resolveConditionTreeReference(
+                    service = conditionTreeService,
+                    mapper = mapper,
+                    conditionId = input.targetConditionId,
+                    treeJson = input.targetConditionTreeJson,
+                    defaultName = "${input.name ?: "boost"}_target",
+                    label = "受益过滤条件树",
+                    managerId = input.managerId
+                )
+                Triple(
+                    triggerId,
+                    targetId,
+                    service.save(
+                        SaveAuraBoostInput(
+                            name = input.name,
+                            conditionId = triggerId,
+                            targetConditionId = targetId,
+                            score = input.score,
+                            managerId = input.managerId,
+                            existingId = input.existingId
+                        )
+                    )
+                )
+            }!!
             mcpSuccess(
                 mapOf(
                     "id" to id, "name" to input.name, "score" to input.score,

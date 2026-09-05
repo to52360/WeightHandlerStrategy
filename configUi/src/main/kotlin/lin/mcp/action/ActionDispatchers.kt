@@ -1,5 +1,6 @@
 package lin.mcp.action
 
+import lin.config.PathConfig
 import lin.mcp.*
 
 /**
@@ -116,7 +117,7 @@ class ToolCapabilitiesProvider(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<CapabilitiesInput>(
             name = "tool_capabilities",
-            description = "查询 get/list/delete 大工具的支持范围与字段语义（能力目录）。不传 resource 返回支持矩阵：get 支持哪些资源、list 支持哪些资源、delete 支持哪些资源。传 resource 返回该资源的完整操作视图：get/list/delete 各自的 id 参数语义、list 过滤字段、删除语义（引用校验/恢复快照/级联）。调用 get/list/delete 前不确定字段语义时先查本工具。"
+            description = "查询 get/list/delete 大工具的支持范围与字段语义（能力目录）。不传 resource 返回支持矩阵：get 支持哪些资源、list 支持哪些资源、delete 支持哪些资源。传 resource 返回该资源的完整操作视图：get/list/delete 各自的 id 参数语义、list 过滤字段、删除语义（引用校验/恢复快照/级联）。调用 get/list/delete 前不确定字段语义时先查本工具。【定库】不传 resource 时同时返回 databasePath（本进程连接的数据库绝对路径）与 cwd——动工前先查一次，确认写的是部署库还是源库（两库数据不同步）。"
         ) { input ->
             if (input.resource == null) {
                 mcpSuccess(
@@ -124,6 +125,10 @@ class ToolCapabilitiesProvider(
                         "get" to registry.getResources(),
                         "list" to registry.listResources(),
                         "delete" to registry.deleteResources(),
+                        // T-007：定库自证——DB 路径由 MCP 进程 cwd 决定（相对路径按 user.dir 解析），
+                        // 调用方据此确认本轮写的是部署库还是源库，不必"写后再查"或靠 description 猜。
+                        "databasePath" to PathConfig.databasePath.toAbsolutePath().normalize().toString(),
+                        "cwd" to System.getProperty("user.dir"),
                         "hint" to "传 resource 可查看单个资源的操作详情（id 语义 / 过滤字段 / 删除语义）"
                     )
                 )

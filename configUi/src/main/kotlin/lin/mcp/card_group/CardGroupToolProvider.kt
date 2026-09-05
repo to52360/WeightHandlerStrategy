@@ -10,6 +10,7 @@ import lin.rule.tree.GroupMembership
 import lin.rule.tree.findOverride
 import lin.rule.tree.findSurplusGate
 import lin.ui.service.TreeConfigService
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * 分组方案域 MCP 工具提供者（写工具 + 动作同文件）：
@@ -19,11 +20,13 @@ import lin.ui.service.TreeConfigService
  */
 class CardGroupToolProvider(
     private val groupService: CardGroupService,
-    private val treeConfigService: TreeConfigService
+    private val treeConfigService: TreeConfigService,
+    /** T-008：级联删除（先删关联树再删 manager）的事务边界。 */
+    private val tx: TransactionTemplate
 ) : McpToolProvider {
 
     override val actions: List<ResourceAction> = listOf(
-        CardGroupAction(groupService, treeConfigService)
+        CardGroupAction(groupService, treeConfigService, tx)
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
@@ -75,7 +78,9 @@ managerId 由 list(resource=card_group) 获取。"""
 
     private class CardGroupAction(
         private val groupService: CardGroupService,
-        private val treeConfigService: TreeConfigService
+        private val treeConfigService: TreeConfigService,
+        /** T-008：级联删除（先删关联树再删 manager）的事务边界（由 Provider 传入）。 */
+        private val tx: TransactionTemplate
     ) : GetAction, ListAction, DeleteAction {
 
         override val resource: String = ActionResources.CARD_GROUP
@@ -104,15 +109,20 @@ managerId 由 list(resource=card_group) 获取。"""
         override val getFieldHint: String = "卡组方案 id（managerId，由 list(resource=card_group) 返回）"
 
         override fun handleDelete(id: String): McpToolResult {
+            // 读与校验放事务外（tx.execute 的 Java SAM lambda 不能非局部 return）
             val manager = groupService.loadAllManagers().firstOrNull { it.id == id }
                 ?: return mcpError("方案不存在: $id")
             val bindings = groupService.loadBindings(id)
             val bindingNames = bindings.map { it.name }
-            val allTreeSummaries = treeConfigService.loadSummaries()
-            val linkedTrees = allTreeSummaries.filter { it["managerId"] == id }
+            val linkedTrees = treeConfigService.loadSummaries().filter { it["managerId"] == id }
             val treeNames = linkedTrees.map { it["name"] as? String ?: "" }
-            linkedTrees.forEach { tree -> treeConfigService.delete(tree["id"] as String) }
-            groupService.deleteManager(id)
+            // T-008：级联删（先删关联树含叶子，再删 manager）包事务，中途失败不留半删。
+            // 内层 TreeConfigService.delete / CardGroupService.deleteManager 自带的 tx.execute
+            // 以 REQUIRED 传播加入本事务，不会嵌套新事务。
+            tx.execute {
+                linkedTrees.forEach { tree -> treeConfigService.delete(tree["id"] as String) }
+                groupService.deleteManager(id)
+            }
             return mcpSuccess(
                 mapOf(
                     "deleted" to true, "managerId" to id, "managerName" to manager.name,

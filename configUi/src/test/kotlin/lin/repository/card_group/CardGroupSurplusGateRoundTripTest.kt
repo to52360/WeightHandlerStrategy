@@ -5,7 +5,9 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.SingleConnectionDataSource
+import org.springframework.transaction.support.TransactionTemplate
 import java.nio.file.Files
 
 /**
@@ -23,7 +25,8 @@ class CardGroupSurplusGateRoundTripTest {
         dataSource = SingleConnectionDataSource("jdbc:sqlite:$dbFile", true)
         val behaviorRepo = CardGroupBehaviorRepository(org.springframework.jdbc.core.JdbcTemplate(dataSource))
         val repo = CardGroupRepository(org.springframework.jdbc.core.JdbcTemplate(dataSource), behaviorRepo)
-        service = CardGroupService(repo)
+        // T-008：service 构造新增事务模板（与生产 Koin 装配一致）
+        service = CardGroupService(repo, TransactionTemplate(DataSourceTransactionManager(dataSource)))
     }
 
     @After

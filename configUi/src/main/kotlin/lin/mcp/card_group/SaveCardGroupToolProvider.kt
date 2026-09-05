@@ -131,11 +131,23 @@ class SaveCardGroupToolProvider(
                 }
             }
             val managerName = input.managerName?.takeIf { it.isNotBlank() } ?: sourceFile
+            val allManagers = groupService.loadAllManagers()
             val existingId = input.existingId?.takeIf { it.isNotBlank() }
+            // T-009：existingId 存在性校验（对齐 save_combo_plan 的 managerId 引用校验）。
+            // 不校验时，传过期 / 跨库的 id 会被直接当 id 用：name/sourceFile 仍匹配则【删掉真 manager 再 upsert
+            // 到错误 id 下】、都不匹配则静默新建一个挂在该 id 下的方案——两者都表现为「操作完在原卡组读不到数据」。
+            // 校验只加在 MCP 边界：service 层 saveManager 的 upsert 语义仍被 UI 工作台等内部调用依赖，不做改动。
+            if (existingId != null && allManagers.none { it.id == existingId }) {
+                return@typedTool mcpError(
+                    "existingId 对应的卡组方案不存在: $existingId。当前存在的方案: ${
+                        allManagers.map { "${it.name}(${it.id})" }
+                    }。不传 existingId 则按 managerName/sourceFile 匹配已有方案，匹配不到才新建。"
+                )
+            }
             // Q-009：更新模式（显式 existingId 或同名/同源方案）下按 name 复用旧 binding id，
             // 避免整体 replaceBindings 重建 id 导致 combo_plan / 评估树 bindingId 引用断裂。
             val targetManagerId = existingId
-                ?: groupService.loadAllManagers()
+                ?: allManagers
                     .firstOrNull { it.name == managerName || it.sourceFile == sourceFile }
                     ?.id
             val existingBindingsByName: Map<String, CardGroupBinding> = if (targetManagerId != null) {

@@ -49,7 +49,10 @@ import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import java.nio.file.Files
+import javax.sql.DataSource
 
 
 /**
@@ -97,11 +100,18 @@ val uiModule = module {
 }
 
 /**
- * 数据库基础模块，直接创建 HikariCP 连接池与 [JdbcTemplate]。
- * configUi 交互频繁，与引擎侧的一次性加载模式不同，需要连接复用以降低开销。
+ * 数据库基础模块：创建 SQLite 数据源、[JdbcTemplate] 与事务模板 [TransactionTemplate]。
+ *
+ * T-008（2026-09-05）：SQLite 是 **单写者 + 文件级锁**，池化多连接反增 `SQLITE_BUSY` 竞争，
+ * 故固定 `maximumPoolSize=1` + `minimumIdle=1`（常驻）——等价于 **单物理连接**：
+ * hs 库 ATTACH 只执行一次，也不会像旧配置（`minIdle=0` + `idleTimeout=30s`）那样空闲即销毁、
+ * 重连时重复 ATTACH。
+ * 保留 Hikari 而非换 `SingleConnectionDataSource` 的关键理由：连接池提供 **借用互斥**——
+ * 同一时刻只有一个线程持有连接，事务的 BEGIN/COMMIT 不会被其他线程的交错调用破坏
+ * （SQLite serialized 模式只保护单个 API 调用，**不保护事务边界**）。
  */
 val dbModule = module {
-    single<JdbcTemplate> {
+    single<DataSource> {
         val dbPath = PathConfig.databasePath
         if (!Files.exists(dbPath)) {
             Files.createFile(dbPath)
@@ -109,23 +119,28 @@ val dbModule = module {
         val config = HikariConfig().apply {
             driverClassName = "org.sqlite.JDBC"
             jdbcUrl = "jdbc:sqlite:${dbPath.toAbsolutePath()}"
-            maximumPoolSize = 2
-            minimumIdle = 0
-            idleTimeout = 30_000
+            maximumPoolSize = 1
+            minimumIdle = 1
+            idleTimeout = 0 // 常驻：禁用空闲回收，避免重连时重复 ATTACH
             connectionTimeout = 10_000
             connectionTestQuery = "SELECT 1"
             connectionInitSql = "ATTACH DATABASE '${PathConfig.hsCardsDbPath.toAbsolutePath()}' AS hs"
             poolName = "ConfigUiPool"
         }
-        JdbcTemplate(HikariDataSource(config))
+        HikariDataSource(config)
     }
 
+    single<JdbcTemplate> { JdbcTemplate(get<DataSource>()) }
+
+    // T-008：多表 / 级联多步写的事务保证。项目用 Koin（非 Spring 容器），
+    // `@Transactional` 注解不生效（无 Spring AOP 代理），故统一用 TransactionTemplate 手动包裹。
+    single<TransactionTemplate> { TransactionTemplate(DataSourceTransactionManager(get<DataSource>())) }
 }
 val uiDBModule = module {
     single { TreeConfigRepository(get()) }
     single { EvaluatorTreeTemplateRepository(get()) }
     single { EvaluatorLeafConfigRepository(get()) }
-    single { TreeConfigService(get(), get(), createTreeConfigMapper()) }
+    single { TreeConfigService(get(), get(), createTreeConfigMapper(), get()) }
     single { EvaluatorTreeTemplateService(get(), get(), createTreeConfigMapper()) }
     single { EvaluatorTreeResolver(get(), get()) }
     single { ConditionTreeConfigRepository(get()) }
@@ -142,7 +157,7 @@ val uiDBModule = module {
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupBehaviorRepository(get()) }
     single { CardGroupRepository(get(), get()) }
-    single { CardGroupService(get()) }
+    single { CardGroupService(get(), get()) }
     single { CardPurposeRepository(get()) }
     single { HsCardRepository(get()) }
 

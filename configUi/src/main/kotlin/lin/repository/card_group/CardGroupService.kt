@@ -8,6 +8,7 @@ import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBehavior.*
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
+import org.springframework.transaction.support.TransactionTemplate
 import java.util.*
 
 // 由于 sourceFile 移到了 Manager，Binding 不再需要独立的 Draft/View 包装，直接使用领域对象 CardGroupBinding 即可。
@@ -28,7 +29,11 @@ data class ManagerSaveCommand(
     val defaultIncludeDerived: Boolean? = null
 )
 
-class CardGroupService(private val repository: CardGroupRepository) {
+class CardGroupService(
+    private val repository: CardGroupRepository,
+    /** T-008：多表 / 多步写的事务边界（Koin 非 Spring 容器，注解式事务不生效，手动包裹）。 */
+    private val tx: TransactionTemplate
+) {
 
     private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
@@ -64,7 +69,12 @@ class CardGroupService(private val repository: CardGroupRepository) {
         }
     }
 
-    fun saveManager(command: ManagerSaveCommand): String {
+    /**
+     * T-008：多表多步写——manager → 删同名 / 同源旧 manager → `replaceBindings`
+     * （**先 `DELETE` 再逐条 insert**）→ 重写 behaviors。任一步失败都会留半写入脏状态
+     * （最坏：删了旧的、新的没插全），故整体包事务。
+     */
+    fun saveManager(command: ManagerSaveCommand): String = tx.execute {
         val (name, sourceFile, enabled, bindings) = command
         val allManagers = repository.findAllManagers()
         val id = command.existingId
@@ -102,10 +112,13 @@ class CardGroupService(private val repository: CardGroupRepository) {
                 toBehaviorEntity(binding.id, b)?.let { repository.saveBehavior(it) }
             }
         }
-        return id
-    }
+        id
+    }!!
 
-    fun deleteManager(id: String) = repository.deleteManager(id)
+    /** T-008：级联删（behaviors → bindings → manager）三步，包事务防半删。 */
+    fun deleteManager(id: String) {
+        tx.execute { repository.deleteManager(id) }
+    }
 
     /**
      * 仅更新方案级元信息（description/status），不触碰 bindings。
@@ -132,12 +145,15 @@ class CardGroupService(private val repository: CardGroupRepository) {
 
     // ─────────────────────── 单条 Binding ──────────────────────────────────
 
+    /** T-008：binding + behaviors 两步写（先删后填），包事务防"binding 改了、behaviors 没跟上"。 */
     fun saveBinding(binding: CardGroupBinding) {
-        repository.saveBinding(CardBindingEntity.fromDomain(binding))
-        // 覆盖写 card_group_behavior：先清该 Binding 全部旧行为行，再按当前行为列表重填
-        repository.deleteBehaviorsByBinding(binding.id)
-        binding.behaviors.forEach { b ->
-            toBehaviorEntity(binding.id, b)?.let { repository.saveBehavior(it) }
+        tx.execute {
+            repository.saveBinding(CardBindingEntity.fromDomain(binding))
+            // 覆盖写 card_group_behavior：先清该 Binding 全部旧行为行，再按当前行为列表重填
+            repository.deleteBehaviorsByBinding(binding.id)
+            binding.behaviors.forEach { b ->
+                toBehaviorEntity(binding.id, b)?.let { repository.saveBehavior(it) }
+            }
         }
     }
 

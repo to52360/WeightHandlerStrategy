@@ -21,11 +21,20 @@ import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 
 val strategyProviderModule = module {
     single { CardGroupBehaviorRepository(get()) }
     single { CardGroupRepository(get(), get()) }
-    single { CardGroupService(get()) }
+    // T-008：本模块由引擎主程序经 SPI 装载（**不含 configUi 的 dbModule**，那里的 TransactionTemplate 解析不到），
+    // 故自备事务模板——从 JdbcTemplate 反查 DataSource（引擎侧 SqliteJdbcProvider 构造 JdbcTemplate 时必带 DataSource）。
+    single<TransactionTemplate> {
+        val dataSource = requireNotNull(get<JdbcTemplate>().dataSource) { "引擎侧 JdbcTemplate 未绑定 DataSource" }
+        TransactionTemplate(DataSourceTransactionManager(dataSource))
+    }
+    single { CardGroupService(get(), get()) }
 
     single {
         ComboPlanDefinitionRepository(get())
