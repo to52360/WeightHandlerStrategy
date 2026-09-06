@@ -10,6 +10,7 @@ import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.ManagerSaveCommand
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
+import lin.repository.condition_tree.resolveConditionTreeReference
 import lin.rule.tree.*
 import lin.utils.nextShortId
 

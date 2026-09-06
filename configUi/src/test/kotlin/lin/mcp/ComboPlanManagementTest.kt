@@ -98,42 +98,39 @@ class ComboPlanManagementTest : McpTestEnv() {
         )
         val planId = mapper.readTree(saveResp.contentJson)["id"].asText()
 
-        // 2. 执行删除，断言返回 deletedPlan 备份快照
+        // 2. 执行删除，断言返回 snapshotId（T-010：删除前落 delete_snapshot 快照）
         val deleteResp = call("delete", """{"resource":"combo_plan","id":"$planId"}""")
         assertFalse("删除不应返回 error", deleteResp.isError)
 
         val deleteContent = mapper.readTree(deleteResp.contentJson)
         assertTrue("应当返回 deleted=true", deleteContent["deleted"].asBoolean())
+        val snapshotId = deleteContent["snapshotId"]
+        assertNotNull("删除应返回 snapshotId", snapshotId)
 
-        val snapshot = deleteContent["deletedPlan"]
-        assertNotNull("恢复快照 deletedPlan 不能为空", snapshot)
-        assertEquals(testManagerId, snapshot["managerId"].asText())
-        assertEquals(5.0, snapshot["score"].asDouble(), 0.001)
-
-        // 3. 利用快照执行 Undo 还原恢复
-        val coreIds = snapshot["coreGroup"]["ids"].map { it.asText() }
-        val depIds = snapshot["depGroup"]["ids"].map { it.asText() }
-
-        val undoResp = call(
-            "save_combo_plan",
-            """{
-              "id":"$planId",
-              "managerId":"${snapshot["managerId"].asText()}",
-              "coreGroupIds":[${coreIds.joinToString(",") { "\"$it\"" }}],
-              "depGroupIds":[${depIds.joinToString(",") { "\"$it\"" }}],
-              "score":${snapshot["score"].asDouble()},
-              "relation":"${snapshot["relation"].asText()}"
-            }"""
+        // 删除后库中应已无该行
+        val afterDelete = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM combo_plan_definition WHERE id = ?", Int::class.java, planId
         )
-        assertFalse("Undo 恢复不应报错", undoResp.isError)
+        assertEquals("删除后库中不应存在", 0, afterDelete)
 
-        // 验证数据库中重新存在该 ID
+        // 3. 经 restore_snapshot 一键恢复（原 id 保留）
+        val restoreResp = call("restore_snapshot", """{"snapshotId":"${snapshotId.asText()}"}""")
+        assertFalse("restore_snapshot 不应报错: ${restoreResp.contentJson}", restoreResp.isError)
+        assertTrue("restore 应返回 restored=true", mapper.readTree(restoreResp.contentJson)["restored"].asBoolean())
+
+        // 验证数据库中按原 id 重新存在该行，且内容与删除前一致
         val count = jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM combo_plan_definition WHERE id = ?",
-            Int::class.java,
-            planId
+            "SELECT count(*) FROM combo_plan_definition WHERE id = ?", Int::class.java, planId
         )
         assertEquals(1, count)
+        val restored = jdbcTemplate.queryForObject(
+            "SELECT manager_id, score, relation FROM combo_plan_definition WHERE id = ?",
+            { rs, _ -> Triple(rs.getString("manager_id"), rs.getDouble("score"), rs.getString("relation")) },
+            planId
+        )
+        assertEquals(testManagerId, restored.first)
+        assertEquals(5.0, restored.second, 0.001)
+        assertEquals("CORE_BEFORE_DEP", restored.third)
     }
 
     @Test

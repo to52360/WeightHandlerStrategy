@@ -7,6 +7,7 @@ import lin.mcp.action.ResourceAction
 import lin.repository.card_group.CardGroupService
 import lin.repository.combo_plan.ComboPlanDefinitionEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.delete_snapshot.DeleteSnapshotService
 import lin.utils.nextShortId
 
 /**
@@ -18,10 +19,11 @@ import lin.utils.nextShortId
  */
 class ComboPlanToolProvider(
     private val repository: ComboPlanDefinitionRepository,
-    private val cardGroupService: CardGroupService
+    private val cardGroupService: CardGroupService,
+    snapshotService: DeleteSnapshotService
 ) : McpToolProvider {
 
-    private val comboPlanAction = ComboPlanAction(repository, cardGroupService)
+    private val comboPlanAction = ComboPlanAction(repository, cardGroupService, snapshotService)
 
     override val actions: List<ResourceAction> = listOf(comboPlanAction)
 

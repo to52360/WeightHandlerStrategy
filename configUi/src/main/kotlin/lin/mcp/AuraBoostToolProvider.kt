@@ -4,10 +4,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.mcp.action.*
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostEntity
-import lin.repository.aura_boost.SaveAuraBoostInput
-import lin.repository.condition_tree.ConditionTreeConfigService
-import lin.repository.condition_tree.createConditionTreeConfigMapper
-import org.springframework.transaction.support.TransactionTemplate
+import lin.repository.aura_boost.SaveAuraBoostInlineInput
+import lin.repository.delete_snapshot.DeleteSnapshotService
+import lin.repository.delete_snapshot.SnapshotPayloads
+import lin.repository.delete_snapshot.SnapshotResource
 
 /**
  * Push 广播评分配置（aura-boost）域 MCP 工具提供者（写工具 + 动作同文件）：
@@ -17,18 +17,17 @@ import org.springframework.transaction.support.TransactionTemplate
  * AuraBoost = 触发条件树（conditionId，全局检测）命中后，给 targetConditionId（受益卡过滤）命中的卡加分。
  * additive 独立通道：命中分与评估树分相加；光环加分只走 AuraBoost，评估树不写光环条件（D-004）。
  * managerId 为消费方归属（卡组级配置），引用的条件树是全局资源（D-003）。
+ * T-011：内联建树（0~2 棵）+ boost 行多步写的编排与事务已下沉至
+ * [lin.repository.aura_boost.AuraBoostConfigService.saveWithInlineTrees]，Provider 不再持有
+ * TransactionTemplate / ConditionTreeConfigService。
  */
 class AuraBoostToolProvider(
     private val service: AuraBoostConfigService,
-    private val conditionTreeService: ConditionTreeConfigService,
-    /** T-008：内联建条件树（0~2 棵）+ boost 行多步写的事务边界。 */
-    private val tx: TransactionTemplate
+    snapshotService: DeleteSnapshotService
 ) : McpToolProvider {
 
-    private val mapper = createConditionTreeConfigMapper()
-
     override val actions: List<ResourceAction> = listOf(
-        AuraBoostAction(service)
+        AuraBoostAction(service, snapshotService)
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
@@ -47,45 +46,22 @@ class AuraBoostToolProvider(
                 managerId 关联卡组（消费方归属）；引用的条件树是全局资源。传 existingId 更新已有配置。
             """.trimIndent()
         ) { input ->
-            // T-008：内联建条件树（0~2 棵）+ boost 行是多步写，包事务防"树建了、boost 没存"。
-            val (conditionId, targetConditionId, id) = tx.execute {
-                val triggerId = resolveConditionTreeReference(
-                    service = conditionTreeService,
-                    mapper = mapper,
+            val result = service.saveWithInlineTrees(
+                SaveAuraBoostInlineInput(
+                    name = input.name,
                     conditionId = input.conditionId,
-                    treeJson = input.conditionTreeJson,
-                    defaultName = "${input.name ?: "boost"}_trigger",
-                    label = "触发条件树",
-                    managerId = input.managerId
+                    conditionTreeJson = input.conditionTreeJson,
+                    targetConditionId = input.targetConditionId,
+                    targetConditionTreeJson = input.targetConditionTreeJson,
+                    score = input.score,
+                    managerId = input.managerId,
+                    existingId = input.existingId
                 )
-                val targetId = resolveConditionTreeReference(
-                    service = conditionTreeService,
-                    mapper = mapper,
-                    conditionId = input.targetConditionId,
-                    treeJson = input.targetConditionTreeJson,
-                    defaultName = "${input.name ?: "boost"}_target",
-                    label = "受益过滤条件树",
-                    managerId = input.managerId
-                )
-                Triple(
-                    triggerId,
-                    targetId,
-                    service.save(
-                        SaveAuraBoostInput(
-                            name = input.name,
-                            conditionId = triggerId,
-                            targetConditionId = targetId,
-                            score = input.score,
-                            managerId = input.managerId,
-                            existingId = input.existingId
-                        )
-                    )
-                )
-            }!!
+            )
             mcpSuccess(
                 mapOf(
-                    "id" to id, "name" to input.name, "score" to input.score,
-                    "conditionId" to conditionId, "targetConditionId" to targetConditionId
+                    "id" to result.id, "name" to input.name, "score" to input.score,
+                    "conditionId" to result.conditionId, "targetConditionId" to result.targetConditionId
                 )
             )
         }
@@ -94,7 +70,8 @@ class AuraBoostToolProvider(
     // ── 动作：aura_boost get/list/delete ──
 
     private class AuraBoostAction(
-        private val service: AuraBoostConfigService
+        private val service: AuraBoostConfigService,
+        private val snapshotService: DeleteSnapshotService
     ) : GetAction, ListAction, DeleteAction {
 
         override val resource: String = ActionResources.AURA_BOOST
@@ -118,13 +95,22 @@ class AuraBoostToolProvider(
         override fun handleDelete(id: String): McpToolResult {
             val entity = service.findById(id)
                 ?: return mcpError("AuraBoost 不存在: $id")
-            service.delete(id)
-            return mcpSuccess(mapOf("deleted" to entity.id, "name" to entity.name))
+            val payload = SnapshotPayloads.auraBoost(entity)
+            val snapshotId = snapshotService.deleteWithSnapshot(
+                resource = SnapshotResource.AURA_BOOST,
+                entityId = entity.id,
+                entityName = entity.name,
+                payload = payload
+            ) {
+                service.delete(id)
+            }
+            return mcpSuccess(mapOf("deleted" to entity.id, "name" to entity.name, "snapshotId" to snapshotId))
         }
 
         override val deleteFieldHint: String = "AuraBoost id（由 list(resource=aura_boost) 返回）"
 
-        override val deleteSemantics: String = "删除不可恢复"
+        override val deleteSemantics: String =
+            "删除前落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）"
     }
 }
 

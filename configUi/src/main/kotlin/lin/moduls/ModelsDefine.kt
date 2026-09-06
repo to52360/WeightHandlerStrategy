@@ -19,6 +19,8 @@ import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
+import lin.repository.delete_snapshot.DeleteSnapshotRepository
+import lin.repository.delete_snapshot.DeleteSnapshotService
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.repository.tree_config.EvaluatorTreeTemplateRepository
@@ -39,10 +41,7 @@ import lin.ui.condition_tree.action.CreateConditionTreeAction
 import lin.ui.condition_tree.action.DeleteConditionTreeAction
 import lin.ui.condition_tree.action.SaveConditionTreeAction
 import lin.ui.condition_tree.validation.ConditionTreeValidator
-import lin.ui.service.EvaluatorTreeResolver
-import lin.ui.service.EvaluatorTreeTemplateService
-import lin.ui.service.TreeConfigService
-import lin.ui.service.createTreeConfigMapper
+import lin.ui.service.*
 import lin.ui.tree_config.EvaluatorTreeExtension
 import lin.ui.tree_config.action.*
 import org.koin.core.context.GlobalContext.startKoin
@@ -153,17 +152,33 @@ val uiDBModule = module {
     }
     single { AuraBoostRepository(get()) }
     single { ConditionTreeValidator(get()) }
-    single { AuraBoostConfigService(get()) }
+    // T-011：saveWithInlineTrees 组合编排注入条件树服务 / mapper / 事务模板
+    single { AuraBoostConfigService(get(), get(), createConditionTreeConfigMapper(), get()) }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupBehaviorRepository(get()) }
     single { CardGroupRepository(get(), get()) }
     single { CardGroupService(get(), get()) }
+    // T-011：delete(card_group) 级联删除事务下沉（Provider 层不再持 tx）
+    single { CardGroupCascadeDeleteService(get(), get(), get()) }
     single { CardPurposeRepository(get()) }
     single { HsCardRepository(get()) }
 
     single { ComboPlanDefinitionRepository(get()) }
     single { TemplateGroupRepository(get()) }
     single { OrthogonalTemplateRepository(get()) }
+    // T-010：delete 快照落 delete_snapshot 表 + restore_snapshot 一键恢复
+    single { DeleteSnapshotRepository(get()) }
+    single {
+        DeleteSnapshotService(
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get()
+        )
+    }
 }
 
 

@@ -17,6 +17,7 @@ object ActionResources {
     const val TREE_TEMPLATE = "tree_template"
     const val DRAFT = "draft"
     const val CAPABILITY_BACKGROUND = "capability_background"
+    const val DELETE_SNAPSHOT = "delete_snapshot"
 }
 
 /**

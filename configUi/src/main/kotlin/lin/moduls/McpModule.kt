@@ -22,12 +22,13 @@ import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
+import lin.repository.delete_snapshot.DeleteSnapshotService
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
+import lin.ui.service.CardGroupCascadeDeleteService
 import lin.ui.service.TreeConfigService
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
-import org.springframework.transaction.support.TransactionTemplate
 
 /** MCP server 及 ToolProvider，仅 MCP 入口加载，不污染 UI 启动 */
 val mcpModule = module {
@@ -62,8 +63,7 @@ val mcpModule = module {
     single {
         CardGroupToolProvider(
             get<CardGroupService>(),
-            get<TreeConfigService>(),
-            get<TransactionTemplate>()
+            get<CardGroupCascadeDeleteService>()
         )
     } bind McpToolProvider::class
     single {
@@ -76,7 +76,8 @@ val mcpModule = module {
         CardPoolToolProvider(
             get<CardGroupQueryService>(),
             get<CardGroupService>(),
-            get<HsCardRepository>()
+            get<HsCardRepository>(),
+            get<DeleteSnapshotService>()
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
@@ -84,14 +85,14 @@ val mcpModule = module {
         ConditionTreeToolProvider(
             get<ConditionTreeConfigService>(),
             get<AuraBoostConfigService>(),
-            get<EvaluatorLeafConfigRepository>()
+            get<EvaluatorLeafConfigRepository>(),
+            get<DeleteSnapshotService>()
         )
     } bind McpToolProvider::class
     single {
         AuraBoostToolProvider(
             get<AuraBoostConfigService>(),
-            get<ConditionTreeConfigService>(),
-            get<TransactionTemplate>()
+            get<DeleteSnapshotService>()
         )
     } bind McpToolProvider::class
     single {
@@ -100,14 +101,16 @@ val mcpModule = module {
     single {
         ComboPlanToolProvider(
             get(),
-            get<CardGroupService>()
+            get<CardGroupService>(),
+            get<DeleteSnapshotService>()
         )
     } bind McpToolProvider::class
     single {
         AiTreeConfigToolProvider(
             get<TreeConfigService>(),
             get<ComboPlanDefinitionRepository>(),
-            get<AiConfigGenerationService>()
+            get<AiConfigGenerationService>(),
+            get<DeleteSnapshotService>()
         )
     } bind McpToolProvider::class
     single {
@@ -127,6 +130,9 @@ val mcpModule = module {
             get<ConditionTreeConfigService>(),
             get<CardPurposeRepository>()
         )
+    } bind McpToolProvider::class
+    single {
+        RestoreSnapshotToolProvider(get<DeleteSnapshotService>())
     } bind McpToolProvider::class
 
     // ── 动作大类 dispatcher（遍历全部 McpToolProvider 集合的 actions，按 resource 分发）──

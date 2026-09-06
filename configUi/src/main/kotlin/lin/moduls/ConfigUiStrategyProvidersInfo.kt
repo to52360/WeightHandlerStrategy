@@ -64,19 +64,26 @@ val strategyProviderModule = module {
         )
     }
 
-    single<ConditionTreeConfigProvider> {
-        SqliteConditionTreeConfigProvider(
-            service = ConditionTreeConfigService(
-                repository = ConditionTreeConfigRepository(get()),
-                mapper = createConditionTreeConfigMapper(),
-                conditionTreeValidator = get()
-            )
+    // T-011：条件树配置服务提为单例（ConditionTreeConfigProvider 与 AuraBoostConfigService 共用）
+    single {
+        ConditionTreeConfigService(
+            repository = ConditionTreeConfigRepository(get()),
+            mapper = createConditionTreeConfigMapper(),
+            conditionTreeValidator = get()
         )
+    }
+    single<ConditionTreeConfigProvider> {
+        SqliteConditionTreeConfigProvider(service = get())
     }
 
     single<AuraBoostConfigProvider> {
         SqliteAuraBoostConfigProvider(
-            service = AuraBoostConfigService(AuraBoostRepository(get())),
+            service = AuraBoostConfigService(
+                repository = AuraBoostRepository(get()),
+                conditionTreeService = get(),
+                conditionTreeMapper = createConditionTreeConfigMapper(),
+                tx = get()
+            ),
             cardGroupService = get()
         )
     }

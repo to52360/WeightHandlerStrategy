@@ -9,6 +9,9 @@ import lin.mcp.*
 import lin.mcp.action.*
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
+import lin.repository.delete_snapshot.DeleteSnapshotService
+import lin.repository.delete_snapshot.SnapshotPayloads
+import lin.repository.delete_snapshot.SnapshotResource
 import lin.serviceLoader.cardInfoProvide.decodeCostValue
 import lin.serviceLoader.cardInfoProvide.encodeCostValue
 import lin.utils.HearthstoneDeckCodeParser
@@ -23,11 +26,12 @@ import java.nio.file.Files
 class CardPoolToolProvider(
     sourceService: CardGroupQueryService,
     groupService: CardGroupService,
-    private val cardRepo: HsCardRepository
+    private val cardRepo: HsCardRepository,
+    snapshotService: DeleteSnapshotService
 ) : McpToolProvider {
 
     override val actions: List<ResourceAction> = listOf(
-        CardPoolAction(sourceService, groupService)
+        CardPoolAction(sourceService, groupService, snapshotService)
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
@@ -127,7 +131,8 @@ class CardPoolToolProvider(
 
     private class CardPoolAction(
         private val sourceService: CardGroupQueryService,
-        private val groupService: CardGroupService
+        private val groupService: CardGroupService,
+        private val snapshotService: DeleteSnapshotService
     ) : GetAction, ListAction, DeleteAction {
 
         override val resource: String = ActionResources.CARD_POOL
@@ -161,19 +166,30 @@ class CardPoolToolProvider(
                 )
             }
 
+            // 删除前读完整卡池配置（enabled + cards，含权重原值）落快照（文件删除在 DB 事务外，先 collect 快照）
+            val config = CardGroupJsonParser.loadByFileName(id)
+                ?: return mcpError("卡池文件不存在或解析失败: $id.cardgroup")
+            val snapshotId = snapshotService.collect(
+                resource = SnapshotResource.CARD_POOL,
+                entityId = id,
+                entityName = id,
+                payload = SnapshotPayloads.cardPool(config)
+            )
             Files.delete(file)
             return mcpSuccess(
                 mapOf(
                     "deleted" to true,
                     "fileName" to id,
-                    "filePath" to file.toString()
+                    "filePath" to file.toString(),
+                    "snapshotId" to snapshotId
                 )
             )
         }
 
         override val deleteFieldHint: String = "卡池文件名（不含 .cardgroup 后缀，由 list(resource=card_pool) 返回）"
 
-        override val deleteSemantics: String = "删除前检查依赖：存在 card_group 引用此卡池时拒绝删除"
+        override val deleteSemantics: String =
+            "删除前检查依赖：存在 card_group 引用此卡池时拒绝删除；删除前落快照（delete_snapshot），可经 restore_snapshot 重建 .cardgroup 文件"
     }
 }
 

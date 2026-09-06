@@ -11,6 +11,9 @@ import lin.mcp.mcpSuccess
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.delete_snapshot.DeleteSnapshotService
+import lin.repository.delete_snapshot.SnapshotPayloads
+import lin.repository.delete_snapshot.SnapshotResource
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import lin.ui.service.TreeConfigService
@@ -25,7 +28,8 @@ import org.koin.core.component.inject
  */
 class ComboPlanAction(
     private val repository: ComboPlanDefinitionRepository,
-    private val cardGroupService: CardGroupService
+    private val cardGroupService: CardGroupService,
+    private val snapshotService: DeleteSnapshotService
 ) : GetAction, ListAction, DeleteAction, KoinComponent {
 
     private val hsCardRepository: HsCardRepository by inject()
@@ -115,39 +119,30 @@ class ComboPlanAction(
 
         val allManagers = cardGroupService.loadAll(onlyEnabled = false)
         val manager = allManagers.find { m -> m.cardGroupManagerId == entity.managerId }
-        val bindingMap = allManagers.flatMap { m -> m.bindings }.associateBy { b -> b.id }
 
-        val coreNames = entity.coreGroupIdSet().map { bindingMap[it]?.name ?: it }
-        val depNames = entity.depGroupIdSet().map { bindingMap[it]?.name ?: it }
-
-        val deletedSnapshot = ComboPlanSummaryDto(
-            id = entity.id,
-            managerId = entity.managerId,
-            managerName = manager?.name,
-            coreGroup = ComboPlanGroupRef(ids = entity.coreGroupIdSet(), names = coreNames),
-            depGroup = ComboPlanGroupRef(ids = entity.depGroupIdSet(), names = depNames),
-            score = entity.score,
-            changeScore = entity.changeScore,
-            relation = entity.relation,
-            coreMutex = entity.coreMutex,
-            mustAdjacent = entity.mustAdjacent
-        )
-
-        repository.deleteById(id)
+        val payload = SnapshotPayloads.comboPlan(entity)
+        val snapshotId = snapshotService.deleteWithSnapshot(
+            resource = SnapshotResource.COMBO_PLAN,
+            entityId = entity.id,
+            entityName = manager?.name,
+            payload = payload
+        ) {
+            repository.deleteById(id)
+        }
 
         return mcpSuccess(
             mapOf(
                 "deleted" to true,
                 "id" to id,
-                "deletedPlan" to deletedSnapshot,
-                "recoveryHint" to "若需撤销删除，请将 deletedPlan 中核心与依赖组 ids 提取为 coreGroupIds/depGroupIds，直接调用 save_combo_plan 重新保存"
+                "snapshotId" to snapshotId
             )
         )
     }
 
     override val deleteFieldHint: String = "Combo 方案 id（由 list(resource=combo_plan) 返回）"
 
-    override val deleteSemantics: String = "删除前自动返回 deletedPlan 完整快照，可经 save_combo_plan 无损恢复"
+    override val deleteSemantics: String =
+        "删除前自动把完整方案落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）"
 
     private data class GroupContext(
         val managerMap: Map<String, CardGroupManagerConfig>,

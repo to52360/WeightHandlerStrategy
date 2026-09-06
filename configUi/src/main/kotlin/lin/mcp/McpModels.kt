@@ -9,6 +9,7 @@ import com.github.victools.jsonschema.generator.SchemaVersion
 import com.github.victools.jsonschema.module.jackson.JacksonModule
 import com.github.victools.jsonschema.module.jackson.JacksonOption
 import lin.mcp.action.ResourceAction
+import lin.repository.condition_tree.ConditionTreeReferenceException
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.LogicNode
 import lin.tree_config.bridge.defaultNodeName
@@ -133,6 +134,9 @@ inline fun <reified I> typedTool(
         } catch (e: McpBadInput) {
             // 输入参数校验失败（action 非法 / 必填参数缺失）：直接转为业务错误响应
             mcpError(e.message ?: "bad input")
+        } catch (e: ConditionTreeReferenceException) {
+            // 条件树引用校验失败（T-011 领域异常，由服务层编排抛出）：原消息转业务错误响应
+            mcpError(e.message ?: "条件树引用无效")
         } catch (e: IllegalArgumentException) {
             // 反序列化格式/类型错误
             mcpError("Input validation failed: ${e.message}")

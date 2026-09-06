@@ -3,6 +3,9 @@ package lin.mcp
 import lin.ai.config.AiConfigGenerationService
 import lin.mcp.action.*
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.delete_snapshot.DeleteSnapshotService
+import lin.repository.delete_snapshot.SnapshotPayloads
+import lin.repository.delete_snapshot.SnapshotResource
 import lin.ui.service.TreeConfigService
 
 /**
@@ -14,11 +17,12 @@ import lin.ui.service.TreeConfigService
 class AiTreeConfigToolProvider(
     treeConfigService: TreeConfigService,
     comboPlanDefinitionRepository: ComboPlanDefinitionRepository,
-    aiConfigGenerationService: AiConfigGenerationService
+    aiConfigGenerationService: AiConfigGenerationService,
+    snapshotService: DeleteSnapshotService
 ) : McpToolProvider {
 
     override val actions: List<ResourceAction> = listOf(
-        EvaluatorTreeAction(treeConfigService, comboPlanDefinitionRepository),
+        EvaluatorTreeAction(treeConfigService, comboPlanDefinitionRepository, snapshotService),
         CapabilityBackgroundAction(aiConfigGenerationService)
     )
 
@@ -27,7 +31,8 @@ class AiTreeConfigToolProvider(
     /** evaluator_tree 查询动作。 */
     private class EvaluatorTreeAction(
         private val treeConfigService: TreeConfigService,
-        private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository
+        private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository,
+        private val snapshotService: DeleteSnapshotService
     ) : GetAction, ListAction, DeleteAction {
 
         override val resource: String = ActionResources.EVALUATOR_TREE
@@ -80,20 +85,38 @@ class AiTreeConfigToolProvider(
         override val getFieldHint: String = "树 id（由 list 返回，或 save_card_group/草稿提交产生）"
 
         override fun handleDelete(id: String): McpToolResult {
-            val summaries = treeConfigService.loadSummaries()
-            val target = summaries.firstOrNull { it["id"] == id }
+            val found = treeConfigService.findById(id)
                 ?: return mcpError(
                     "树不存在: $id。当前存在的树列表: ${
-                        summaries.map { mapOf("id" to it["id"], "name" to it["name"]) }
+                        treeConfigService.loadSummaries().map { mapOf("id" to it["id"], "name" to it["name"]) }
                     }"
                 )
-            treeConfigService.delete(id)
-            return mcpSuccess(mapOf("deleted" to true, "treeId" to id, "treeName" to target["name"]))
+            val entity = found.first!!
+            val config = found.second
+                ?: return mcpError("树配置解析失败，无法采集快照，拒绝删除: $id")
+            val payload = SnapshotPayloads.evaluatorTree(id, entity, config)
+            val snapshotId = snapshotService.deleteWithSnapshot(
+                resource = SnapshotResource.EVALUATOR_TREE,
+                entityId = id,
+                entityName = entity.name,
+                payload = payload
+            ) {
+                treeConfigService.delete(id)
+            }
+            return mcpSuccess(
+                mapOf(
+                    "deleted" to true,
+                    "treeId" to id,
+                    "treeName" to entity.name,
+                    "snapshotId" to snapshotId
+                )
+            )
         }
 
         override val deleteFieldHint: String = "树 id（由 list(resource=evaluator_tree) 获取）"
 
-        override val deleteSemantics: String = "删除不可恢复（含叶子配置）"
+        override val deleteSemantics: String =
+            "删除前落快照（delete_snapshot，含 root/leafConfigs）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）"
 
         companion object {
             /** list 无 managerId 过滤时的返回条数上限（原 evaluator_tree 工具的 LIST 语义）。 */
