@@ -76,6 +76,13 @@ object EngineConfig {
     val orderFallbackKey get() = store.raw(ORDER_FALLBACK_KEY)?.takeIf { it.isNotBlank() }
     val orderFallbackDirection get() = store.raw(ORDER_FALLBACK_DIRECTION)?.takeIf { it.isNotBlank() }
 
+    // T-004（sop-rework）：起手留牌「默认可留费用上限」——cost ≤ 该值且 changeWeight ≥ 0 的牌可直接留，
+    // > 该值须 changeWeight > 0 才留。原硬编码散落 3 处且互不一致：
+    //   ①ChangeCardSelector.select 默认参数 ②ChangeWeightResult 构造默认值（**运行时真正生效**——
+    //   ComboDomain 创建时并不传参） ③ComboDomain 中 enableChangeWeight=false 的 `cost > 2` 兜底分支。
+    // 配置化后三处统一由本项控制；默认 2 保持既有行为（SOP §4.3 现按 2 表述，改动该值需回看该段）。
+    val changeKeepCost get() = store.int("change.keep.cost", 2)
+
     // timing
     val awaitAnimationTime get() = store.long("timing.await.animation", 1000)
     val useAnimationTime get() = store.long("timing.use.animation", 1500)

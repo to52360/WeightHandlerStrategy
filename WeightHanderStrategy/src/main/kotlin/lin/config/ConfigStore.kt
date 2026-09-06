@@ -52,6 +52,11 @@ class ConfigStore(
             if (props.getProperty(key) != null) logger.warn("配置项 $key 值非法，使用默认值 $default")
         }
 
+    fun int(key: String, default: Int): Int =
+        props.getProperty(key)?.toIntOrNull() ?: default.also {
+            if (props.getProperty(key) != null) logger.warn("配置项 $key 值非法，使用默认值 $default")
+        }
+
     fun boolean(key: String, default: Boolean): Boolean =
         props.getProperty(key)?.toBooleanStrictOrNull() ?: default.also {
             if (props.getProperty(key) != null) logger.warn("配置项 $key 值非法，使用默认值 $default")

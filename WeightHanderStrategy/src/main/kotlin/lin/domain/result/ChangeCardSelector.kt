@@ -3,10 +3,8 @@ package lin.domain.result
 import lin.bean.ComboCard
 import lin.bean.cardExt.base.changeWeight
 import lin.bean.usePlan.CardComboEntry
+import lin.config.EngineConfig
 import lin.domain.context.NotWeight
-
-// 临时方案,如果配置多了,封装成环境配置
-private const val DEFAULT_KEEP_COST = 2
 
 /**
  * 起手换牌选择结果。
@@ -42,7 +40,7 @@ data class ChangeDecision(
  */
 object ChangeCardSelector {
 
-    fun select(cards: List<ComboCard>, keepCost: Int = DEFAULT_KEEP_COST): ChangeDecision {
+    fun select(cards: List<ComboCard>, keepCost: Int = EngineConfig.changeKeepCost): ChangeDecision {
         if (cards.isEmpty()) {
             return ChangeDecision(emptySet(), emptySet())
         }

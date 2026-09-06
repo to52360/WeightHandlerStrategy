@@ -6,6 +6,7 @@ import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.data.BaseData
 import lin.bean.ComboCard
 import lin.bean.passesSurplusCandidate
+import lin.config.EngineConfig
 import lin.config.cardConfig.CardConfigBind
 import lin.domain.result.*
 import lin.domain.strategy.FindComboStrategy
@@ -273,7 +274,7 @@ class ComboDomain : KoinComponent {
                 changeWeightResult.processChangeCard()
 
             } else {
-                cards.removeIf { card -> card.cost > 2 }
+                cards.removeIf { card -> card.cost > EngineConfig.changeKeepCost }
             }
         }
 

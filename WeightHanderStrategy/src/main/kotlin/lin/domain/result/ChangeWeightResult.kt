@@ -3,6 +3,7 @@ package lin.domain.result
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.ComboCard
 import lin.bean.cardExt.base.changeWeight
+import lin.config.EngineConfig
 import lin.myLog
 
 /**
@@ -13,7 +14,7 @@ import lin.myLog
 class ChangeWeightResult(
     private val cards: HashSet<Card>,
     private val comboCards: List<ComboCard>,
-    private val keepCost: Int = 2
+    private val keepCost: Int = EngineConfig.changeKeepCost
 ) {
 
     fun processChangeCard() {
