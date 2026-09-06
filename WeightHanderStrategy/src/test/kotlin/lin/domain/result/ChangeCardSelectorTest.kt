@@ -21,6 +21,9 @@ import org.junit.Test
  * ② 默认 0 时行为与加字段前完全一致（向后兼容是这次改动的安全底线）；
  * ③ 同一 combo 在一次子集评分中只计一次（两侧成员各持一条 entry，不去重会双计）。
  *
+ * T-031 配合通道（高费 0 分卡「有配合才留，不然不留」）的边界也锁定在此：
+ * 配对成立随对侧留 / 对侧不在不 solo 留 / 配对名额被抢占换掉 / 负分哨兵不进通道 / 总分负不保送。
+ *
  * 另可佐证：`combo.score`（出牌协同加分）始终不参与起手决策——用例 ② 里
  * 出牌分给 0、起手分给 10，两者互不干扰。
  */
@@ -176,5 +179,87 @@ class ChangeCardSelectorTest {
         val b = card("B", changeWeight = 10.0, groups = setOf("G_B"), comboDefs = listOf(combo))
 
         assertEquals(setOf("B"), keptIds(listOf(a, b)))
+    }
+
+    @Test
+    fun `配合通道：高费0分卡配对成立时随对侧一起留`() {
+        val combo = ComboPlanDefinition(
+            id = "C1",
+            coreGroupIds = setOf("G_A"),
+            depGroupIds = setOf("G_B"),
+            changeScore = 12.0
+        )
+
+        // A = 决战位（2 费 +10），B = 棱彩位（7 费 0 分）：B 单独过不了门禁，
+        // 凭声明起手协同进配对 → {A,B} = 10 + 0 + 12 = 22 → 一起留（combo 半激活就此打通）
+        val a = card("A", changeWeight = 10.0, cost = 2, groups = setOf("G_A"), comboDefs = listOf(combo))
+        val b = card("B", changeWeight = 0.0, cost = 7, groups = setOf("G_B"), comboDefs = listOf(combo))
+
+        assertEquals(setOf("A", "B"), keptIds(listOf(a, b)))
+    }
+
+    @Test
+    fun `配合通道：对侧不在起手时高费0分卡照样换掉（不然不留）`() {
+        val combo = ComboPlanDefinition(
+            id = "C1",
+            coreGroupIds = setOf("G_A"),
+            depGroupIds = setOf("G_B"),
+            changeScore = 12.0
+        )
+
+        // solo 陷阱：只有 7 费 0 分的依赖侧，{B}=0 能过非负兜底——
+        // 若不设防会被 solo 留下占起手位，终选过滤必须把它换掉
+        val b = card("B", changeWeight = 0.0, cost = 7, groups = setOf("G_B"), comboDefs = listOf(combo))
+
+        assertEquals(emptySet<String>(), keptIds(listOf(b)))
+    }
+
+    @Test
+    fun `配合通道：配对名额被更高分抢占时照样换掉`() {
+        val combo = ComboPlanDefinition(
+            id = "C1",
+            coreGroupIds = setOf("G_A"),
+            depGroupIds = setOf("G_B"),
+            changeScore = 12.0
+        )
+
+        // 同侧两张：B2 配对分更高（10+6 > 10+0）入选，B1（0 分通道卡）落选 → 换掉
+        val a = card("A", changeWeight = 10.0, cost = 2, groups = setOf("G_A"), comboDefs = listOf(combo))
+        val b1 = card("B1", changeWeight = 0.0, cost = 7, groups = setOf("G_B"), comboDefs = listOf(combo))
+        val b2 = card("B2", changeWeight = 6.0, cost = 7, groups = setOf("G_B"), comboDefs = listOf(combo))
+
+        assertEquals(setOf("A", "B2"), keptIds(listOf(a, b1, b2)))
+    }
+
+    @Test
+    fun `负分哨兵：高费负分卡不进配合通道`() {
+        val combo = ComboPlanDefinition(
+            id = "C1",
+            coreGroupIds = setOf("G_A"),
+            depGroupIds = setOf("G_B"),
+            changeScore = 12.0
+        )
+
+        // 负数 changeWeight 是预留哨兵语义（D-008）：门禁直接挡死，协同声明也捞不回
+        val a = card("A", changeWeight = 10.0, cost = 2, groups = setOf("G_A"), comboDefs = listOf(combo))
+        val b = card("B", changeWeight = -3.0, cost = 7, groups = setOf("G_B"), comboDefs = listOf(combo))
+
+        assertEquals(setOf("A"), keptIds(listOf(a, b)))
+    }
+
+    @Test
+    fun `配对子集总分不过非负兜底时高费0分卡不保送`() {
+        val combo = ComboPlanDefinition(
+            id = "C1",
+            coreGroupIds = setOf("G_A"),
+            depGroupIds = setOf("G_B"),
+            changeScore = -5.0  // 协同为负（防未来配置）：配对成立也不保送
+        )
+
+        // {A,B} = 0+0-5 = -5 被非负兜底否决；{A} 与 {B} 同为 0 分，费用小者胜 → 留 A 换 B
+        val a = card("A", changeWeight = 0.0, cost = 2, groups = setOf("G_A"), comboDefs = listOf(combo))
+        val b = card("B", changeWeight = 0.0, cost = 7, groups = setOf("G_B"), comboDefs = listOf(combo))
+
+        assertEquals(setOf("A"), keptIds(listOf(a, b)))
     }
 }

@@ -31,6 +31,13 @@ data class ChangeDecision(
  * `changeScore == 0`（未声明起手协同）的 combo **完全不干预起手**：不配对、不剔除，
  * 行为与加该字段前逐字一致——向后兼容的底线。
  *
+ * ## 配合通道（T-031）：高费 0 分卡「有配合才留，不然不留」
+ *
+ * 高费（cost > keepCost）0 分卡过不了通用门禁；若声明了起手协同（存在 `changeScore != 0` 的 combo），
+ * 允许作为**配对候选**进入选择：配对成立且配对子集过非负兜底，才随对侧一起留；
+ * 对侧不在（未凑齐 / 配对名额被更高分抢占）→ 一律换掉。负分高费卡仍被门禁挡死——
+ * 负数 `changeWeight` 是预留哨兵语义（D-008），配合通道不占用。
+ *
  * 语义来源：初版 `ChangeWeightResult`（b9160b74）「规则卡 + 唯一最佳配合卡，其余配合卡全换掉」；
  * f6b2df0 迁移到 combo 体系时这条语义漏搬，此处用 combo 结构重新表达（不复活旧的 `ComboRule`）。
  *
@@ -45,7 +52,7 @@ object ChangeCardSelector {
             return ChangeDecision(emptySet(), emptySet())
         }
 
-        val candidates = cards.map { it.toChangeCandidate() }
+        val candidates = cards.map { it.toChangeCandidate(keepCost) }
             .filter { it.isKeepCandidate(keepCost) }
         val bestKeepCards = findBestKeepSet(candidates)
         val keepSet = bestKeepCards.map { it.source }.toSet()
@@ -56,13 +63,17 @@ object ChangeCardSelector {
         )
     }
 
-    private fun ComboCard.toChangeCandidate(): ChangeCandidate {
+    private fun ComboCard.toChangeCandidate(keepCost: Int): ChangeCandidate {
+        val cardCost = cost()
+        val weight = changeWeight()
         return ChangeCandidate(
             source = this,
-            cost = cost(),
-            changeWeight = changeWeight(),
+            cost = cardCost,
+            changeWeight = weight,
             groupIds = allGroupIds,
-            comboEntries = comboEntries
+            comboEntries = comboEntries,
+            // 零分卡才走配合通道；显式比 0.0，不借 NotWeight（其语义是中性哨兵，负数哨兵重构会动它）
+            comboChannelEntrant = cardCost > keepCost && weight == 0.0
         )
     }
 
@@ -70,7 +81,9 @@ object ChangeCardSelector {
         return if (cost <= keepCost) {
             changeWeight >= NotWeight
         } else {
-            changeWeight > NotWeight
+            // 高费 0 分卡的「配合通道」：声明了起手协同才有资格进配对；
+            // 对侧不在时由终选过滤剔除（isUnpairedComboChannel），不会 solo 留下
+            changeWeight > NotWeight || (comboChannelEntrant && comboEntries.any { it.changeScore != 0.0 })
         }
     }
 
@@ -94,7 +107,28 @@ object ChangeCardSelector {
         }
 
         val bestKeepCards = best ?: return emptyList()
-        return if (bestKeepCards.keepScore(matches) >= NotWeight) bestKeepCards else emptyList()
+        if (bestKeepCards.keepScore(matches) < NotWeight) return emptyList()
+        return bestKeepCards.filterNot { it.isUnpairedComboChannel(matches, bestKeepCards) }
+    }
+
+    /**
+     * 配合通道卡是否该被剔除：找不到一条「自己在内、且 core/dep 两侧都在保留集」的配对即剔除。
+     *
+     * 0 分卡入候选后 `{卡}=0` 能过非负兜底——若配对不成立仍被留，就成了「无协同也占起手位」，
+     * 正是「有配合才留，不然不留」要堵的 solo 陷阱。非配合通道卡恒 false（凭自身分数留，不与配对捆绑）。
+     */
+    private fun ChangeCandidate.isUnpairedComboChannel(
+        matches: List<KeepComboMatch>,
+        kept: List<ChangeCandidate>
+    ): Boolean {
+        if (!comboChannelEntrant) return false
+        // 依赖不变量：matches 与 kept 是同一批 ChangeCandidate 对象（candidates→survivors→best 全程 filter/子集复用引用）。
+        // 若未来链路重建对象（map/copy），=== 会静默失效导致 solo 卡漏剔除——届时改以 source.cardId() 作稳定键。
+        return matches.none { match ->
+            (match.core === this || match.dep === this) &&
+                    kept.any { it === match.core } &&
+                    kept.any { it === match.dep }
+        }
     }
 
     /**
@@ -111,7 +145,8 @@ object ChangeCardSelector {
      * M2 配对：为每个**声明了 `changeScore`** 的 combo 选出唯一一组（核心侧 1 张 + 依赖侧 1 张），
      * 按两张卡 `changeWeight` 之和取最高。
      *
-     * 缺一侧则不成立（不成组 → 相关卡不受影响，仍走通用单卡规则）；
+     * 缺一侧则不成立（不成组 → 相关卡不受影响，仍走通用单卡规则；
+     * 配合通道卡除外——它们本就不过通用门禁，缺一侧即被终选过滤剔除）；
      * `changeScore == 0` 的 combo 不参与——未声明起手协同就不干预起手。
      */
     private fun resolveKeepCombos(candidates: List<ChangeCandidate>): List<KeepComboMatch> {
@@ -268,6 +303,8 @@ object ChangeCardSelector {
         val changeWeight: Double,
         /** 该卡所属分组（静态 ∪ 谓词），用于判定 combo 的 counterpart 是否被同时保留 */
         val groupIds: Set<String>,
-        val comboEntries: List<CardComboEntry>
+        val comboEntries: List<CardComboEntry>,
+        /** 高费 0 分、仅凭「配合通道」入候选的卡：配对另一侧不在保留集就必须换掉（T-031） */
+        val comboChannelEntrant: Boolean
     )
 }

@@ -104,7 +104,7 @@ class DefaultAiConfigGenerationService(
                     if (cardId !in enabledCardIds) {
                         diagnostics += EvaluatorTreeValidator.ValidationDiagnostic(
                             "binding_card_not_found",
-                            "绑定的卡牌ID不存在于任何启用的卡池中: $cardId",
+                            "绑定的卡牌ID不在任何启用分组的成员中: $cardId（CARD 树绑定要求该卡已属于任一启用分组，请先入组）",
                             "bindingIds"
                         )
                     }
