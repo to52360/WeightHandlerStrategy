@@ -70,9 +70,10 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
     }
 
     fun findByCardId(cardId: String): CardPurposeEntity? {
+        // Q-015：LEFT JOIN 下未打标卡 p 侧全 NULL，而实体 purposeTags 声明非空 String → 空串兜底
         val sql = """
             SELECT h.cardId as card_id, h.name,
-                   p.purpose_tags as purpose_tags,
+                   COALESCE(p.purpose_tags, '') as purpose_tags,
                    p.replan_after_use as replan_after_use,
                    p.created_date
             FROM hs.cards h
@@ -215,9 +216,10 @@ class CardPurposeRepository(private val jdbcTemplate: JdbcTemplate) {
     ): List<CardPurposeEntity> {
         if (cardIds.isEmpty()) return emptyList()
         val (whereClause, params) = buildConfigConditions(cardIds, searchText, tagFilter, dateFilter)
+        // 同 Q-015：与 findByCardId 同为 hs LEFT JOIN 方向且共用 rowMapper，未打标卡空串兜底
         val sql = """
             SELECT h.cardId as card_id, h.name,
-                   p.purpose_tags as purpose_tags,
+                   COALESCE(p.purpose_tags, '') as purpose_tags,
                    p.replan_after_use as replan_after_use,
                    p.created_date
             FROM hs.cards h
