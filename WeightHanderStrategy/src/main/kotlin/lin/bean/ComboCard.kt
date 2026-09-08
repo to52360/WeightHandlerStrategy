@@ -82,23 +82,21 @@ class ComboCard(
      * [lin.utils.startup.ComboStep] / [lin.utils.startup.ConfigBindingStep]），
      * 结果是静态预算的超集，故不需要第三份合并逻辑。
      *
-     * @defect combo-plan-model/K-001: 这 5 项是 [allGroupIds] 的纯函数（Map 查表），却各套一个 lazy
-     *   ——每卡每轮多 5 个 Lazy 对象分配 + 5 次锁，静态模式下缓存零收益（只返回静态预算引用）。
-     *   真正需要缓存的只有 [predicateGroupIds]（条件树求值）与 [allGroupIds]（Set 合并）两项。
-     *   收敛前须实测 `FindBestCombination` 循环内 `comboEntries` 的访问频次（与 Q-012 联动）。
+     * @defect combo-plan-model/K-001（已修复 2026-09-08）: 这 5 项原各套一个 lazy——每卡每轮
+     *   多 5 个 Lazy 对象分配 + 5 次锁，静态模式下缓存零收益（只返回静态预算引用）。已去 lazy
+     *   改计算属性：重活在 [predicateGroupIds]（条件树求值）与 [allGroupIds]（Set 合并）两项
+     *   lazy 缓存里，本层只是 Map 查表派生；访问频次低（门控/装配期，非回溯热循环），重复查表可接受。
      */
 
     /** combo 条目（评分 / coreMutex）：谓词组命中时补全静态预算缺的部分。 */
-    val comboEntries: List<CardComboEntry> by lazy {
-        if (shouldRecomputeCombo()) ComboRuntime.entries(allGroupIds)
+    val comboEntries: List<CardComboEntry>
+        get() = if (shouldRecomputeCombo()) ComboRuntime.entries(allGroupIds)
         else combinedConfig?.comboEntries.orEmpty()
-    }
 
     /** 出牌顺序绑定，同 [comboEntries] 的守卫与短路语义。 */
-    val comboUseBindings: List<CardComboUseBinding> by lazy {
-        if (shouldRecomputeCombo()) ComboRuntime.bindings(allGroupIds)
+    val comboUseBindings: List<CardComboUseBinding>
+        get() = if (shouldRecomputeCombo()) ComboRuntime.bindings(allGroupIds)
         else combinedConfig?.comboUseBindings.orEmpty()
-    }
 
     /**
      * 条件化阶段覆盖：谓词组挂的 conditionalStage 对成员生效。
@@ -107,16 +105,14 @@ class ComboCard(
      * 口径与启动期**逐字一致**（取第一个 conditionalStage 非空的 override，而非先取 override
      * 再读字段）——否则「有 override 但 conditionalStage 为空」的组会挡掉后面组的条件覆盖。
      */
-    val conditionalStage: ConditionalStageOverride? by lazy {
-        if (shouldRecomputeBehavior()) GroupBehaviorRuntime.resolveConditionalStage(allGroupIds)
+    val conditionalStage: ConditionalStageOverride?
+        get() = if (shouldRecomputeBehavior()) GroupBehaviorRuntime.resolveConditionalStage(allGroupIds)
         else combinedConfig?.conditionalStage
-    }
 
     /** 组级余费门槛 N：谓词组挂的 SURPLUS_GATE 对成员生效。 */
-    val groupSurplusIdleThreshold: Int? by lazy {
-        if (shouldRecomputeBehavior()) GroupBehaviorRuntime.resolveSurplusGate(allGroupIds)
+    val groupSurplusIdleThreshold: Int?
+        get() = if (shouldRecomputeBehavior()) GroupBehaviorRuntime.resolveSurplusGate(allGroupIds)
         else combinedConfig?.groupSurplusIdleThreshold
-    }
 
     /**
      * 出牌意图：谓词组挂的 OVERRIDE（stageOverride / replanAfterUse / orderWeight）对成员生效。
@@ -125,18 +121,18 @@ class ComboCard(
      * + 完整组集合下的组级 override，配方与启动期 [lin.domain.use.plan.UseIntentAssembler] 一致。
      * `combinedConfig` 可为 null（衍生卡 / 卡池外）——此时用空卡级输入，组级 override 仍应生效。
      */
-    val useIntent: UseIntent? by lazy {
-        val config = combinedConfig
-        if (shouldRecomputeBehavior()) {
-            GroupBehaviorRuntime.resolveUseIntent(
-                allGroupIds,
-                config?.purposeTags ?: emptySet(),
-                config?.purposeReplanAfterUse ?: false
-            ) ?: config?.useIntent
-        } else {
-            config?.useIntent
+    val useIntent: UseIntent?
+        get() {
+            val config = combinedConfig
+            if (shouldRecomputeBehavior()) {
+                return GroupBehaviorRuntime.resolveUseIntent(
+                    allGroupIds,
+                    config?.purposeTags ?: emptySet(),
+                    config?.purposeReplanAfterUse ?: false
+                ) ?: config?.useIntent
+            }
+            return config?.useIntent
         }
-    }
 
     //指定目标
     var pointCard: Card? = null
@@ -216,7 +212,7 @@ class ComboCard(
     var extPowerWeight: Double = BaseWeight
 
     // 评估树战术信号（D-007 回归「树分皆战术信号」：全树分 general+tactical，由 weightEvaluator 写入）。
-    // 消费方：第一轮候选门控（T-008）、余费门槛绕行、fillValue 溢价（×TacticalScoreScale，封顶 G）。
+    // 消费方：第一轮候选门控（T-008）、余费门槛绕行、fillValue 溢价（Q-024 费化后即费值，直加）。
     // Q-008/T-007 的通道分离已无独立消费者（双费数模型取代其使命），通道字段遗留待清理（T-018）。
     var tacticalScore: Double = 0.0
 

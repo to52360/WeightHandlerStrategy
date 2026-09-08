@@ -70,8 +70,8 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
             addColumn("ID", 80.0) { it.id }
             addGroupColumn("核心组", 80.0) { it.coreGroupIds }
             addGroupColumn("依赖组", 80.0) { it.depGroupIds }
-            addColumn("权重", 60.0, isCentered = true) { String.format("%.1f", it.score) }
-            addColumn("留牌权重", 70.0, isCentered = true) {
+            addColumn("费值", 60.0, isCentered = true) { String.format("%.1f", it.score) }
+            addColumn("留牌费值", 70.0, isCentered = true) {
                 if (it.changeScore == 0.0) "—" else String.format(
                     "%.1f",
                     it.changeScore

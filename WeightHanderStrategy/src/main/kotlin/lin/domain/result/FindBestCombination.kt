@@ -5,6 +5,7 @@ import lin.bean.groupIds
 import lin.bean.usePlan.CardComboEntry
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
+import lin.utils.DecisionLog
 
 interface FindBestCombination {
     fun findBestCombination(targetList: List<ComboCard>, ableCost: Int): List<ComboCard>
@@ -29,6 +30,11 @@ object DefaultFindBestCombination : FindBestCombination {
 
         // ===== 增量回溯状态 =====
         val currentCombination = mutableListOf<ComboCard>()
+
+        // T-PV-007：配分标尺双最优——同批维护「含核心（combo 定义 core 侧）最优」与「不含核心最优」，
+        // 回溯结束输出差值（决策仍全量 max，本跟踪只记日志不改决策。核心分侧依据 = coreGroupIds，D-005/Q-014）。
+        var maxWithCore = Double.NEGATIVE_INFINITY
+        var maxWithoutCore = Double.NEGATIVE_INFINITY
 
         // comboId -> (ownGroupId -> refCount)，用于 O(1) 级别的 coreMutex 检查
         val coreMutexState = mutableMapOf<String, MutableMap<String, Int>>()
@@ -112,6 +118,10 @@ object DefaultFindBestCombination : FindBestCombination {
                 maxEffectiveScore = effectiveScore
                 bestCombination = currentCombination.toList()
             }
+            // T-PV-007：按「组合是否含任一 combo 的 core 侧卡」分桶更新双最优
+            val containsCore = currentCombination.any { it.comboEntries.any { e -> e.coreGroupIds.isNotEmpty() } }
+            if (effectiveScore > maxWithCore && containsCore) maxWithCore = effectiveScore
+            if (effectiveScore > maxWithoutCore && !containsCore) maxWithoutCore = effectiveScore
 
             for (i in startIndex until targetList.size) {
                 val card = targetList[i]
@@ -142,6 +152,22 @@ object DefaultFindBestCombination : FindBestCombination {
         }
 
         backtrack(0, 0, 0.0)
+        logComboGap(maxWithCore, maxWithoutCore)
         return bestCombination
+    }
+
+    /**
+     * T-PV-007（play-value-model）：combo 配分差值日志——「含核心最优 vs 不含核心最优，差多少」。
+     *
+     * 只记日志不改决策；供配分标尺（Q-014 锚定诊断）看差值定分——含核心更优（差值正）说明核心值得跟出，
+     * 负值说明强拉核心反而亏。置 [lin.utils.DecisionLog] 开关输出（默认关）。
+     */
+    private fun logComboGap(maxWithCore: Double, maxWithoutCore: Double) {
+        if (!DecisionLog.enabled) return
+        if (maxWithCore == Double.NEGATIVE_INFINITY || maxWithoutCore == Double.NEGATIVE_INFINITY) return
+        DecisionLog.log {
+            "组合差值(配分标尺): 含核心最优=$maxWithCore vs 不含核心最优=$maxWithoutCore" +
+                    " -> 差值=${maxWithCore - maxWithoutCore}（正值=核心加入更赚，负值=反而更差）"
+        }
     }
 }

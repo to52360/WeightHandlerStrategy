@@ -2,7 +2,6 @@ package lin.bean
 
 import lin.bean.cardExt.base.isMinion
 import lin.bean.usePlan.NegativeScorePolicy
-import lin.domain.context.TacticalScoreScale
 
 /**
  * 候选门控过滤（T-008，D-003；T-026 枚举退役后 (N, ts) 二元组模型）：
@@ -100,14 +99,14 @@ fun ComboCard.surplusIdleThreshold(): Int =
         ?: 0
 
 /**
- * fillValue（填充交付费值）= 等效费 E + 战术溢价（tacticalScore×[TacticalScoreScale]）。
+ * fillValue（填充交付费值）= 等效费 E + 战术溢价（tacticalScore，Q-024 费化后即费值，直加）。
  * ts==0 → E；ts>0 → 更高溢价（战术命中且此刻更值得垫）；ts<0（非 -100 绝对禁）→ 折价补位
- * （更低的临界值，只在不浪费剩余费时垫出）。scale 为分→费换算（树量纲费化后可退役，Q-024）。
+ * （更低的临界值，只在不浪费剩余费时垫出）。
  * T-027（Q-026 §2.1）：删 `max`，负分不再抹平——ts<0 以真实折价参与填充，防 [SurplusFillCombination] 的 `>0.0`
  * 软死捏过滤被击穿（极端负分 → fillValue ≤ 0 被自动剔除）。
  */
 fun ComboCard.surplusFillValue(): Double =
-    equivalentCostValue() + tacticalScore * TacticalScoreScale
+    equivalentCostValue() + tacticalScore
 
 /**
  * 余费门槛（D-007 + D-012 垫后余量语义）：战术兑现（tacticalScore > 0）= 此刻价值兑现，直接放行（**优先填充**）；

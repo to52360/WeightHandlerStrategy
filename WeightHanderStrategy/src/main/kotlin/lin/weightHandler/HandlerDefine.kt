@@ -6,7 +6,7 @@ import lin.domain.MyWarManage
 
 interface WeightHandler : Priority {
     /**
-     * todo-future 这里设计问题,不应该用基本类型作为返回值
+     * @return 费用
      */
     fun cardWeightCompute(callCard: ComboCard, warManage: MyWarManage): Double
 

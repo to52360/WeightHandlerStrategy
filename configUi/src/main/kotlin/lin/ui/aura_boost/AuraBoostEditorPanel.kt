@@ -5,6 +5,7 @@ import javafx.geometry.Pos
 import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
+import javafx.scene.layout.Region
 import javafx.scene.layout.VBox
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInput
@@ -46,7 +47,6 @@ class AuraBoostEditorPanel : ScrollPane(), KoinComponent {
     // 触发条件树
     private val triggerTreeCombo = ComboBox<ConditionTreeOption>().apply {
         promptText = "选择触发条件树..."
-        prefWidth = 240.0
     }
     private val btnTriggerNew = Button("➕ 新建").apply {
         style = "-fx-background-color: #198754; -fx-text-fill: white; -fx-font-size: 11px;"
@@ -61,7 +61,6 @@ class AuraBoostEditorPanel : ScrollPane(), KoinComponent {
     // 受益过滤条件树
     private val targetTreeCombo = ComboBox<ConditionTreeOption>().apply {
         promptText = "选择受益过滤条件树..."
-        prefWidth = 240.0
     }
     private val btnTargetNew = Button("➕ 新建").apply {
         style = "-fx-background-color: #198754; -fx-text-fill: white; -fx-font-size: 11px;"
@@ -190,10 +189,16 @@ class AuraBoostEditorPanel : ScrollPane(), KoinComponent {
                 style = "-fx-text-fill: #6c757d; -fx-font-size: 11px;"
             }
 
+            listOf(btnNew, btnEdit, btnPreview).forEach { btn ->
+                btn.minWidth = Region.USE_PREF_SIZE
+            }
+            HBox.setHgrow(combo, Priority.ALWAYS)
+            combo.maxWidth = Double.MAX_VALUE
+
             val actionRow = HBox(8.0).apply {
                 alignment = Pos.CENTER_LEFT
                 children.addAll(
-                    Label("选择条件树:"),
+                    Label("条件树:"),
                     combo,
                     btnNew,
                     btnEdit,
@@ -214,14 +219,14 @@ class AuraBoostEditorPanel : ScrollPane(), KoinComponent {
             val scoreRow = HBox(10.0).apply {
                 alignment = Pos.CENTER_LEFT
                 children.addAll(
-                    Label("加分分值 (score):").apply { style = "-fx-font-weight: bold;" },
+                    Label("加分费值 (score):").apply { style = "-fx-font-weight: bold;" },
                     scoreField,
-                    Label("分").apply { style = "-fx-text-fill: #6c757d;" }
+                    Label("费").apply { style = "-fx-text-fill: #6c757d;" }
                 )
             }
 
             val tipLabel = Label(
-                "💡 说明：AuraBoost 走 additive 独立加分通道，命中后分值直接叠加给受益卡牌。规则评估树无需包含光环条件，避免双倍计分与结构膨胀。"
+                "💡 说明：AuraBoost 走 additive 独立加分通道，命中后费值直接叠加给受益卡牌（Q-024 后按费配）。规则评估树无需包含光环条件，避免双倍计分与结构膨胀。"
             ).apply {
                 isWrapText = true
                 style = "-fx-text-fill: #0d6efd; -fx-font-size: 11px;"
@@ -311,7 +316,7 @@ class AuraBoostEditorPanel : ScrollPane(), KoinComponent {
             return
         }
         if (score == null) {
-            Alert(Alert.AlertType.ERROR, "请输入有效的数值分值（如 1.5）。").showAndWait()
+            Alert(Alert.AlertType.ERROR, "请输入有效的费值（如 1.2）。").showAndWait()
             return
         }
 

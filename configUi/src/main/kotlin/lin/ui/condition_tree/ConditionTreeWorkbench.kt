@@ -5,6 +5,7 @@ import javafx.scene.control.SplitPane
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionRegistry
+import lin.ui.ActiveAware
 import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.components.LogicTreeEditor
 import lin.ui.components.TreeConfigStrategy
@@ -22,7 +23,7 @@ import org.koin.core.component.inject
 
 class ConditionTreeWorkbench(
     val showList: Boolean = true
-) : SplitPane(), KoinComponent {
+) : SplitPane(), KoinComponent, ActiveAware {
 
     private val conditionRegistry: ConditionRegistry by inject()
     private val conditionTreeConfigService: ConditionTreeConfigService by inject()
@@ -121,7 +122,7 @@ class ConditionTreeWorkbench(
         }
     }
 
-    fun saveCurrent(name: String, existingId: String? = null, managerId: String? = targetManagerId): String {
+    fun saveCurrent(name: String, existingId: String? = null, managerId: String? = null): String {
         val rootNode = logicTreeEditor.treeView.root
             ?: throw IllegalStateException("当前条件树为空，请先配置节点")
         val conditionNode = TreeModelConverter.fromTreeItem(rootNode) {
@@ -131,9 +132,15 @@ class ConditionTreeWorkbench(
             )
         }
         val extras = mutableMapOf<String, Any>()
-        val finalManagerId = managerId ?: targetManagerId
+        val currentSelectedItem = configListPanel?.configListView?.selectionModel?.selectedItem
+        val finalManagerId = managerId
+            ?: if (existingId != null && currentSelectedItem?.id == existingId) currentSelectedItem.managerId else targetManagerId
         finalManagerId?.let { extras["managerId"] = it }
 
         return treeConfigStrategy.save(name, conditionNode, existingId, extras)
+    }
+
+    override fun onActive() {
+        refreshList()
     }
 }

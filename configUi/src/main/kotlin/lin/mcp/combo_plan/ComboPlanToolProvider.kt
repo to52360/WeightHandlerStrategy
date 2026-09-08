@@ -127,10 +127,10 @@ private data class SaveComboPlanInput(
     @field:JsonPropertyDescription("依赖卡牌分组 ID 列表（绑定条目 id），不能为空。Combo 方案必须包含核心组与依赖组才能构成协同")
     val depGroupIds: List<String> = emptyList(),
 
-    @field:JsonPropertyDescription("Combo 加分（如 3.0，负值如 -2.0 表达软惩罚）。【纯排序配方：固定 0】仅表达先后顺序不加分时必填 0，此时配合 relation=CORE_BEFORE_DEP/DEP_BEFORE_CORE 即为纯排序（如「先铺场再清场」的出牌次序），不会扭曲权重竞争")
+    @field:JsonPropertyDescription("Combo 加分（**费值**，Q-024 后按费配：1 分 = 0.4 费，如 4.0 ≈ 原 10 分；负值如 -2.0 表达软惩罚）。【纯排序配方：固定 0】仅表达先后顺序不加分时必填 0，此时配合 relation=CORE_BEFORE_DEP/DEP_BEFORE_CORE 即为纯排序（如「先铺场再清场」的出牌次序），不会扭曲权重竞争")
     val score: Double = 0.0,
 
-    @field:JsonPropertyDescription("【起手换牌专用】组合协同加分：本 Combo 的核心组与依赖组的牌在起手**同时保留**时，给该保留子集额外加此分——表达「A、B 单留都一般，一起留才值钱」（单卡 changeWeight 只能表达单卡价值）。默认 0 = 不加成。⚠️只影响起手换牌，**不影响出牌评分**（出牌协同加分是 score）；同一个 Combo 在一次起手评分中只计一次")
+    @field:JsonPropertyDescription("【起手换牌专用】组合协同加分（费值，Q-024 起手通道已费化）：本 Combo 的核心组与依赖组的牌在起手**同时保留**时，给该保留子集额外加此费值——表达「A、B 单留都一般，一起留才值钱」（单卡 changeWeight 只能表达单卡价值）。默认 0 = 不加成。⚠️只影响起手换牌，**不影响出牌评分**（出牌协同加分是 score）；同一个 Combo 在一次起手评分中只计一次")
     val changeScore: Double = 0.0,
 
     @field:JsonPropertyDescription("核心组内互斥：同 Combo 下多个核心组候选不能同时打出时置为 true。⚠️陷阱一：默认 true——纯排序配方必须显式置 false，否则多核心组会被互斥剪枝、只剩一组参与排序。⚠️陷阱二：该值同时被起手换牌消费（多个核心组不能同时保留），置 false 会连带取消起手侧的保留互斥——若该 Combo 的核心牌在起手阶段也不希望同时留手，需另行确认")

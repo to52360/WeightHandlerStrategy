@@ -12,9 +12,12 @@ import lin.warExt.my.base.getPlayCardSize
 import lin.weightHandler.WeightHandler
 
 /**
+ *
+ * AuraBoost 广播重构
  * 场面太多随从,费用低的减权重
  * todo-future 逻辑不够严谨 需要"之后处理器"(WeightHandlerAfter)才行,之后处理器还没想好怎么实现
  * [lin.weightHandler.WeightHandlerAfter]
+ *
  */
 class MinionNumWeightHandler : WeightHandler, RoundLifecycle {
     var tooMach = false

@@ -14,8 +14,8 @@ import lin.repository.delete_snapshot.SnapshotResource
  * - [AuraBoostAction]：resource=aura_boost 的 get/list/delete（原 aura_boost / delete_aura_boost 工具）。
  * - provide()：save_aura_boost 写工具。
  *
- * AuraBoost = 触发条件树（conditionId，全局检测）命中后，给 targetConditionId（受益卡过滤）命中的卡加分。
- * additive 独立通道：命中分与评估树分相加；光环加分只走 AuraBoost，评估树不写光环条件（D-004）。
+ * AuraBoost = 触发条件树（conditionId，全局检测）命中后，给 targetConditionId（受益卡过滤）命中的卡加分（Q-024 后即**费值**）。
+ * additive 独立通道：命中费值与评估树费值相加；光环加分只走 AuraBoost，评估树不写光环条件（D-004）。
  * managerId 为消费方归属（卡组级配置），引用的条件树是全局资源（D-003）。
  * T-011：内联建树（0~2 棵）+ boost 行多步写的编排与事务已下沉至
  * [lin.repository.aura_boost.AuraBoostConfigService.saveWithInlineTrees]，Provider 不再持有
@@ -35,8 +35,8 @@ class AuraBoostToolProvider(
             name = "save_aura_boost",
             description = """
                 创建或更新一条 Push 广播评分配置（AuraBoost）。
-                语义：触发条件树命中（如"莱妮莎在场"）→ 给受益过滤条件树命中的卡 +score。
-                additive 通道：加分与评估树分相加，光环加分只走 AuraBoost，评估树不写光环条件（防双倍计分）。
+                语义：触发条件树命中（如"莱妮莎在场"）→ 给受益过滤条件树命中的卡 +score（**费值**，Q-024 后按费配）。
+                additive 通道：加分（费值）与评估树加分相加，光环加分只走 AuraBoost，评估树不写光环条件（防双倍计分）。
 
                 【条件树两种提供方式（二选一，互斥）】
                 - 复用已有条件树：conditionId / targetConditionId 传已有树 id（来自 list(resource=condition_tree)）
@@ -139,7 +139,7 @@ private data class SaveAuraBoostMcpInput(
     val targetConditionId: String? = null,
     @field:JsonPropertyDescription("受益过滤条件树内联 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}。与 targetConditionId 互斥：提供此字段时自动建树。")
     val targetConditionTreeJson: String? = null,
-    @field:JsonPropertyDescription("命中后加给受益卡的分值。")
+    @field:JsonPropertyDescription("命中后加给受益卡的费值（Q-024 后即费：1 分 = 0.4 费，如 3.2 = 原 8 分；按「≈ 典型卡等效费」标定，D-PV-012）。")
     val score: Double,
     @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 list(resource=card_group)）。")
     val managerId: String? = null,

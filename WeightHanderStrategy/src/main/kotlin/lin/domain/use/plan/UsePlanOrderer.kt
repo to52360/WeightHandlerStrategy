@@ -9,6 +9,7 @@ import lin.config.EngineConfig
 import lin.domain.use.plan.UsePlanOrderer.fallbackComparator
 import lin.domain.use.plan.UsePlanOrderer.stageOrderValue
 import lin.myLog
+import lin.utils.DecisionLog
 import java.util.*
 
 object UsePlanOrderer {
@@ -44,14 +45,15 @@ object UsePlanOrderer {
      * 逐卡输出基础序三键的**实际取值**（stage / orderWeight / 兜底键，含 map 缺失时的兜底值），
      * 并列出本轮真正生效的约束边。三类排序问题——阶段不对、同段先后不对、约束没生效——都靠这条日志定位。
      *
-     * debug 级别：每轮决策调用一次，生产默认不输出；调顺序时把 lin.domain.use.plan 调到 debug 即可。
+     * T-PV-005：日志由 [lin.utils.DecisionLog] 统一开关控制（`decision.log.enabled`，默认关）——
+     * 不再依赖宿主 logback 的 debug 级（引擎 jar 不带 logback.xml，部署侧 debug 可能输出不出来）。
      */
     private fun logOrderDecision(
         ordered: List<ComboCard>,
         intents: Map<ComboCard, UseIntent>,
         beforePairs: List<Pair<ComboCard, ComboCard>>
     ) {
-        myLog.debug {
+        DecisionLog.log {
             buildString {
                 appendLine("出牌顺序决策（${ordered.size} 张）: 兜底键=$fallbackKey/$fallbackDirection")
                 ordered.forEachIndexed { index, card ->
@@ -103,10 +105,9 @@ object UsePlanOrderer {
     // - key = base：只看 baseValue，局面战术信号完全不参与排序（最可复现）。
     // - key = weight：powerWeight，旧行为，仅作 A/B 回退通道（一标多义，不推荐长期使用）。
     //
-    // 为什么是**分层**（ts 序数优先）而不是**合成**（E + ts×scale，如 surplusFillValue）：
-    // 分层只用树分的**序数**（谁更命中），合成要用树分的**基数**（具体几分）。树分跨卡可比目前是
-    // 未被验证的假设（TacticalScoreScale 的标定仅基于「典型满命中树分 8~10」的经验值），
-    // 标差 2 倍时合成体会翻转顺序而分层不会。待 Q-024 评估树量纲费化落地后再考虑合成。
+    // 为什么是**分层**（ts 序数优先）而不是**合成**（surplusFillValue 的 E + ts）：
+    // 分层只用树分的**序数**（谁更命中），合成要用树分的**基数**（具体值）。Q-024 量纲费化后 ts
+    // 已是费、基数与 E 同轴可比，是否将兜底键改为合成留作后续评估（属行为改动，不随 T-PV-011 批次）。
     //
     // @verify use-intent-model/K-001: 方向本身仍未实战校准。desc 与 asc 各有论证（desc=高价值先落袋防中断；
     // asc=逐张 replan 架构下先出低费保留选择面），未做对局对比，故保留现状 desc 并留配置开关。

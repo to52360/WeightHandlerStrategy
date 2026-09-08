@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration debug="false">
-    <property  name="logLevel" value="info"/>
-    <property  name="logPath" value="log"/>
+    <!-- 可被 -D 系统属性覆盖（如 -DlogLevel=debug -DlogPath=D:/logs），不传用默认值 -->
+    <property name="logLevel" value="${logLevel:-info}"/>
+    <property name="logPath" value="${logPath:-log}"/>
     <!--控制台日志格式-->
     <property name="log_pattern_console"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%boldYellow(%thread)] \(%file:%line\) %highlight(%-5level) %msg%n"/>
@@ -35,9 +36,9 @@
             <charset>UTF-8</charset>
         </encoder>
     </appender>
+    <!-- 宿主主日志异步（只挂 file；weightHandler.log 为引擎 lin.* 专属，勿混写） -->
     <appender name="file_async" class="ch.qos.logback.classic.AsyncAppender">
         <appender-ref ref="file"/>
-        <appender-ref ref="myFile"/>
     </appender>
     <import class="ch.qos.logback.classic.encoder.PatternLayoutEncoder"/>
     <import class="ch.qos.logback.core.rolling.RollingFileAppender"/>

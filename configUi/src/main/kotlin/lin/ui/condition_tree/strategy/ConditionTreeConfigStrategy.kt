@@ -30,7 +30,11 @@ class ConditionTreeConfigStrategy(
             TreeConfigStrategy.LoadedConfig(
                 id = entity.id,
                 name = entity.name,
-                root = config?.root
+                root = config?.root,
+                extras = buildMap {
+                    entity.managerId?.let { put("managerId", it) }
+                    put("inlineCreated", entity.inlineCreated)
+                }
             )
         }
     }

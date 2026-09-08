@@ -1,8 +1,10 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
+import lin.bean.cardExt.base.isMinion
 import lin.bean.passesFirstRoundCandidate
 import lin.bean.passesSurplusCandidate
+import lin.bean.surplusIdleThreshold
 import lin.domain.context.NotWeight
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
@@ -101,6 +103,7 @@ class EndWeightResult(
         // T-008 + T-026：第一轮候选过滤——战术兑现（ts>0）或未配余费门槛（N==0）才进主组合；N>0 且战术未命中惜售。
         // 与 EvalOutcome.Banned 硬禁区分：只进不出候选，不改 unUse，卡保持可用。
         val firstRoundCandidates = _canUseCardsByHandler.filter { it.passesFirstRoundCandidate() }
+        logFirstRoundGate(firstRoundCandidates)
         val fastPath = isLessCost()
         if (fastPath) {// 预评估快路：无替代组合，直接全收
             this.mainCombination = firstRoundCandidates
@@ -140,7 +143,8 @@ class EndWeightResult(
      */
     private fun logSelectionDetail() {
         if (!DecisionLog.enabled) return
-        val chosen = bestCombination.toSet()
+        val mainSet = mainCombination.toSet()
+        val fillSet = fillCombination.toSet()
         val lessCost = (cost - costSum()).coerceAtLeast(0)
         val penalty = remainingCostPenalty(lessCost, cost) + comboPenalty(bestCombination.size)
         DecisionLog.log {
@@ -153,7 +157,8 @@ class EndWeightResult(
                 (_canUseCardsByHandler + _unUseCards).forEach { card ->
                     val other = card.extPowerWeight - card.tacticalScore - card.auraScore
                     val state = when {
-                        card in chosen -> "入选"
+                        card in mainSet -> "入选·主"   // 第一轮主组合（搜索选中 / fastPath 全收）
+                        card in fillSet -> "入选·垫"   // 第二轮余费填充（fillSurplusCost 垫出）
                         card.isUnUse() -> "硬禁"
                         else -> "未入选"
                     }
@@ -179,10 +184,67 @@ class EndWeightResult(
     private fun fillSurplusCost(isFull: Boolean, nDelta: Int = 0) {
         val remainingCost = cost - costSum()
         if (remainingCost < 0) return // 理论不可达（主牌总费用 ≤ cost），防御
-        val candidates = (_canUseCardsByHandler - bestCombination.toSet())
-            .filter { it.passesSurplusCandidate(remainingCost, isFull, nDelta) }
+        val pool = _canUseCardsByHandler - bestCombination.toSet()
+        val candidates = pool.filter { it.passesSurplusCandidate(remainingCost, isFull, nDelta) }
+        logSurplusGate(pool, candidates, remainingCost, isFull, nDelta)
         if (candidates.isEmpty()) return
         this.fillCombination = SurplusFillCombination.findBestCombination(candidates, remainingCost)
+    }
+
+    /**
+     * T-PV-004（play-value-model）：第一轮门控落选原因日志。
+     *
+     * 回答「没进主组合是分不够 / 被 N 挡 / 还是费用不够」。第一轮挡只有一种形态——
+     * 非 combo 成员且 `ts==0 && N>0`（未配/未命中树分 + 惜售挂号）。combo 成员豁免（D-005）为放行态。
+     */
+    private fun logFirstRoundGate(candidates: List<ComboCard>) {
+        if (!DecisionLog.enabled) return
+        val blocked = _canUseCardsByHandler.filterNot { it in candidates }
+        if (blocked.isEmpty()) return
+        DecisionLog.log {
+            buildString {
+                appendLine("门控·第一轮: 进=${candidates.size}/${_canUseCardsByHandler.size}")
+                blocked.forEach { card ->
+                    appendLine(
+                        "  挡 ${card.cardId()}(${card.card.entityName}) cost=${card.cost()} ts=${card.tacticalScore} " +
+                                "N=${card.surplusIdleThreshold()} 原因=树分未命中(ts=0) 且 配了惜售 N>0（非 combo 成员）"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * T-PV-004（play-value-model）：余费门落选原因日志。
+     *
+     * 原因按 [ComboCard.passesSurplusCandidate] 的判定链细分：费用不够 / 硬禁 / 满场随从 / N 惜售（各挡差几费）。
+     */
+    private fun logSurplusGate(
+        pool: List<ComboCard>, candidates: List<ComboCard>,
+        remainingCost: Int, isFull: Boolean, nDelta: Int
+    ) {
+        if (!DecisionLog.enabled) return
+        val blocked = pool.filterNot { it in candidates }
+        if (blocked.isEmpty()) return
+        DecisionLog.log {
+            buildString {
+                appendLine("门控·余费(空闲 $remainingCost 费, 满场=$isFull, nDelta=$nDelta): 进=${candidates.size}/${pool.size}")
+                blocked.forEach { card ->
+                    val reason = when {
+                        card.cost() > remainingCost ->
+                            "费用不够(${card.cost()}>$remainingCost, 差 ${card.cost() - remainingCost})"
+
+                        card.isUnUse() -> "硬禁(isUnUse)"
+                        isFull && card.isMinion() -> "满场随从不占位"
+                        else -> {
+                            val n = (card.surplusIdleThreshold() - nDelta).coerceAtLeast(0)
+                            "战术未命中(ts=${card.tacticalScore}) 被 N 惜售: 空闲$remainingCost < cost ${card.cost()}+N $n (差 ${card.cost() + n - remainingCost})"
+                        }
+                    }
+                    appendLine("  挡 ${card.cardId()} cost=${card.cost()} ts=${card.tacticalScore} N=${card.surplusIdleThreshold()} 原因=$reason")
+                }
+            }
+        }
     }
 
     /**

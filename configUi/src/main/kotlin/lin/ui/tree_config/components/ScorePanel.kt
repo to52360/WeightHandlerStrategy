@@ -89,7 +89,7 @@ class ScorePanel(
         add(sourceOpCombo, 1, 2)
         add(Label("算子参数:"), 0, 3)
         add(sourceOpArgsContainer, 1, 3)
-        add(Label("未命中分数:"), 0, 4)
+        add(Label("未命中费值:"), 0, 4)
         add(sourceMissField, 1, 4)
         add(Label("缓存优化:"), 0, 5)
         add(crossCardCheckBox, 1, 5)

@@ -38,10 +38,6 @@ object EngineConfig {
     // 法术兜底保守系数（法术无身材/不占场，空放负收益，应比同费随从更保守）
     val spellCostValueWeight get() = store.double("scoring.spell.cost.value.weight", 1.5)
 
-    // D-007 双费数模型：评估树战术分(分)→费 的全局换算。fillValue = fallback + min(G, tacticalScore×scale)。
-    // 唯一量纲标定常数（Q-019~021 缩水残余）：典型满命中树分 8~10 分 × 0.4 ≈ 3.2 费，覆盖常见 G≤3 饱和到满值。
-    val tacticalScoreScale get() = store.double("scoring.tactical.score.scale", 0.4)
-
     // D-011 全局绝望规则 v2：前置（场面承压+手牌无战术牌）成立时，按血量阶梯降低余费门槛 N（地板 1）。
     // ladder 格式 `blood:delta` 逗号分隔（血量 < blood → 门槛减 delta，多档取最大），二值绝望是退化特例。
     // enabled 默认 false——阶梯档位是未实战校准的估值（@verify），校准后再考虑默认开。

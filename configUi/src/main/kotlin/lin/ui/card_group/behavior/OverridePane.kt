@@ -23,7 +23,7 @@ data class ConditionTreeOption(
     val name: String
 ) {
     override fun toString(): String {
-        return if (id.isEmpty()) "(未选择条件树)" else "[$id] $name"
+        return if (id.isEmpty()) "(未选择条件树)" else name.ifBlank { "[$id] (未命名)" }
     }
 }
 

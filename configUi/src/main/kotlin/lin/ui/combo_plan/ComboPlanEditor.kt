@@ -125,7 +125,7 @@ class ComboPlanEditor : VBox(12.0) {
         val scoreBox = HBox(10.0).apply {
             alignment = Pos.CENTER_LEFT
             children.addAll(
-                Label("组合评分加权:").apply { style = "-fx-font-weight: bold; -fx-text-fill: #2c3e50;" },
+                Label("组合评分加权 (费):").apply { style = "-fx-font-weight: bold; -fx-text-fill: #2c3e50;" },
                 scoreSpinner
             )
         }
@@ -143,7 +143,7 @@ class ComboPlanEditor : VBox(12.0) {
         val changeScoreBox = HBox(10.0).apply {
             alignment = Pos.CENTER_LEFT
             children.addAll(
-                Label("起手组合加分:").apply { style = "-fx-font-weight: bold; -fx-text-fill: #2c3e50;" },
+                Label("起手组合加分 (费):").apply { style = "-fx-font-weight: bold; -fx-text-fill: #2c3e50;" },
                 changeScoreSpinner
             )
         }

@@ -203,6 +203,19 @@ class EvaluatorTreeValidator(
                 path = "$prefix.guardMissBehavior"
             )
         }
+
+        // Q-037 常驻树分隐患（play-value-model 阶段二）：SCORE 行为下 missValue > 0 = 常驻分——
+        // 守卫未命中也拿正分 → ts 恒正 → 惜售 N 门槛（ts≠0 / ts>0 放行判定）永远成立，配了 N 也白配（惜售被架空）。
+        // 提示意图：表达「未命中也有兜底」应保持 missValue=0，由命中分支给分；误配在此拦截并回显。
+        if (leafConfig.guardMissBehavior == GuardMissBehavior.SCORE && scoreable.scoreEffect.missValue > 0.0) {
+            diagnostics += ValidationDiagnostic(
+                code = "resident_score_warn",
+                message = "常驻分警告：守卫未命中（SCORE 兜底）时 missValue=${scoreable.scoreEffect.missValue} > 0" +
+                        " → 该卡条件未命中仍拿正分（ts 恒正）→ 惜售门槛 N 的放行判定被架空（配了 N 也白配，门控永远放行）。" +
+                        "请核对是否有意为之；通常应保持 missValue=0，由命中分支给分。",
+                path = "$prefix.scoreEffect.missValue"
+            )
+        }
     }
 
     private fun validatePipelineRef(

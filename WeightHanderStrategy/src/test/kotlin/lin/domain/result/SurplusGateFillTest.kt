@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * D-007 双费数机会成本模型 v3（T-015）+ D-012 门槛语义 v2：等效费 E（D-014 原语义，不含战术溢价）
  * + 垫后余量门槛 N（放行 ⟺ 空闲 ≥ 牌费 + N，「垫出后空闲池仍须剩 N 费」，跨卡费同义）
- * → fillValue = E + 树分×scale（费单位）。
+ * → fillValue = E + 树分（Q-024 费化后树分即费值，直加）。
  *
  * 语义锚点（D-012 拍板例）：① 3 费卡 N=1 = 空闲 4 才垫（垫后仍剩 1 费）；②「不贪心」= 配更小的 N；
  * ③ 未配置 = 0 付得起即垫（D-005「无战术不死捏」）；④ v1 池语义（空闲 ≥ max(牌费,N)，N≤牌费静默空设）已废弃。
@@ -126,7 +126,7 @@ class SurplusGateFillTest {
         assertTrue(card.passesSurplusCandidate(remainingCost = 2, isFull = false))
     }
 
-    // ===== fillValue = 等效费 + 树分×scale（满足一些赚一点）=====
+    // ===== fillValue = 等效费 + 树分（Q-024 后树分即费值）=====
 
     @Test
     fun `fillValue 零命中等效费_树分线性加溢价`() {
@@ -136,10 +136,10 @@ class SurplusGateFillTest {
                 powerWeight = 5.0, idleThreshold = 4, tacticalScore = ts
             )
         }
-        // scale=0.4：零命中 → E=5.0；ts=5 → 5+2.0=7.0；ts=10 → 5+4.0=9.0
+        // Q-024 费化直加：零命中 → E=5.0；ts=5 → 5+5.0=10.0；ts=10 → 5+10.0=15.0
         assertEquals(5.0, base(0.0).surplusFillValue(), 1e-9)
-        assertEquals(7.0, base(5.0).surplusFillValue(), 1e-9)
-        assertEquals(9.0, base(10.0).surplusFillValue(), 1e-9)
+        assertEquals(10.0, base(5.0).surplusFillValue(), 1e-9)
+        assertEquals(15.0, base(10.0).surplusFillValue(), 1e-9)
     }
 
     // ===== T-028：NegativeScorePolicy 控制 ts<0 在第二轮的语义 =====
@@ -147,9 +147,9 @@ class SurplusGateFillTest {
     // AGGRESSIVE：ts<0 也绕 N，折价补位
 
     @Test
-    fun `fillValue 负分象限 恒等式 E加ts乘scale 不再被max抹平`() {
-        // E=5、ts=-5 → 5 + (-5)*0.4 = 3.0（删 max 后不加回；负分象限防御性断言）
-        assertEquals(3.0, buildCard("F2", cost = 2, powerWeight = 5.0, tacticalScore = -5.0).surplusFillValue(), 1e-9)
+    fun `fillValue 负分象限 恒等式 E加ts 不再被max抹平`() {
+        // E=5、ts=-5 → 5 + (-5) = 0.0（Q-024 费化后 ts 即费直加；删 max 后不加回；负分象限防御性断言）
+        assertEquals(0.0, buildCard("F2", cost = 2, powerWeight = 5.0, tacticalScore = -5.0).surplusFillValue(), 1e-9)
     }
 
     @Test

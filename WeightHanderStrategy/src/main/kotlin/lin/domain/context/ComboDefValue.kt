@@ -25,8 +25,8 @@ val CostValueExponent: Double get() = EngineConfig.costValueExponent
 val CostValueMaxCost: Double get() = EngineConfig.costValueMaxCost
 val SpellCostValueWeight: Double get() = EngineConfig.spellCostValueWeight
 
-// D-007 双费数模型：战术分(分)→费 全局换算（fillValue = fallback + min(G, tacticalScore×TacticalScoreScale)）
-val TacticalScoreScale: Double get() = EngineConfig.tacticalScoreScale
+// Q-024 量纲费化（T-PV-011）：评估树/combo/AuraBoost 直接配费值，tacticalScoreScale 已退役。
+// 战术分不再有「分→费」换算层——双量纲（选牌层 1分=1费 / 填充层 1分=0.4费）消灭。
 
 // 费用价值凹函数：costValue(cost, weight) = weight * min(cost, MaxCost)^CostValueExponent。
 // 表达炉石「低费抢节奏溢价、高费卡手/怕解贬值」的非线性经济规律（指数 0.5 = √cost）。

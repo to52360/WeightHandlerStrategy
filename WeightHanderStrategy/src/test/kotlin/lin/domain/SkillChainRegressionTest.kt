@@ -76,7 +76,7 @@ class SkillChainRegressionTest {
 
         val skill = harness.warManage.parseComboCard(power)
         // 真实链路由 weightEvaluator 同时写 extPowerWeight 与 tacticalScore；此处只驱动 fillValue 输入
-        skill.tacticalScore = -3.0 // E=1（配置等效费），fillValue = 1 + (-3)×0.4 = -0.2 ≤ 0
+        skill.tacticalScore = -3.0 // E=1（配置等效费），fillValue = 1 + (-3) = -2 ≤ 0（Q-024 后 ts 即费直加）
 
         assertTrue(
             SurplusFillCombination.findBestCombination(listOf(skill), 10).isEmpty(),
