@@ -220,6 +220,11 @@ class ComboCard(
     // Q-008/T-007 的通道分离已无独立消费者（双费数模型取代其使命），通道字段遗留待清理（T-018）。
     var tacticalScore: Double = 0.0
 
+    // T-PV-003（play-value-model）：光环广播分（AuraBoost 独立 additive 通道，aura-boost D-004）。
+    // 原本算完即并入 weightEvaluator 的 total、不落存，诊断时无法区分「树分 / 光环 / 其余累加」三路来源。
+    // **仅作决策日志（DecisionLog）的诊断分量，不参与任何权重计算**。
+    var auraScore: Double = 0.0
+
     /**
      * 权重累加方法
      */

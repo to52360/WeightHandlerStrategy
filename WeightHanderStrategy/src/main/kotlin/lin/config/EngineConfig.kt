@@ -83,6 +83,13 @@ object EngineConfig {
     // 配置化后三处统一由本项控制；默认 2 保持既有行为（SOP §4.3 现按 2 表述，改动该值需回看该段）。
     val changeKeepCost get() = store.int("change.keep.cost", 2)
 
+    // T-PV-002（play-value-model）：决策日志总开关——选牌分量 / 门控落选原因 / 排序明细三处共用
+    // （统一出口见 lin.utils.DecisionLog）。默认 false：对局高频，逐卡日志量大。
+    // 为什么不用 debug 级别：引擎 jar 不带 logback.xml，日志级别由宿主控制，
+    // debug 在部署侧可能根本输出不出来 → 改由本开关控制，统一以 info 输出。
+    // ⚠️ 本键必须在 engine.properties 注册：ConfigStore 只对已存在的键做 -D 系统属性覆盖。
+    val decisionLogEnabled get() = store.boolean("decision.log.enabled", false)
+
     // timing
     val awaitAnimationTime get() = store.long("timing.await.animation", 1000)
     val useAnimationTime get() = store.long("timing.use.animation", 1500)

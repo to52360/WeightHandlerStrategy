@@ -9,7 +9,8 @@ import lin.domain.context.TacticalScoreScale
  *
  * 候选资格决定一张牌「能否进入哪一轮」，与 `UseStage`（排序）/`replanAfterUse`（执行生命周期）互不推导。
  * 三态候选策略枚举已被 (N, ts) 完全吸收（Q-026 方案 C + T-027/T-028）：
- * - **第一轮**（主组合竞争）：ts ≠ 0（有战术立场，**含 ts<0 降权竞争入口**）或 N == 0 才进；ts == 0 且 N > 0 则惜售。
+ * - **第一轮**（主组合竞争）：**combo 成员直接豁免**（T-PV-008/D-005——价值在组合里，单卡门槛对其无意义）；
+ *   否则 ts ≠ 0（有战术立场，**含 ts<0 降权竞争入口**）或 N == 0 才进；ts == 0 且 N > 0 则惜售。
  * - **第二轮**（余费填充）：ts > 0（兑现）绕 N 优先填充；ts ≤ 0（含亏模）默认尊重 N（T-028：[NegativeScorePolicy] 控制——
  *   NORMAL 同 ts==0 尊重 N，AGGRESSIVE 也绕 N 折价补位）。
  * - 极端 -100 = 绝对不打，走 isUnUse 硬禁，候选链前即被抽离，本门不涉及。
@@ -23,8 +24,24 @@ import lin.domain.context.TacticalScoreScale
  * 注意：候选门控只做「进不进候选」，不调用 `unUse()`/Banned——那是 EvalOutcome.Banned 硬禁语义（永久禁出），
  * 与本软门控（暂时不出）互不重叠。
  */
-fun ComboCard.passesFirstRoundCandidate(): Boolean =
-    tacticalScore != 0.0 || surplusIdleThreshold() == 0
+/**
+ * combo 成员判定（T-PV-008 / D-005）：该卡绑定了至少一个 combo 条目（core 侧或 dep 侧）。
+ *
+ * 实现即 `comboEntries` 非空——卡片只要在任一 combo 里承担核心或依赖就有条目
+ * （[lin.bean.usePlan.CardComboEntry] 由 ComboAssembler 按 combo 定义归并）。
+ *
+ * 用途：Q-027 方案 B 的**第一轮门控豁免**——combo 成员的价值存在于**组合**里（搜索时由 comboBonus 表达），
+ * 单卡树分门槛（ts≠0 / N==0）对它无意义，故豁免、让它进搜索由 comboBonus 决定去留（D-005）。
+ * ⚠️ **仅豁免第一轮**；余费门 [passesSurplusGate] 刻意不豁免（D-006），避免配合不成立时被垫出浪费 core 牌。
+ */
+fun ComboCard.isComboMember(): Boolean = comboEntries.isNotEmpty()
+
+fun ComboCard.passesFirstRoundCandidate(): Boolean {
+    // T-PV-008（D-005）：combo 成员豁免本轮门槛——价值在组合里（comboBonus 搜索时算），
+    // 单卡树分门槛对其无意义；进搜索后配合成立则入选、不成立则落选（落选即「等」）。
+    if (isComboMember()) return true
+    return tacticalScore != 0.0 || surplusIdleThreshold() == 0
+}
 
 /**
  * 第二轮余费候选资格（Q-036 收口，D-020）：仅挡硬禁（[isUnUse]，Banned/打出失败）——
@@ -100,6 +117,8 @@ fun ComboCard.surplusFillValue(): Double =
  * - NORMAL（默认）：ts<0 尊重 N，同 ts==0（N=0 折价补位 / N>0 惜售 held）；
  * - AGGRESSIVE：ts<0 也绕 N，以 `E + ts×scale` 折价补位（不浪费费，但覆盖 N>0 惜售保护）。
  * 绝对不打（-100）走 isUnUse 硬禁。
+ * T-PV-008（D-006）：combo 成员**不豁免**本门——只豁免 [passesFirstRoundCandidate] 是刻意的：
+ *   配合不成立时 combo 成员不应被余费填充垫出（浪费 core 牌），故第二轮仍受「空闲 ≥ 牌费 + N」约束。
  */
 fun ComboCard.passesSurplusGate(idleCost: Int, nDelta: Int = 0): Boolean {
     val bypassCondition = if (useIntent?.negativeScorePolicy == NegativeScorePolicy.AGGRESSIVE)

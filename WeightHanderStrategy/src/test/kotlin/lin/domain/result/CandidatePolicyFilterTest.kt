@@ -2,6 +2,7 @@ package lin.domain.result
 
 import condition.createMockCard
 import lin.bean.*
+import lin.bean.usePlan.CardComboEntry
 import lin.bean.usePlan.NegativeScorePolicy
 import lin.bean.usePlan.UseIntent
 import org.junit.Assert.*
@@ -171,5 +172,49 @@ class CandidatePolicyFilterTest {
         val card = buildCard(n = 2, cost = 3, tacticalScore = -2.0)
         assertFalse(card.passesSurplusGate(idleCost = 4))
         assertTrue(card.passesSurplusGate(idleCost = 5))
+    }
+
+    // ── T-PV-008：combo 成员第一轮豁免（D-005 / D-006）──
+
+    @Test
+    fun `combo 成员豁免第一轮门槛`() {
+        // D-005：combo 成员的价值在组合里（搜索时由 comboBonus 表达），单卡门槛对其无意义 → 豁免进搜索。
+        // 对照组：同样的 ts==0 + N=2，非 combo 成员应被惜售挡下。
+        assertFalse(buildCard(n = 2, tacticalScore = 0.0).passesFirstRoundCandidate())
+        val member = buildComboMemberCard(n = 2, tacticalScore = 0.0)
+        assertTrue(member.isComboMember())
+        assertTrue(member.passesFirstRoundCandidate())
+    }
+
+    @Test
+    fun `combo 成员不豁免余费门`() {
+        // D-006：只豁免第一轮——配合不成立时 combo 成员不应被余费填充垫出（浪费 core 牌），
+        // 故第二轮仍受「空闲 ≥ 牌费 + N」约束（N=2 的 3 费牌需空闲 ≥ 3+2=5）。
+        val member = buildComboMemberCard(n = 2, cost = 3, tacticalScore = 0.0)
+        assertFalse(member.passesSurplusGate(idleCost = 4))
+        assertTrue(member.passesSurplusGate(idleCost = 5))
+    }
+
+    private fun buildComboMemberCard(
+        n: Int? = null,
+        cost: Int = 3,
+        tacticalScore: Double = 0.0
+    ): ComboCard {
+        val card = ComboCard(
+            combinedConfig = CardCombinedConfig(
+                weightInfo = CardWeightInfo(
+                    cardId = "CB_${n}_${tacticalScore}",
+                    powerWeight = 1.0,
+                    surplusIdleThreshold = n
+                ),
+                // comboEntries 非空 = combo 成员；谓词组为空时直接取静态预算（无需 ComboRuntime 装配）
+                comboEntries = listOf(CardComboEntry(comboId = "combo_test", score = 10.0)),
+                useIntent = UseIntent()
+            ),
+            card = createMockCard(cardId = "CB_${n}_${tacticalScore}", cost = cost),
+            baseValue = 5.0
+        )
+        card.tacticalScore = tacticalScore
+        return card
     }
 }

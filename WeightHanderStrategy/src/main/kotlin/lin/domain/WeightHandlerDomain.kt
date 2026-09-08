@@ -109,7 +109,10 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         comboCard.tacticalScore = treeResult.score
 
         // 1.5 push 广播分（独立 additive 通道，aura-boost D-004；光环加分只走 AuraBoost，评估树不写光环条件）
-        total += auraBoostEvaluator.activeScore(comboCard, ruleEnv)
+        val auraScore = auraBoostEvaluator.activeScore(comboCard, ruleEnv)
+        total += auraScore
+        // T-PV-003：光环分落存到卡上（仅诊断用，供 DecisionLog 逐卡分量区分三路来源）
+        comboCard.auraScore = auraScore
 
         // 2. legacy handler 链（旧系统，兼容）
         for (handler in weightHandlers) {

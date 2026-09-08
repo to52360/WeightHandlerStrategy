@@ -7,6 +7,7 @@ import lin.domain.context.NotWeight
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
 import lin.myLog
+import lin.utils.DecisionLog
 
 sealed class CmdPlanner
 object ContinuePlanner : CmdPlanner()
@@ -122,6 +123,46 @@ class EndWeightResult(
                 val totalPenalty = remainingCostPenalty(lessCost, cost) + comboPenalty(bestCombination.size)
                 val penalty = totalPenalty.coerceAtMost(baseWeightSum)
                 extWeight -= penalty
+            }
+        }
+
+        logSelectionDetail()
+    }
+
+    /**
+     * T-PV-003（play-value-model）：选牌层逐卡分量 + 组合摘要（挂 [DecisionLog] 总开关，默认关）。
+     *
+     * 回答「这张牌为什么被选 / 没被选」：把 powerWeight 的每一路来源逐卡摊开——
+     * `base`（物理价值）/ `ts`（评估树分）/ `aura`（光环广播分）/ `other`（其余累加，含 legacy handler）
+     * / `ext`（累加器总值）/ `power`（= base + ext，最终决策依据）。
+     *
+     * 落选**原因**细节（门控 / 费用）归 T-PV-004 门控日志，此处只标入选 / 未入选 / 硬禁三态。
+     */
+    private fun logSelectionDetail() {
+        if (!DecisionLog.enabled) return
+        val chosen = bestCombination.toSet()
+        val lessCost = (cost - costSum()).coerceAtLeast(0)
+        val penalty = remainingCostPenalty(lessCost, cost) + comboPenalty(bestCombination.size)
+        DecisionLog.log {
+            buildString {
+                appendLine(
+                    "选牌结果: costSum=${costSum()}/$cost weightSum=${weightSum()} " +
+                            "penalty=$penalty effectiveScore=${bestCombination.sumOf { it.powerWeight } - penalty}"
+                )
+                appendLine("  成员: ${bestCombination.joinToString { it.cardId() }}")
+                (_canUseCardsByHandler + _unUseCards).forEach { card ->
+                    val other = card.extPowerWeight - card.tacticalScore - card.auraScore
+                    val state = when {
+                        card in chosen -> "入选"
+                        card.isUnUse() -> "硬禁"
+                        else -> "未入选"
+                    }
+                    appendLine(
+                        "  ${card.cardId()}(${card.card.entityName}) cost=${card.cost()} " +
+                                "base=${card.baseValue} ts=${card.tacticalScore} aura=${card.auraScore} " +
+                                "other=$other ext=${card.extPowerWeight} power=${card.powerWeight} -> $state"
+                    )
+                }
             }
         }
     }
