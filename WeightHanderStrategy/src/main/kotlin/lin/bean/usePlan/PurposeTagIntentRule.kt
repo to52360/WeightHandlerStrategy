@@ -41,7 +41,7 @@ interface PurposeTagIntentRuleProvider {
 }
 
 /**
- * 默认规则提供者：硬编码的 7 条基础规则。
+ * 默认规则提供者：硬编码的 6 条基础规则。
  *
  * 作为 [PurposeTagIntentRuleProvider] 的 fallback 实现；
  * 后续可替换为数据库驱动或其他外部配置加载实现。

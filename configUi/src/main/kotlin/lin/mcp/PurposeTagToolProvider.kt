@@ -103,6 +103,12 @@ class PurposeTagToolProvider(
                 传空集合表示清除该卡全部标签。replanAfterUse 为 null 表示不修改当前值。
 
                 典型场景：给过牌卡打 DRAW_CARD 标签，或给某卡增补/移除用途标签。
+
+                ⚠️ 打标前先确认标签的隐式编排含义：标签命中 PurposeTagIntentRule 后会自动带来四项默认值
+                ——defaultStage / defaultOrderWeight / defaultSurplusIdleThreshold(N) / defaultReplanAfterUse
+                （N 多标签取 max、replan 取 any，均属保守方向合并，且不因 stageOverride 而跳过）。
+                用 get(resource=purpose_tag, id=标签ID) 查看这四项再决定是否打标；
+                不需要任何编排默认值时改用纯查询标签（如 FINISH / EXTRA_COST，无规则条目）。
             """.trimIndent()
         ) { input ->
             handleSave(input)

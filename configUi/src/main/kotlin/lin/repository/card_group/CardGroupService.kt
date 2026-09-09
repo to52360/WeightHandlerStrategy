@@ -101,6 +101,16 @@ class CardGroupService(
             )
         )
 
+        // 单活卡组（@defect open-questions/Q-OQ-005）：引擎侧按「**所有 enabled 卡组**」加载配置
+        // （`SqliteAuraBoostConfigProvider` / TreeConfigProvider 等均如此），**无「当前卡组」概念**
+        // → 多卡组同时 enabled 会串味（绑 A 的 AuraBoost 在玩 B 时照样生效）。
+        // 结构性消除：启用本卡组时自动禁用其余卡组，把「同时只启用一个」从**约定**变成**机制保证**。
+        // ⚠️ 已知缺陷：UI 侧不会主动刷新其它卡组的启用态（需重新加载才看到已置灰）——可接受，记录待收敛。
+        if (enabled) {
+            allManagers.filter { it.id != id && it.enabled }
+                .forEach { repository.saveManager(it.copy(enabled = false)) }
+        }
+
         // 整体替换该 Manager 下的 Binding（行为覆盖/使用动作已迁到 card_group_behavior 表）
         val entities = bindings.map { CardBindingEntity.fromDomain(it.copy(managerId = id)) }
         repository.replaceBindings(id, entities)

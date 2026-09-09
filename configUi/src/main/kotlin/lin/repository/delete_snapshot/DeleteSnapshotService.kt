@@ -176,7 +176,9 @@ class DeleteSnapshotService(
                 targetConditionId = entity.targetConditionId,
                 score = entity.score,
                 managerId = entity.managerId,
-                existingId = entity.id
+                existingId = entity.id,
+                // T-SR-012：恢复时一并还原启用状态（快照 payload 含 enabled）
+                enabled = entity.enabled
             )
         )
         return RestoreResult("已恢复 aura_boost ${entity.id}（原 id 保留）", isError = false)

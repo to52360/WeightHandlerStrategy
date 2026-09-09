@@ -44,6 +44,11 @@ class AuraBoostToolProvider(
                   无需先 save_condition_tree 建模板，本工具自动建树并返回新 id
 
                 managerId 关联卡组（消费方归属）；引用的条件树是全局资源。传 existingId 更新已有配置。
+
+                enabled 启用开关（缺省保持原值，新建默认 true）：false = 配置仍留在库中可查，
+                但**不进引擎**（临时停用通道）。⚠️ 这是**行级**开关，只能停用"这一条规则"，
+                做不到"按卡组启停"——引擎侧按"所有已启用卡组"加载，无"当前卡组"概念
+                （见单活卡组约束：启用一个卡组会自动禁用其余卡组）。
             """.trimIndent()
         ) { input ->
             val result = service.saveWithInlineTrees(
@@ -55,13 +60,15 @@ class AuraBoostToolProvider(
                     targetConditionTreeJson = input.targetConditionTreeJson,
                     score = input.score,
                     managerId = input.managerId,
-                    existingId = input.existingId
+                    existingId = input.existingId,
+                    enabled = input.enabled
                 )
             )
             mcpSuccess(
                 mapOf(
                     "id" to result.id, "name" to input.name, "score" to input.score,
-                    "conditionId" to result.conditionId, "targetConditionId" to result.targetConditionId
+                    "conditionId" to result.conditionId, "targetConditionId" to result.targetConditionId,
+                    "enabled" to (input.enabled ?: true)
                 )
             )
         }
@@ -120,7 +127,8 @@ private fun AuraBoostEntity.toSummary(): Map<String, Any?> = mapOf(
     "conditionId" to conditionId,
     "targetConditionId" to targetConditionId,
     "score" to score,
-    "managerId" to managerId
+    "managerId" to managerId,
+    "enabled" to enabled
 )
 
 /**
@@ -144,5 +152,7 @@ private data class SaveAuraBoostMcpInput(
     @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 list(resource=card_group)）。")
     val managerId: String? = null,
     @field:JsonPropertyDescription("可选：更新已有 AuraBoost 时传其 id；不传则新建。")
-    val existingId: String? = null
+    val existingId: String? = null,
+    @field:JsonPropertyDescription("可选：启用开关。false = 留在库中可查但不进引擎（临时停用）；不传=保持原值，新建默认 true。注意是行级开关，不能按卡组启停。")
+    val enabled: Boolean? = null
 )

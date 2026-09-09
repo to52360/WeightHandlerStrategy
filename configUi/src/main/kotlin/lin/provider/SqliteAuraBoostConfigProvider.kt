@@ -23,6 +23,9 @@ class SqliteAuraBoostConfigProvider(
             .mapTo(mutableSetOf()) { it.id }
         return service.loadAll()
             .filter { it.managerId == null || it.managerId in enabledManagerIds }
+            // T-SR-012（open-questions Q-OQ-002）：启用开关——false 留库但不进引擎（临时停用通道）。
+            // ⚠️ 行级：与"归属过滤"叠加后仍只表达"这条规则要不要"，不表达"对哪个卡组"（引擎无当前卡组概念）。
+            .filter { it.enabled }
             .map { entity ->
                 AuraBoostConfig(
                     id = entity.id,

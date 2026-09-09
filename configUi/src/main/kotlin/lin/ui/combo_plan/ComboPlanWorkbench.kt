@@ -78,7 +78,7 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 )
             }
             addColumn("核心互斥", 60.0, isCentered = true) { if (it.coreMutex) "是" else "否" }
-            addColumn("出牌顺序", 90.0) { it.relation.toChineseDesc() }
+            addColumn("组合顺序", 90.0) { it.relation.toChineseDesc() }
 
             items = obsPlans
         }

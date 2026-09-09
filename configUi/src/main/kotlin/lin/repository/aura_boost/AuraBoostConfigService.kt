@@ -11,6 +11,8 @@ import java.util.*
  *
  * @param managerId 消费方归属（D-003 分层）：aura_boost 是卡组级配置（圣契卡组才有莱妮莎光环），
  *                  归属在消费方，引用的条件树（condition_id/target_condition_id）是全局资源。
+ * @param enabled   启用开关（T-SR-012，open-questions Q-OQ-002）：false = 留库但不进引擎。
+ *                  ⚠️ 行级开关，**不能**做"按卡组启停"（引擎无"当前卡组"概念，见 Q-OQ-005）。
  */
 data class AuraBoostEntity(
     val id: String,
@@ -18,7 +20,8 @@ data class AuraBoostEntity(
     val conditionId: String,
     val targetConditionId: String,
     val score: Double,
-    val managerId: String?
+    val managerId: String?,
+    val enabled: Boolean = true
 )
 
 data class SaveAuraBoostInput(
@@ -27,7 +30,9 @@ data class SaveAuraBoostInput(
     val targetConditionId: String,
     val score: Double,
     val managerId: String? = null,
-    val existingId: String? = null
+    val existingId: String? = null,
+    /** null = 保持原值（新建则 true），与 description/status 的"缺省不覆盖"语义一致。 */
+    val enabled: Boolean? = null
 )
 
 /**
@@ -43,7 +48,9 @@ data class SaveAuraBoostInlineInput(
     val targetConditionTreeJson: String? = null,
     val score: Double,
     val managerId: String? = null,
-    val existingId: String? = null
+    val existingId: String? = null,
+    /** null = 保持原值（新建则 true）。 */
+    val enabled: Boolean? = null
 )
 
 /** save_aura_boost 落库结果（含实际生效的条件树 id，供调用方回显）。 */
@@ -63,6 +70,8 @@ class AuraBoostConfigService(
 ) {
     fun save(input: SaveAuraBoostInput): String {
         val id = input.existingId ?: UUID.randomUUID().toString().substring(0, 8)
+        // T-SR-012：enabled 缺省（null）保持原值——UI 保存路径不传该字段时不会把已停用的规则重新启用
+        val existingEnabled = repository.findById(id)?.enabled
         repository.save(
             AuraBoostEntity(
                 id = id,
@@ -70,7 +79,8 @@ class AuraBoostConfigService(
                 conditionId = input.conditionId,
                 targetConditionId = input.targetConditionId,
                 score = input.score,
-                managerId = input.managerId
+                managerId = input.managerId,
+                enabled = input.enabled ?: existingEnabled ?: true
             )
         )
         return id
@@ -107,7 +117,8 @@ class AuraBoostConfigService(
                 targetConditionId = targetId,
                 score = input.score,
                 managerId = input.managerId,
-                existingId = input.existingId
+                existingId = input.existingId,
+                enabled = input.enabled
             )
         )
         AuraBoostInlineSaveResult(id = id, conditionId = triggerId, targetConditionId = targetId)
