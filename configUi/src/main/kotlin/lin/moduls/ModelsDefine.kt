@@ -15,6 +15,7 @@ import lin.repository.card_group.CardGroupBehaviorRepository
 import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
+import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
@@ -31,9 +32,9 @@ import lin.ui.aura_boost.AuraBoostExtension
 import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.card_group.CardGroupExtension
 import lin.ui.card_purpose.CardPurposeExtension
-import lin.ui.card_purpose.DefaultPurposeTagProvider
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
+import lin.ui.card_purpose.SqlitePurposeTagProvider
 import lin.ui.combo_plan.ComboPlanExtension
 import lin.ui.condition_tree.ConditionTreeExtension
 import lin.ui.condition_tree.action.ConditionTreeWorkbenchAction
@@ -63,8 +64,9 @@ val serviceModule = module {
 
     single { SelectOptionRegistry() }
 
-    // 用途标签目录与显示
-    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    // 标记定义与显示（T-TG-001：定义落库，白名单随之可增长）
+    single { PurposeTagDefRepository(get()) }
+    single<PurposeTagProvider> { SqlitePurposeTagProvider(get()) }
     single<PurposeTagIntentRuleProvider> { DefaultPurposeTagIntentRuleProvider() }
     single { PurposeTagTreeBindingPolicy(get()) }
 
@@ -170,6 +172,7 @@ val uiDBModule = module {
     single { DeleteSnapshotRepository(get()) }
     single {
         DeleteSnapshotService(
+            get(),
             get(),
             get(),
             get(),

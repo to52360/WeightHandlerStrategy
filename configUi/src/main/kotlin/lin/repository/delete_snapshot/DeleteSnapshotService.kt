@@ -12,6 +12,8 @@ import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInput
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.ManagerSaveCommand
+import lin.repository.card_purpose.PurposeTagDefEntity
+import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.combo_plan.ComboPlanDefinitionEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigEntity
@@ -38,6 +40,7 @@ object SnapshotResource {
     const val CARD_POOL = "card_pool"
     const val CONDITION_TREE = "condition_tree"
     const val AURA_BOOST = "aura_boost"
+    const val PURPOSE_TAG = "purpose_tag"
 }
 
 /** restore 结果：恢复成功的说明文案，或失败（快照不存在 / 冲突 / 分发失败）的错误文案。 */
@@ -60,6 +63,8 @@ class DeleteSnapshotService(
     private val conditionTreeService: ConditionTreeConfigService,
     private val auraBoostService: AuraBoostConfigService,
     private val comboPlanRepository: ComboPlanDefinitionRepository,
+    /** T-TG-002：标记定义删除/恢复（restore 按原 tagId 写回）。 */
+    private val purposeTagDefRepository: PurposeTagDefRepository,
     /** restore(card_group 级联) 与 deleteWithSnapshot 的多步写事务边界。 */
     private val tx: TransactionTemplate
 ) {
@@ -141,6 +146,7 @@ class DeleteSnapshotService(
         SnapshotResource.CONDITION_TREE -> restoreConditionTree(snapshot)
         SnapshotResource.CARD_GROUP -> restoreCardGroup(snapshot)
         SnapshotResource.CARD_POOL -> restoreCardPool(snapshot)
+        SnapshotResource.PURPOSE_TAG -> restorePurposeTag(snapshot)
         else -> RestoreResult(
             "恢复失败：未知资源类型 ${snapshot.resource}（快照 ${snapshot.snapshotId}）", isError = true
         )
@@ -157,6 +163,8 @@ class DeleteSnapshotService(
         SnapshotResource.COMBO_PLAN -> comboPlanRepository.findById(entityId)?.id
         SnapshotResource.CARD_POOL ->
             if (Files.exists(PathConfig.defaultDirPath.resolve("$entityId.cardgroup"))) entityId else null
+
+        SnapshotResource.PURPOSE_TAG -> purposeTagDefRepository.findByTagId(entityId)?.displayName
 
         else -> null
     }
@@ -264,6 +272,16 @@ class DeleteSnapshotService(
             isError = false
         )
     }
+
+    /** T-TG-002：标记定义恢复。按原 tagId 写回（builtin 由 payload 保留，不会把自定义标记升级成战略用途）。 */
+    private fun restorePurposeTag(snapshot: DeleteSnapshotEntity): RestoreResult {
+        val entity = SnapshotPayloads.mapper.readValue(snapshot.payload, PurposeTagDefEntity::class.java)
+        purposeTagDefRepository.save(entity)
+        return RestoreResult(
+            "已恢复 purpose_tag ${entity.tagId}（原 tagId 保留，boundPurpose=${entity.boundPurpose ?: "null"}）",
+            isError = false
+        )
+    }
 }
 
 // ─────────────────── payload 序列化（快照写入与恢复两侧共用，保证多态一致） ───────────────────
@@ -332,6 +350,9 @@ object SnapshotPayloads {
     fun comboPlan(entity: ComboPlanDefinitionEntity): String = mapper.writeValueAsString(entity)
 
     fun auraBoost(entity: AuraBoostEntity): String = mapper.writeValueAsString(entity)
+
+    /** T-TG-002：标记定义（简单实体，普通 mapper；恢复侧按原 tagId 写回）。 */
+    fun purposeTag(entity: PurposeTagDefEntity): String = mapper.writeValueAsString(entity)
 
     fun cardPool(config: CardGroupConfig): String = mapper.writeValueAsString(config)
 

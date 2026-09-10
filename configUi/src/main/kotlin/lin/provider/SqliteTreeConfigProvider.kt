@@ -27,24 +27,31 @@ class SqliteTreeConfigProvider(
         if (!entity.enabled) return null
 
         val currentEnabledGroupIds = groupRepository.findManagers(onlyEnabled = true).map { it.id }.toSet()
+        // T-TG-001：enabledTags 为每次访问重算，用 lazy 保证一次加载只读一次库
+        val enabledTagIds by lazy(LazyThreadSafetyMode.NONE) { tagPolicy.enabledTags.map { it.value }.toSet() }
         return runCatchingLog("反序列化评估树配置失败: id=$id") {
             val config = mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-            filterBindings(config, currentEnabledGroupIds)
+            filterBindings(config, currentEnabledGroupIds, enabledTagIds)
         }.getOrNull()
     }
 
     override fun findAll(): List<EvaluatorTreeConfig> {
         val currentEnabledGroupIds = groupRepository.findManagers(onlyEnabled = true).map { it.id }.toSet()
+        val enabledTagIds by lazy(LazyThreadSafetyMode.NONE) { tagPolicy.enabledTags.map { it.value }.toSet() }
         return repository.findAll().filter { it.enabled }.mapNotNull { entity ->
             runCatchingLog("反序列化评估树配置失败: id=${entity.id}") {
                 val config = mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-                filterBindings(config, currentEnabledGroupIds)
+                filterBindings(config, currentEnabledGroupIds, enabledTagIds)
             }.getOrNull()
         }
     }
 
     // @defect purpose-tag-configurable/K-001: GROUP 绑定跟随分组管理 enabled 状态，已修复缓存缺陷，现为动态查询。
-    private fun filterBindings(config: EvaluatorTreeConfig, currentEnabledGroupIds: Set<String>): EvaluatorTreeConfig {
+    private fun filterBindings(
+        config: EvaluatorTreeConfig,
+        currentEnabledGroupIds: Set<String>,
+        enabledTagIds: Set<String>
+    ): EvaluatorTreeConfig {
         val filtered = config.bindingIds.filter { id ->
             when (config.bindingType) {
                 EvaluatorTreeBindingType.GROUP -> {
@@ -56,7 +63,7 @@ class SqliteTreeConfigProvider(
                 }
 
                 EvaluatorTreeBindingType.PURPOSE_TAG -> {
-                    val enabled = id in tagPolicy.enabledTags.map { it.value }
+                    val enabled = id in enabledTagIds
                     if (!enabled) {
                         myLog.debug { "跳过已禁用用途标签的绑定: tagId=$id" }
                     }

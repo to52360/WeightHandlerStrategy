@@ -75,7 +75,7 @@ data class ListInput(
 
 /** delete 大工具输入：resource 判别 + 通用 id。id 可空以让 resource 校验优先于 id 缺失报错。 */
 data class DeleteInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost。完整支持面与各资源删除语义用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag。完整支持面与各资源删除语义用 tool_capabilities 查询。")
     val resource: String,
     @field:JsonPropertyDescription("资源标识 id（card_pool=fileName、card_group=managerId、其余=资源 id）。")
     val id: String? = null

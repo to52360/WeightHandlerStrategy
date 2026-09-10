@@ -21,6 +21,8 @@ class DefaultAiConfigGenerationService(
     private val treeConfigService: TreeConfigService,
     pipelineAssembler: PipelineAssembler,
     private val cardGroupService: CardGroupService,
+    // T-TG-001：默认值仅为无库场景 fallback（直接构造时）；Koin 注入的是 SqlitePurposeTagProvider
+    // （标记定义落库，白名单可增长），故 MCP/UI 路径不会用到这个硬编码清单。
     private val purposeTagProvider: PurposeTagProvider = DefaultPurposeTagProvider(),
     conditionTreeService: ConditionTreeConfigService? = null
 ) : AiConfigGenerationService {

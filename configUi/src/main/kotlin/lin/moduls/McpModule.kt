@@ -20,6 +20,7 @@ import lin.repository.HsCardRepository
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
+import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.delete_snapshot.DeleteSnapshotService
@@ -118,7 +119,9 @@ val mcpModule = module {
             get(),
             get(),
             get<CardPurposeRepository>(),
-            get<TreeConfigService>()
+            get<TreeConfigService>(),
+            get<PurposeTagDefRepository>(),
+            get<DeleteSnapshotService>()
         )
     } bind McpToolProvider::class
     single {

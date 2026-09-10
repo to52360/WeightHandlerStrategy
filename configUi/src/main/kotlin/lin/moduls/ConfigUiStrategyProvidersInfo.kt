@@ -7,6 +7,7 @@ import lin.repository.card_group.CardGroupBehaviorRepository
 import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
+import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
@@ -15,9 +16,9 @@ import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.CardGroupBinding
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.*
-import lin.ui.card_purpose.DefaultPurposeTagProvider
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
+import lin.ui.card_purpose.SqlitePurposeTagProvider
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -52,7 +53,9 @@ val strategyProviderModule = module {
         SqliteCardPurposeProvider(get())
     }
 
-    single<PurposeTagProvider> { DefaultPurposeTagProvider() }
+    // T-TG-001：标记定义落库（本模块由引擎经 SPI 装载，JdbcTemplate 来自引擎侧）
+    single { PurposeTagDefRepository(get()) }
+    single<PurposeTagProvider> { SqlitePurposeTagProvider(get()) }
     single { PurposeTagTreeBindingPolicy(get()) }
 
         single<TreeConfigProvider> {

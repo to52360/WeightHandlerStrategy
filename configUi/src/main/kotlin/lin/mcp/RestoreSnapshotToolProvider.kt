@@ -26,7 +26,7 @@ class RestoreSnapshotToolProvider(
         typedTool<RestoreSnapshotInput>(
             name = "restore_snapshot",
             description = """一键恢复此前被 delete 删除的资源（原 id 保留，引用不断）。传入 delete 响应里的 snapshotId（或 list(resource=delete_snapshot) 的 snapshotId）。
-按原 id 写回：combo_plan / aura_boost / evaluator_tree / condition_tree 重建单条，card_group 级联重建 manager+bindings+关联树，card_pool 重建 .cardgroup 文件。
+按原 id 写回：combo_plan / aura_boost / evaluator_tree / condition_tree / purpose_tag 重建单条，card_group 级联重建 manager+bindings+关联树，card_pool 重建 .cardgroup 文件。
 恢复前会做冲突检查：原 id 已被现有数据占用时拒绝（不覆盖、不改名），需先删除/改名现有数据再恢复。"""
         ) { input ->
             if (input.snapshotId.isBlank()) {
