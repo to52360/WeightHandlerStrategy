@@ -44,6 +44,9 @@ data class PurposeTagSummaryDto(
     val displayName: String,
     @field:JsonPropertyDescription("默认映射的出牌阶段（时序命名，非用途）。可选值：FIRST, SETUP, MID, LATE, GENERAL, LAST")
     val defaultStage: String,
+    val defaultOrderWeight: Double,
+    @field:JsonPropertyDescription("该标签的全局兜底声明：打出后是否必须重新评估。")
+    val defaultReplanAfterUse: Boolean,
     val priority: Int,
     @field:JsonPropertyDescription("该标签默认余费门槛 N（惜售声明）。null=未声明回落 0（付得起即垫）；N>0=平时惜售，战术命中（评估树 ts>0）兑现即放行，未命中需空闲 ≥ 牌费+N 才垫")
     val defaultSurplusIdleThreshold: Int? = null,
@@ -174,6 +177,8 @@ class PurposeTagToolProvider(
                     tagId = tagIdStr,
                     displayName = tagDef.displayName,
                     defaultStage = rule?.defaultStage?.name ?: "GENERAL",
+                    defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
+                    defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,
                     priority = rule?.priority ?: 100,
                     defaultSurplusIdleThreshold = rule?.defaultSurplusIdleThreshold,
                     associatedCardCount = cardTagSets.count { it.contains(tagIdStr) }
