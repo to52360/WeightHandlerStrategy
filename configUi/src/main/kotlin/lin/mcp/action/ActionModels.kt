@@ -14,6 +14,7 @@ object ActionResources {
     const val CONDITION_TREE = "condition_tree"
     const val AURA_BOOST = "aura_boost"
     const val PURPOSE_TAG = "purpose_tag"
+    const val STRATEGY_PRESET = "strategy_preset"
     const val TREE_TEMPLATE = "tree_template"
     const val DRAFT = "draft"
     const val CAPABILITY_BACKGROUND = "capability_background"
@@ -59,7 +60,7 @@ interface DeleteAction : ResourceAction {
 
 /** get 大工具输入：resource 判别 + 通用 id（语义因资源而异，用 tool_capabilities 详情查询确认）。id 可空以让 resource 校验优先于 id 缺失报错。 */
 data class GetInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / tree_template / draft。完整支持面与各资源 id 语义用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / draft。完整支持面与各资源 id 语义用 tool_capabilities 查询。")
     val resource: String,
     @field:JsonPropertyDescription("资源标识。id 语义因资源而异（card_pool=fileName、card_group=managerId、purpose_tag=tagId、draft=draftId、其余=资源 id），务必先用 tool_capabilities 确认。")
     val id: String? = null
@@ -67,7 +68,7 @@ data class GetInput(
 
 /** list 大工具输入：resource 判别 + 可选 managerId 过滤。 */
 data class ListInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / tree_template / capability_background。完整支持面用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / capability_background。完整支持面用 tool_capabilities 查询。")
     val resource: String,
     @field:JsonPropertyDescription("可选：按卡组 managerId 过滤（evaluator_tree / combo_plan / condition_tree / aura_boost / capability_background 支持，其余资源忽略此字段）。")
     val managerId: String? = null

@@ -36,7 +36,7 @@ class GetDispatcher(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<GetInput>(
             name = "get",
-            description = "读取单个资源详情。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / tree_template / draft），id 为资源标识。id 语义因资源而异（card_pool=fileName、card_group=managerId、purpose_tag=tagId、draft=draftId、其余=资源 id），不确定时先调 tool_capabilities 查询。"
+            description = "读取单个资源详情。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / draft），id 为资源标识。id 语义因资源而异（card_pool=fileName、card_group=managerId、purpose_tag=tagId、draft=draftId、其余=资源 id），不确定时先调 tool_capabilities 查询。"
         ) { input ->
             val action = registry.get(input.resource)
             if (action == null) {
@@ -62,7 +62,7 @@ class ListDispatcher(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<ListInput>(
             name = "list",
-            description = "列出资源列表。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / tree_template / capability_background），可选 managerId 按卡组过滤（仅部分资源支持）。不确定支持面时先调 tool_capabilities 查询。"
+            description = "列出资源列表。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / capability_background），可选 managerId 按卡组过滤（仅部分资源支持）。不确定支持面时先调 tool_capabilities 查询。"
         ) { input ->
             val action = registry.list(input.resource)
             if (action == null) {

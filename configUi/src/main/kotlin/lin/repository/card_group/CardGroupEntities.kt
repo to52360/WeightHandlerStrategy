@@ -18,7 +18,9 @@ data class CardManagerEntity(
     val description: String? = null, // 卡组总体描述/规划（manager_description 列，2026-08-10）
     val status: String? = null,      // 配置进度状态（manager_status 列，2026-08-10）：PLANNED / IN_PROGRESS / CONFIGURED
     // 卡组级「谓词组是否纳入卡池外的卡」默认值（T-001）：null=未声明，组级未设时回落 false
-    val defaultIncludeDerived: Boolean? = null
+    val defaultIncludeDerived: Boolean? = null,
+    /** 卡组引用的用途预设（T-TG-012）：null = 不用预设（走全局用途规则）。 */
+    val presetId: String? = null
 )
 
 /**

@@ -4,18 +4,13 @@ import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
 import lin.bean.ConfigSliceScope
 import lin.bean.SliceEntry
-import lin.bean.usePlan.CardPurpose
-import lin.bean.usePlan.ComboPlanDefinition
-import lin.bean.usePlan.GroupUseOverride
-import lin.bean.usePlan.PurposeTagId
+import lin.bean.usePlan.*
 import lin.domain.use.UseStrategy
-import lin.domain.use.plan.ComboAssembler
-import lin.domain.use.plan.GroupBehaviorIndex
-import lin.domain.use.plan.GroupBehaviorRuntime
-import lin.domain.use.plan.UseIntentAssembler
+import lin.domain.use.plan.*
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.GroupMembership
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 
 /**
  * 卡牌配置绑定步骤：每步只贡献一类原始数据到 [CardCombinedConfigBuilder]，
@@ -32,7 +27,13 @@ interface ConfigBindingStep {
  * 配置组装累加器：收集各 Step 贡献的原始数据，[build] 时统一组装为不可变 Map。
  * 组装逻辑（UseIntentAssembler / ComboAssembler）集中在 build，避免散落于各 Step。
  */
-class CardCombinedConfigBuilder {
+class CardCombinedConfigBuilder(
+    /**
+     * 用途意图规则来源（T-TG-006 SPI 通道）：由 [CardConfigBindingTask] 从 Koin 注入；
+     * 默认值供测试 / 无 Koin 场景直接构造。
+     */
+    private val intentRuleProvider: PurposeTagIntentRuleProvider = DefaultPurposeTagIntentRuleProvider()
+) {
     val baseInfos = HashMap<String, CardWeightInfo>()
     val groupMap = HashMap<String, MutableSet<String>>()
     val groupOverrides = HashMap<String, GroupUseOverride>()
@@ -70,12 +71,15 @@ class CardCombinedConfigBuilder {
         val tagIndex = buildTagIndex()
         expandGroupBehaviors()
         expandSlices(tagIndex)
-        val useIntentAsm = UseIntentAssembler(cardPurposes, groupMap, groupOverrides)
+        // T-TG-006：共用**同一个** deriver 实例 —— 静态 useIntent 预推导与运行时组行为重算
+        // 若各持一个，规则源可能漂移（一处读库、一处读硬编码）。
+        val intentDeriver = UseIntentDeriver(intentRuleProvider)
+        val useIntentAsm = UseIntentAssembler(cardPurposes, groupMap, groupOverrides, intentDeriver)
         val comboAsm = ComboAssembler(groupMap, comboDefinitions)
         // T-013：组级行为索引——静态预算与运行时索引**同源且原子**（同一份 groupOverrides /
         // groupSurplusGates / deriver），故运行时对完整组集合重算的结果必是静态预算的超集，
         // 不需要第三份「预算 ∪ 增量」合并逻辑（与 T-012 的 ComboIndex 同构）。
-        val behaviorIndex = GroupBehaviorIndex(groupOverrides, groupSurplusGates)
+        val behaviorIndex = GroupBehaviorIndex(groupOverrides, groupSurplusGates, intentDeriver)
         GroupBehaviorRuntime.configure(behaviorIndex)
         return baseInfos.mapValues { (cardId, weightInfo) ->
             val strategies = useStrategiesByCardId[cardId].orEmpty()

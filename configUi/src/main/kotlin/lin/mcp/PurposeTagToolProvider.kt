@@ -1,7 +1,6 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import lin.bean.usePlan.PurposeTagIntentRuleProvider
 import lin.mcp.action.*
 import lin.repository.card_purpose.CardPurposeEntity
 import lin.repository.card_purpose.CardPurposeRepository
@@ -11,13 +10,14 @@ import lin.repository.delete_snapshot.DeleteSnapshotService
 import lin.repository.delete_snapshot.SnapshotPayloads
 import lin.repository.delete_snapshot.SnapshotResource
 import lin.rule.tree.EvaluatorTreeBindingType
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.service.TreeConfigService
 import java.time.LocalDate
 
 /**
  * 用途标签（PurposeTag）域 MCP 工具提供者（写工具 + 动作 + DTO 同文件）：
- * - [PurposeTagAction]：resource=purpose_tag 的 get/list（原 purpose_tag 工具）。
+ * - PurposeTagAction：resource=purpose_tag 的 get/list/delete（原 purpose_tag 工具）。
  * - provide()：save_card_purpose 批量打标工具。
  * - DTO（PurposeTagSummaryDto 等）供 list/get 动作共用。
  */

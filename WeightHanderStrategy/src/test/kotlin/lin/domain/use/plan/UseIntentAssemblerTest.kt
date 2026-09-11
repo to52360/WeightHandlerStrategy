@@ -1,6 +1,7 @@
 ﻿package lin.domain.use.plan
 
 import lin.bean.usePlan.*
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

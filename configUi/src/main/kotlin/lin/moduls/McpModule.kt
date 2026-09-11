@@ -15,16 +15,21 @@ import lin.mcp.action.ToolCapabilitiesProvider
 import lin.mcp.card_group.CardGroupToolProvider
 import lin.mcp.card_group.CardPoolToolProvider
 import lin.mcp.card_group.SaveCardGroupToolProvider
+import lin.mcp.card_group.StrategyPresetToolProvider
 import lin.mcp.combo_plan.ComboPlanToolProvider
 import lin.repository.HsCardRepository
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.card_group.CardGroupService
+import lin.repository.card_group.DimensionItemResolver
+import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
+import lin.repository.card_purpose.PurposeTagRuleRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.delete_snapshot.DeleteSnapshotService
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
+import lin.repository.tree_config.TreeConfigRepository
 import lin.ui.service.CardGroupCascadeDeleteService
 import lin.ui.service.TreeConfigService
 import org.koin.core.context.GlobalContext.startKoin
@@ -104,6 +109,14 @@ val mcpModule = module {
             get(),
             get<CardGroupService>(),
             get<DeleteSnapshotService>()
+        )
+    } bind McpToolProvider::class
+    single {
+        StrategyPresetToolProvider(
+            get<StrategyPresetService>(),
+            get<PurposeTagRuleRepository>(),
+            get<TreeConfigRepository>(),
+            get<DimensionItemResolver>()
         )
     } bind McpToolProvider::class
     single {

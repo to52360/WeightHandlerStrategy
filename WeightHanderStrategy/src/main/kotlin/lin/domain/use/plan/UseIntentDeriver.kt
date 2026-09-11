@@ -1,6 +1,7 @@
 package lin.domain.use.plan
 
 import lin.bean.usePlan.*
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 
 /**
  * 意图推导核心器。

@@ -153,7 +153,7 @@ class TreeConfigService(
         val leafConfigs = leafConfigRepository.findByConfigId(entity.id, mapper)
         return EvaluatorTreeConfig(
             bindingType = EvaluatorTreeBindingType.valueOf(entity.bindingType),
-            bindingIds = entity.bindingIds.split(",").filter { it.isNotBlank() },
+            bindingIds = entity.bindingIdList,
             root = root,
             leafConfigs = leafConfigs
         )

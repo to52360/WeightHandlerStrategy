@@ -1,80 +1,127 @@
 package lin.provider
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import lin.myLog
-import lin.repository.card_group.CardGroupRepository
-import lin.repository.tree_config.TreeConfigRepository
+import lin.repository.card_group.*
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.EvaluatorTreeConfig
 import lin.serviceLoader.provider.TreeConfigProvider
-import lin.utils.runCatchingLog
+import lin.ui.service.TreeConfigService
 
 /**
  * [TreeConfigProvider] 的 SQLite 实现，供策略层通过 SPI 加载评估树配置。
  *
- * 在 SPI 边界完成绑定过滤：GROUP 绑定参考 [CardManagerEntity.enabled]，
- * PURPOSE_TAG 绑定参考 [lin.ui.card_purpose.PurposeTagTreeBindingPolicy]。
- * 引擎层收到的 [EvaluatorTreeConfig] 只包含有效的绑定目标。
+ * 在 SPI 边界完成两层处理（引擎零改动，它只收到"剪好的树"）：
+ * 1. **绑定过滤**：`GROUP` 绑定按**启用卡组下的绑定条目**过滤；`PURPOSE_TAG` 绑定按
+ *    [lin.ui.card_purpose.PurposeTagTreeBindingPolicy] 过滤；`CARD` 绑定不过滤。
+ * 2. **用途预设裁剪**（T-TG-015）：当前卡组引用的**用途预设**声明了「某用途保留哪些树」（白名单，
+ *    未声明的用途 ⇒ 该用途树全禁），消费方增量项再减；
+ *    **粒度是 (用途, 树)** ⇒ 实现为**按 tag 收窄 `bindingIds`**（多 tag 树不能整棵删），
+ *    剔空则整棵树不输出。
+ *
+ * ⚠️ **组装走 [TreeConfigService]**（`config_data` 只存 root、叶子在 `evaluator_leaf_config` 表）——
+ * 此前本类直接 `readValue(configData, EvaluatorTreeConfig::class.java)`，自叶子拆表后**每棵树都反序列化失败**
+ * ⇒ 引擎拿不到任何树（K-TG-007，2026-09-11 修复）；`GROUP` 过滤此前拿**卡组 manager id**比**绑定条目 id**
+ * ⇒ 恒 false 剔空（K-TG-008，同步修复）。两者都是"**恢复**"，不是新能力。
+ *
+ * 「当前卡组」的解析统一走 [CurrentDeckContext]（单点），不再各处重抄 `findManagers(onlyEnabled = true)`。
  */
 class SqliteTreeConfigProvider(
-    private val repository: TreeConfigRepository,
-    private val mapper: ObjectMapper,
-    private val groupRepository: CardGroupRepository,
-    private val tagPolicy: lin.ui.card_purpose.PurposeTagTreeBindingPolicy
+    private val treeConfigService: TreeConfigService,
+    private val cardGroupService: CardGroupService,
+    private val tagPolicy: lin.ui.card_purpose.PurposeTagTreeBindingPolicy,
+    /** T-TG-015：预设项 + 消费方增量项（同一张 `strategy_dimension_item`，按 scope 区分）。 */
+    private val presetRepository: StrategyPresetRepository,
+    private val currentDeck: CurrentDeckContext,
+    private val resolver: DimensionItemResolver
 ) : TreeConfigProvider {
-    override fun findById(id: String): EvaluatorTreeConfig? {
-        val entity = repository.findById(id) ?: return null
-        if (!entity.enabled) return null
 
-        val currentEnabledGroupIds = groupRepository.findManagers(onlyEnabled = true).map { it.id }.toSet()
-        // T-TG-001：enabledTags 为每次访问重算，用 lazy 保证一次加载只读一次库
-        val enabledTagIds by lazy(LazyThreadSafetyMode.NONE) { tagPolicy.enabledTags.map { it.value }.toSet() }
-        return runCatchingLog("反序列化评估树配置失败: id=$id") {
-            val config = mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-            filterBindings(config, currentEnabledGroupIds, enabledTagIds)
-        }.getOrNull()
+    override fun findById(id: String): EvaluatorTreeConfig? {
+        val (entity, config) = treeConfigService.findById(id) ?: return null
+        if (!entity.enabled) return null
+        val resolved = config ?: return null
+        return applyDeckFilters(entity.id, resolved, loadDeckContext())
     }
 
     override fun findAll(): List<EvaluatorTreeConfig> {
-        val currentEnabledGroupIds = groupRepository.findManagers(onlyEnabled = true).map { it.id }.toSet()
-        val enabledTagIds by lazy(LazyThreadSafetyMode.NONE) { tagPolicy.enabledTags.map { it.value }.toSet() }
-        return repository.findAll().filter { it.enabled }.mapNotNull { entity ->
-            runCatchingLog("反序列化评估树配置失败: id=${entity.id}") {
-                val config = mapper.readValue(entity.configData, EvaluatorTreeConfig::class.java)
-                filterBindings(config, currentEnabledGroupIds, enabledTagIds)
-            }.getOrNull()
-        }
+        val context = loadDeckContext()
+        return treeConfigService.loadAll()
+            .filter { (entity, _) -> entity.enabled }
+            .mapNotNull { (entity, config) ->
+                config?.let { applyDeckFilters(entity.id, it, context) }
+            }
     }
 
-    // @defect purpose-tag-configurable/K-001: GROUP 绑定跟随分组管理 enabled 状态，已修复缓存缺陷，现为动态查询。
-    private fun filterBindings(
+    // ─────────────────────── 一次加载内的共享上下文 ───────────────────────
+
+    /**
+     * 一次加载（`findAll`）内复用，避免逐树查库。
+     *
+     * @param enabledGroupBindingIds 启用卡组下的**绑定条目** id —— `GROUP` 树的 `bindingIds` 就是这个空间
+     * @param enabledTagIds          允许参与 `PURPOSE_TAG` 绑定的用途
+     * @param treeSelection          预设白名单 + 消费方额外排除
+     */
+    private data class DeckContext(
+        val enabledGroupBindingIds: Set<String>,
+        val enabledTagIds: Set<String>,
+        val treeSelection: DimensionItemResolver.TreeSelection
+    )
+
+    private fun loadDeckContext(): DeckContext {
+        val deck = currentDeck.current()
+        val presetId = deck?.presetId?.takeIf { it.isNotBlank() }
+        return DeckContext(
+            enabledGroupBindingIds = cardGroupService.loadAll(onlyEnabled = true)
+                .flatMap { manager -> manager.bindings.map { it.id } }
+                .toSet(),
+            enabledTagIds = tagPolicy.enabledTags.map { it.value }.toSet(),
+            treeSelection = resolver.treeSelection(
+                presetReferenced = presetId != null,
+                presetKeepByTag = presetId
+                    ?.let { presetRepository.findTreeSelections(DimensionScope.PRESET, it) }
+                    ?: emptyMap(),
+                consumerExcludeByTag = deck
+                    ?.let { presetRepository.findTreeSelections(DimensionScope.CARD_GROUP, it.id) }
+                    ?: emptyMap()
+            )
+        )
+    }
+
+    /**
+     * 按绑定类型分别过滤；返回 null = 该树不输出。
+     *
+     * - `GROUP`：绑定 id 必须是**启用卡组下的绑定条目**
+     * - `CARD`：不过滤
+     * - `PURPOSE_TAG`：先按预设白名单/消费方排除**按 tag 收窄**，再按启用用途过滤；**剔空 ⇒ 不输出**
+     */
+    private fun applyDeckFilters(
+        treeId: String,
         config: EvaluatorTreeConfig,
-        currentEnabledGroupIds: Set<String>,
-        enabledTagIds: Set<String>
-    ): EvaluatorTreeConfig {
-        val filtered = config.bindingIds.filter { id ->
-            when (config.bindingType) {
-                EvaluatorTreeBindingType.GROUP -> {
-                    val enabled = id in currentEnabledGroupIds
-                    if (!enabled) {
-                        myLog.debug { "跳过已禁用分组的绑定: groupId=$id" }
-                    }
+        context: DeckContext
+    ): EvaluatorTreeConfig? = when (config.bindingType) {
+        EvaluatorTreeBindingType.GROUP -> {
+            val kept = config.bindingIds.filter { id ->
+                val enabled = id in context.enabledGroupBindingIds
+                if (!enabled) myLog.debug { "跳过已禁用分组的绑定: bindingId=$id" }
+                enabled
+            }
+            config.copy(bindingIds = kept)
+        }
+
+        EvaluatorTreeBindingType.CARD -> config
+
+        EvaluatorTreeBindingType.PURPOSE_TAG -> {
+            val kept = resolver.narrowTreeTags(treeId, config.bindingIds, context.treeSelection)
+                .filter { tag ->
+                    val enabled = tag in context.enabledTagIds
+                    if (!enabled) myLog.debug { "跳过已禁用用途标签的绑定: tagId=$tag" }
                     enabled
                 }
-
-                EvaluatorTreeBindingType.PURPOSE_TAG -> {
-                    val enabled = id in enabledTagIds
-                    if (!enabled) {
-                        myLog.debug { "跳过已禁用用途标签的绑定: tagId=$id" }
-                    }
-                    enabled
-                }
-
-                EvaluatorTreeBindingType.CARD -> {
-                    true
-                }
+            if (kept.isEmpty()) {
+                myLog.debug { "用途树无保留用途，整棵不输出: treeId=$treeId（绑定=${config.bindingIds}）" }
+                null
+            } else {
+                config.copy(bindingIds = kept)
             }
         }
-        return config.copy(bindingIds = filtered)
     }
 }

@@ -1,5 +1,7 @@
 ﻿package lin.bean.usePlan
 
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
+
 /**
  * 用途标签默认意图规则。
  *
@@ -30,15 +32,6 @@ data class PurposeTagIntentRule(
     val defaultReplanAfterUse: Boolean = false,
     val defaultSurplusIdleThreshold: Int? = null
 )
-
-/**
- * 用途标签意图规则的数据源接口。
- *
- * 解耦规则来源，方便后续切换为数据库、SPI、配置文件等实现。
- */
-interface PurposeTagIntentRuleProvider {
-    fun rules(): List<PurposeTagIntentRule>
-}
 
 /**
  * 默认规则提供者：硬编码的 6 条基础规则。

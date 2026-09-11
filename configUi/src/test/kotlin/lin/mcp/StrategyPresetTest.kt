@@ -1,0 +1,333 @@
+package lin.mcp
+
+import com.fasterxml.jackson.annotation.JsonPropertyDescription
+import lin.bean.usePlan.UseStage
+import lin.mcp.action.GetInput
+import lin.mcp.action.ListInput
+import lin.repository.card_group.*
+import lin.repository.tree_config.TreeConfigEntity
+import lin.repository.tree_config.TreeConfigRepository
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Test
+import org.koin.core.context.GlobalContext
+
+/**
+ * T-TG-015：用途预设（兜底层）+ 卡组增量项（③微调层）。
+ *
+ * 覆盖：
+ * ① 预设时序覆盖生效、未声明字段回落全局；
+ * ② 消费方增量项**逐字段压过**预设；
+ * ③ 不引用预设 → 完全走全局（默认状态，零开关）；清除引用即回落；
+ * ④ **K-TG-005 关闭**：`clearSurplusIdleThreshold` 能把 N 覆盖为「无门槛」；
+ * ⑤ 前置校验：树必须存在、必须绑了该用途、时序只能覆盖有全局规则行的用途；
+ * ⑥ **未声明禁用**：空预设 ⇒ 全部用途树被禁，`disabledPurposes` 回报。
+ *
+ * ⚠️ 树裁剪的**合并规则**在 `DimensionItemResolverTest`（纯函数）覆盖；
+ * 本类只在 MCP 层验语义与校验（不构造 `EvaluatorTreeConfig`）。
+ */
+class StrategyPresetTest : McpTestEnv() {
+
+    private val presetService: StrategyPresetService by lazy {
+        GlobalContext.get().get<StrategyPresetService>()
+    }
+    private val presetRepository: StrategyPresetRepository by lazy {
+        GlobalContext.get().get<StrategyPresetRepository>()
+    }
+    private val ruleProvider: PurposeTagIntentRuleProvider by lazy {
+        GlobalContext.get().get<PurposeTagIntentRuleProvider>()
+    }
+    private val groupRepository: CardGroupRepository by lazy {
+        GlobalContext.get().get<CardGroupRepository>()
+    }
+    private val treeRepository: TreeConfigRepository by lazy {
+        GlobalContext.get().get<TreeConfigRepository>()
+    }
+
+    private var testDeckId: String? = null
+    private var presetId: String? = null
+    private val createdTreeIds = mutableListOf<String>()
+
+    @After
+    fun cleanUpPreset() {
+        presetId?.let { presetService.deletePreset(it) }
+        createdTreeIds.forEach { treeRepository.deleteById(it) }
+        testDeckId?.let {
+            presetRepository.deleteItems(DimensionScope.CARD_GROUP, it)
+            groupRepository.deleteManager(it)
+        }
+    }
+
+    /**
+     * 建一个 enabled 卡组 —— 直接走 repository（**有意绕开** `CardGroupService.saveManager`：
+     * 后者在 enabled 时会自动禁用其余卡组，测试不应污染其他卡组的启用状态）。
+     */
+    private fun createEnabledDeck(id: String): String {
+        groupRepository.saveManager(
+            CardManagerEntity(id = id, name = id, sourceFile = "$id.cardgroup", enabled = true)
+        )
+        return id
+    }
+
+    /** 直接落一行用途树（只用到列，不需要合法 `config_data` —— 本类不做反序列化）。 */
+    private fun insertPurposeTree(id: String, tags: List<String>): String {
+        treeRepository.save(
+            TreeConfigEntity(
+                id = id,
+                bindingType = "PURPOSE_TAG",
+                bindingIds = tags.joinToString(","),
+                name = id,
+                configData = """{"root":{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}}""",
+                enabled = true
+            )
+        )
+        createdTreeIds += id
+        return id
+    }
+
+    private fun savePreset(json: String): String {
+        val result = call("save_strategy_preset", json)
+        assertEquals("保存预设应成功: ${result.contentJson}", false, result.isError)
+        val id = mapper.readTree(result.contentJson).get("presetId").asText()
+        presetId = id
+        return id
+    }
+
+    private fun rulesByTag() = ruleProvider.rules().associateBy { it.tagId.value }
+
+    // ─────────────────────── 时序 ───────────────────────
+
+    @Test
+    fun `预设覆盖用途时序参数且未声明字段回落全局`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_A")
+        testDeckId = deck
+
+        // 全局基线：CLEAN = MID / N=1
+        assertEquals(UseStage.MID, rulesByTag().getValue("CLEAN").defaultStage)
+
+        val id = savePreset("""{"name":"TG_PRESET_A","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        assertEquals(
+            false,
+            call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""").isError
+        )
+
+        val clean = rulesByTag().getValue("CLEAN")
+        assertEquals("预设应把 CLEAN 的 stage 改成 LATE", UseStage.LATE, clean.defaultStage)
+        assertEquals("未声明的 N 应回落全局值 1", 1, clean.defaultSurplusIdleThreshold)
+    }
+
+    @Test
+    fun `消费方增量项逐字段压过预设`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_A2")
+        testDeckId = deck
+
+        val id = savePreset("""{"name":"TG_PRESET_A2","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertEquals(UseStage.LATE, rulesByTag().getValue("CLEAN").defaultStage)
+
+        // 卡组只覆盖 stage → 压过预设
+        val delta = call(
+            "save_card_group_preset_delta",
+            """{"managerId":"$deck","timings":[{"tagId":"CLEAN","defaultStage":"GENERAL"}]}"""
+        )
+        assertEquals(false, delta.isError)
+        assertEquals(UseStage.GENERAL, rulesByTag().getValue("CLEAN").defaultStage)
+        assertEquals("未声明的 N 仍回落全局", 1, rulesByTag().getValue("CLEAN").defaultSurplusIdleThreshold)
+    }
+
+    @Test
+    fun `K-TG-005 可把用途的 N 覆盖为无门槛`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_A3")
+        testDeckId = deck
+
+        val id = savePreset(
+            """{"name":"TG_PRESET_A3","timings":[{"tagId":"CLEAN","clearSurplusIdleThreshold":true}]}"""
+        )
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertNull(
+            "clearSurplusIdleThreshold 应把 N 覆盖为「不设门槛」",
+            rulesByTag().getValue("CLEAN").defaultSurplusIdleThreshold
+        )
+    }
+
+    @Test
+    fun `N 与清除开关互斥`() {
+        val r = call(
+            "save_strategy_preset",
+            """{"name":"TG_PRESET_A4","timings":[{"tagId":"CLEAN","defaultSurplusIdleThreshold":2,"clearSurplusIdleThreshold":true}]}"""
+        )
+        assertTrue("同时传 N 与清除开关应报错", r.isError)
+    }
+
+    @Test
+    fun `不引用预设时完全走全局`() {
+        createEnabledDeck("TG_PRESET_DECK_B").also { testDeckId = it }
+
+        savePreset("""{"name":"TG_PRESET_B","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        // 建了预设但**不引用** → 全局不变
+        assertEquals(UseStage.MID, rulesByTag().getValue("CLEAN").defaultStage)
+    }
+
+    @Test
+    fun `清除引用后回落全局`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_C")
+        testDeckId = deck
+
+        val id = savePreset("""{"name":"TG_PRESET_C","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertEquals(UseStage.LATE, rulesByTag().getValue("CLEAN").defaultStage)
+
+        assertEquals(false, call("save_card_group_preset", """{"managerId":"$deck"}""").isError)
+        assertEquals(UseStage.MID, rulesByTag().getValue("CLEAN").defaultStage)
+    }
+
+    // ─────────────────────── 校验 ───────────────────────
+
+    @Test
+    fun `无全局规则行的用途不能被覆盖`() {
+        // FINISH 无全局规则行（无规则 = 不参与选优，D-TG-003）→ 覆盖它必须报错
+        val r = call(
+            "save_strategy_preset",
+            """{"name":"TG_PRESET_D","timings":[{"tagId":"FINISH","defaultStage":"MID"}]}"""
+        )
+        assertTrue("覆盖无规则行的用途应被拒", r.isError)
+    }
+
+    @Test
+    fun `用途树不存在被拒`() {
+        val r = call(
+            "save_strategy_preset",
+            """{"name":"TG_PRESET_E","treeSelections":[{"tagId":"CLEAN","treeIds":["no_such_tree"]}]}"""
+        )
+        assertTrue("不存在的树应被拒", r.isError)
+    }
+
+    @Test
+    fun `没绑该用途的树被拒`() {
+        val tree = insertPurposeTree("TG_TREE_BOUND_CLEAN", listOf("CLEAN"))
+        val r = call(
+            "save_strategy_preset",
+            """{"name":"TG_PRESET_F","treeSelections":[{"tagId":"GREED","treeIds":["$tree"]}]}"""
+        )
+        assertTrue("只能选绑了该用途的树", r.isError)
+    }
+
+    // ─────────────────────── 未声明禁用 + 增量项读写 ───────────────────────
+
+    @Test
+    fun `空预设禁用全部用途树并回报禁用清单`() {
+        val tree = insertPurposeTree("TG_TREE_CLEAN_1", listOf("CLEAN"))
+        val deck = createEnabledDeck("TG_PRESET_DECK_G")
+        testDeckId = deck
+
+        // ① 空预设 ⇒ CLEAN 被禁
+        val emptyId = savePreset("""{"name":"TG_PRESET_G_EMPTY"}""")
+        val emptyResp = call("save_strategy_preset", """{"presetId":"$emptyId","name":"TG_PRESET_G_EMPTY"}""")
+        assertTrue(
+            "空预设应把库中已有用途树的用途列为被禁用",
+            mapper.readTree(emptyResp.contentJson).get("disabledPurposes").any { it.asText() == "CLEAN" }
+        )
+
+        // ② 声明该用途保留这棵树 ⇒ 不再被禁
+        val keptResp = call(
+            "save_strategy_preset",
+            """{"presetId":"$emptyId","name":"TG_PRESET_G_EMPTY","treeSelections":[{"tagId":"CLEAN","treeIds":["$tree"]}]}"""
+        )
+        assertEquals(false, keptResp.isError)
+        assertFalse(
+            "已声明的用途不应出现在禁用清单",
+            mapper.readTree(keptResp.contentJson).get("disabledPurposes").any { it.asText() == "CLEAN" }
+        )
+
+        // ③ get 能读回生效项
+        val got = call("get", """{"resource":"strategy_preset","id":"$emptyId"}""")
+        assertEquals(false, got.isError)
+        val treeSelections = mapper.readTree(got.contentJson).get("treeSelections")
+        assertEquals("CLEAN", treeSelections.get(0).get("tagId").asText())
+        assertEquals(tree, treeSelections.get(0).get("treeIds").get(0).asText())
+    }
+
+    @Test
+    fun `卡组增量项可写入并读回`() {
+        val tree = insertPurposeTree("TG_TREE_CLEAN_2", listOf("CLEAN"))
+        val deck = createEnabledDeck("TG_PRESET_DECK_H")
+        testDeckId = deck
+
+        val delta = call(
+            "save_card_group_preset_delta",
+            """
+            {"managerId":"$deck",
+             "excludeTreeSelections":[{"tagId":"CLEAN","treeIds":["$tree"]}],
+             "timings":[{"tagId":"CLEAN","defaultOrderWeight":3.0}]}
+            """.trimIndent()
+        )
+        assertEquals(false, delta.isError)
+
+        val saved = presetService.findDeckDelta(deck)
+        assertEquals(setOf(tree), saved.treeExclusions["CLEAN"])
+        assertEquals(3.0, saved.timings.getValue("CLEAN").defaultOrderWeight!!, 0.0)
+
+        // 空数组 = 清空
+        val cleared = call(
+            "save_card_group_preset_delta",
+            """{"managerId":"$deck","excludeTreeSelections":[],"timings":[]}"""
+        )
+        assertEquals(false, cleared.isError)
+        val after = presetService.findDeckDelta(deck)
+        assertTrue(after.treeExclusions.isEmpty())
+        assertTrue(after.timings.isEmpty())
+    }
+
+    @Test
+    fun `更新预设只传 timings 时 disabledPurposes 不误报存量声明`() {
+        val tree = insertPurposeTree("TG_TREE_CLEAN_3", listOf("CLEAN"))
+        val deck = createEnabledDeck("TG_PRESET_DECK_J")
+        testDeckId = deck
+
+        // 首次保存：声明 CLEAN 保留该树
+        val id = savePreset(
+            """{"name":"TG_PRESET_J","treeSelections":[{"tagId":"CLEAN","treeIds":["$tree"]}]}"""
+        )
+
+        // 更新：只传 timings（treeSelections 省略 = 不改）⇒ disabledPurposes 不得把 CLEAN 误报为被禁
+        val updated = call(
+            "save_strategy_preset",
+            """{"presetId":"$id","name":"TG_PRESET_J","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}"""
+        )
+        assertEquals(false, updated.isError)
+        assertFalse(
+            "存量树声明未被本次输入携带，不应误报为禁用",
+            mapper.readTree(updated.contentJson).get("disabledPurposes").any { it.asText() == "CLEAN" }
+        )
+    }
+
+    @Test
+    fun `list 回报引用者可识别卡组专用预设`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_I")
+        testDeckId = deck
+        val id = savePreset("""{"name":"TG_PRESET_I"}""")
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+
+        val listed = call("list", """{"resource":"strategy_preset"}""")
+        assertEquals(false, listed.isError)
+        val mine = mapper.readTree(listed.contentJson).first { it.get("id").asText() == id }
+        assertNotNull(mine)
+        assertEquals(deck, mine.get("referencedBy").get(0).get("managerId").asText())
+    }
+
+    /** 防描述漂移：get/list 输入的资源枚举必须含 strategy_preset（AGENTS「改响应字段须同步描述」）。 */
+    @Test
+    fun `get 与 list 的资源枚举含 strategy_preset`() {
+        fun resourceDesc(cls: Class<*>) =
+            cls.getDeclaredField("resource").getAnnotation(JsonPropertyDescription::class.java).value
+        assertTrue(
+            "GetInput 资源枚举应含 strategy_preset",
+            resourceDesc(GetInput::class.java).contains("strategy_preset")
+        )
+        assertTrue(
+            "ListInput 资源枚举应含 strategy_preset",
+            resourceDesc(ListInput::class.java).contains("strategy_preset")
+        )
+    }
+}

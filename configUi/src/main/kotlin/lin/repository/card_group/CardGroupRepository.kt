@@ -25,7 +25,8 @@ class CardGroupRepository(
                 enabled                 INTEGER NOT NULL DEFAULT 1,
                 manager_description     TEXT,
                 manager_status          TEXT,
-                default_include_derived INTEGER
+                default_include_derived INTEGER,
+                preset_id               TEXT
             );
             """.trimIndent()
         )
@@ -60,7 +61,8 @@ class CardGroupRepository(
             enabled = rs.getInt("enabled") == 1,
             description = rs.getString("manager_description"),
             status = rs.getString("manager_status"),
-            defaultIncludeDerived = readNullableBoolean(rs, "default_include_derived")
+            defaultIncludeDerived = readNullableBoolean(rs, "default_include_derived"),
+            presetId = rs.getString("preset_id")
         )
     }
 
@@ -114,6 +116,16 @@ class CardGroupRepository(
             "UPDATE card_group_manager SET manager_description = ?, manager_status = ? WHERE id = ?",
             description, status, id
         )
+    }
+
+    /**
+     * T-TG-012：设置/清除卡组引用的用途预设（null = 不用预设，走全局用途规则）。
+     *
+     * **独立于 [saveManager]**（有意）：`saveManager` 是整体替换语义，若把 preset_id 纳入其
+     * INSERT ... ON CONFLICT 列，则每次保存卡组都会把预设引用清空。
+     */
+    fun updateManagerPreset(id: String, presetId: String?) {
+        jdbcTemplate.update("UPDATE card_group_manager SET preset_id = ? WHERE id = ?", presetId, id)
     }
 
     fun deleteManager(id: String) {

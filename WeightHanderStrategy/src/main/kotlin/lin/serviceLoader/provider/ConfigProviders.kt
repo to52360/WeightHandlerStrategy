@@ -4,6 +4,7 @@ import lin.bean.AuraBoostConfig
 import lin.bean.usePlan.CardPurpose
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.GroupUseOverride
+import lin.bean.usePlan.PurposeTagIntentRule
 import lin.rule.condition.ConditionTreeConfig
 import lin.rule.tree.EvaluatorTreeConfig
 
@@ -23,6 +24,21 @@ fun interface CardPurposeProvider {
         if (ids.isEmpty()) return emptyMap()
         return findAllEnabled().filterKeys { it in ids }
     }
+}
+
+/**
+ * 用途标签意图规则提供者。
+ *
+ * SPI 入口，configUi 通过此接口读取 `purpose_tag_rule` 表（T-TG-007）。
+ * 引擎端**必须**保留硬编码 fallback（`DefaultPurposeTagIntentRuleProvider`）：
+ * 纯引擎运行（无 configUi）或表为空时回落内置 6 条，禁止静默退化为「全无规则」
+ * （那会让所有标签失去 stage/N/replan 默认值）。
+ *
+ * 注意：规则的**有无**由「是否存在该 tagId 的规则」表达 —— 无规则的标签（如 FINISH）
+ * 不参与 `UseIntentDeriver` 的 priority 选优，故不可用「全默认值规则」冒充（D-TG-003）。
+ */
+fun interface PurposeTagIntentRuleProvider {
+    fun rules(): List<PurposeTagIntentRule>
 }
 
 // 当前数据量下 findById 逐个查询（~30 次）≈ 1.5ms。

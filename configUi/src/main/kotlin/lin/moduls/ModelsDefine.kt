@@ -2,8 +2,6 @@ package lin.moduls
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import lin.bean.usePlan.DefaultPurposeTagIntentRuleProvider
-import lin.bean.usePlan.PurposeTagIntentRuleProvider
 import lin.config.PathConfig
 import lin.di.infraModule
 import lin.repository.HsCardRepository
@@ -11,11 +9,10 @@ import lin.repository.OrthogonalTemplateRepository
 import lin.repository.TemplateGroupRepository
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostRepository
-import lin.repository.card_group.CardGroupBehaviorRepository
-import lin.repository.card_group.CardGroupRepository
-import lin.repository.card_group.CardGroupService
+import lin.repository.card_group.*
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
+import lin.repository.card_purpose.PurposeTagRuleRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
@@ -26,15 +23,13 @@ import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.repository.tree_config.EvaluatorTreeTemplateRepository
 import lin.repository.tree_config.TreeConfigRepository
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.ui.SelectOptionRegistry
 import lin.ui.UiExtension
 import lin.ui.aura_boost.AuraBoostExtension
 import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.card_group.CardGroupExtension
-import lin.ui.card_purpose.CardPurposeExtension
-import lin.ui.card_purpose.PurposeTagProvider
-import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
-import lin.ui.card_purpose.SqlitePurposeTagProvider
+import lin.ui.card_purpose.*
 import lin.ui.combo_plan.ComboPlanExtension
 import lin.ui.condition_tree.ConditionTreeExtension
 import lin.ui.condition_tree.action.ConditionTreeWorkbenchAction
@@ -67,7 +62,12 @@ val serviceModule = module {
     // 标记定义与显示（T-TG-001：定义落库，白名单随之可增长）
     single { PurposeTagDefRepository(get()) }
     single<PurposeTagProvider> { SqlitePurposeTagProvider(get()) }
-    single<PurposeTagIntentRuleProvider> { DefaultPurposeTagIntentRuleProvider() }
+    // 用途意图规则（T-TG-007：第一层排序兜底落库）
+    single { PurposeTagRuleRepository(get()) }
+    // T-TG-015：用途规则 = 全局 + 预设时序覆盖 + 消费方增量项（三层在 Provider 内逐字段合并）
+    single<PurposeTagIntentRuleProvider> {
+        SqlitePurposeTagIntentRuleProvider(get(), get(), get(), get())
+    }
     single { PurposeTagTreeBindingPolicy(get()) }
 
     // 全局卡组选择状态
@@ -160,6 +160,12 @@ val uiDBModule = module {
     single { CardGroupBehaviorRepository(get()) }
     single { CardGroupRepository(get(), get()) }
     single { CardGroupService(get(), get()) }
+    // T-TG-015：用途预设（锚 + 维度项单表）+ 卡组增量项
+    single { StrategyPresetRepository(get()) }
+    single { StrategyPresetService(get(), get(), get()) }
+    // T-TG-015：维度项合并规则（纯函数）+「当前卡组」单点解析
+    single { DimensionItemResolver() }
+    single { CurrentDeckContext(get()) }
     // T-011：delete(card_group) 级联删除事务下沉（Provider 层不再持 tx）
     single { CardGroupCascadeDeleteService(get(), get(), get()) }
     single { CardPurposeRepository(get()) }

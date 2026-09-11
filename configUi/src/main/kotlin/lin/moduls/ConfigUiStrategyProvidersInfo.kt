@@ -3,22 +3,23 @@ package lin.moduls
 import lin.provider.*
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostRepository
-import lin.repository.card_group.CardGroupBehaviorRepository
-import lin.repository.card_group.CardGroupRepository
-import lin.repository.card_group.CardGroupService
+import lin.repository.card_group.*
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
+import lin.repository.card_purpose.PurposeTagRuleRepository
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
-import lin.repository.tree_config.TreeConfigRepository
+import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.rule.tree.CardGroupBinding
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.*
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
+import lin.ui.card_purpose.SqlitePurposeTagIntentRuleProvider
 import lin.ui.card_purpose.SqlitePurposeTagProvider
+import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -56,14 +57,29 @@ val strategyProviderModule = module {
     // T-TG-001：标记定义落库（本模块由引擎经 SPI 装载，JdbcTemplate 来自引擎侧）
     single { PurposeTagDefRepository(get()) }
     single<PurposeTagProvider> { SqlitePurposeTagProvider(get()) }
+    // T-TG-007：用途意图规则落库（第一层排序兜底）；引擎经 CardConfigBindingTask 从 Koin 解析
+    single { PurposeTagRuleRepository(get()) }
+    // T-TG-015：用途预设（锚 + 维度项单表）+ 卡组增量项，配置侧解析
+    single { StrategyPresetRepository(get()) }
+    single { StrategyPresetService(get(), get(), get()) }
+    single { DimensionItemResolver() }
+    single { CurrentDeckContext(get()) }
+    single<PurposeTagIntentRuleProvider> {
+        SqlitePurposeTagIntentRuleProvider(get(), get(), get(), get())
+    }
     single { PurposeTagTreeBindingPolicy(get()) }
 
-        single<TreeConfigProvider> {
+    // K-TG-007：评估树组装必须走 TreeConfigService（config_data 只存 root，叶子在 evaluator_leaf_config 表）
+    single { EvaluatorLeafConfigRepository(get()) }
+    single { TreeConfigService(get(), get(), createTreeConfigMapper(), get()) }
+    single<TreeConfigProvider> {
         SqliteTreeConfigProvider(
-            repository = TreeConfigRepository(get()),
-            mapper = createTreeConfigMapper(),
-            groupRepository = CardGroupRepository(get(), get()),
-            tagPolicy = get()
+            treeConfigService = get(),
+            cardGroupService = get(),
+            tagPolicy = get(),
+            presetRepository = get(),
+            currentDeck = get(),
+            resolver = get()
         )
     }
 

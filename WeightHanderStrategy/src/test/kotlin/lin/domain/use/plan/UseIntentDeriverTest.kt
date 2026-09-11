@@ -1,6 +1,10 @@
 ﻿package lin.domain.use.plan
 
-import lin.bean.usePlan.*
+import lin.bean.usePlan.CardUseConfig
+import lin.bean.usePlan.PurposeTagId
+import lin.bean.usePlan.PurposeTagIntentRule
+import lin.bean.usePlan.UseStage
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
