@@ -5,13 +5,10 @@ import lin.mcp.action.*
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInlineInput
-import lin.repository.delete_snapshot.DeleteSnapshotService
-import lin.repository.delete_snapshot.SnapshotPayloads
-import lin.repository.delete_snapshot.SnapshotResource
 
 /**
  * Push 广播评分配置（aura-boost）域 MCP 工具提供者（写工具 + 动作同文件）：
- * - [AuraBoostAction]：resource=aura_boost 的 get/list/delete（原 aura_boost / delete_aura_boost 工具）。
+ * - resource=aura_boost 的 get/list/delete（原 aura_boost / delete_aura_boost 工具）。
  * - provide()：save_aura_boost 写工具。
  *
  * AuraBoost = 触发条件树（conditionId，全局检测）命中后，给 targetConditionId（受益卡过滤）命中的卡加分（Q-024 后即**费值**）。
@@ -22,12 +19,27 @@ import lin.repository.delete_snapshot.SnapshotResource
  * TransactionTemplate / ConditionTreeConfigService。
  */
 class AuraBoostToolProvider(
-    private val service: AuraBoostConfigService,
-    snapshotService: DeleteSnapshotService
+    private val service: AuraBoostConfigService
 ) : McpToolProvider {
 
-    override val actions: List<ResourceAction> = listOf(
-        AuraBoostAction(service, snapshotService)
+    override val actions: List<ResourceActions> = listOf(
+        ResourceActions(
+            resource = ActionResources.AURA_BOOST,
+            capabilities = listOf(
+                GetCapability(
+                    fieldHint = "AuraBoost id（8 位短 id，由 list(resource=aura_boost) 返回）"
+                ) { id -> auraBoostDetail(id) },
+                ListCapability(supportsManagerIdFilter = true) { managerId -> auraBoostSummaries(managerId) },
+                DeleteCapability(
+                    fieldHint = "AuraBoost id（由 list(resource=aura_boost) 返回）",
+                    semantics = "删除前落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）",
+                    ops = service.deleteOps()
+                ),
+                RestoreCapability { entityId, payload ->
+                    service.restoreFromSnapshot(entityId, payload)
+                }
+            )
+        )
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
@@ -74,50 +86,20 @@ class AuraBoostToolProvider(
         }
     )
 
-    // ── 动作：aura_boost get/list/delete ──
+    // ── 能力实现（aura_boost 的 get / list）：具名私有函数，行为可点名 ──
 
-    private class AuraBoostAction(
-        private val service: AuraBoostConfigService,
-        private val snapshotService: DeleteSnapshotService
-    ) : GetAction, ListAction, DeleteAction {
+    /** list：AuraBoost 摘要（可按 managerId 过滤）。 */
+    private fun auraBoostSummaries(managerId: String?): McpToolResult {
+        val list = service.loadAll()
+            .filter { managerId == null || it.managerId == managerId }
+        return mcpSuccess(list.map { it.toSummary() })
+    }
 
-        override val resource: String = ActionResources.AURA_BOOST
-
-        override val supportsManagerIdFilter: Boolean = true
-
-        override fun handleList(managerId: String?): McpToolResult {
-            val list = service.loadAll()
-                .filter { managerId == null || it.managerId == managerId }
-            return mcpSuccess(list.map { it.toSummary() })
-        }
-
-        override fun handleGet(id: String): McpToolResult {
-            val entity = service.findById(id)
-                ?: return mcpError("AuraBoost 不存在: $id")
-            return mcpSuccess(entity.toSummary())
-        }
-
-        override val getFieldHint: String = "AuraBoost id（8 位短 id，由 list(resource=aura_boost) 返回）"
-
-        override fun handleDelete(id: String): McpToolResult {
-            val entity = service.findById(id)
-                ?: return mcpError("AuraBoost 不存在: $id")
-            val payload = SnapshotPayloads.auraBoost(entity)
-            val snapshotId = snapshotService.deleteWithSnapshot(
-                resource = SnapshotResource.AURA_BOOST,
-                entityId = entity.id,
-                entityName = entity.name,
-                payload = payload
-            ) {
-                service.delete(id)
-            }
-            return mcpSuccess(mapOf("deleted" to entity.id, "name" to entity.name, "snapshotId" to snapshotId))
-        }
-
-        override val deleteFieldHint: String = "AuraBoost id（由 list(resource=aura_boost) 返回）"
-
-        override val deleteSemantics: String =
-            "删除前落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）"
+    /** get：AuraBoost 详情。 */
+    private fun auraBoostDetail(id: String): McpToolResult {
+        val entity = service.findById(id)
+            ?: return mcpError("AuraBoost 不存在: $id")
+        return mcpSuccess(entity.toSummary())
     }
 }
 

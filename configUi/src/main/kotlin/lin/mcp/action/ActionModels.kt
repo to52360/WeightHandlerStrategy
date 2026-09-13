@@ -2,6 +2,11 @@ package lin.mcp.action
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.mcp.McpToolResult
+import lin.mcp.mcpError
+import lin.mcp.mcpSuccess
+import lin.repository.delete_snapshot.RestoreResult
+import lin.repository.delete_snapshot.SnapshotOps
+import lin.repository.delete_snapshot.SnapshotRefused
 
 /**
  * 动作大类资源类型常量（单一事实来源：dispatcher / tool_capabilities / 各 handler 共用，防散落字符串）。
@@ -22,41 +27,75 @@ object ActionResources {
 }
 
 /**
- * 资源动作（ResourceAction）：一个 resource 一个实现类，通过实现 GetAction / ListAction / DeleteAction
- * 子接口声明支持面（Q-007 归一：支持面 = 实现了哪些子接口，天然消灭 *Supported 布尔与占位异常）。
- * 不支持的入口由 dispatcher 用 as? 判断拒绝（不会调用对应 handle*）。
- * 动作逻辑作为 Provider 内部私有类，与写工具同文件（减少项目结构，一个资源域一个 Provider 文件）。
+ * 资源能力模型（Q-TG-007 / 2026-09-13）——**值化形态**：
+ * 一个资源 = 一条 [ResourceActions]（**id 只在这里声明一次**），其 `capabilities` 里放若干**能力值**。
+ *
+ * - **能力＝类型**：`capabilities.filterIsInstance<GetCapability>()` 即"支持 get"
+ *   （Q-007 归一不变：支持面由类型表达，**不用 null / boolean**）。
+ * - 能力值零依赖、零状态：业务逻辑由各 Provider 的**具名私有函数**承载（行为可点名），
+ *   依赖由 Provider `by inject()` 自取（依赖跨越不因值化而增加）。
+ * - 支持面判定：dispatcher 取到 null 即"该 resource 不支持此操作"（报错文案不变）。
  */
-interface ResourceAction {
-    val resource: String
-}
+sealed interface ResourceCapability
 
-/** get 动作：实现此接口即声明支持 get。 */
-interface GetAction : ResourceAction {
-    /** get 的 id 字段语义说明（tool_capabilities 展示用）。 */
-    val getFieldHint: String get() = "id 参数（语义见 handleGet 实现）"
+/** get 能力；[fieldHint] 供 `tool_capabilities` 展示 id 语义。 */
+data class GetCapability(
+    val fieldHint: String,
+    val handle: (id: String) -> McpToolResult
+) : ResourceCapability
 
-    fun handleGet(id: String): McpToolResult
-}
+/** list 能力；[supportsManagerIdFilter] 供 `tool_capabilities` 展示过滤面。 */
+data class ListCapability(
+    val supportsManagerIdFilter: Boolean = false,
+    val handle: (managerId: String?) -> McpToolResult
+) : ResourceCapability
 
-/** list 动作：实现此接口即声明支持 list。 */
-interface ListAction : ResourceAction {
-    /** list 是否支持按 managerId 过滤（tool_capabilities 二级详情展示用，默认不支持）。 */
-    val supportsManagerIdFilter: Boolean get() = false
+/**
+ * delete 能力（沿用 T-TG-022 Z5 语义）：**只声明"删除前怎么采快照"**——
+ * 编排（落快照 + 删除同事务 + 回显 `snapshotId`）在 `DeleteDispatcher` 单点，机制在 `SnapshotStore`。
+ */
+data class DeleteCapability(
+    /** delete 的 id 字段语义说明（`tool_capabilities` 展示用）。 */
+    val fieldHint: String,
+    /** 删除语义说明（引用校验 / 恢复快照 / 级联等，`tool_capabilities` 展示用）。 */
+    val semantics: String,
+    /**
+     * 本资源的删除操作值（采集 + 校验 + 删除体），通常由域服务 `deleteOps()` 导出。
+     * 直接是**值**（不是 `() -> SnapshotOps` 闭包）：Provider 构造期构建一次即可，
+     * dispatcher 无需再缓存（去一层间接 + 去一个缓存可变状态）。
+     */
+    val ops: SnapshotOps
+) : ResourceCapability
 
-    fun handleList(managerId: String?): McpToolResult
-}
+/** 快照恢复能力：按快照内容写回（原 id 保留）；失败（如原 id 已被占用）返回 `isError = true`。 */
+data class RestoreCapability(
+    /** 恢复体，通常转调本域服务（`XxxService.restoreFromSnapshot`）。 */
+    val handle: (entityId: String, payload: String) -> RestoreResult
+) : ResourceCapability
 
-/** delete 动作：实现此接口即声明支持 delete。 */
-interface DeleteAction : ResourceAction {
-    /** delete 的 id 字段语义说明（tool_capabilities 展示用）。 */
-    val deleteFieldHint: String get() = "id 参数（语义见 handleDelete 实现）"
+/**
+ * 一个资源的动作集合 —— **`resource` 的唯一声明处**（防多能力各写一次 id 造成不一致）。
+ * `capabilities` 里放了哪些能力，该资源就支持哪些操作。
+ */
+data class ResourceActions(
+    val resource: String,
+    val capabilities: List<ResourceCapability>
+)
 
-    /** 删除语义说明（引用校验/恢复快照/级联等，tool_capabilities 展示用）。 */
-    val deleteSemantics: String get() = ""
+/** 取本资源的某能力（无则 null）；能力面判定单点，替代原 `as?`。 */
+inline fun <reified T : ResourceCapability> ResourceActions.capability(): T? =
+    capabilities.filterIsInstance<T>().firstOrNull()
 
-    fun handleDelete(id: String): McpToolResult
-}
+/**
+ * delete 动作的统一入口：领域服务以 [SnapshotRefused] 表达"拒绝删除"（实体不存在 / 引用中禁删），
+ * 此处转成 MCP 错误结果 —— 让 `DeleteDispatcher` 的删除编排保持一行（业务校验全在域服务 / guard 里）。
+ */
+internal inline fun mcpDeleteAction(block: () -> Map<String, Any?>): McpToolResult =
+    try {
+        mcpSuccess(block())
+    } catch (e: SnapshotRefused) {
+        mcpError(e.message ?: "删除被拒绝")
+    }
 
 /** get 大工具输入：resource 判别 + 通用 id（语义因资源而异，用 tool_capabilities 详情查询确认）。id 可空以让 resource 校验优先于 id 缺失报错。 */
 data class GetInput(
@@ -76,7 +115,7 @@ data class ListInput(
 
 /** delete 大工具输入：resource 判别 + 通用 id。id 可空以让 resource 校验优先于 id 缺失报错。 */
 data class DeleteInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag。完整支持面与各资源删除语义用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset。完整支持面与各资源删除语义用 tool_capabilities 查询。")
     val resource: String,
     @field:JsonPropertyDescription("资源标识 id（card_pool=fileName、card_group=managerId、其余=资源 id）。")
     val id: String? = null

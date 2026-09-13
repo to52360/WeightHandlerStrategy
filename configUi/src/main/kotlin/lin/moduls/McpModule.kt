@@ -8,10 +8,7 @@ import lin.ai.config.draft.DefaultDraftTreeService
 import lin.ai.config.draft.DraftTreeService
 import lin.di.infraModule
 import lin.mcp.*
-import lin.mcp.action.DeleteDispatcher
-import lin.mcp.action.GetDispatcher
-import lin.mcp.action.ListDispatcher
-import lin.mcp.action.ToolCapabilitiesProvider
+import lin.mcp.action.*
 import lin.mcp.card_group.CardGroupToolProvider
 import lin.mcp.card_group.CardPoolToolProvider
 import lin.mcp.card_group.SaveCardGroupToolProvider
@@ -19,18 +16,24 @@ import lin.mcp.card_group.StrategyPresetToolProvider
 import lin.mcp.combo_plan.ComboPlanToolProvider
 import lin.repository.HsCardRepository
 import lin.repository.aura_boost.AuraBoostConfigService
+import lin.repository.card_group.CardGroupCascadeDeleteService
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.card_purpose.PurposeTagRuleRepository
+import lin.repository.card_purpose.PurposeTagService
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanService
 import lin.repository.condition_tree.ConditionTreeConfigService
-import lin.repository.delete_snapshot.DeleteSnapshotService
+import lin.repository.delete_snapshot.SnapshotStore
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
+import lin.repository.tree_config.EvaluatorTreeTemplateRepository
 import lin.repository.tree_config.TreeConfigRepository
-import lin.ui.service.CardGroupCascadeDeleteService
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
+import lin.ui.card_purpose.PurposeTagProvider
+import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.dsl.bind
@@ -64,7 +67,12 @@ val mcpModule = module {
     // 注意：Koin 主类型必须用具体实现类，且只 bind McpToolProvider::class（接口主类型 bind 会同名覆盖，
     // getAll 只拿到最后一个，2026-08-12 实测坑）。动作收集由 dispatcher 从 getAll<McpToolProvider>()
     // 的 actions 汇总（Q-007 已实施：无独立 ResourceActionProvider 接口）。
-    single { AiTreeTemplateToolProvider(get(), get()) } bind McpToolProvider::class
+    single {
+        AiTreeTemplateToolProvider(
+            get<EvaluatorTreeTemplateRepository>(),
+            get<EvaluatorTreeTemplateService>()
+        )
+    } bind McpToolProvider::class
     single { AiOrthogonalToolProvider(get(), get()) } bind McpToolProvider::class
     single {
         CardGroupToolProvider(
@@ -80,10 +88,9 @@ val mcpModule = module {
     } bind McpToolProvider::class
     single {
         CardPoolToolProvider(
-            get<CardGroupQueryService>(),
-            get<CardGroupService>(),
             get<HsCardRepository>(),
-            get<DeleteSnapshotService>()
+            get<CardGroupQueryService>(),
+            get<CardGroupService>()
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
@@ -91,24 +98,27 @@ val mcpModule = module {
         ConditionTreeToolProvider(
             get<ConditionTreeConfigService>(),
             get<AuraBoostConfigService>(),
-            get<EvaluatorLeafConfigRepository>(),
-            get<DeleteSnapshotService>()
+            get<EvaluatorLeafConfigRepository>()
         )
     } bind McpToolProvider::class
     single {
         AuraBoostToolProvider(
-            get<AuraBoostConfigService>(),
-            get<DeleteSnapshotService>()
+            get<AuraBoostConfigService>()
         )
     } bind McpToolProvider::class
     single {
-        AiDraftTreeToolProvider(get(), get<CardGroupService>())
+        AiDraftTreeToolProvider(
+            get<DraftTreeService>(),
+            get<CardGroupService>()
+        )
     } bind McpToolProvider::class
     single {
         ComboPlanToolProvider(
-            get(),
+            get<ComboPlanDefinitionRepository>(),
             get<CardGroupService>(),
-            get<DeleteSnapshotService>()
+            get<HsCardRepository>(),
+            get<TreeConfigService>(),
+            get<ComboPlanService>()
         )
     } bind McpToolProvider::class
     single {
@@ -123,18 +133,17 @@ val mcpModule = module {
         AiTreeConfigToolProvider(
             get<TreeConfigService>(),
             get<ComboPlanDefinitionRepository>(),
-            get<AiConfigGenerationService>(),
-            get<DeleteSnapshotService>()
+            get<AiConfigGenerationService>()
         )
     } bind McpToolProvider::class
     single {
         PurposeTagToolProvider(
-            get(),
-            get(),
+            get<PurposeTagProvider>(),
             get<CardPurposeRepository>(),
-            get<TreeConfigService>(),
             get<PurposeTagDefRepository>(),
-            get<DeleteSnapshotService>()
+            get<PurposeTagIntentRuleProvider>(),
+            get<TreeConfigService>(),
+            get<PurposeTagService>()
         )
     } bind McpToolProvider::class
     single {
@@ -147,23 +156,26 @@ val mcpModule = module {
             get<CardPurposeRepository>()
         )
     } bind McpToolProvider::class
+    // 动作索引单例：get / list / delete / restore 四条链路共用（索引只建一次；lazy 取 providers 避循环依赖）
+    single { ActionRegistry(lazy { getAll<McpToolProvider>() }) }
+
     single {
-        RestoreSnapshotToolProvider(get<DeleteSnapshotService>())
+        RestoreSnapshotToolProvider(get<SnapshotStore>(), get<ActionRegistry>())
     } bind McpToolProvider::class
 
-    // ── 动作大类 dispatcher（遍历全部 McpToolProvider 集合的 actions，按 resource 分发）──
-    // Lazy 注入避开循环依赖：getAll<McpToolProvider>() 含 dispatcher 自身，构造期解析会 StackOverflow。
+    // ── 动作大类 dispatcher（共用同一个 ActionRegistry 单例，索引只建一次）──
     single {
-        GetDispatcher(lazy { getAll<McpToolProvider>() })
+        GetDispatcher(get<ActionRegistry>())
     } bind McpToolProvider::class
     single {
-        ListDispatcher(lazy { getAll<McpToolProvider>() })
+        ListDispatcher(get<ActionRegistry>())
     } bind McpToolProvider::class
     single {
-        DeleteDispatcher(lazy { getAll<McpToolProvider>() })
+        // T-TG-022（J′）：delete 的落快照/删除编排单点在此 dispatcher，各 Provider 只声明 deleteOps() 值
+        DeleteDispatcher(get<ActionRegistry>(), get<SnapshotStore>())
     } bind McpToolProvider::class
     single {
-        ToolCapabilitiesProvider(lazy { getAll<McpToolProvider>() })
+        ToolCapabilitiesProvider(get<ActionRegistry>())
     } bind McpToolProvider::class
 
     single { MyMcpServer(getAll<McpToolProvider>()) }

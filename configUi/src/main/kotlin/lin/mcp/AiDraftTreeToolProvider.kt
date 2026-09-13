@@ -2,8 +2,8 @@ package lin.mcp
 
 import lin.ai.config.draft.*
 import lin.mcp.action.ActionResources
-import lin.mcp.action.GetAction
-import lin.mcp.action.ResourceAction
+import lin.mcp.action.GetCapability
+import lin.mcp.action.ResourceActions
 import lin.repository.card_group.CardGroupService
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.rule.tree.GroupMembership
@@ -21,24 +21,31 @@ class AiDraftTreeToolProvider(
     private val cardGroupService: CardGroupService
 ) : McpToolProvider {
 
-    override val actions: List<ResourceAction> = listOf(
-        DraftGetAction(draftTreeService)
+    override val actions: List<ResourceActions> = listOf(
+        ResourceActions(
+            resource = ActionResources.DRAFT,
+            capabilities = listOf(
+                GetCapability(
+                    fieldHint = "草稿 id（由 create_draft_tree 返回的 draftId）"
+                ) { id -> draftStatus(id) }
+            )
+        )
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<CreateDraftRequest>(
             name = "create_draft_tree",
             description = """创建一个评估树草稿骨架。评估树 JSON 结构极大，必须采用渐进式生成：
-                                1. 用此工具建立拓扑骨架，返回 draftId 和 missingNodeIds
-                                2. 用 put_draft_leaf 逐个填充叶子节点
-                                3. 全部填完后用 commit_draft_tree 提交
-                                
-                                拓扑不满意时无需修改，重新创建一个新草稿即可。
-                                
-                                【两种互斥模式】
-                                - 从零创建：提供 root（拓扑骨架）
-                                - 克隆已有树：提供 cloneFrom（已有配置 id），叶子参数预填，可直接 commit 或用 put_draft_leaf 覆盖差异节点
-                            """
+                               1. 用此工具建立拓扑骨架，返回 draftId 和 missingNodeIds
+                               2. 用 put_draft_leaf 逐个填充叶子节点
+                               3. 全部填完后用 commit_draft_tree 提交
+                               
+                               拓扑不满意时无需修改，重新创建一个新草稿即可。
+                               
+                               【两种互斥模式】
+                               - 从零创建：提供 root（拓扑骨架）
+                               - 克隆已有树：提供 cloneFrom（已有配置 id），叶子参数预填，可直接 commit 或用 put_draft_leaf 覆盖差异节点
+                           """
         ) { request ->
             // 提前校验 GROUP 绑定的引用完整性，避免填入全部叶子后才在 commit 时被拒
             if (request.bindingType == EvaluatorTreeBindingType.GROUP) {
@@ -106,20 +113,12 @@ class AiDraftTreeToolProvider(
         }
     )
 
-    // ── 动作：draft get（原 get_draft_status）──
+    // ── 能力实现（draft 的 get，原 get_draft_status）：具名私有函数，行为可点名 ──
 
-    private class DraftGetAction(
-        private val draftTreeService: DraftTreeService
-    ) : GetAction {
-
-        override val resource: String = ActionResources.DRAFT
-
-        override fun handleGet(id: String): McpToolResult {
-            val result = draftTreeService.getDraftStatus(id)
-                ?: return mcpError("草稿不存在或已过期: $id（草稿有生命周期，进程重启/长期搁置后过期，过期需重新 create_draft_tree）")
-            return mcpSuccess(result)
-        }
-
-        override val getFieldHint: String = "草稿 id（由 create_draft_tree 返回的 draftId）"
+    /** get：草稿状态（缺失节点等）。 */
+    private fun draftStatus(id: String): McpToolResult {
+        val result = draftTreeService.getDraftStatus(id)
+            ?: return mcpError("草稿不存在或已过期: $id（草稿有生命周期，进程重启/长期搁置后过期，过期需重新 create_draft_tree）")
+        return mcpSuccess(result)
     }
 }

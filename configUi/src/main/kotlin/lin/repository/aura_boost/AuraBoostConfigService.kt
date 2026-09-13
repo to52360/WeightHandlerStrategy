@@ -3,6 +3,7 @@ package lin.repository.aura_boost
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.resolveConditionTreeReference
+import lin.repository.delete_snapshot.*
 import org.springframework.transaction.support.TransactionTemplate
 import java.util.*
 
@@ -68,6 +69,45 @@ class AuraBoostConfigService(
     /** T-011：内联建树（0~2 棵）+ boost 行多步写的事务边界（由 Provider 层下沉至此）。 */
     private val tx: TransactionTemplate
 ) {
+
+    // ─────────────────── 删除 + 快照 / 恢复（T-TG-021：业务归域 + 机制由快照域编排）───────────────────
+
+    /** 导出本资源的删除操作值；不存在时抛 [SnapshotRefused]（不落快照、不删除）。 */
+    fun deleteOps(): SnapshotOps = SnapshotOps(
+        collect = { entityId ->
+            val entity = findById(entityId) ?: throw SnapshotRefused("AuraBoost 不存在: $entityId")
+            SnapshotDraft(
+                entityName = entity.name,
+                payload = SnapshotPayloads.auraBoost(entity),
+                echo = mapOf("deleted" to entity.id, "name" to entity.name)
+            )
+        },
+        remove = { entityId -> delete(entityId) }
+    )
+
+    /** 按快照写回（含 enabled 启用状态）；原 id 已被占用则拒绝。 */
+    fun restoreFromSnapshot(id: String, payload: String): RestoreResult {
+        findById(id)?.let { occupied ->
+            return RestoreResult(
+                "恢复失败：原 id=$id 已被现有数据占用（现有名称: ${occupied.name}）。请先删除/改名现有数据再恢复",
+                isError = true
+            )
+        }
+        val entity = SnapshotPayloads.mapper.readValue(payload, AuraBoostEntity::class.java)
+        save(
+            SaveAuraBoostInput(
+                name = entity.name,
+                conditionId = entity.conditionId,
+                targetConditionId = entity.targetConditionId,
+                score = entity.score,
+                managerId = entity.managerId,
+                existingId = entity.id,
+                // T-SR-012：恢复时一并还原启用状态（快照 payload 含 enabled）
+                enabled = entity.enabled
+            )
+        )
+        return RestoreResult("已恢复 aura_boost ${entity.id}（原 id 保留）", isError = false)
+    }
     fun save(input: SaveAuraBoostInput): String {
         val id = input.existingId ?: UUID.randomUUID().toString().substring(0, 8)
         // T-SR-012：enabled 缺省（null）保持原值——UI 保存路径不传该字段时不会把已停用的规则重新启用

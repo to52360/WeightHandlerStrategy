@@ -26,7 +26,10 @@ class CardGroupSurplusGateRoundTripTest {
         val behaviorRepo = CardGroupBehaviorRepository(org.springframework.jdbc.core.JdbcTemplate(dataSource))
         val repo = CardGroupRepository(org.springframework.jdbc.core.JdbcTemplate(dataSource), behaviorRepo)
         // T-008：service 构造新增事务模板（与生产 Koin 装配一致）
-        service = CardGroupService(repo, TransactionTemplate(DataSourceTransactionManager(dataSource)))
+        service = CardGroupService(
+            repo,
+            TransactionTemplate(DataSourceTransactionManager(dataSource))
+        )
     }
 
     @After

@@ -28,10 +28,15 @@ class TreeConfigSpiTest : McpTestEnv() {
     private val testManagerId = "TG_TREE_SPI_DECK"
     private val testBindingId = "TG_TREE_SPI_BINDING"
     private val testTreeId = "TG_TREE_SPI_GROUP_TREE"
+    private val testTagTreeId = "TG_TREE_SPI_TAG_TREE"
+
+    /** 用内置用途标签（保证已在 `purpose_tag_def` 中 ⇒ 在 `tagPolicy.enabledTags` 内）。 */
+    private val testPresetTag = "CLEAN"
 
     @org.junit.After
     fun cleanUp() {
         treeRepository.deleteById(testTreeId)
+        treeRepository.deleteById(testTagTreeId)
         groupRepository.deleteManager(testManagerId)
     }
 
@@ -120,8 +125,56 @@ class TreeConfigSpiTest : McpTestEnv() {
         assertEquals(listOf(testBindingId), mine!!.bindingIds)
     }
 
+    /**
+     * T-TG-020：卡组引用的预设**行已不存在**（悬空引用）⇒ 语义保持「引用即受控」，
+     * 白名单取到空集 ⇒ 用途树全禁（等同空预设），**不**回落成"全部生效"。
+     *
+     * 对照组（未引用预设 ⇒ 该树正常输出）证明本用例的判定链是通的，不是恒 null 蒙对。
+     */
+    @Test
+    fun `悬空预设引用使用途树全禁而未被静默放行`() {
+        assertTrue(
+            "前置：$testPresetTag 必须是启用标签，否则该用途树本就出不来、用例证不了任何事",
+            testPresetTag in PurposeTagTreeBindingPolicy(GlobalContext.get().get()).enabledTags.map { it.value }
+        )
+        groupRepository.saveManager(
+            lin.repository.card_group.CardManagerEntity(
+                id = testManagerId, name = testManagerId,
+                sourceFile = "$testManagerId.cardgroup", enabled = true
+            )
+        )
+        treeRepository.save(
+            lin.repository.tree_config.TreeConfigEntity(
+                id = testTagTreeId,
+                bindingType = EvaluatorTreeBindingType.PURPOSE_TAG.name,
+                bindingIds = testPresetTag,
+                name = testTagTreeId,
+                configData = ROOT_JSON,
+                enabled = true
+            )
+        )
+        assertEquals(
+            "前置：本用例的卡组应就是「当前卡组」（库中不应有其它 enabled 卡组）",
+            testManagerId,
+            CurrentDeckContext(groupRepository).current()?.id
+        )
+
+        // 对照组：未引用预设 ⇒ 用途树正常输出
+        assertNotNull("未引用预设时用途树应输出", provider().findById(testTagTreeId))
+
+        // 悬空引用：卡组指向一个不存在的预设
+        groupRepository.updateManagerPreset(testManagerId, DANGLING_PRESET_ID)
+        assertNull(
+            "T-TG-020：悬空引用 ⇒ 全禁（不得回落成兜底全开）",
+            provider().findById(testTagTreeId)
+        )
+    }
+
     private companion object {
         /** 只用于探针：本用例不做反序列化断言，但 provider 会走组装（root 必须可解）。 */
         const val ROOT_JSON = """{"root":{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}}"""
+
+        /** 刻意不存在的预设 id（用于构造悬空引用）。 */
+        const val DANGLING_PRESET_ID = "TG_TREE_SPI_NO_SUCH_PRESET"
     }
 }

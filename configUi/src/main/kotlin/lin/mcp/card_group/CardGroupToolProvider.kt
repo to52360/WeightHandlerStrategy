@@ -3,28 +3,46 @@ package lin.mcp.card_group
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.mcp.*
 import lin.mcp.action.*
+import lin.repository.card_group.CardGroupCascadeDeleteService
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.CardManagerEntity
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.GroupMembership
 import lin.rule.tree.findOverride
 import lin.rule.tree.findSurplusGate
-import lin.ui.service.CardGroupCascadeDeleteService
 
 /**
  * 分组方案域 MCP 工具提供者（写工具 + 动作同文件）：
- * - [CardGroupAction]：resource=card_group 的 get/list/delete（原 card_group 查询 + delete_card_group 工具）。
+ * - resource=card_group 的 get/list/delete（原 card_group 查询 + delete_card_group 工具）。
  * - provide()：card_group_progress 进度管理（D-006 边界保留独立）。
  * 卡池域见 [CardPoolToolProvider]，卡组策略保存域见 [SaveCardGroupToolProvider]。
- * T-011：级联删除事务已下沉至 [CardGroupCascadeDeleteService]，本 Provider 不再持有 TransactionTemplate。
+ * T-TG-010：级联删（关联树 + manager + 卡组维度项）及其快照/恢复归 `CardGroupCascadeDeleteService`（卡组域），
+ * 本 Provider 只做分发与回显。
  */
 class CardGroupToolProvider(
     private val groupService: CardGroupService,
+    /** 删除/恢复走本域级联服务（T-TG-010 Z3：restorable 路由不经过快照编排）。 */
     private val cascadeDeleteService: CardGroupCascadeDeleteService
 ) : McpToolProvider {
 
-    override val actions: List<ResourceAction> = listOf(
-        CardGroupAction(groupService, cascadeDeleteService)
+    override val actions: List<ResourceActions> = listOf(
+        ResourceActions(
+            resource = ActionResources.CARD_GROUP,
+            capabilities = listOf(
+                GetCapability(
+                    fieldHint = "卡组方案 id（managerId，由 list(resource=card_group) 返回）"
+                ) { id -> cardGroupDetail(id) },
+                ListCapability { cardGroupSummaries() },
+                DeleteCapability(
+                    fieldHint = "卡组方案 id（managerId，由 list(resource=card_group) 返回）",
+                    semantics = "级联删除：绑定条目 + 关联评估树一并删除；删除前落快照（delete_snapshot，manager+bindings+trees 原 id 全保留），可经 restore_snapshot 一键恢复",
+                    ops = cascadeDeleteService.deleteOps()
+                ),
+                RestoreCapability { entityId, payload ->
+                    cascadeDeleteService.restoreFromSnapshot(entityId, payload)
+                }
+            )
+        )
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
@@ -72,59 +90,28 @@ managerId 由 list(resource=card_group) 获取。"""
         "description" to manager.description
     )
 
-    // ── 动作：card_group get/list/delete ──
+    // ── 能力实现（card_group 的 get / list）：具名私有函数，行为可点名 ──
 
-    private class CardGroupAction(
-        private val groupService: CardGroupService,
-        private val cascadeDeleteService: CardGroupCascadeDeleteService
-    ) : GetAction, ListAction, DeleteAction {
+    /** list：全部卡组方案。 */
+    private fun cardGroupSummaries(): McpToolResult =
+        mcpSuccess(groupService.loadAllManagers())
 
-        override val resource: String = ActionResources.CARD_GROUP
-
-        override fun handleList(managerId: String?): McpToolResult {
-            return mcpSuccess(groupService.loadAllManagers())
-        }
-
-        override fun handleGet(id: String): McpToolResult {
-            val manager = groupService.loadAllManagers().firstOrNull { it.id == id }
-                ?: return mcpError("方案不存在: $id")
-            val bindings = groupService.loadBindings(id).map { bindingView(it) }
-            return mcpSuccess(
-                mapOf(
-                    "id" to manager.id, "name" to manager.name,
-                    "sourceFile" to manager.sourceFile, "enabled" to manager.enabled,
-                    "description" to manager.description,
-                    "status" to manager.status,
-                    // T-005：回读卡组级谓词组默认值（覆盖链：组级 includeDerived > 此值 > false）
-                    "defaultIncludeDerived" to manager.defaultIncludeDerived,
-                    "bindings" to bindings
-                )
+    /** get：卡组方案详情（含绑定条目）。 */
+    private fun cardGroupDetail(id: String): McpToolResult {
+        val manager = groupService.loadAllManagers().firstOrNull { it.id == id }
+            ?: return mcpError("方案不存在: $id")
+        val bindings = groupService.loadBindings(id).map { bindingView(it) }
+        return mcpSuccess(
+            mapOf(
+                "id" to manager.id, "name" to manager.name,
+                "sourceFile" to manager.sourceFile, "enabled" to manager.enabled,
+                "description" to manager.description,
+                "status" to manager.status,
+                // T-005：回读卡组级谓词组默认值（覆盖链：组级 includeDerived > 此值 > false）
+                "defaultIncludeDerived" to manager.defaultIncludeDerived,
+                "bindings" to bindings
             )
-        }
-
-        override val getFieldHint: String = "卡组方案 id（managerId，由 list(resource=card_group) 返回）"
-
-        override fun handleDelete(id: String): McpToolResult {
-            // 级联删（含删除前快照）已下沉 [CardGroupCascadeDeleteService]，Provider 只调服务
-            val result = cascadeDeleteService.deleteManager(id)
-                ?: return mcpError("方案不存在: $id")
-            return mcpSuccess(
-                mapOf(
-                    "deleted" to true,
-                    "managerId" to result.managerId,
-                    "managerName" to result.managerName,
-                    "deletedBindings" to result.bindingNames,
-                    "deletedTrees" to result.treeNames,
-                    "totalDeleted" to result.totalDeleted,
-                    "snapshotId" to result.snapshotId
-                )
-            )
-        }
-
-        override val deleteFieldHint: String = "卡组方案 id（managerId，由 list(resource=card_group) 返回）"
-
-        override val deleteSemantics: String =
-            "级联删除：绑定条目 + 关联评估树一并删除；删除前落快照（delete_snapshot，manager+bindings+trees 原 id 全保留），可经 restore_snapshot 一键恢复"
+        )
     }
 }
 

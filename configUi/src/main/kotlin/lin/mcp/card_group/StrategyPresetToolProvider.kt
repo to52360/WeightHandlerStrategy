@@ -3,10 +3,7 @@ package lin.mcp.card_group
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.UseStage
 import lin.mcp.*
-import lin.mcp.action.ActionResources
-import lin.mcp.action.GetAction
-import lin.mcp.action.ListAction
-import lin.mcp.action.ResourceAction
+import lin.mcp.action.*
 import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.ThresholdPatch
@@ -24,8 +21,7 @@ import lin.rule.tree.EvaluatorTreeBindingType
  * - 引用：`save_card_group_preset` —— 只设 `preset_id`，不动增量项；
  * - `resource=strategy_preset` 的 get / list。
  *
- * ⚠️ 删除通道暂缺（`delete(resource=strategy_preset)` 未实现）—— 与 `DeleteSnapshotService`
- * 注册发现化一并在 T-TG-010 处理。
+ * - `resource=strategy_preset` 的 delete：**仍被卡组引用时拒绝**（回显引用卡组，见 D-TG-010），落快照可恢复。
  */
 
 // ── 输入 DTO ──
@@ -139,7 +135,26 @@ class StrategyPresetToolProvider(
     private val resolver: DimensionItemResolver
 ) : McpToolProvider {
 
-    override val actions: List<ResourceAction> = listOf(StrategyPresetAction(service, treeRepository, resolver))
+    override val actions: List<ResourceActions> = listOf(
+        ResourceActions(
+            resource = ActionResources.STRATEGY_PRESET,
+            capabilities = listOf(
+                GetCapability(
+                    fieldHint = "预设 id（由 list(resource=strategy_preset) 返回）"
+                ) { id -> presetDetail(id) },
+                ListCapability { presetSummaries() },
+                DeleteCapability(
+                    fieldHint = "预设 id（由 list(resource=strategy_preset) 返回）",
+                    semantics = "仍被卡组引用时**拒绝删除**（回显引用卡组，需先 save_card_group_preset 不带 presetId 解除引用）；" +
+                            "删除前落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留，含两维度项）",
+                    ops = service.deleteOps()
+                ),
+                RestoreCapability { entityId, payload ->
+                    service.restoreFromSnapshot(entityId, payload)
+                }
+            )
+        )
+    )
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<SaveStrategyPresetInput>(
@@ -160,7 +175,8 @@ class StrategyPresetToolProvider(
 
                 ⚠️ 解析链为「卡组私有（组级/卡级） > 消费方增量项 > 预设 > 全局用途规则」；
                   切换预设或卡组后**需重启**引擎装配（配置侧装配期一次性解析）。
-                ⚠️ 预设删除通道暂缺（待 T-TG-010）。
+                删除预设走 delete(resource=strategy_preset)：**仍被卡组引用时拒绝**（回显引用卡组），
+                  需先 save_card_group_preset（不带 presetId）解除引用；删除前落快照，可 restore_snapshot 恢复。
             """.trimIndent()
         ) { input ->
             if (input.name.isBlank()) throw McpBadInput("name 不能为空")
@@ -299,73 +315,63 @@ class StrategyPresetToolProvider(
         .flatMap { it.bindingIdList }
         .toSet()
 
-    // ── 动作：strategy_preset get/list ──
+    // ── 能力实现（strategy_preset 的 get / list）：具名私有函数，行为可点名 ──
 
-    private class StrategyPresetAction(
-        private val service: StrategyPresetService,
-        private val treeRepository: TreeConfigRepository,
-        private val resolver: DimensionItemResolver
-    ) : GetAction, ListAction {
-
-        override val resource: String = ActionResources.STRATEGY_PRESET
-
-        override fun handleList(managerId: String?): McpToolResult {
-            // 预设是全局资产（不归属任何卡组），managerId 参数不适用
-            val summaries = service.listPresets().map { s ->
-                mapOf(
-                    "id" to s.preset.id,
-                    "name" to s.preset.name,
-                    "description" to s.preset.description,
-                    "treeItemCount" to s.treeItemCount,
-                    "timingCount" to s.timingCount,
-                    "referencedBy" to s.referencedBy.map {
-                        mapOf(
-                            "managerId" to it.managerId,
-                            "name" to it.managerName
-                        )
-                    },
-                    "createdAt" to s.preset.createdAt
-                )
-            }
-            return mcpSuccess(summaries)
-        }
-
-        override fun handleGet(id: String): McpToolResult {
-            val detail = service.findDetail(id.trim())
-                ?: return mcpError("预设不存在: $id")
-            val universe = treeRepository.findAll()
-                .filter { it.enabled && it.bindingType == EvaluatorTreeBindingType.PURPOSE_TAG.name }
-                .flatMap { it.bindingIdList }
-                .toSet()
-            return mcpSuccess(
-                mapOf(
-                    "id" to detail.preset.id,
-                    "name" to detail.preset.name,
-                    "description" to detail.preset.description,
-                    "createdAt" to detail.preset.createdAt,
-                    "treeSelections" to detail.treeSelections.map { (tag, treeIds) ->
-                        mapOf("tagId" to tag, "treeIds" to treeIds.sorted())
-                    },
-                    "timings" to detail.timings.map { (tag, override) ->
-                        mapOf(
-                            "tagId" to tag,
-                            "defaultStage" to override.defaultStage,
-                            "defaultOrderWeight" to override.defaultOrderWeight,
-                            "defaultSurplusIdleThreshold" to override.surplusIdleThreshold?.value,
-                            "surplusIdleThresholdCleared" to (override.surplusIdleThreshold?.value == null &&
-                                    override.surplusIdleThreshold != null),
-                            "defaultReplanAfterUse" to override.defaultReplanAfterUse
-                        )
-                    },
-                    // 防"以为在用其实被禁"：列出被本预设禁用的用途
-                    "disabledPurposes" to resolver.disabledPurposes(universe, detail.treeSelections.keys),
-                    "referencedBy" to service.findReferences(detail.preset.id)
-                        .map { mapOf("managerId" to it.managerId, "name" to it.managerName) }
-                )
+    /** list：预设摘要（含引用它的卡组）。预设是全局资产（不归属任何卡组），managerId 参数不适用。 */
+    private fun presetSummaries(): McpToolResult {
+        val summaries = service.listPresets().map { s ->
+            mapOf(
+                "id" to s.preset.id,
+                "name" to s.preset.name,
+                "description" to s.preset.description,
+                "treeItemCount" to s.treeItemCount,
+                "timingCount" to s.timingCount,
+                "referencedBy" to s.referencedBy.map {
+                    mapOf(
+                        "managerId" to it.managerId,
+                        "name" to it.managerName
+                    )
+                },
+                "createdAt" to s.preset.createdAt
             )
         }
+        return mcpSuccess(summaries)
+    }
 
-        override val getFieldHint: String = "预设 id（由 list(resource=strategy_preset) 返回）"
+    /** get：预设详情（树白名单 + 时序覆盖 + 被禁用用途 + 引用卡组）。 */
+    private fun presetDetail(id: String): McpToolResult {
+        val detail = service.findDetail(id.trim())
+            ?: return mcpError("预设不存在: $id")
+        val universe = treeRepository.findAll()
+            .filter { it.enabled && it.bindingType == EvaluatorTreeBindingType.PURPOSE_TAG.name }
+            .flatMap { it.bindingIdList }
+            .toSet()
+        return mcpSuccess(
+            mapOf(
+                "id" to detail.preset.id,
+                "name" to detail.preset.name,
+                "description" to detail.preset.description,
+                "createdAt" to detail.preset.createdAt,
+                "treeSelections" to detail.treeSelections.map { (tag, treeIds) ->
+                    mapOf("tagId" to tag, "treeIds" to treeIds.sorted())
+                },
+                "timings" to detail.timings.map { (tag, override) ->
+                    mapOf(
+                        "tagId" to tag,
+                        "defaultStage" to override.defaultStage,
+                        "defaultOrderWeight" to override.defaultOrderWeight,
+                        "defaultSurplusIdleThreshold" to override.surplusIdleThreshold?.value,
+                        "surplusIdleThresholdCleared" to (override.surplusIdleThreshold?.value == null &&
+                                override.surplusIdleThreshold != null),
+                        "defaultReplanAfterUse" to override.defaultReplanAfterUse
+                    )
+                },
+                // 防"以为在用其实被禁"：列出被本预设禁用的用途
+                "disabledPurposes" to resolver.disabledPurposes(universe, detail.treeSelections.keys),
+                "referencedBy" to service.findReferences(detail.preset.id)
+                    .map { mapOf("managerId" to it.managerId, "name" to it.managerName) }
+            )
+        )
     }
 
     private companion object {

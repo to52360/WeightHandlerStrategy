@@ -4,11 +4,16 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import lin.bean.usePlan.GroupUseOverride
+import lin.config.PathConfig
+import lin.dao.CardGroupConfig
+import lin.dao.CardGroupJsonParser
+import lin.repository.delete_snapshot.*
 import lin.rule.tree.CardGroupBehavior
 import lin.rule.tree.CardGroupBehavior.*
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import org.springframework.transaction.support.TransactionTemplate
+import java.nio.file.Files
 import java.util.*
 
 // 由于 sourceFile 移到了 Manager，Binding 不再需要独立的 Draft/View 包装，直接使用领域对象 CardGroupBinding 即可。
@@ -34,6 +39,60 @@ class CardGroupService(
     /** T-008：多表 / 多步写的事务边界（Koin 非 Spring 容器，注解式事务不生效，手动包裹）。 */
     private val tx: TransactionTemplate
 ) {
+
+    // ─────────────────── 卡池（文件资源，同属卡组域）删除 + 快照 / 恢复（T-TG-021）───────────────────
+
+    /** 导出 card_pool 的删除操作值；文件不存在 / 有 card_group 依赖时抛 [SnapshotRefused]（不落快照、不删）。 */
+    fun deleteOps(): SnapshotOps = SnapshotOps(
+        collect = { entityId -> collectCardPoolSnapshot(entityId) },
+        remove = { entityId -> Files.delete(PathConfig.defaultDirPath.resolve("$entityId.cardgroup")) }
+    )
+
+    private fun collectCardPoolSnapshot(entityId: String): SnapshotDraft {
+        if (entityId.isBlank()) throw SnapshotRefused("fileName 参数不能为空")
+        val file = PathConfig.defaultDirPath.resolve("$entityId.cardgroup")
+        if (!Files.exists(file)) throw SnapshotRefused("卡池文件不存在: $entityId.cardgroup")
+
+        // 依赖校验：有 card_group 引用此卡池时拒绝
+        val dependents = loadAllManagers().filter { it.sourceFile == entityId }
+        if (dependents.isNotEmpty()) {
+            val depInfo = dependents.joinToString("\n") { mgr -> "  - ${mgr.name} (id=${mgr.id})" }
+            throw SnapshotRefused(
+                "无法删除 $entityId.cardgroup，以下卡牌分组方案依赖此卡池:\n$depInfo\n" +
+                        "请先删除这些方案（delete resource=card_group）或将其 sourceFile 改为其他卡池后重试。"
+            )
+        }
+
+        val config = CardGroupJsonParser.loadByFileName(entityId)
+            ?: throw SnapshotRefused("卡池文件不存在或解析失败: $entityId.cardgroup")
+        return SnapshotDraft(
+            entityName = entityId,
+            payload = SnapshotPayloads.cardPool(config),
+            echo = mapOf(
+                "deleted" to true,
+                "fileName" to entityId,
+                "filePath" to file.toString()
+            )
+        )
+    }
+
+    /** 按快照重建 `.cardgroup` 文件；原文件已存在则拒绝。 */
+    fun restoreCardPoolFromSnapshot(fileName: String, payload: String): RestoreResult {
+        if (Files.exists(PathConfig.defaultDirPath.resolve("$fileName.cardgroup"))) {
+            return RestoreResult(
+                "恢复失败：原文件 $fileName.cardgroup 已存在。请先删除/改名现有数据再恢复",
+                isError = true
+            )
+        }
+        val config = SnapshotPayloads.mapper.readValue(payload, CardGroupConfig::class.java)
+        CardGroupJsonParser.saveCardGroupConfigs(config.cards, fileName, config.enabled)
+        return RestoreResult("已恢复 card_pool $fileName.cardgroup（原文件重建，含 cards 权重）", isError = false)
+    }
+
+    /** 单独写回卡组的预设引用（`saveManager` 有意不写 `preset_id`，见 T-TG-010 卡组恢复）。 */
+    fun setPresetReference(managerId: String, presetId: String?) {
+        repository.updateManagerPreset(managerId, presetId)
+    }
 
     private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 

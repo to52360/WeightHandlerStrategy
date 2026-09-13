@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import lin.repository.delete_snapshot.*
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.TreeConfigEntity
 import lin.repository.tree_config.TreeConfigRepository
@@ -70,6 +71,54 @@ class TreeConfigService(
     /** T-008：tree_config 与 evaluator_leaf_config 两表写的事务边界。 */
     private val tx: TransactionTemplate
 ) {
+
+    // ─────────────────── 删除 + 快照 / 恢复（T-TG-021：业务归域 + 机制由快照域编排，无跨域、无中转）───────────────────
+
+    /** 导出本资源的删除操作值；树不存在 / 配置无法解析时抛 [SnapshotRefused]（不落快照、不删）。 */
+    fun deleteOps(): SnapshotOps = SnapshotOps(
+        collect = { entityId ->
+            val found = findById(entityId)
+                ?: throw SnapshotRefused(
+                    "树不存在: $entityId。当前存在的树列表: ${
+                        loadSummaries().map { mapOf("id" to it["id"], "name" to it["name"]) }
+                    }"
+                )
+            val entity = found.first
+            val config = found.second
+                ?: throw SnapshotRefused("树配置解析失败，无法采集快照，拒绝删除: $entityId")
+            SnapshotDraft(
+                entityName = entity.name,
+                payload = SnapshotPayloads.evaluatorTree(entityId, entity, config),
+                echo = mapOf("deleted" to true, "treeId" to entityId, "treeName" to entity.name)
+            )
+        },
+        remove = { entityId -> delete(entityId) }
+    )
+
+    /** 按快照内容写回（原 id 保留）；原 id 已被占用则拒绝。 */
+    fun restoreFromSnapshot(id: String, payload: String): RestoreResult {
+        findById(id)?.let { occupied ->
+            return RestoreResult(
+                "恢复失败：原 id=$id 已被现有数据占用（现有名称: ${occupied.first.name}）。请先删除/改名现有数据再恢复",
+                isError = true
+            )
+        }
+        val p = SnapshotPayloads.treeMapper.readValue(payload, EvaluatorTreeSnapshot::class.java)
+        saveConfig(
+            name = p.name,
+            config = EvaluatorTreeConfig(
+                bindingType = EvaluatorTreeBindingType.valueOf(p.bindingType),
+                bindingIds = p.bindingIds,
+                root = p.root,
+                leafConfigs = p.leafConfigs
+            ),
+            existingId = id,
+            enabled = p.enabled,
+            managerId = p.managerId,
+            description = p.description
+        )
+        return RestoreResult("已恢复 evaluator_tree $id（原 id 保留，含 root/leafConfigs）", isError = false)
+    }
     /**
      * 避免 EvaluatorNode (typealias) 导致的 Jackson 泛型解析丢失。
      * 显式声明 LogicNode&lt;EvaluatorPayload&gt; 使 JsonTypeInfo 正确处理 payload 多态。

@@ -302,6 +302,60 @@ class StrategyPresetTest : McpTestEnv() {
         )
     }
 
+    // ─────────────────────── 删除通道（T-TG-010 / D-TG-010）───────────────────────
+
+    @Test
+    fun `预设被卡组引用时拒绝删除并回显引用卡组`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_DEL")
+        testDeckId = deck
+        val id = savePreset("""{"name":"TG_PRESET_DEL_REF"}""")
+        assertEquals(false, call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""").isError)
+
+        val refused = call("delete", """{"resource":"strategy_preset","id":"$id"}""")
+        assertTrue("引用中删除应被拒绝: ${refused.contentJson}", refused.isError)
+        assertTrue("拒绝文案应回显引用卡组名", refused.contentJson.contains(deck))
+        assertEquals(
+            "拒绝删除后预设应仍在",
+            false,
+            call("get", """{"resource":"strategy_preset","id":"$id"}""").isError
+        )
+
+        // 解除引用（不带 presetId = 不用预设）后可删
+        assertEquals(false, call("save_card_group_preset", """{"managerId":"$deck"}""").isError)
+        val deleted = call("delete", """{"resource":"strategy_preset","id":"$id"}""")
+        assertEquals("解除引用后删除应成功: ${deleted.contentJson}", false, deleted.isError)
+        assertEquals(id, mapper.readTree(deleted.contentJson).get("deleted").asText())
+    }
+
+    @Test
+    fun `预设删除落快照并可恢复含两个维度项`() {
+        val tree = insertPurposeTree("TG_TREE_CLEAN_4", listOf("CLEAN"))
+        val deck = createEnabledDeck("TG_PRESET_DECK_RESTORE")
+        testDeckId = deck
+        val id = savePreset(
+            """
+            {"name":"TG_PRESET_RESTORE",
+             "treeSelections":[{"tagId":"CLEAN","treeIds":["$tree"]}],
+             "timings":[{"tagId":"CLEAN","defaultOrderWeight":2.5}]}
+            """.trimIndent()
+        )
+
+        val deleted = call("delete", """{"resource":"strategy_preset","id":"$id"}""")
+        assertEquals("删除应成功: ${deleted.contentJson}", false, deleted.isError)
+        val snapshotId = mapper.readTree(deleted.contentJson).get("snapshotId").asText()
+        assertTrue("删除后应查不到", call("get", """{"resource":"strategy_preset","id":"$id"}""").isError)
+
+        val restored = call("restore_snapshot", """{"snapshotId":"$snapshotId"}""")
+        assertEquals("恢复应成功: ${restored.contentJson}", false, restored.isError)
+
+        val got = call("get", """{"resource":"strategy_preset","id":"$id"}""")
+        assertEquals(false, got.isError)
+        val detail = mapper.readTree(got.contentJson)
+        assertEquals("CLEAN", detail.get("treeSelections").get(0).get("tagId").asText())
+        assertEquals(tree, detail.get("treeSelections").get(0).get("treeIds").get(0).asText())
+        assertEquals(2.5, detail.get("timings").get(0).get("defaultOrderWeight").asDouble(), 0.0)
+    }
+
     @Test
     fun `list 回报引用者可识别卡组专用预设`() {
         val deck = createEnabledDeck("TG_PRESET_DECK_I")

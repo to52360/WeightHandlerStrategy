@@ -1,5 +1,6 @@
 package lin.repository.card_group
 
+import lin.repository.delete_snapshot.*
 import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import java.util.*
@@ -54,6 +55,56 @@ class StrategyPresetService(
     private val groupRepository: CardGroupRepository,
     private val tx: TransactionTemplate
 ) {
+
+    // ─────────────────── 删除 + 快照 / 恢复（T-TG-021：业务归域 + 机制由快照域编排）───────────────────
+
+    /** 导出本资源的删除操作值（锚 + 两维度项）。**仍被卡组引用时拒绝**（不提供隐式清引用路径，见 D-TG-010）。 */
+    fun deleteOps(): SnapshotOps = SnapshotOps(
+        collect = { entityId ->
+            val preset = presetRepository.findPresetById(entityId)
+                ?: throw SnapshotRefused("预设不存在: $entityId")
+            val references = findReferences(entityId)
+            if (references.isNotEmpty()) {
+                val refInfo = references.joinToString("\n") { "  - ${it.managerName} (id=${it.managerId})" }
+                throw SnapshotRefused(
+                    "无法删除预设 [${preset.name}] (id=$entityId)，以下卡组引用此预设:\n$refInfo\n" +
+                            "请先用 save_card_group_preset（不带 presetId）解除这些卡组的引用后重试。"
+                )
+            }
+            SnapshotDraft(
+                entityName = preset.name,
+                payload = SnapshotPayloads.strategyPreset(
+                    StrategyPresetSnapshot(
+                        preset = preset,
+                        dimensionItems = presetRepository.findItems(DimensionScope.PRESET, entityId)
+                    )
+                ),
+                echo = mapOf("deleted" to entityId, "name" to preset.name)
+            )
+        },
+        remove = { entityId -> deletePreset(entityId) }
+    )
+
+    /** 按快照写回（锚 + 两维度项按维度覆盖写回）；原 id 已被占用则拒绝。 */
+    fun restoreFromSnapshot(id: String, payload: String): RestoreResult {
+        presetRepository.findPresetById(id)?.let { occupied ->
+            return RestoreResult(
+                "恢复失败：原 id=$id 已被现有数据占用（现有名称: ${occupied.name}）。请先删除/改名现有数据再恢复",
+                isError = true
+            )
+        }
+        val p = SnapshotPayloads.mapper.readValue(payload, StrategyPresetSnapshot::class.java)
+        return tx.execute {
+            presetRepository.savePreset(p.preset.copy(id = id))
+            p.dimensionItems.groupBy { it.dimension }.forEach { (dimension, items) ->
+                presetRepository.replaceItems(DimensionScope.PRESET, id, dimension, items)
+            }
+            RestoreResult(
+                "已恢复 strategy_preset $id（含 ${p.dimensionItems.size} 条维度项，原 id 保留）",
+                isError = false
+            )
+        }!!
+    }
 
     /**
      * 新建或更新预设。

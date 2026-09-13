@@ -17,6 +17,9 @@ import lin.ui.service.TreeConfigService
  *    未声明的用途 ⇒ 该用途树全禁），消费方增量项再减；
  *    **粒度是 (用途, 树)** ⇒ 实现为**按 tag 收窄 `bindingIds`**（多 tag 树不能整棵删），
  *    剔空则整棵树不输出。
+ * 3. **悬空引用防御**（T-TG-020）：卡组引用的预设**行已不存在**时**不改语义** —— 「引用了预设」即受控，
+ *    白名单取到空集 ⇒ 用途树全禁（方向与「空预设 = 要精准不要兜底」一致，**不**回落成兜底全开）；
+ *    但补 `warn` 一次：此前该分支**完全静默**，用户无法区分"我主动禁用"与"预设被删 / 脏数据"。
  *
  * ⚠️ **组装走 [TreeConfigService]**（`config_data` 只存 root、叶子在 `evaluator_leaf_config` 表）——
  * 此前本类直接 `readValue(configData, EvaluatorTreeConfig::class.java)`，自叶子拆表后**每棵树都反序列化失败**
@@ -69,6 +72,15 @@ class SqliteTreeConfigProvider(
     private fun loadDeckContext(): DeckContext {
         val deck = currentDeck.current()
         val presetId = deck?.presetId?.takeIf { it.isNotBlank() }
+        // T-TG-020：悬空引用（预设行已不存在）**不改判定** —— 仍按「引用了预设」走白名单，取到空集 ⇒ 用途树全禁；
+        // 但必须可见：`presetReferenced = presetId != null` 只看卡组一侧，预设被删/脏数据时用户看不到任何提示。
+        if (deck != null && presetId != null && presetRepository.findPresetById(presetId) == null) {
+            myLog.warn {
+                "悬空预设引用：卡组引用的用途预设不存在 ⇒ 该卡组全部 PURPOSE_TAG 树不输出、时序覆盖退化为未声明" +
+                        "（等同空预设语义，非兜底全开）: managerId=${deck.id} presetId=$presetId；" +
+                        "修法 = restore_snapshot 恢复该预设快照，或 save_card_group_preset（不带 presetId）清空该卡组的引用"
+            }
+        }
         return DeckContext(
             enabledGroupBindingIds = cardGroupService.loadAll(onlyEnabled = true)
                 .flatMap { manager -> manager.bindings.map { it.id } }

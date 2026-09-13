@@ -1,5 +1,5 @@
 -- 2026-09-11 T-TG-015 用途预设载体统一：strategy_dimension_item（单表 · 键列 + payload JSON）
--- 方案依据：architecture-context/card-tag-model/cross-dialogue/Q-TG-003-use-preset-final.md
+-- 方案依据：architecture-context/staged/card-tag-model/cross-dialogue/Q-TG-003-use-preset-final.md
 --
 -- 变更：
 --   · 新表 strategy_dimension_item：预设项与卡组增量项**结构同构**，用 scope 区分

@@ -2,13 +2,7 @@ package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.mcp.action.*
-import lin.repository.card_purpose.CardPurposeEntity
-import lin.repository.card_purpose.CardPurposeRepository
-import lin.repository.card_purpose.PurposeTagDefEntity
-import lin.repository.card_purpose.PurposeTagDefRepository
-import lin.repository.delete_snapshot.DeleteSnapshotService
-import lin.repository.delete_snapshot.SnapshotPayloads
-import lin.repository.delete_snapshot.SnapshotResource
+import lin.repository.card_purpose.*
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.ui.card_purpose.PurposeTagProvider
@@ -109,23 +103,37 @@ data class SavePurposeTagDefInput(
 
 // ── Provider ──
 
+/**
+ * 依赖全部由构造注入（写工具 + 能力 lambda 用到的都在此声明）。
+ * `actions` 在构造期求值但 lambda 体不执行 ⇒ 依赖首次调用才解析。
+ */
 class PurposeTagToolProvider(
     private val tagProvider: PurposeTagProvider,
-    ruleProvider: PurposeTagIntentRuleProvider,
     private val cardPurposeRepository: CardPurposeRepository,
-    treeConfigService: TreeConfigService,
     private val tagDefRepository: PurposeTagDefRepository,
-    private val snapshotService: DeleteSnapshotService
+    private val ruleProvider: PurposeTagIntentRuleProvider,
+    private val treeConfigService: TreeConfigService,
+    private val purposeTagService: PurposeTagService
 ) : McpToolProvider {
 
-    override val actions: List<ResourceAction> = listOf(
-        PurposeTagAction(
-            tagProvider,
-            ruleProvider,
-            cardPurposeRepository,
-            treeConfigService,
-            tagDefRepository,
-            snapshotService
+    override val actions: List<ResourceActions> = listOf(
+        ResourceActions(
+            resource = ActionResources.PURPOSE_TAG,
+            capabilities = listOf(
+                GetCapability(
+                    fieldHint = "用途标签 ID（如 SAVE_LIFE, CLEAN, FINISH, GREED, VALUE, EXTRA_COST；由 list(resource=purpose_tag) 返回）"
+                ) { id -> tagDetail(id) },
+                ListCapability { tagSummaries() },
+                DeleteCapability(
+                    fieldHint = "标记 tagId（由 list(resource=purpose_tag) 返回）",
+                    semantics = "战略用途（builtin）不可删；仍被卡牌引用的标记不可删（防幽灵标记，需先摘标）；" +
+                            "删除前落快照并回 snapshotId，可经 restore_snapshot 一键恢复（原 tagId 保留）",
+                    ops = purposeTagService.deleteOps()
+                ),
+                RestoreCapability { entityId, payload ->
+                    purposeTagService.restoreFromSnapshot(entityId, payload)
+                }
+            )
         )
     )
 
@@ -260,149 +268,89 @@ class PurposeTagToolProvider(
         )
     }
 
-    // ── 动作：purpose_tag get/list ──
+    // ── 能力实现（purpose_tag 的 get / list）：具名私有函数，行为可点名 ──
 
-    private class PurposeTagAction(
-        private val tagProvider: PurposeTagProvider,
-        private val ruleProvider: PurposeTagIntentRuleProvider,
-        private val cardPurposeRepository: CardPurposeRepository,
-        private val treeConfigService: TreeConfigService,
-        private val tagDefRepository: PurposeTagDefRepository,
-        private val snapshotService: DeleteSnapshotService
-    ) : GetAction, ListAction, DeleteAction {
-
-        override val resource: String = ActionResources.PURPOSE_TAG
-
-        override fun handleList(managerId: String?): McpToolResult {
-            val tags = tagProvider.tags()
-            val rules = ruleProvider.rules().associateBy { it.tagId.value }
-            val defs = tagDefRepository.findAll().associateBy { it.tagId }
-            val allCardPurposes = cardPurposeRepository.findAll()
-            val cardTagSets = allCardPurposes.map { entity ->
-                entity.purposeTags.split(",").map { it.trim() }.toSet()
-            }
-            val summaries = tags.map { tagDef ->
-                val tagIdStr = tagDef.id.value
-                val rule = rules[tagIdStr]
-                PurposeTagSummaryDto(
-                    tagId = tagIdStr,
-                    displayName = tagDef.displayName,
-                    boundPurpose = defs[tagIdStr]?.boundPurpose,
-                    defaultStage = rule?.defaultStage?.name ?: "GENERAL",
-                    defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
-                    defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,
-                    priority = rule?.priority ?: 100,
-                    defaultSurplusIdleThreshold = rule?.defaultSurplusIdleThreshold,
-                    associatedCardCount = cardTagSets.count { it.contains(tagIdStr) }
-                )
-            }
-            return mcpSuccess(summaries)
+    /** list：标签摘要（含规则默认值 + 关联卡数）。 */
+    private fun tagSummaries(): McpToolResult {
+        val tags = tagProvider.tags()
+        val rules = ruleProvider.rules().associateBy { it.tagId.value }
+        val defs = tagDefRepository.findAll().associateBy { it.tagId }
+        val allCardPurposes = cardPurposeRepository.findAll()
+        val cardTagSets = allCardPurposes.map { entity ->
+            entity.purposeTags.split(",").map { it.trim() }.toSet()
         }
-
-        override fun handleGet(id: String): McpToolResult {
-            val targetTagId = id.trim()
-            val availableTags = tagProvider.tags()
-            val availableTagIds = availableTags.map { it.id.value }
-
-            if (targetTagId.isBlank() || targetTagId !in availableTagIds) {
-                return mcpError("tagId 不合法。当前可用标签: $availableTagIds")
-            }
-
-            val tagDef = availableTags.first { it.id.value == targetTagId }
-            val rules = ruleProvider.rules().associateBy { it.tagId.value }
-            val rule = rules[targetTagId]
-
-            val allCardPurposes = cardPurposeRepository.findAll()
-            val associatedCards = allCardPurposes
-                .filter { entity ->
-                    entity.purposeTags.split(",").map { it.trim() }.toSet().contains(targetTagId)
-                }
-                .map { entity ->
-                    PurposeTagCardInfoDto(
-                        cardId = entity.cardId,
-                        name = entity.name,
-                        replanAfterUse = entity.replanAfterUse
-                    )
-                }
-
-            val boundTrees = treeConfigService.loadAll()
-                .filter { (entity, _) ->
-                    entity.bindingType == EvaluatorTreeBindingType.PURPOSE_TAG.name &&
-                            entity.bindingIds.split(",").map { it.trim() }.toSet().contains(targetTagId)
-                }
-                .map { (entity, _) ->
-                    BoundTreeSummaryDto(
-                        id = entity.id,
-                        name = entity.name,
-                        description = entity.description,
-                        bindingType = entity.bindingType,
-                        bindingIds = entity.bindingIds.split(",").map { it.trim() }
-                    )
-                }
-
-            val detail = PurposeTagDetailDto(
-                tagId = targetTagId,
+        val summaries = tags.map { tagDef ->
+            val tagIdStr = tagDef.id.value
+            val rule = rules[tagIdStr]
+            PurposeTagSummaryDto(
+                tagId = tagIdStr,
                 displayName = tagDef.displayName,
-                boundPurpose = tagDefRepository.findByTagId(targetTagId)?.boundPurpose,
+                boundPurpose = defs[tagIdStr]?.boundPurpose,
                 defaultStage = rule?.defaultStage?.name ?: "GENERAL",
                 defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
                 defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,
                 priority = rule?.priority ?: 100,
                 defaultSurplusIdleThreshold = rule?.defaultSurplusIdleThreshold,
-                associatedCards = associatedCards,
-                boundEvaluatorTrees = boundTrees
+                associatedCardCount = cardTagSets.count { it.contains(tagIdStr) }
             )
-            return mcpSuccess(detail)
+        }
+        return mcpSuccess(summaries)
+    }
+
+    /** get：标签详情（含规则默认值 + 关联卡 + 绑定评估树）。 */
+    private fun tagDetail(id: String): McpToolResult {
+        val targetTagId = id.trim()
+        val availableTags = tagProvider.tags()
+        val availableTagIds = availableTags.map { it.id.value }
+
+        if (targetTagId.isBlank() || targetTagId !in availableTagIds) {
+            return mcpError("tagId 不合法。当前可用标签: $availableTagIds")
         }
 
-        override val getFieldHint: String =
-            "用途标签 ID（如 SAVE_LIFE, CLEAN, FINISH, GREED, VALUE, EXTRA_COST；由 list(resource=purpose_tag) 返回）"
+        val tagDef = availableTags.first { it.id.value == targetTagId }
+        val rules = ruleProvider.rules().associateBy { it.tagId.value }
+        val rule = rules[targetTagId]
 
-        // ── 删除标记定义（T-TG-002）──
-
-        override fun handleDelete(id: String): McpToolResult {
-            val tagId = id.trim()
-            val def = tagDefRepository.findByTagId(tagId)
-                ?: return mcpError("标记定义不存在: $tagId")
-
-            if (def.builtin) {
-                return mcpError("战略用途不可删除: $tagId（内置 7 个是行为承载者，只能改显示名）")
+        val allCardPurposes = cardPurposeRepository.findAll()
+        val associatedCards = allCardPurposes
+            .filter { entity ->
+                entity.purposeTags.split(",").map { it.trim() }.toSet().contains(targetTagId)
             }
-
-            // 引用校验：仍被卡牌引用的标记不可删。
-            // 否则会留下「幽灵标记」——card_purpose 里还有该字符串，条件树 has_purpose_tag 仍能命中，
-            // 但白名单/列表里已不存在，既查不到也改不了。
-            val referenced = cardPurposeRepository.findAll().count { entity ->
-                entity.purposeTags.split(",").map { it.trim() }.contains(tagId)
-            }
-            if (referenced > 0) {
-                return mcpError(
-                    "标记 $tagId 仍被 $referenced 张卡使用，请先用 save_card_purpose 摘除该标记后再删除"
+            .map { entity ->
+                PurposeTagCardInfoDto(
+                    cardId = entity.cardId,
+                    name = entity.name,
+                    replanAfterUse = entity.replanAfterUse
                 )
             }
 
-            val payload = SnapshotPayloads.purposeTag(def)
-            val snapshotId = snapshotService.deleteWithSnapshot(
-                resource = SnapshotResource.PURPOSE_TAG,
-                entityId = def.tagId,
-                entityName = def.displayName,
-                payload = payload
-            ) {
-                tagDefRepository.deleteByTagId(tagId)
+        val boundTrees = treeConfigService.loadAll()
+            .filter { (entity, _) ->
+                entity.bindingType == EvaluatorTreeBindingType.PURPOSE_TAG.name &&
+                        entity.bindingIds.split(",").map { it.trim() }.toSet().contains(targetTagId)
             }
-            return mcpSuccess(
-                mapOf(
-                    "deleted" to def.tagId,
-                    "displayName" to def.displayName,
-                    "snapshotId" to snapshotId
+            .map { (entity, _) ->
+                BoundTreeSummaryDto(
+                    id = entity.id,
+                    name = entity.name,
+                    description = entity.description,
+                    bindingType = entity.bindingType,
+                    bindingIds = entity.bindingIds.split(",").map { it.trim() }
                 )
-            )
-        }
+            }
 
-        override val deleteFieldHint: String = "标记 tagId（由 list(resource=purpose_tag) 返回）"
-
-        override val deleteSemantics: String =
-            "战略用途（builtin）不可删；仍被卡牌引用的标记不可删（防幽灵标记，需先摘标）；" +
-                    "删除前落快照并回 snapshotId，可经 restore_snapshot 一键恢复（原 tagId 保留）"
+        val detail = PurposeTagDetailDto(
+            tagId = targetTagId,
+            displayName = tagDef.displayName,
+            boundPurpose = tagDefRepository.findByTagId(targetTagId)?.boundPurpose,
+            defaultStage = rule?.defaultStage?.name ?: "GENERAL",
+            defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
+            defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,
+            priority = rule?.priority ?: 100,
+            defaultSurplusIdleThreshold = rule?.defaultSurplusIdleThreshold,
+            associatedCards = associatedCards,
+            boundEvaluatorTrees = boundTrees
+        )
+        return mcpSuccess(detail)
     }
 }

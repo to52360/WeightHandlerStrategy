@@ -1,5 +1,8 @@
 package lin.mcp
 
+import lin.repository.card_group.CardGroupRepository
+import lin.repository.card_group.DimensionScope
+import lin.repository.card_group.StrategyPresetRepository
 import lin.repository.delete_snapshot.DeleteSnapshotEntity
 import lin.repository.delete_snapshot.DeleteSnapshotRepository
 import org.junit.Assert.*
@@ -65,7 +68,7 @@ class DeleteSnapshotRestoreTest : McpTestEnv() {
         val boostId = mapper.readTree(saveResp.contentJson)["id"].asText()
 
         val del = call("delete", """{"resource":"aura_boost","id":"$boostId"}""")
-        assertFalse(del.isError)
+        assertFalse("delete(aura_boost) 应成功: ${del.contentJson}", del.isError)
         val snapshotId = mapper.readTree(del.contentJson)["snapshotId"].asText()
         assertNotNull("delete 应返回 snapshotId", snapshotId)
 
@@ -237,5 +240,112 @@ class DeleteSnapshotRestoreTest : McpTestEnv() {
         // createdAt 递增，最新 3 条 = prefix3/4/5（findAll 按 created_at 倒序）
         assertEquals("应只保留最新 3 条", listOf("$prefix" + "5", "$prefix" + "4", "$prefix" + "3"), kept)
         assertEquals("表中应仅剩 3 条", 3, repo.findAll().size)
+    }
+
+    // ─────────────────── card_group 的预设引用 + 维度项 roundtrip（T-TG-010 补账）───────────────────
+
+    @Test
+    fun `cardGroup 删除恢复后预设引用与卡组增量项一并复原`() {
+        val groupRepository = GlobalContext.get().get<CardGroupRepository>()
+        val presetRepository = GlobalContext.get().get<StrategyPresetRepository>()
+
+        val saveGroup = call(
+            "save_card_group",
+            """{"sourceFile":"$poolName","managerName":"$managerName","bindings":[{"name":"T010守卫组","cardIds":["ICC_820"]}]}"""
+        )
+        assertFalse("save_card_group 应成功: ${saveGroup.contentJson}", saveGroup.isError)
+        val mid = mapper.readTree(saveGroup.contentJson)["managerId"].asText()
+        managerId = mid
+
+        val savePreset = call("save_strategy_preset", """{"name":"t010_group_preset"}""")
+        assertFalse("save_strategy_preset 应成功: ${savePreset.contentJson}", savePreset.isError)
+        val presetId = mapper.readTree(savePreset.contentJson)["presetId"].asText()
+        assertFalse(
+            call("save_card_group_preset", """{"managerId":"$mid","presetId":"$presetId"}""").isError
+        )
+        assertFalse(
+            call(
+                "save_card_group_preset_delta",
+                """{"managerId":"$mid","timings":[{"tagId":"CLEAN","defaultOrderWeight":4.0}]}"""
+            ).isError
+        )
+
+        val del = call("delete", """{"resource":"card_group","id":"$mid"}""")
+        assertFalse("delete(card_group) 应成功: ${del.contentJson}", del.isError)
+        val snapshotId = mapper.readTree(del.contentJson)["snapshotId"].asText()
+        assertTrue(
+            "删除卡组应一并清理 CARD_GROUP 维度项（不留孤儿）",
+            presetRepository.findItems(DimensionScope.CARD_GROUP, mid).isEmpty()
+        )
+
+        val restore = call("restore_snapshot", """{"snapshotId":"$snapshotId"}""")
+        assertFalse("restore 应成功: ${restore.contentJson}", restore.isError)
+
+        assertEquals(
+            "恢复后 preset_id 应写回（否则「用预设」退化成「不用预设」）",
+            presetId,
+            groupRepository.findManagerById(mid)?.presetId
+        )
+        assertEquals(
+            "恢复后卡组增量项应写回",
+            4.0,
+            presetRepository.findTimings(DimensionScope.CARD_GROUP, mid).getValue("CLEAN").defaultOrderWeight!!,
+            0.0
+        )
+
+        presetRepository.deletePreset(presetId)
+    }
+
+    // ─────────────────── T-TG-020：卡组快照的预设引用不得悬空 ───────────────────
+
+    /**
+     * 可达路径：删除卡组 ⇒ 预设失去最后一个引用而被删 ⇒ 再 `restore_snapshot` 恢复卡组时，
+     * 快照里的 `presetId` 已指向不存在的预设。
+     *
+     * 期望：**拒绝恢复**（而不是静默置空 —— 那会把"用预设"悄悄变成"不用预设"＝兜底全开，方向相反），
+     * 并给出可操作指引；拒绝发生在事务前 ⇒ 不留半个卡组。
+     */
+    @Test
+    fun `卡组快照引用的预设已不存在时拒绝恢复`() {
+        val groupRepository = GlobalContext.get().get<CardGroupRepository>()
+        val presetRepository = GlobalContext.get().get<StrategyPresetRepository>()
+        var presetId: String? = null
+        try {
+            val saveGroup = call(
+                "save_card_group",
+                """{"sourceFile":"$poolName","managerName":"$managerName","bindings":[{"name":"T020守卫组","cardIds":["ICC_820"]}]}"""
+            )
+            assertFalse("save_card_group 应成功: ${saveGroup.contentJson}", saveGroup.isError)
+            val mid = mapper.readTree(saveGroup.contentJson)["managerId"].asText()
+            managerId = mid
+
+            val savePreset = call("save_strategy_preset", """{"name":"t020_preset"}""")
+            assertFalse("save_strategy_preset 应成功: ${savePreset.contentJson}", savePreset.isError)
+            presetId = mapper.readTree(savePreset.contentJson)["presetId"].asText()
+            assertFalse(
+                "卡组引用预设应成功",
+                call("save_card_group_preset", """{"managerId":"$mid","presetId":"$presetId"}""").isError
+            )
+
+            val del = call("delete", """{"resource":"card_group","id":"$mid"}""")
+            assertFalse("delete(card_group) 应成功: ${del.contentJson}", del.isError)
+            val snapshotId = mapper.readTree(del.contentJson)["snapshotId"].asText()
+
+            // 卡组已删 ⇒ 预设失去最后一个引用 ⇒ 允许删除（这正是悬空引用的产生路径）
+            presetRepository.deletePreset(presetId!!)
+
+            val restore = call("restore_snapshot", """{"snapshotId":"$snapshotId"}""")
+            assertTrue(
+                "T-TG-020：快照引用的预设不存在时应拒绝恢复: ${restore.contentJson}",
+                restore.isError
+            )
+            assertTrue(
+                "拒绝文案应点出缺失的 presetId 与修法: ${restore.contentJson}",
+                restore.contentJson.contains(presetId!!) && restore.contentJson.contains("restore_snapshot")
+            )
+            assertNull("拒绝发生在事务前，不得留下半个卡组", groupRepository.findManagerById(mid))
+        } finally {
+            presetId?.let { presetRepository.deletePreset(it) } // 幂等：不存在时返回 null
+        }
     }
 }

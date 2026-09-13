@@ -8,7 +8,7 @@ import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder
 import com.github.victools.jsonschema.generator.SchemaVersion
 import com.github.victools.jsonschema.module.jackson.JacksonModule
 import com.github.victools.jsonschema.module.jackson.JacksonOption
-import lin.mcp.action.ResourceAction
+import lin.mcp.action.ResourceActions
 import lin.repository.condition_tree.ConditionTreeReferenceException
 import lin.rule.tree.EvaluatorPayload
 import lin.rule.tree.LogicNode
@@ -151,14 +151,14 @@ inline fun <reified I> typedTool(
 /**
  * MCP tool 提供者接口。
  * 每个 domain 实现此接口，提供本域的 tool 列表。
- * actions：本 Provider 参与 get/list/delete 动作大类分发的资源动作（Q-007：直接声明在 Provider 上，
- * dispatcher 从 getAll<McpToolProvider>() 的 actions 收集，无独立 ResourceActionProvider 接口）。
+ * actions：本 Provider 参与 get/list/delete 动作大类分发的**资源动作集合**（Q-007 / Q-TG-007：直接声明在 Provider 上，
+ * dispatcher 从 getAll<McpToolProvider>() 的 actions 收集并按 resource 索引，无独立 ResourceActionProvider 接口）。
  * 默认空 = 不参与动作分发（纯写工具 Provider）。
  */
 interface McpToolProvider {
     fun provide(): List<McpToolHandler>
 
-    val actions: List<ResourceAction> get() = emptyList()
+    val actions: List<ResourceActions> get() = emptyList()
 }
 
 data class SaveTreeTemplateInput(

@@ -9,7 +9,8 @@ import org.junit.Test
  *
  * - save_aura_boost：内联建树（0~2 棵）+ boost 行由 [lin.repository.aura_boost.AuraBoostConfigService.saveWithInlineTrees]
  *   在服务层事务编排，MCP Provider 不再注入 TransactionTemplate / ConditionTreeConfigService。
- * - delete(card_group)：级联删由 [lin.ui.service.CardGroupCascadeDeleteService] 完成，快照结构不变。
+ * - delete(card_group)：级联删由 `CardGroupCascadeDeleteService`（卡组域服务，T-TG-010）完成，
+ *   快照结构与回显字段不变。
  * - 校验失败（conditionId 与 treeJson 互斥）经中立 [lin.repository.condition_tree.ConditionTreeReferenceException]
  *   以原消息返回，且**事务回滚**（先建的 trigger 树不残留）。
  */

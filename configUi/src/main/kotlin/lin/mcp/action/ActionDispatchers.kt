@@ -2,44 +2,60 @@ package lin.mcp.action
 
 import lin.config.PathConfig
 import lin.mcp.*
+import lin.repository.delete_snapshot.SnapshotStore
 
 /**
- * 动作注册表（Q-007）：从全部 McpToolProvider 集合的 actions 收集（无独立 ResourceActionProvider 接口），
- * 按 resource 索引；动作支持面用 as? 判断实现的是哪个子接口（GetAction / ListAction / DeleteAction）。
- * 新增资源动作 = 在 Provider 的 actions 中加一项，四类 dispatcher 零改动。
+ * 动作注册表（Q-007 / Q-TG-007）：从全部 McpToolProvider 的 actions 收集，按 resource 索引。
+ * **一个 resource 一条 [ResourceActions]**；支持面用 `capability<T>()` 判定（能力＝类型，null = 不支持）。
+ * get / list / delete / restore **四条链路共用本索引**（构建一次，按 resource 取用）。
+ *
+ * `providers` 用 [Lazy]：`getAll<McpToolProvider>()` 含 dispatcher 自身，构造期解析会循环依赖 StackOverflow
+ * （2026-08-12 实测坑）⇒ 索引延迟到首次取用时构建；由 Koin 注册为单例，全进程只有这一份。
+ * 新增资源动作 = 在 Provider 的 actions 中加一条，五处调用点（四 dispatcher + 恢复）零改动。
  */
-internal class ActionRegistry(providers: List<McpToolProvider>) {
-    private val byResource: Map<String, ResourceAction> =
-        providers.flatMap { it.actions }.associateBy { it.resource }
+class ActionRegistry(private val providers: Lazy<List<McpToolProvider>>) {
+
+    private val byResource: Map<String, ResourceActions> by lazy {
+        buildMap {
+            providers.value.flatMap { it.actions }.forEach { entry ->
+                // 值化后同一 resource 可能被多条声明贡献 ⇒ 重复会**静默覆盖能力**，故首次建索引即失败
+                check(put(entry.resource, entry) == null) {
+                    "重复声明 resource=${entry.resource}：同一 resource 只能有一条 ResourceActions（检查各 Provider 的 actions）"
+                }
+            }
+        }
+    }
 
     val resources: Set<String> get() = byResource.keys
 
-    fun get(resource: String): GetAction? = byResource[resource] as? GetAction
-    fun list(resource: String): ListAction? = byResource[resource] as? ListAction
-    fun delete(resource: String): DeleteAction? = byResource[resource] as? DeleteAction
-    fun getResources(): List<String> = byResource.values.filterIsInstance<GetAction>().map { it.resource }
-    fun listResources(): List<String> = byResource.values.filterIsInstance<ListAction>().map { it.resource }
-    fun deleteResources(): List<String> = byResource.values.filterIsInstance<DeleteAction>().map { it.resource }
+    fun get(resource: String): GetCapability? = byResource[resource]?.capability()
+    fun list(resource: String): ListCapability? = byResource[resource]?.capability()
+    fun delete(resource: String): DeleteCapability? = byResource[resource]?.capability()
+    fun restorable(resource: String): RestoreCapability? = byResource[resource]?.capability()
+
+    fun getResources(): List<String> = supportResources { it.capability<GetCapability>() != null }
+    fun listResources(): List<String> = supportResources { it.capability<ListCapability>() != null }
+    fun deleteResources(): List<String> = supportResources { it.capability<DeleteCapability>() != null }
+
+    private fun supportResources(predicate: (ResourceActions) -> Boolean): List<String> =
+        byResource.values.filter(predicate).map { it.resource }
 }
 
 /**
  * get / list / delete / tool_capabilities 四个动作大类工具的 Dispatcher。
- * 注入用 Lazy：getAll<McpToolProvider>() 包含 dispatcher 自身，若在构造期解析会触发循环依赖 StackOverflow
- * （2026-08-12 实测坑），故延迟到首次 provide() 时解析。
+ * 共用同一个 [ActionRegistry] 单例（索引只建一次）；循环依赖由 registry 内部的 [Lazy] 处理。
  */
 class GetDispatcher(
-    private val providers: Lazy<List<McpToolProvider>>
+    private val registry: ActionRegistry
 ) : McpToolProvider {
-
-    private val registry: ActionRegistry by lazy { ActionRegistry(providers.value) }
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<GetInput>(
             name = "get",
             description = "读取单个资源详情。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / draft），id 为资源标识。id 语义因资源而异（card_pool=fileName、card_group=managerId、purpose_tag=tagId、draft=draftId、其余=资源 id），不确定时先调 tool_capabilities 查询。"
         ) { input ->
-            val action = registry.get(input.resource)
-            if (action == null) {
+            val capability = registry.get(input.resource)
+            if (capability == null) {
                 if (input.resource !in registry.resources) {
                     throw McpBadInput("未知 resource: ${input.resource}。支持: ${registry.resources}")
                 }
@@ -48,47 +64,51 @@ class GetDispatcher(
             if (input.id.isNullOrBlank()) {
                 throw McpBadInput("get 需要 id 参数（resource=${input.resource} 的 id 语义用 tool_capabilities 查询）")
             }
-            action.handleGet(input.id)
+            capability.handle(input.id)
         }
     )
 }
 
 class ListDispatcher(
-    private val providers: Lazy<List<McpToolProvider>>
+    private val registry: ActionRegistry
 ) : McpToolProvider {
-
-    private val registry: ActionRegistry by lazy { ActionRegistry(providers.value) }
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<ListInput>(
             name = "list",
             description = "列出资源列表。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / capability_background），可选 managerId 按卡组过滤（仅部分资源支持）。不确定支持面时先调 tool_capabilities 查询。"
         ) { input ->
-            val action = registry.list(input.resource)
-            if (action == null) {
+            val capability = registry.list(input.resource)
+            if (capability == null) {
                 if (input.resource !in registry.resources) {
                     throw McpBadInput("未知 resource: ${input.resource}。支持: ${registry.resources}")
                 }
                 throw McpBadInput("resource=${input.resource} 不支持 list（当前支持 list: ${registry.listResources()}）")
             }
-            action.handleList(input.managerId)
+            capability.handle(input.managerId)
         }
     )
 }
 
+/**
+ * delete 大类分发 + **删除编排单点**（T-TG-022 J′ 骨架）：
+ * 收集者（registry）+ 分发者 + 机制持有者三合一 —— 各 Provider 只声明 [DeleteCapability] 的 `ops` 值，
+ * 落快照 / 删除同事务 / 回显 `snapshotId` 在此写一次（原先 8 个 Action 各写一份）。
+ * `ops` 是 Provider 构造期建好的**值**（无状态、捕获单例域服务）⇒ 本类无需缓存。
+ */
 class DeleteDispatcher(
-    private val providers: Lazy<List<McpToolProvider>>
+    private val registry: ActionRegistry,
+    /** 快照域唯一入口；机制细节不再泄漏到各 Provider。 */
+    private val snapshotStore: SnapshotStore
 ) : McpToolProvider {
-
-    private val registry: ActionRegistry by lazy { ActionRegistry(providers.value) }
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<DeleteInput>(
             name = "delete",
-            description = "删除一个已保存的资源配置。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost），id 为资源标识（card_pool=fileName、card_group=managerId、其余=资源 id）。删除语义（引用校验/恢复快照/级联）因资源而异，详见 tool_capabilities 详情。"
+            description = "删除一个已保存的资源配置。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset），id 为资源标识（card_pool=fileName、card_group=managerId、其余=资源 id）。删除语义（引用校验/恢复快照/级联）因资源而异，详见 tool_capabilities 详情。删除前会落快照，可经 restore_snapshot 恢复。"
         ) { input ->
-            val action = registry.delete(input.resource)
-            if (action == null) {
+            val capability = registry.delete(input.resource)
+            if (capability == null) {
                 if (input.resource !in registry.resources) {
                     throw McpBadInput("未知 resource: ${input.resource}。支持: ${registry.resources}")
                 }
@@ -97,7 +117,10 @@ class DeleteDispatcher(
             if (input.id.isNullOrBlank()) {
                 throw McpBadInput("delete 需要 id 参数（resource=${input.resource} 的 id 语义用 tool_capabilities 查询）")
             }
-            action.handleDelete(input.id)
+            // 归一化单点：采集与删除拿到同一个 id（防"采集用 trimmed、删除用 raw"的静默错位）。
+            val id = input.id.trim()
+            // resource 路由标识只在这里出现一次（唯一来源 = ResourceActions.resource）；ops 是 Provider 建好的值
+            mcpDeleteAction { snapshotStore.deleteWithSnapshot(input.resource, capability.ops, id) }
         }
     )
 }
@@ -109,10 +132,8 @@ class DeleteDispatcher(
  * 全部由 Provider 注册的 actions 动态生成（零硬编码资源列表）。
  */
 class ToolCapabilitiesProvider(
-    private val providers: Lazy<List<McpToolProvider>>
+    private val registry: ActionRegistry
 ) : McpToolProvider {
-
-    private val registry: ActionRegistry by lazy { ActionRegistry(providers.value) }
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<CapabilitiesInput>(
@@ -133,21 +154,21 @@ class ToolCapabilitiesProvider(
                     )
                 )
             } else {
-                val action = registry.get(input.resource)
+                val known = registry.get(input.resource)
                     ?: registry.list(input.resource)
                     ?: registry.delete(input.resource)
                     ?: throw McpBadInput("未知 resource: ${input.resource}。支持: ${registry.resources}")
                 mcpSuccess(
                     mapOf(
                         "resource" to input.resource,
-                        "get" to registry.get(input.resource)?.let { mapOf("id" to it.getFieldHint) },
+                        "get" to registry.get(input.resource)?.let { mapOf("id" to it.fieldHint) },
                         "list" to registry.list(input.resource)?.let {
                             mapOf(
                                 "managerId" to if (it.supportsManagerIdFilter) "可选，按卡组过滤" else "不支持（忽略此字段）"
                             )
                         },
                         "delete" to registry.delete(input.resource)?.let {
-                            mapOf("id" to it.deleteFieldHint, "semantics" to it.deleteSemantics)
+                            mapOf("id" to it.fieldHint, "semantics" to it.semantics)
                         }
                     )
                 )

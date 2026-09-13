@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import lin.repository.delete_snapshot.*
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionTreeConfig
 import lin.ui.condition_tree.validation.ConditionTreeValidator
@@ -38,6 +39,49 @@ class ConditionTreeConfigService(
     private val mapper: ObjectMapper,
     private val conditionTreeValidator: ConditionTreeValidator
 ) {
+
+    // ─────────────────── 删除 + 快照 / 恢复（T-TG-021：业务归域 + 机制由快照域编排）───────────────────
+
+    /**
+     * 导出本资源的删除操作值；不存在 / 配置无法解析时抛 [SnapshotRefused]（不落快照、不删除）。
+     *
+     * ⚠️ **引用校验不在此处**（AuraBoost / 评估树叶子是跨域查询）—— 由 MCP 层 `ConditionTreeToolProvider` 前置。
+     */
+    fun deleteOps(): SnapshotOps = SnapshotOps(
+        collect = { entityId ->
+            val meta = loadAllMeta().firstOrNull { it.id == entityId }
+                ?: throw SnapshotRefused("条件树不存在: $entityId")
+            val loaded = loadAll().firstOrNull { it.first.id == entityId }
+                ?: throw SnapshotRefused("条件树不存在: $entityId")
+            val config = loaded.second
+                ?: throw SnapshotRefused("条件树配置解析失败，无法采集快照，拒绝删除: $entityId")
+            SnapshotDraft(
+                entityName = meta.name,
+                payload = SnapshotPayloads.conditionTree(loaded.first, config),
+                echo = mapOf("deleted" to meta.id, "name" to meta.name)
+            )
+        },
+        remove = { entityId -> delete(entityId) }
+    )
+
+    /** 按快照写回（原 id 保留）；原 id 已被占用则拒绝。 */
+    fun restoreFromSnapshot(id: String, payload: String): RestoreResult {
+        loadAll().firstOrNull { it.first.id == id }?.let { occupied ->
+            return RestoreResult(
+                "恢复失败：原 id=$id 已被现有数据占用（现有名称: ${occupied.first.name}）。请先删除/改名现有数据再恢复",
+                isError = true
+            )
+        }
+        val p = SnapshotPayloads.conditionTreeMapper.readValue(payload, ConditionTreeSnapshot::class.java)
+        saveConfig(
+            name = p.config.name ?: id,
+            config = p.config,
+            existingId = id,
+            managerId = p.managerId?.takeIf { it.isNotBlank() },
+            inlineCreated = p.inlineCreated
+        )
+        return RestoreResult("已恢复 condition_tree $id（原 id 保留）", isError = false)
+    }
     /**
      * @param managerId 归属卡组：null = 全局共享树；非 null = 卡组私有树（空字符串自动归一化为 null，
      *                  存储层只存在 null 一种"全局"表示，与 tree_config 的 null 语义一致）。

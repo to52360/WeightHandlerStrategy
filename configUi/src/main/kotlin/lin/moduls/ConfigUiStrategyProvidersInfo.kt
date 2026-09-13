@@ -11,6 +11,8 @@ import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
+import lin.repository.delete_snapshot.DeleteSnapshotRepository
+import lin.repository.delete_snapshot.SnapshotStore
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.rule.tree.CardGroupBinding
 import lin.serviceLoader.module.ModulesInfo
@@ -71,6 +73,9 @@ val strategyProviderModule = module {
 
     // K-TG-007：评估树组装必须走 TreeConfigService（config_data 只存 root，叶子在 evaluator_leaf_config 表）
     single { EvaluatorLeafConfigRepository(get()) }
+    // T-TG-021：快照域唯一入口（表存取 + 删除编排）
+    single { DeleteSnapshotRepository(get()) }
+    single { SnapshotStore(get(), get()) }
     single { TreeConfigService(get(), get(), createTreeConfigMapper(), get()) }
     single<TreeConfigProvider> {
         SqliteTreeConfigProvider(
@@ -95,14 +100,18 @@ val strategyProviderModule = module {
         SqliteConditionTreeConfigProvider(service = get())
     }
 
+    single { AuraBoostRepository(get()) }
+    single {
+        AuraBoostConfigService(
+            repository = get(),
+            conditionTreeService = get(),
+            conditionTreeMapper = createConditionTreeConfigMapper(),
+            tx = get()
+        )
+    }
     single<AuraBoostConfigProvider> {
         SqliteAuraBoostConfigProvider(
-            service = AuraBoostConfigService(
-                repository = AuraBoostRepository(get()),
-                conditionTreeService = get(),
-                conditionTreeMapper = createConditionTreeConfigMapper(),
-                tx = get()
-            ),
+            service = get(),
             cardGroupService = get()
         )
     }

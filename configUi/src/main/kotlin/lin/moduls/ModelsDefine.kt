@@ -13,12 +13,14 @@ import lin.repository.card_group.*
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.card_purpose.PurposeTagRuleRepository
+import lin.repository.card_purpose.PurposeTagService
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanService
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
 import lin.repository.delete_snapshot.DeleteSnapshotRepository
-import lin.repository.delete_snapshot.DeleteSnapshotService
+import lin.repository.delete_snapshot.SnapshotStore
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
 import lin.repository.tree_config.EvaluatorTreeTemplateRepository
@@ -37,7 +39,10 @@ import lin.ui.condition_tree.action.CreateConditionTreeAction
 import lin.ui.condition_tree.action.DeleteConditionTreeAction
 import lin.ui.condition_tree.action.SaveConditionTreeAction
 import lin.ui.condition_tree.validation.ConditionTreeValidator
-import lin.ui.service.*
+import lin.ui.service.EvaluatorTreeResolver
+import lin.ui.service.EvaluatorTreeTemplateService
+import lin.ui.service.TreeConfigService
+import lin.ui.service.createTreeConfigMapper
 import lin.ui.tree_config.EvaluatorTreeExtension
 import lin.ui.tree_config.action.*
 import org.koin.core.context.GlobalContext.startKoin
@@ -155,39 +160,35 @@ val uiDBModule = module {
     single { AuraBoostRepository(get()) }
     single { ConditionTreeValidator(get()) }
     // T-011：saveWithInlineTrees 组合编排注入条件树服务 / mapper / 事务模板
-    single { AuraBoostConfigService(get(), get(), createConditionTreeConfigMapper(), get()) }
+    single {
+        AuraBoostConfigService(get(), get(), createConditionTreeConfigMapper(), get())
+    }
     single { EvaluatorLeafSourceCatalog(get(), get(), get()) }
     single { CardGroupBehaviorRepository(get()) }
     single { CardGroupRepository(get(), get()) }
+    // 卡池（文件资源）同属卡组域 ⇒ card_pool 的快照能力由本服务导出
     single { CardGroupService(get(), get()) }
+    // T-TG-010：卡组级联删（关联树 + manager + 卡组维度项）+ 其快照/恢复
+    single { CardGroupCascadeDeleteService(get(), get(), get(), get()) }
     // T-TG-015：用途预设（锚 + 维度项单表）+ 卡组增量项
     single { StrategyPresetRepository(get()) }
     single { StrategyPresetService(get(), get(), get()) }
     // T-TG-015：维度项合并规则（纯函数）+「当前卡组」单点解析
     single { DimensionItemResolver() }
     single { CurrentDeckContext(get()) }
-    // T-011：delete(card_group) 级联删除事务下沉（Provider 层不再持 tx）
-    single { CardGroupCascadeDeleteService(get(), get(), get()) }
     single { CardPurposeRepository(get()) }
+    // T-TG-010：标记定义的删除 / 恢复（业务归域）
+    single { PurposeTagService(get(), get()) }
     single { HsCardRepository(get()) }
 
     single { ComboPlanDefinitionRepository(get()) }
+    // T-TG-010：combo 的删除 / 恢复（顺带补上原本缺失的服务层）
+    single { ComboPlanService(get()) }
     single { TemplateGroupRepository(get()) }
     single { OrthogonalTemplateRepository(get()) }
-    // T-010：delete 快照落 delete_snapshot 表 + restore_snapshot 一键恢复
+    // T-TG-021：快照域唯一入口（表存取 + 删除编排）—— 操作值由调用方传入，业务归各域
     single { DeleteSnapshotRepository(get()) }
-    single {
-        DeleteSnapshotService(
-            get(),
-            get(),
-            get(),
-            get(),
-            get(),
-            get(),
-            get(),
-            get()
-        )
-    }
+    single { SnapshotStore(get(), get()) }
 }
 
 
