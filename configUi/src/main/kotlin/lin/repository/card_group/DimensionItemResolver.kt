@@ -11,7 +11,8 @@ import lin.myLog
  * - `SqliteTreeConfigProvider`：算「某棵用途树保留哪些 tag」→ **按 tag 收窄 `bindingIds`**；
  * - `SqlitePurposeTagIntentRuleProvider`：算「某用途最终生效的时序规则」。
  *
- * 语义见 `cross-dialogue/Q-TG-003-use-preset-final.md` §3.3 / §3.4。
+ * 语义见 `cross-dialogue/Q-TG-003-use-preset-final.md` §3.3 / §3.4；
+ * **卡组专属树（归属即拥有、不走白名单）**见 `cross-dialogue/Q-TG-004-deck-private-purpose-tree.md`（形态 D）。
  */
 class DimensionItemResolver {
 
@@ -48,21 +49,35 @@ class DimensionItemResolver {
     )
 
     /**
-     * 某棵树**收窄后的用途 tag 列表**（即新的 `bindingIds`）。
+     * 某棵**全局共享树**的收窄后的用途 tag 列表（即新的 `bindingIds`）。
      *
      * 逐 tag 判定：有预设白名单而该 tag 未声明 ⇒ 禁；白名单不含本树 ⇒ 禁；消费方已排除 ⇒ 禁。
      * **返回空列表 ⇒ 整棵树不输出**（调用方负责丢弃）。
      */
     fun narrowTreeTags(treeId: String, treeTags: List<String>, selection: TreeSelection): List<String> =
-        treeTags.filter { tag -> keepTag(treeId, tag, selection) }
-
-    private fun keepTag(treeId: String, tag: String, selection: TreeSelection): Boolean {
-        selection.presetKeepByTag?.let { presetKeep ->
-            val whitelist = presetKeep[tag] ?: return false // 该用途未声明 ⇒ 全禁
-            if (treeId !in whitelist) return false
+        treeTags.filter { tag ->
+            inPresetWhitelist(treeId, tag, selection) && !consumerExcluded(treeId, tag, selection)
         }
-        return treeId !in (selection.consumerExcludeByTag[tag] ?: emptySet())
+
+    /**
+     * 某棵**卡组专属树**（`manager_id` = 当前卡组）的收窄。
+     *
+     * 归属即拥有 ⇒ **不受预设白名单约束**（预设管的是公共资源怎么用，私有资源天然属于本卡组），
+     * 但**仍受消费方增量项约束** —— 保留"本卡组再减"这个微调入口（需要时仍可把它排除）。
+     */
+    fun narrowOwnTreeTags(treeId: String, treeTags: List<String>, selection: TreeSelection): List<String> =
+        treeTags.filter { tag -> !consumerExcluded(treeId, tag, selection) }
+
+    /** 预设白名单判定：无白名单（未引用预设）⇒ 放行；否则必须被该用途显式声明。 */
+    private fun inPresetWhitelist(treeId: String, tag: String, selection: TreeSelection): Boolean {
+        val presetKeep = selection.presetKeepByTag ?: return true
+        val whitelist = presetKeep[tag] ?: return false // 该用途未声明 ⇒ 全禁
+        return treeId in whitelist
     }
+
+    /** 消费方增量项判定：本卡组额外排除的树，两类树（全局 / 专属）都受它约束。 */
+    private fun consumerExcluded(treeId: String, tag: String, selection: TreeSelection): Boolean =
+        treeId in (selection.consumerExcludeByTag[tag] ?: emptySet())
 
     /**
      * **被禁用的用途清单** = 「库中已有用途树」的 tag − 预设已声明的 tag。

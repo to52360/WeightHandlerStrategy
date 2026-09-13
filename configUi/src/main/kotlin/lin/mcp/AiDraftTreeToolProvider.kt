@@ -47,32 +47,45 @@ class AiDraftTreeToolProvider(
                                - 克隆已有树：提供 cloneFrom（已有配置 id），叶子参数预填，可直接 commit 或用 put_draft_leaf 覆盖差异节点
                            """
         ) { request ->
-            // 提前校验 GROUP 绑定的引用完整性，避免填入全部叶子后才在 commit 时被拒
-            if (request.bindingType == EvaluatorTreeBindingType.GROUP) {
-                val managerId = request.managerId
-                    ?: return@typedTool mcpError("bindingType=GROUP 时 managerId 必填（取值来自 card_group(action=LIST) 或 save_card_group 响应的 managerId）")
-                val allManagers = cardGroupService.loadAll(onlyEnabled = true)
-                val manager = allManagers.firstOrNull { it.cardGroupManagerId == managerId }
-                    ?: return@typedTool mcpError("卡组方案不存在或未启用: $managerId。可用 card_group(action=LIST) 查看现有方案。")
-                val validBindingIds = manager.bindings.map { it.id }.toSet()
-                val invalidIds = request.bindingIds.filter { it !in validBindingIds }
-                if (invalidIds.isNotEmpty()) {
-                    return@typedTool mcpError(
-                        "以下 bindingIds 不属于卡组方案 \"${manager.name}\": $invalidIds。" +
-                                "该方案的有效绑定条目为: ${manager.bindings.map { "${it.name}(${it.id})" }}"
-                    )
+            // 归属校验（Q-TG-004 形态 D 配套 P2）：managerId 非空时必须指向**存在的卡组** ——
+            // 悬空归属的用途树在引擎侧"对任何卡组都不输出"（只在日志 warn）⇒ 写入侧直接拒绝，别制造静默失效。
+            val managerId = request.managerId?.takeIf { it.isNotBlank() }
+            if (managerId == null) {
+                if (request.bindingType == EvaluatorTreeBindingType.GROUP) {
+                    return@typedTool mcpError("bindingType=GROUP 时 managerId 必填（取值来自 card_group(action=LIST) 或 save_card_group 响应的 managerId）")
                 }
-                // Q-003：谓词组（条件定义成员）暂不支持绑定评估树——GROUP 绑定按静态成员解析，
-                // 谓词组解析到空成员会静默不生效，故保存侧直接拦截（改绑静态组或换绑定类型）。
-                val predicateIds = manager.bindings
-                    .filter { it.membership is GroupMembership.Predicate }
-                    .map { it.id }
-                    .toSet().intersect(request.bindingIds)
-                if (predicateIds.isNotEmpty()) {
-                    return@typedTool mcpError(
-                        "以下分组是谓词组（由条件树定义成员），暂不支持绑定评估树，绑定后不会对任何卡生效: " +
-                                predicateIds.joinToString() + "。请改绑静态组（成员为显式卡列表的分组）。"
+            } else {
+                val managers = cardGroupService.loadAll(onlyEnabled = false)
+                val manager = managers.firstOrNull { it.cardGroupManagerId == managerId }
+                    ?: return@typedTool mcpError(
+                        "managerId 指向的卡组不存在: $managerId（归属悬空的树对任何卡组都不会生效）。" +
+                                "可用卡组: " + managers.joinToString { "${it.name}(${it.cardGroupManagerId})" }
                     )
+                // 以下为 GROUP 绑定专属校验：提前拦掉引用不完整，避免填入全部叶子后才在 commit 时被拒
+                if (request.bindingType == EvaluatorTreeBindingType.GROUP) {
+                    if (!manager.enabled) {
+                        return@typedTool mcpError("卡组方案未启用: $managerId。可用 card_group(action=LIST) 查看现有方案。")
+                    }
+                    val validBindingIds = manager.bindings.map { it.id }.toSet()
+                    val invalidIds = request.bindingIds.filter { it !in validBindingIds }
+                    if (invalidIds.isNotEmpty()) {
+                        return@typedTool mcpError(
+                            "以下 bindingIds 不属于卡组方案 \"${manager.name}\": $invalidIds。" +
+                                    "该方案的有效绑定条目为: ${manager.bindings.map { "${it.name}(${it.id})" }}"
+                        )
+                    }
+                    // Q-003：谓词组（条件定义成员）暂不支持绑定评估树——GROUP 绑定按静态成员解析，
+                    // 谓词组解析到空成员会静默不生效，故保存侧直接拦截（改绑静态组或换绑定类型）。
+                    val predicateIds = manager.bindings
+                        .filter { it.membership is GroupMembership.Predicate }
+                        .map { it.id }
+                        .toSet().intersect(request.bindingIds)
+                    if (predicateIds.isNotEmpty()) {
+                        return@typedTool mcpError(
+                            "以下分组是谓词组（由条件树定义成员），暂不支持绑定评估树，绑定后不会对任何卡生效: " +
+                                    predicateIds.joinToString() + "。请改绑静态组（成员为显式卡列表的分组）。"
+                        )
+                    }
                 }
             }
             val result = draftTreeService.createDraft(request)

@@ -133,7 +133,8 @@ val mcpModule = module {
         AiTreeConfigToolProvider(
             get<TreeConfigService>(),
             get<ComboPlanDefinitionRepository>(),
-            get<AiConfigGenerationService>()
+            get<AiConfigGenerationService>(),
+            get<CardGroupService>()
         )
     } bind McpToolProvider::class
     single {

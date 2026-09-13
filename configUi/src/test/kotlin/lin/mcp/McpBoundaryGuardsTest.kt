@@ -91,4 +91,31 @@ class McpBoundaryGuardsTest : McpTestEnv() {
         val okBody = mapper.readValue(ok.contentJson, Map::class.java) as Map<String, Any?>
         assertEquals("T-009：更新应复用同一 managerId", realId, okBody["managerId"])
     }
+
+    /**
+     * Q-TG-004（形态 D 配套写侧校验）：`managerId` 是树的**归属卡组**，必须指向真实卡组 ——
+     * 悬空归属的树在引擎侧"对任何卡组都不生效"，只在日志 warn ⇒ 在写入边界直接拒绝。
+     */
+    @Test
+    fun createDraftTree_rejectsUnknownManagerId() {
+        val rootJson = """{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}"""
+
+        // 归属卡组不存在 ⇒ 拒绝
+        val bad = call(
+            "create_draft_tree",
+            """{"name":"q004_悬空归属","bindingType":"PURPOSE_TAG","bindingIds":["CLEAN"],"root":$rootJson,"managerId":"zzz_no_such_deck"}"""
+        )
+        assertTrue("Q-TG-004：不存在的归属卡组应被拒绝：${bad.contentJson}", bad.isError)
+        assertTrue(
+            "错误信息应说明卡组不存在：${bad.contentJson}",
+            bad.contentJson.contains("不存在")
+        )
+
+        // 不填 managerId ⇒ 全局共享树，应通过（回归：新校验不得误伤非 GROUP 绑定）
+        val ok = call(
+            "create_draft_tree",
+            """{"name":"q004_全局树","bindingType":"PURPOSE_TAG","bindingIds":["CLEAN"],"root":$rootJson}"""
+        )
+        assertFalse("不填 managerId（全局共享树）应通过：${ok.contentJson}", ok.isError)
+    }
 }

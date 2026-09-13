@@ -95,8 +95,14 @@ class TreeConfigService(
         remove = { entityId -> delete(entityId) }
     )
 
-    /** 按快照内容写回（原 id 保留）；原 id 已被占用则拒绝。 */
-    fun restoreFromSnapshot(id: String, payload: String): RestoreResult {
+    /**
+     * 按快照内容写回（原 id 保留）；两类冲突拒绝：**原 id 已被占用** / **快照的归属卡组已不存在**
+     * （T-TG-023：防造出"悬空归属" —— 该树此后对任何卡组都不输出，只在日志留一条 warn）。
+     *
+     * @param deckExists 归属卡组存在性判定，**由调用方注入**：本服务不认识"卡组"域 ⇒ 依赖反转，
+     *   不引入跨域依赖（判定方是恢复路由所在的 MCP 适配层，它本就消费卡组域）。
+     */
+    fun restoreFromSnapshot(id: String, payload: String, deckExists: (String) -> Boolean): RestoreResult {
         findById(id)?.let { occupied ->
             return RestoreResult(
                 "恢复失败：原 id=$id 已被现有数据占用（现有名称: ${occupied.first.name}）。请先删除/改名现有数据再恢复",
@@ -104,6 +110,14 @@ class TreeConfigService(
             )
         }
         val p = SnapshotPayloads.treeMapper.readValue(payload, EvaluatorTreeSnapshot::class.java)
+        val managerId = p.managerId?.takeIf { it.isNotBlank() }
+        if (managerId != null && !deckExists(managerId)) {
+            return RestoreResult(
+                "恢复失败：快照的归属卡组已不存在（managerId=$managerId），直接恢复会造出**悬空归属**" +
+                        "（该树对任何卡组都不会生效）。请先 restore_snapshot 恢复该卡组后再恢复此树。",
+                isError = true
+            )
+        }
         saveConfig(
             name = p.name,
             config = EvaluatorTreeConfig(

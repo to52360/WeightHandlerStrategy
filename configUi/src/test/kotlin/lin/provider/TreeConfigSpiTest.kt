@@ -29,6 +29,10 @@ class TreeConfigSpiTest : McpTestEnv() {
     private val testBindingId = "TG_TREE_SPI_BINDING"
     private val testTreeId = "TG_TREE_SPI_GROUP_TREE"
     private val testTagTreeId = "TG_TREE_SPI_TAG_TREE"
+    private val testGlobalTreeId = "TG_Q004_GLOBAL_TREE"
+    private val testOwnTreeId = "TG_Q004_OWN_TREE"
+    private val testDanglingTreeId = "TG_Q004_DANGLING_TREE"
+    private val testPresetId = "TG_Q004_PRESET"
 
     /** 用内置用途标签（保证已在 `purpose_tag_def` 中 ⇒ 在 `tagPolicy.enabledTags` 内）。 */
     private val testPresetTag = "CLEAN"
@@ -37,6 +41,10 @@ class TreeConfigSpiTest : McpTestEnv() {
     fun cleanUp() {
         treeRepository.deleteById(testTreeId)
         treeRepository.deleteById(testTagTreeId)
+        treeRepository.deleteById(testGlobalTreeId)
+        treeRepository.deleteById(testOwnTreeId)
+        treeRepository.deleteById(testDanglingTreeId)
+        GlobalContext.get().get<StrategyPresetRepository>().deletePreset(testPresetId)
         groupRepository.deleteManager(testManagerId)
     }
 
@@ -167,6 +175,65 @@ class TreeConfigSpiTest : McpTestEnv() {
         assertNull(
             "T-TG-020：悬空引用 ⇒ 全禁（不得回落成兜底全开）",
             provider().findById(testTagTreeId)
+        )
+    }
+
+    /**
+     * Q-TG-004（形态 D）：`PURPOSE_TAG` 树的 `manager_id` = **归属卡组**。
+     *
+     * - 归属**本卡组** ⇒ 可见，且**跳过预设白名单**（归属即拥有；预设管的是公共资源怎么用）
+     * - 归属**他组 / 不存在的卡组** ⇒ 整棵不输出
+     *
+     * 对照组：同用途的**无归属（全局共享）树**被"该用途声明零棵树"的空集白名单裁掉 ⇒ 证明白名单确实在起作用。
+     */
+    @Test
+    fun `归属本卡组的用途树跳过预设白名单而他组与悬空归属不输出`() {
+        assertTrue(
+            "前置：$testPresetTag 必须是启用标签",
+            testPresetTag in PurposeTagTreeBindingPolicy(GlobalContext.get().get()).enabledTags.map { it.value }
+        )
+        val presetRepository = GlobalContext.get().get<StrategyPresetRepository>()
+        groupRepository.saveManager(
+            lin.repository.card_group.CardManagerEntity(
+                id = testManagerId, name = testManagerId,
+                sourceFile = "$testManagerId.cardgroup", enabled = true
+            )
+        )
+        // 三棵树绑同一用途：全局共享 / 本卡组专属 / 悬空归属
+        savePurposeTagTree(testGlobalTreeId, managerId = null)
+        savePurposeTagTree(testOwnTreeId, managerId = testManagerId)
+        savePurposeTagTree(testDanglingTreeId, managerId = "TG_Q004_NO_SUCH_DECK")
+
+        // 预设对该用途声明"保留零棵树"（空集）⇒ 全局共享树该被裁掉
+        presetRepository.savePreset(
+            lin.repository.card_group.StrategyPresetEntity(id = testPresetId, name = "q004", description = null, createdAt = null)
+        )
+        presetRepository.replaceTreeSelections(
+            lin.repository.card_group.DimensionScope.PRESET, testPresetId, mapOf(testPresetTag to emptyList())
+        )
+        groupRepository.updateManagerPreset(testManagerId, testPresetId)
+        assertEquals(
+            "前置：本用例的卡组应就是「当前卡组」",
+            testManagerId,
+            CurrentDeckContext(groupRepository).current()?.id
+        )
+
+        assertNull("全局共享树应被空集白名单裁掉（证明白名单在起作用）", provider().findById(testGlobalTreeId))
+        assertNotNull("Q-TG-004：归属本卡组的专属树不受白名单约束", provider().findById(testOwnTreeId))
+        assertNull("Q-TG-004：悬空归属的用途树应整棵不输出（不静默放行）", provider().findById(testDanglingTreeId))
+    }
+
+    private fun savePurposeTagTree(treeId: String, managerId: String?) {
+        treeRepository.save(
+            lin.repository.tree_config.TreeConfigEntity(
+                id = treeId,
+                bindingType = EvaluatorTreeBindingType.PURPOSE_TAG.name,
+                bindingIds = testPresetTag,
+                name = treeId,
+                configData = ROOT_JSON,
+                enabled = true,
+                managerId = managerId
+            )
         )
     }
 

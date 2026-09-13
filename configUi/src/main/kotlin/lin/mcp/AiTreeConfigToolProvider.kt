@@ -2,6 +2,7 @@ package lin.mcp
 
 import lin.ai.config.AiConfigGenerationService
 import lin.mcp.action.*
+import lin.repository.card_group.CardGroupService
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.service.TreeConfigService
 
@@ -14,7 +15,9 @@ import lin.ui.service.TreeConfigService
 class AiTreeConfigToolProvider(
     private val treeConfigService: TreeConfigService,
     private val comboPlanDefinitionRepository: ComboPlanDefinitionRepository,
-    private val aiConfigGenerationService: AiConfigGenerationService
+    private val aiConfigGenerationService: AiConfigGenerationService,
+    /** T-TG-023：恢复路由的归属卡组存在性判定（本 Provider 是唯一消费卡组域的恢复入口）。 */
+    private val cardGroupService: CardGroupService
 ) : McpToolProvider {
 
     override val actions: List<ResourceActions> = listOf(
@@ -31,7 +34,10 @@ class AiTreeConfigToolProvider(
                     ops = treeConfigService.deleteOps()
                 ),
                 RestoreCapability { entityId, payload ->
-                    treeConfigService.restoreFromSnapshot(entityId, payload)
+                    // T-TG-023：归属卡组已不存在 ⇒ 恢复被拒（否则造出"悬空归属"，该树对任何卡组都不生效）
+                    treeConfigService.restoreFromSnapshot(entityId, payload) { managerId ->
+                        cardGroupService.loadAll(onlyEnabled = false).any { it.cardGroupManagerId == managerId }
+                    }
                 }
             )
         ),

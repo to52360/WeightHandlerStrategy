@@ -59,6 +59,33 @@ class DimensionItemResolverTest {
         assertEquals(emptyList<String>(), resolver.narrowTreeTags("treeB", listOf("CLEAN"), sel))
     }
 
+    // ─────────────────── 树：卡组专属（Q-TG-004 形态 D：归属即拥有） ───────────────────
+
+    @Test
+    fun `卡组专属树不受预设白名单约束`() {
+        val declaredOnlyA = selection(presetKeep = mapOf("CLEAN" to setOf("treeA")))
+        // 专属树既没进白名单、其用途也可能没被声明 —— 归属即拥有 ⇒ 照旧保留
+        assertEquals(listOf("CLEAN"), resolver.narrowOwnTreeTags("own", listOf("CLEAN"), declaredOnlyA))
+        assertEquals(listOf("GREED"), resolver.narrowOwnTreeTags("own", listOf("GREED"), declaredOnlyA))
+        // 空预设（"全禁"语义）同样不作用于专属树：预设管的是公共（无归属）资源
+        assertEquals(
+            listOf("CLEAN"),
+            resolver.narrowOwnTreeTags("own", listOf("CLEAN"), selection(presetKeep = emptyMap()))
+        )
+        // 对照：同一选择下，全局共享树被裁 ⇒ 证明"豁免"是专属树独有
+        assertEquals(
+            emptyList<String>(),
+            resolver.narrowTreeTags("own", listOf("CLEAN"), declaredOnlyA)
+        )
+    }
+
+    @Test
+    fun `卡组专属树仍受消费方增量项约束`() {
+        val sel = selection(presetKeep = null, consumerExclude = mapOf("CLEAN" to setOf("own")))
+        assertEquals("本卡组可把自己的专属树再排除（微调入口保留）", emptyList<String>(), resolver.narrowOwnTreeTags("own", listOf("CLEAN"), sel))
+        assertEquals(listOf("CLEAN"), resolver.narrowOwnTreeTags("other", listOf("CLEAN"), sel))
+    }
+
     @Test
     fun `多用途树按用途收窄而不是整棵误伤`() {
         // 树绑 [CLEAN, DRAW_CARD]；预设只给 CLEAN 选了它，DRAW_CARD 未声明 ⇒ 保留 CLEAN、剔掉 DRAW_CARD

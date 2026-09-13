@@ -348,4 +348,56 @@ class DeleteSnapshotRestoreTest : McpTestEnv() {
             presetId?.let { presetRepository.deletePreset(it) } // 幂等：不存在时返回 null
         }
     }
+
+    // ─────────────────── T-TG-023：树快照的归属卡组不得悬空 ───────────────────
+
+    /**
+     * 可达路径：树**先**被单独删（落快照）⇒ 卡组**再**被删（级联删树时该树已不在库中，这条快照留了下来）
+     * ⇒ 恢复该树快照时，快照里的 `managerId` 已指向不存在的卡组。
+     *
+     * 期望：**拒绝恢复**（而不是造出"悬空归属" —— 该树此后对任何卡组都不输出，只在日志留 warn）。
+     */
+    @Test
+    fun `树快照的归属卡组已不存在时拒绝恢复`() {
+        val groupRepository = GlobalContext.get().get<CardGroupRepository>()
+        val treeRepository = GlobalContext.get().get<lin.repository.tree_config.TreeConfigRepository>()
+        val deckId = "T023_DECK"
+        val tid = "T023_TREE"
+        try {
+            groupRepository.saveManager(
+                lin.repository.card_group.CardManagerEntity(
+                    id = deckId, name = deckId, sourceFile = "$deckId.cardgroup", enabled = true
+                )
+            )
+            treeRepository.save(
+                lin.repository.tree_config.TreeConfigEntity(
+                    id = tid,
+                    bindingType = lin.rule.tree.EvaluatorTreeBindingType.PURPOSE_TAG.name,
+                    bindingIds = "CLEAN",
+                    name = tid,
+                    configData = """{"root":{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}}""",
+                    enabled = true,
+                    managerId = deckId
+                )
+            )
+
+            val del = call("delete", """{"resource":"evaluator_tree","id":"$tid"}""")
+            assertFalse("delete(evaluator_tree) 应成功: ${del.contentJson}", del.isError)
+            val snapshotId = mapper.readTree(del.contentJson)["snapshotId"].asText()
+
+            // 卡组被删（级联删树时该树已不在库中 ⇒ 这条树快照留了下来，归属随之悬空）
+            groupRepository.deleteManager(deckId)
+
+            val restore = call("restore_snapshot", """{"snapshotId":"$snapshotId"}""")
+            assertTrue("T-TG-023：归属卡组不存在时应拒绝恢复: ${restore.contentJson}", restore.isError)
+            assertTrue(
+                "拒绝文案应点出缺失的归属卡组: ${restore.contentJson}",
+                restore.contentJson.contains(deckId)
+            )
+            assertNull("拒绝发生在写库前，树不应被恢复", treeRepository.findById(tid))
+        } finally {
+            treeRepository.deleteById(tid)
+            groupRepository.deleteManager(deckId)
+        }
+    }
 }

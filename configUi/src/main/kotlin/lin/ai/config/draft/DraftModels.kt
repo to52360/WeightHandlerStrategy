@@ -35,8 +35,11 @@ data class CreateDraftRequest(
     @field:JsonPropertyDescription("覆盖已有配置的ID")
     val existingId: String? = null,
     @field:JsonPropertyDescription(
-        """所属卡组 manager 的 id（GROUP 绑定时【必填】）。
-        取值来自 list_card_groups 返回的 id，或 save_card_group 响应的 managerId。注意它不同于 bindingIds 里的绑定条目 id。PURPOSE_TAG 或 CARD 绑定时留空。"""
+        """所属卡组 manager 的 id —— 即这棵树的**归属卡组**。
+        - GROUP 绑定时【必填】，且必须是已启用卡组。取值来自 list_card_groups 返回的 id，或 save_card_group 响应的 managerId。注意它不同于 bindingIds 里的绑定条目 id。
+        - PURPOSE_TAG 绑定时可选：填了 ⇒ 该用途树成为**该卡组私有树**（只对该卡组可见、且无需在用途预设里声明即生效）；不填 ⇒ 全局共享树（受用途预设白名单取舍）。
+        - CARD 绑定时留空（不参与归属判定）。
+        ⚠️ 归属卡组必须**存在**，否则该树对任何卡组都不会生效。"""
     )
     val managerId: String? = null,
     @field:JsonPropertyDescription("克隆已有评估树的 id（由 evaluator_tree(action=LIST) 获取）。与 root 互斥：提供 cloneFrom 时 root 留空。非空时以该配置为蓝本创建草稿，叶子节点参数预填，missingNodeIds 为空，可直接 commit 或用 put_draft_leaf 覆盖差异节点。")

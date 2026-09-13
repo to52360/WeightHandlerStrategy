@@ -36,7 +36,7 @@ class RestoreSnapshotToolProvider(
             description = """一键恢复此前被 delete 删除的资源（原 id 保留，引用不断）。传入 delete 响应里的 snapshotId（或 list(resource=delete_snapshot) 的 snapshotId）。
 按原 id 写回：combo_plan / aura_boost / evaluator_tree / condition_tree / purpose_tag / strategy_preset 重建单条（预设含树白名单 + 时序两个维度项），card_group 级联重建 manager+bindings+关联树+卡组维度项+预设引用，card_pool 重建 .cardgroup 文件。
 恢复前会做冲突检查：原 id 已被现有数据占用时拒绝（不覆盖、不改名），需先删除/改名现有数据再恢复。
-另：恢复 card_group 时若快照引用的用途预设已不存在，也会拒绝（先恢复该预设，避免造出悬空引用）。"""
+另：恢复时会校验快照里的引用是否仍存在 —— card_group 快照引用的用途预设已不存在、或 evaluator_tree 快照的归属卡组已不存在时拒绝恢复（先恢复被引用者，避免造出悬空引用）。"""
         ) { input ->
             if (input.snapshotId.isBlank()) {
                 return@typedTool mcpError("snapshotId 不能为空（来自 delete 响应，或 list(resource=delete_snapshot)）")
