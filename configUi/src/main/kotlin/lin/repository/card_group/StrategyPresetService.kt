@@ -154,20 +154,25 @@ class StrategyPresetService(
         )
     }
 
-    fun listPresets(): List<PresetSummary> = presetRepository.findAllPresets().map { preset ->
-        val trees = presetRepository.findTreeSelections(DimensionScope.PRESET, preset.id)
-        PresetSummary(
-            preset = preset,
-            treeItemCount = trees.values.sumOf { it.size },
-            timingCount = presetRepository.findTimings(DimensionScope.PRESET, preset.id).size,
-            referencedBy = findReferences(preset.id)
-        )
+    fun listPresets(): List<PresetSummary> {
+        val allManagers = groupRepository.findManagers()
+        val refsByPreset = allManagers
+            .filter { !it.presetId.isNullOrBlank() }
+            .groupBy({ it.presetId!! }, { PresetReference(it.id, it.name) })
+        return presetRepository.findAllPresets().map { preset ->
+            val trees = presetRepository.findTreeSelections(DimensionScope.PRESET, preset.id)
+            PresetSummary(
+                preset = preset,
+                treeItemCount = trees.values.sumOf { it.size },
+                timingCount = presetRepository.findTimings(DimensionScope.PRESET, preset.id).size,
+                referencedBy = refsByPreset[preset.id].orEmpty()
+            )
+        }
     }
 
     /** 引用某预设的卡组（用于识别"卡组专用预设"）。 */
     fun findReferences(presetId: String): List<PresetReference> =
-        groupRepository.findManagers()
-            .filter { it.presetId == presetId }
+        groupRepository.findManagersByPresetId(presetId)
             .map { PresetReference(it.id, it.name) }
 
     fun deletePreset(presetId: String): StrategyPresetEntity? {

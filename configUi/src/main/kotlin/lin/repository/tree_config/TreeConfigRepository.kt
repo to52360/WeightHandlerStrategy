@@ -175,4 +175,19 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
             return jdbcTemplate.query(sql, rowMapper)
         }
     }
+
+    /**
+     * 查仅全局共享（manager_id IS NULL）且匹配指定 bindingType 的树配置列表（摘要级，不解析 AST 与叶子表）。
+     *
+     * @param bindingType 绑定类型（如 PURPOSE_TAG）
+     * @param enabledOnly 是否仅查启用的配置
+     */
+    fun findGlobalByBindingType(bindingType: String, enabledOnly: Boolean = false): List<TreeConfigEntity> {
+        val sql = if (enabledOnly) {
+            "SELECT * FROM tree_config WHERE manager_id IS NULL AND binding_type = ? AND enabled = 1 ORDER BY name COLLATE NOCASE ASC"
+        } else {
+            "SELECT * FROM tree_config WHERE manager_id IS NULL AND binding_type = ? ORDER BY name COLLATE NOCASE ASC"
+        }
+        return jdbcTemplate.query(sql, rowMapper, bindingType)
+    }
 }

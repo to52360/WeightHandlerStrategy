@@ -236,6 +236,31 @@ class TreeConfigService(
             entity to parseConfig(entity)
         }
     }
+
+    /**
+     * 查仅全局共享（manager_id IS NULL）且匹配指定 bindingType 的树摘要（不解析 AST 与叶子表）。
+     *
+     * 供预设工作台（T-TG-017）作为候选树来源。
+     */
+    fun findGlobalSummaries(
+        bindingType: EvaluatorTreeBindingType = EvaluatorTreeBindingType.PURPOSE_TAG,
+        enabledOnly: Boolean = false
+    ): List<TreeConfigEntity> =
+        repository.findGlobalByBindingType(bindingType.name, enabledOnly)
+
+    /**
+     * 库中全局生效的用途标签全集（仅统计 manager_id IS NULL 且 enabled=1 的 PURPOSE_TAG 树）。
+     *
+     * 供策略预设（MCP 与 UI 看板）计算「被禁用用途清单」：
+     * disabledPurposes = purposeTagUniverse() - declaredTags
+     *
+     * ⚠️ 铁律（D-TG-015）：卡组专属用途树归属即拥有，跳过预设白名单，绝不能算进本全集，
+     * 否则未声明时会导致预设禁用看板误报。
+     */
+    fun purposeTagUniverse(): Set<String> =
+        findGlobalSummaries(EvaluatorTreeBindingType.PURPOSE_TAG, enabledOnly = true)
+            .flatMap { it.bindingIdList }
+            .toSet()
 }
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)

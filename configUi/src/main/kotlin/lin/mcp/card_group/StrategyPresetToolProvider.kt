@@ -11,6 +11,7 @@ import lin.repository.card_group.TimingOverride
 import lin.repository.card_purpose.PurposeTagRuleRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
+import lin.ui.service.TreeConfigService
 
 /**
  * 用途预设域 MCP 工具提供者（T-TG-015）—— 方案见
@@ -132,7 +133,9 @@ class StrategyPresetToolProvider(
     /** 前置校验用：树必须存在、必须是 PURPOSE_TAG 绑定、且确实绑了该用途。 */
     private val treeRepository: TreeConfigRepository,
     /** 「被禁用的用途清单」计算（纯规则）。 */
-    private val resolver: DimensionItemResolver
+    private val resolver: DimensionItemResolver,
+    /** 全局用途树候选与用途全集口径（T-TG-024）。 */
+    private val treeConfigService: TreeConfigService
 ) : McpToolProvider {
 
     override val actions: List<ResourceActions> = listOf(
@@ -309,11 +312,8 @@ class StrategyPresetToolProvider(
         return resolver.disabledPurposes(universe, declaredTags)
     }
 
-    /** 库中已被用途树绑定的用途全集（已启用的 `PURPOSE_TAG` 树）。 */
-    private fun purposeTagUniverse(): Set<String> = treeRepository.findAll()
-        .filter { it.enabled && it.bindingType == EvaluatorTreeBindingType.PURPOSE_TAG.name }
-        .flatMap { it.bindingIdList }
-        .toSet()
+    /** 库中已被用途树绑定的用途全集（仅已启用的全局 `PURPOSE_TAG` 树，见 D-TG-015 / T-TG-024）。 */
+    private fun purposeTagUniverse(): Set<String> = treeConfigService.purposeTagUniverse()
 
     // ── 能力实现（strategy_preset 的 get / list）：具名私有函数，行为可点名 ──
 
@@ -342,10 +342,7 @@ class StrategyPresetToolProvider(
     private fun presetDetail(id: String): McpToolResult {
         val detail = service.findDetail(id.trim())
             ?: return mcpError("预设不存在: $id")
-        val universe = treeRepository.findAll()
-            .filter { it.enabled && it.bindingType == EvaluatorTreeBindingType.PURPOSE_TAG.name }
-            .flatMap { it.bindingIdList }
-            .toSet()
+        val universe = purposeTagUniverse()
         return mcpSuccess(
             mapOf(
                 "id" to detail.preset.id,

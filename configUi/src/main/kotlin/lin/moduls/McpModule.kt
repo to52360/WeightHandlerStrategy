@@ -126,7 +126,8 @@ val mcpModule = module {
             get<StrategyPresetService>(),
             get<PurposeTagRuleRepository>(),
             get<TreeConfigRepository>(),
-            get<DimensionItemResolver>()
+            get<DimensionItemResolver>(),
+            get<TreeConfigService>()
         )
     } bind McpToolProvider::class
     single {

@@ -46,6 +46,22 @@ class MainShellView : BorderPane(), KoinComponent {
             style = "-fx-font-size: 18px; -fx-text-fill: #666;"
         }, null)
 
+        // 全局导航器接入（支持跨模块跳转并携带上下文）
+        val navigator = getKoin().getOrNull<WorkbenchNavigator>()
+        navigator?.onNavigate = { title, context ->
+            val targetModule = modules.find { it.title == title }
+            if (targetModule == null) {
+                // 跳转目标不存在属于接线错误（魔法字符串/未注册扩展），必须显式告警而非静默吞掉
+                println("[MainShellView] 导航目标不存在: \"$title\"（请检查跳转方是否引用了扩展的 TITLE 常量）")
+            } else {
+                val targetBtn = navBar.children.filterIsInstance<Button>().find { it.text == title }
+                val workbench = targetModule.createWorkbench()
+                switchWorkbench(workbench, targetBtn)
+                // 上下文解释权归目标扩展（applyContext），壳层不感知具体工作台类型
+                targetModule.applyContext(workbench, context)
+            }
+        }
+
         // 顶部卡组选择器
         this.top = createManagerSelector()
 

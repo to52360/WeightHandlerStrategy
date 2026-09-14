@@ -4,14 +4,17 @@ import javafx.beans.property.SimpleObjectProperty
 import lin.bean.usePlan.ConditionalStageOverride
 import lin.dao.CardGroupJsonParser
 import lin.domain.MatchState
-import lin.repository.card_group.CardGroupService
-import lin.repository.card_group.CardManagerEntity
-import lin.repository.card_group.ManagerSaveCommand
+import lin.repository.card_group.*
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.GroupMembership
+import lin.ui.service.PresetCatalogLoader
 import java.util.*
 
-class WorkbenchStore(private val service: CardGroupService) {
+class WorkbenchStore(
+    private val service: CardGroupService,
+    private val presetService: StrategyPresetService,
+    private val catalogLoader: PresetCatalogLoader
+) {
 
     val stateProperty = SimpleObjectProperty(WorkbenchState())
     var state: WorkbenchState
@@ -29,6 +32,17 @@ class WorkbenchStore(private val service: CardGroupService) {
     fun loadInitialData() {
         val managers = service.loadAllManagers().map { CardManagerItem(it) }
         dispatch(WorkbenchActions.setManagers(managers))
+
+        // T-TG-024: 预设域目录单点装配（列表 + 候选树 + 时序规则 + 用途全集）
+        val catalog = catalogLoader.load()
+        dispatch(
+            WorkbenchActions.setPresetsAndUniverse(
+                catalog.presets,
+                catalog.candidateTrees,
+                catalog.timingRules,
+                catalog.purposeUniverse
+            )
+        )
     }
 
     fun selectManager(item: CardManagerItem?) {
@@ -37,13 +51,16 @@ class WorkbenchStore(private val service: CardGroupService) {
             return
         }
 
+        val presetDetail = item.entity?.presetId?.let { presetService.findDetail(it) }
+        val deckDelta = item.entity?.id?.let { presetService.findDeckDelta(it) }
+
         if (item.isDraft) {
             // 如果是草稿，不用查 DB
-            dispatch(WorkbenchActions.selectManager(item, emptyList()))
+            dispatch(WorkbenchActions.selectManager(item, emptyList(), presetDetail, deckDelta))
         } else {
             // 查 DB 获取 Bindings
             val bindings = service.loadBindings(item.entity!!.id)
-            dispatch(WorkbenchActions.selectManager(item, bindings))
+            dispatch(WorkbenchActions.selectManager(item, bindings, presetDetail, deckDelta))
         }
     }
 
@@ -60,6 +77,61 @@ class WorkbenchStore(private val service: CardGroupService) {
         selectManager(newItem)
     }
 
+    /**
+     * 卡组切换/关联策略预设（T-TG-018）。
+     * [presetId] null = 不用预设
+     */
+    fun setCardGroupPreset(presetId: String?): String? {
+        val currentItem = state.selectedManagerItem ?: return "未选择卡组"
+        val targetPresetId = presetId?.takeIf { it.isNotBlank() }
+
+        if (currentItem.isDraft || currentItem.entity == null) {
+            // 草稿卡组，只暂存
+            val detail = targetPresetId?.let { presetService.findDetail(it) }
+            dispatch(WorkbenchActions.updateManagerPreset(targetPresetId, detail))
+            return null
+        }
+
+        // 已落库卡组，调用 service 更新
+        val error = presetService.setCardGroupPreset(currentItem.entity.id, targetPresetId)
+        if (error != null) return error
+
+        val detail = targetPresetId?.let { presetService.findDetail(it) }
+        dispatch(WorkbenchActions.updateManagerPreset(targetPresetId, detail))
+
+        // 重新拉取列表以刷新引用关系和 presetId
+        val managers = service.loadAllManagers().map { CardManagerItem(it) }
+        dispatch(WorkbenchActions.setManagers(managers))
+        val updatedCandidate = managers.find { it.entity?.id == currentItem.entity.id }
+        dispatch(
+            WorkbenchActions.selectManager(
+                updatedCandidate,
+                state.currentBindings,
+                detail,
+                state.currentDeckDelta
+            )
+        )
+        return null
+    }
+
+    /**
+     * 保存卡组微调层增量项（T-TG-018）。
+     */
+    fun saveDeckDelta(
+        treeExclusions: Map<String, Collection<String>>?,
+        timings: Map<String, TimingOverride>?
+    ): String? {
+        val currentItem = state.selectedManagerItem ?: return "未选择卡组"
+        val managerId = currentItem.entity?.id ?: return "卡组尚未保存"
+
+        val error = presetService.saveDeckDelta(managerId, treeExclusions, timings)
+        if (error != null) return error
+
+        val updatedDelta = presetService.findDeckDelta(managerId)
+        dispatch(WorkbenchActions.updateDeckDelta(updatedDelta))
+        return null
+    }
+
     fun saveCurrentManager() {
         val currentItem = state.selectedManagerItem ?: return
 
@@ -73,6 +145,11 @@ class WorkbenchStore(private val service: CardGroupService) {
                 existingId = if (currentItem.isDraft) null else currentItem.entity?.id
             )
         )
+
+        // 如果是草稿，且预设了 presetId，保存后关联预设
+        if (currentItem.isDraft && state.managerPresetId != null) {
+            presetService.setCardGroupPreset(id, state.managerPresetId)
+        }
 
         // 保存后重新加载整体列表
         loadInitialData()

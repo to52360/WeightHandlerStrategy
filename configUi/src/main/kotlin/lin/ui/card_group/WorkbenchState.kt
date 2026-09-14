@@ -6,6 +6,11 @@ import lin.bean.usePlan.UseStage
 import lin.dao.CardWeightConfig
 import lin.domain.MatchState
 import lin.repository.card_group.CardManagerEntity
+import lin.repository.card_group.DeckDelta
+import lin.repository.card_group.PresetDetail
+import lin.repository.card_group.PresetSummary
+import lin.repository.card_purpose.PurposeTagRuleEntity
+import lin.repository.tree_config.TreeConfigEntity
 import lin.rule.tree.*
 
 /** 列表项展示模型 */
@@ -33,7 +38,16 @@ data class WorkbenchState(
 
     // 维度 4: 当前 Binding 对应的卡池与选择状态
     val currentCardPool: List<CardWeightConfig> = emptyList(),
-    val selectedCards: Set<String> = emptySet()
+    val selectedCards: Set<String> = emptySet(),
+
+    // 维度 5: 策略预设与微调项（T-TG-018）
+    val managerPresetId: String? = null,
+    val availablePresets: List<PresetSummary> = emptyList(),
+    val currentPresetDetail: PresetDetail? = null,
+    val candidateTrees: List<TreeConfigEntity> = emptyList(),
+    val timingRules: List<PurposeTagRuleEntity> = emptyList(),
+    val purposeUniverse: Set<String> = emptySet(),
+    val currentDeckDelta: DeckDelta? = null
 )
 
 /** 
@@ -48,17 +62,50 @@ object WorkbenchActions {
 
     fun setManagers(managers: List<CardManagerItem>): Action = { it.copy(managers = managers) }
 
-    fun selectManager(item: CardManagerItem?, bindings: List<CardGroupBinding>): Action = { state ->
+    fun setPresetsAndUniverse(
+        presets: List<PresetSummary>,
+        candidateTrees: List<TreeConfigEntity>,
+        timingRules: List<PurposeTagRuleEntity>,
+        purposeUniverse: Set<String>
+    ): Action = { state ->
+        state.copy(
+            availablePresets = presets,
+            candidateTrees = candidateTrees,
+            timingRules = timingRules,
+            purposeUniverse = purposeUniverse
+        )
+    }
+
+    fun selectManager(
+        item: CardManagerItem?,
+        bindings: List<CardGroupBinding>,
+        presetDetail: PresetDetail? = null,
+        deckDelta: DeckDelta? = null
+    ): Action = { state ->
         state.copy(
             selectedManagerItem = item,
             managerName = item?.entity?.name ?: "",
             managerSourceFile = item?.entity?.sourceFile ?: "",
             managerEnabled = item?.entity?.enabled ?: true,
+            managerPresetId = item?.entity?.presetId,
+            currentPresetDetail = presetDetail,
+            currentDeckDelta = deckDelta,
             currentBindings = bindings,
             selectedBindingIndex = null,
             currentCardPool = emptyList(),
             selectedCards = emptySet()
         )
+    }
+
+    fun updateManagerPreset(presetId: String?, detail: PresetDetail?): Action = { state ->
+        state.copy(
+            managerPresetId = presetId,
+            currentPresetDetail = detail
+        )
+    }
+
+    fun updateDeckDelta(delta: DeckDelta?): Action = { state ->
+        state.copy(currentDeckDelta = delta)
     }
 
     fun updateManagerInfo(name: String, enabled: Boolean): Action = { state ->

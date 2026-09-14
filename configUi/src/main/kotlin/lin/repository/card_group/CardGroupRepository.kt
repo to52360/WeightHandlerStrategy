@@ -128,6 +128,14 @@ class CardGroupRepository(
         jdbcTemplate.update("UPDATE card_group_manager SET preset_id = ? WHERE id = ?", presetId, id)
     }
 
+    /** 按引用的策略预设 ID 查询卡组列表（用于反查预设引用者，避免全表扫）。 */
+    fun findManagersByPresetId(presetId: String): List<CardManagerEntity> =
+        jdbcTemplate.query(
+            "SELECT * FROM card_group_manager WHERE preset_id = ? ORDER BY name COLLATE NOCASE ASC",
+            managerRowMapper,
+            presetId
+        )
+
     fun deleteManager(id: String) {
         // 同时清理该 Manager 下的所有 Binding 及其行为
         behaviorRepository.deleteBehaviorsByManager(id)

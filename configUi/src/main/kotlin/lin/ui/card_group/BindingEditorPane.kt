@@ -29,6 +29,10 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
     private val obsCardPool = FXCollections.observableArrayList<CardWeightConfig>()
     private val obsSelectedCards = FXCollections.observableArrayList<String>()
 
+    // T-TG-018: 策略预设关联面板与卡组微调层面板
+    private val presetPane = CardGroupPresetPane()
+    private val deltaPanel = DeckDeltaPanel()
+
     // 防止在监听属性变化时触发循环调用
     private var isUpdatingFromState = false
 
@@ -54,6 +58,15 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         }
         enabledCheck.selectedProperty().addListener { _, _, newValue ->
             if (!isUpdatingFromState) store.dispatch(WorkbenchActions.updateManagerInfo(nameField.text, newValue))
+        }
+
+        // 预设与微调事件绑定
+        presetPane.onPresetChanged = { presetId ->
+            store.setCardGroupPreset(presetId)
+        }
+
+        deltaPanel.onSaveDelta = { exclusions, timings ->
+            store.saveDeckDelta(exclusions, timings)
         }
 
         // 2. 表格与控制栏
@@ -258,7 +271,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
         }
 
         setVgrow(mainSplitPane, Priority.ALWAYS)
-        children.addAll(infoBox, mainSplitPane)
+        children.addAll(infoBox, presetPane, deltaPanel, mainSplitPane)
 
         // =====================================
         // State -> UI 更新逻辑
@@ -269,6 +282,29 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 if (nameField.text != newState.managerName) nameField.text = newState.managerName
                 if (enabledCheck.isSelected != newState.managerEnabled) enabledCheck.isSelected =
                     newState.managerEnabled
+
+                // 预设面板状态更新
+                presetPane.updateState(
+                    currentPresetId = newState.managerPresetId,
+                    availablePresets = newState.availablePresets,
+                    presetDetail = newState.currentPresetDetail,
+                    purposeUniverse = newState.purposeUniverse
+                )
+
+                // 卡组微调项面板更新
+                // ⚠️ 必须包含 selectedManagerItem：候选树/时序规则是全局的，两卡组 delta 相同（如均为 null）时
+                // 其余条件不变 —— 不按卡组切换重载会把上一卡组的未保存勾选泄漏到当前卡组
+                if (oldState.selectedManagerItem != newState.selectedManagerItem ||
+                    oldState.candidateTrees != newState.candidateTrees ||
+                    oldState.timingRules != newState.timingRules ||
+                    oldState.currentDeckDelta != newState.currentDeckDelta
+                ) {
+                    deltaPanel.loadDelta(
+                        candidateTrees = newState.candidateTrees,
+                        timingRules = newState.timingRules,
+                        delta = newState.currentDeckDelta
+                    )
+                }
 
                 if (oldState.currentBindings != newState.currentBindings) {
                     obsBindings.setAll(newState.currentBindings)

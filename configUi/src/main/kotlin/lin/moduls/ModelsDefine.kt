@@ -43,6 +43,7 @@ import lin.ui.service.EvaluatorTreeResolver
 import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
+import lin.ui.strategy_preset.StrategyPresetExtension
 import lin.ui.tree_config.EvaluatorTreeExtension
 import lin.ui.tree_config.action.*
 import org.koin.core.context.GlobalContext.startKoin
@@ -77,6 +78,9 @@ val serviceModule = module {
 
     // 全局卡组选择状态
     single { ActiveManagerHolder() }
+    single { lin.ui.WorkbenchNavigator() }
+    // 预设域目录单点装配（候选树/时序规则/用途全集/预设列表）
+    single { lin.ui.service.PresetCatalogLoader(get(), get(), get()) }
 
 }
 
@@ -88,6 +92,7 @@ val uiModule = module {
     single { ConditionTreeExtension() } bind UiExtension::class
     single { CardPurposeExtension() } bind UiExtension::class
     single { ComboPlanExtension() } bind UiExtension::class
+    single { StrategyPresetExtension() } bind UiExtension::class
     single { AuraBoostExtension() } bind UiExtension::class
 
     // 评估树工作台动作注册

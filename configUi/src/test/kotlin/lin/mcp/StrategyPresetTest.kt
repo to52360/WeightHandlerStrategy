@@ -302,6 +302,36 @@ class StrategyPresetTest : McpTestEnv() {
         )
     }
 
+    @Test
+    fun `预设被禁用用途看板不把卡组专属树的用途算作被禁用(D-TG-015与T-TG-024)`() {
+        val globalTree = insertPurposeTree("TG_TREE_GLOBAL_CLEAN", listOf("CLEAN"))
+        val deckTreeId = "TG_TREE_DECK_BURST"
+        treeRepository.save(
+            TreeConfigEntity(
+                id = deckTreeId,
+                bindingType = "PURPOSE_TAG",
+                bindingIds = "BURST",
+                name = deckTreeId,
+                configData = """{"root":{"Leaf":{"payload":{"Rule":{"nodeId":"r1"}}}}}""",
+                enabled = true,
+                managerId = "SOME_DECK_XYZ"
+            )
+        )
+        createdTreeIds += deckTreeId
+
+        val id = savePreset(
+            """
+            {"name":"TG_PRESET_UNIVERSE",
+             "treeSelections":[{"tagId":"CLEAN","treeIds":["$globalTree"]}]}
+            """.trimIndent()
+        )
+        val got = call("get", """{"resource":"strategy_preset","id":"$id"}""")
+        assertEquals(false, got.isError)
+        val detail = mapper.readTree(got.contentJson)
+        val disabledPurposes = detail.get("disabledPurposes").map { it.asText() }
+        assertFalse("卡组专属用途树的用途不应出现在预设被禁用看板: $disabledPurposes", "BURST" in disabledPurposes)
+    }
+
     // ─────────────────────── 删除通道（T-TG-010 / D-TG-010）───────────────────────
 
     @Test
