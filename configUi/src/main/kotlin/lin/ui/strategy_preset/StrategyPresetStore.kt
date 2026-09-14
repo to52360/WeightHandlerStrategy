@@ -153,6 +153,32 @@ class StrategyPresetStore(
     }
 
     /**
+     * 从现有预设**派生**新预设（fork，D-TG-017）—— 转发到域服务，UI 侧只做校验与选中。
+     *
+     * ⚠️ fork = 只复制内容、不建立关系：新预设与源预设此后各自独立演化（改源预设不传导到派生预设）。
+     * ⚠️ 源预设漏声明的用途会被一并继承（未声明 = 该用途树全禁）。
+     *
+     * @return 错误信息；null 表示派生成功（成功后刷新列表并打开新预设详情）
+     */
+    fun clonePreset(sourceId: String, name: String, description: String? = null): String? {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) return "预设名称不能为空"
+        if (cleanName.length > 60) return "预设名称过长（最多 60 字符）"
+
+        val source = sourceId.trim().takeIf { it.isNotBlank() } ?: return "派生失败：未指定源预设"
+        val result = service.clonePreset(
+            sourceId = source,
+            name = cleanName,
+            description = description?.trim()?.takeIf { it.isNotBlank() }
+        ) ?: return "派生失败：源预设不存在 ($source)"
+
+        // 派生成功后刷新数据并选中/打开新预设详情
+        loadInitialData()
+        selectPreset(result.presetId)
+        return null
+    }
+
+    /**
      * 删除预设（UI 层面在调用前已完成是否有引用的阻断拦截）。
      *
      * ⚠️ D-TG-016 裁定：UI 删除是用户自主意图操作，直接物理删除不落快照（不可恢复）。

@@ -97,6 +97,17 @@ data class SaveStrategyPresetInput(
     val timings: List<PurposeTimingInput>? = null
 )
 
+data class CloneStrategyPresetInput(
+    @field:JsonPropertyDescription("源预设 id（由 list(resource=strategy_preset) 返回）；其两个维度会被复制到新预设。")
+    val sourcePresetId: String,
+
+    @field:JsonPropertyDescription("新预设名称（如 \"快攻-铺场特化\"）。")
+    val name: String,
+
+    @field:JsonPropertyDescription("可选：新预设说明。不传 = 沿用源预设的说明。")
+    val description: String? = null
+)
+
 data class SaveCardGroupPresetInput(
     @field:JsonPropertyDescription("卡组 managerId。")
     val managerId: String,
@@ -209,6 +220,43 @@ class StrategyPresetToolProvider(
             mcpSuccess(
                 mapOf(
                     "presetId" to result.presetId,
+                    "name" to result.name,
+                    "treeItemCount" to result.treeItemCount,
+                    "timingCount" to result.timingCount,
+                    "disabledPurposes" to disabledPurposes(declared)
+                )
+            )
+        },
+
+        typedTool<CloneStrategyPresetInput>(
+            name = "clone_strategy_preset",
+            description = """
+                从现有预设**派生**一个新预设（fork）—— 复制源预设的「树白名单 + 时序覆盖」两个维度，
+                用于「快攻通用 / 控制通用」这类**分类通用预设**的快速建站（否则每建一个预设都要重填一遍时序）。
+
+                ⚠️ **fork = 只复制内容、不建立关系**：新预设与源预设此后**各自独立演化** ——
+                改源预设**不会**传导到已派生的预设（"改通用份、派生份跟着变"目前不支持，见 D-TG-017）。
+                ⚠️ 源预设**漏声明的用途会被一并继承**（未声明 = 该用途树全禁）⇒ 务必核对回显的 disabledPurposes。
+
+                派生后仍需 save_card_group_preset 让卡组引用它；切换预设后**需重启**引擎装配。
+            """.trimIndent()
+        ) { input ->
+            if (input.name.isBlank()) throw McpBadInput("name 不能为空")
+            if (input.name.trim().length > 60) throw McpBadInput("name 过长（<= 60）")
+            val sourceId = input.sourcePresetId.trim()
+            if (sourceId.isBlank()) throw McpBadInput("sourcePresetId 不能为空")
+
+            val result = service.clonePreset(
+                sourceId = sourceId,
+                name = input.name.trim(),
+                description = input.description
+            ) ?: return@typedTool mcpError("派生失败：源预设不存在（sourcePresetId=$sourceId）")
+
+            val declared = service.findDetail(result.presetId)?.treeSelections?.keys.orEmpty()
+            mcpSuccess(
+                mapOf(
+                    "presetId" to result.presetId,
+                    "sourcePresetId" to sourceId,
                     "name" to result.name,
                     "treeItemCount" to result.treeItemCount,
                     "timingCount" to result.timingCount,

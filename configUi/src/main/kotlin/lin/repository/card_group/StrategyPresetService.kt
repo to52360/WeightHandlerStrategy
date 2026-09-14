@@ -145,6 +145,41 @@ class StrategyPresetService(
         )
     }
 
+    /**
+     * 从现有预设**派生**新预设（fork，D-TG-017）—— 用于「快攻通用 / 控制通用」这类**分类通用预设**的快速建站。
+     *
+     * 复制的是**内容**而非**关系**：源预设的 `PURPOSE_TREE` / `PURPOSE_TIMING` 两个维度**全量写入新 id**，
+     * 此后两者**各自独立演化**（改源预设不传导到已派生的预设 —— 不引入 `base_preset_id` 继承，见 D-TG-017）。
+     *
+     * ⚠️ 源预设**漏声明的用途**会被一并继承（未声明 = 该用途树全禁）⇒ 调用方须核对 `disabledPurposes`。
+     *
+     * @return null = 源预设不存在
+     */
+    fun clonePreset(sourceId: String, name: String, description: String? = null): SavePresetResult? = tx.execute {
+        val source = presetRepository.findPresetById(sourceId) ?: return@execute null
+
+        val newId = UUID.randomUUID().toString().substring(0, 8)
+        presetRepository.savePreset(
+            StrategyPresetEntity(
+                id = newId,
+                name = name,
+                description = description ?: source.description,
+                createdAt = Instant.now().toString()
+            )
+        )
+        val trees = presetRepository.findTreeSelections(DimensionScope.PRESET, sourceId)
+        val timings = presetRepository.findTimings(DimensionScope.PRESET, sourceId)
+        presetRepository.replaceTreeSelections(DimensionScope.PRESET, newId, trees)
+        presetRepository.replaceTimings(DimensionScope.PRESET, newId, timings)
+
+        SavePresetResult(
+            presetId = newId,
+            name = name,
+            treeItemCount = trees.values.sumOf { it.size },
+            timingCount = timings.size
+        )
+    }
+
     fun findDetail(presetId: String): PresetDetail? {
         val preset = presetRepository.findPresetById(presetId) ?: return null
         return PresetDetail(

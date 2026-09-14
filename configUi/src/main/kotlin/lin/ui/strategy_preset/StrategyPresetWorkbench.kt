@@ -70,6 +70,14 @@ class StrategyPresetWorkbench : SplitPane(), KoinComponent, ActiveAware {
         detailPane.onDeletePreset = { presetId ->
             store.deletePreset(presetId)
         }
+
+        // 另存为新预设（fork 派生，D-TG-017）；成功后 Store 已刷新列表并选中新预设
+        detailPane.onClonePreset = { sourceId, name, description ->
+            val error = store.clonePreset(sourceId, name, description)
+            if (error != null) {
+                detailPane.showError(error)
+            }
+        }
     }
 
     private fun setupStateObserver() {

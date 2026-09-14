@@ -32,6 +32,9 @@ class StrategyPresetDetailPane(
     /** 物理删除预设 */
     var onDeletePreset: ((presetId: String) -> Unit)? = null
 
+    /** 另存为新预设（fork 派生，D-TG-017）：源预设 id + 新名称 + 新描述 */
+    var onClonePreset: ((sourceId: String, name: String, description: String?) -> Unit)? = null
+
     private val headerLabel = Label("策略预设详情").apply {
         style = "-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;"
     }
@@ -62,6 +65,16 @@ class StrategyPresetDetailPane(
 
     private val btnDelete = Button("🗑️ 删除预设").apply {
         style = "-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-weight: bold;"
+    }
+
+    /** 另存为新预设（fork 派生，D-TG-017）。tooltip 说明 fork 语义。 */
+    private val btnClone = Button("📋 另存为新预设").apply {
+        style = "-fx-background-color: #16a085; -fx-text-fill: white; -fx-font-weight: bold;"
+        tooltip = Tooltip(
+            "复制当前预设的「树白名单 + 时序覆盖」为一个新预设（fork）。\n" +
+                    "新预设与源预设此后各自独立演化 —— 改源预设不会同步到新预设。\n" +
+                    "源预设漏声明的用途会被一并继承（未声明 = 该用途树全禁）。"
+        )
     }
 
     // 三大功能子组件（T-TG-017）
@@ -106,7 +119,7 @@ class StrategyPresetDetailPane(
 
         val buttonBox = HBox(10.0).apply {
             alignment = Pos.CENTER_LEFT
-            children.addAll(btnSave, btnDelete)
+            children.addAll(btnSave, btnClone, btnDelete)
         }
 
         referenceSection.children.addAll(
@@ -131,6 +144,11 @@ class StrategyPresetDetailPane(
         btnDelete.setOnAction {
             val presetId = currentPresetId ?: return@setOnAction
             handleDelete(presetId)
+        }
+
+        btnClone.setOnAction {
+            val sourceId = currentPresetId ?: return@setOnAction
+            handleClone(sourceId)
         }
 
         // 树选择变化时，动态联动更新被禁用用途看板
@@ -210,6 +228,40 @@ class StrategyPresetDetailPane(
         }
     }
 
+    /**
+     * 另存为新预设（fork 派生，D-TG-017）。
+     *
+     * ⚠️ fork = 复制内容、不建立关系：新预设与源预设此后各自独立演化（改源预设不传导）。
+     * ⚠️ 源预设漏声明的用途会被一并继承（未声明 = 该用途树全禁）；
+     * 继承结果由「🚫 被禁用用途看板」在派生后自动刷新展示，此处不重复计算口径。
+     */
+    private fun handleClone(sourceId: String) {
+        val sourceName = txtName.text.trim().ifBlank { sourceId }
+        val dialog = TextInputDialog("$sourceName-副本").apply {
+            title = "另存为新预设"
+            headerText = "将预设 [$sourceName] 的内容复制为一个新预设"
+            contentText = "• 复制内容、不建立关系：新预设与源预设此后各自独立演化，改源预设不会同步到新预设。\n" +
+                    "• 源预设漏声明的用途会被一并继承（未声明 = 该用途树全禁），可在派生后于\n" +
+                    "  「🚫 被禁用用途看板」页签核对。\n" +
+                    "• 新建后仍需在「卡组分组管理」中让卡组引用它。"
+        }
+        dialog.editor.promptText = "新预设名称（必填，<= 60 字符）..."
+
+        // 取消（空 Optional）静默返回；点了确定但名称为空才提示校验失败
+        val input = dialog.showAndWait().orElse(null) ?: return
+        val name = input.trim()
+        if (name.isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称不能为空")
+            return
+        }
+        if (name.length > 60) {
+            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称过长（最多 60 字符）")
+            return
+        }
+
+        onClonePreset?.invoke(sourceId, name, null)
+    }
+
     /** 同步展示当前预设详情或新建状态 */
     fun updateState(state: StrategyPresetState) {
         currentUniverse = state.purposeUniverse
@@ -235,6 +287,7 @@ class StrategyPresetDetailPane(
         txtName.text = detail.preset.name
         txtDescription.text = detail.preset.description ?: ""
         btnDelete.isDisable = false
+        btnClone.isDisable = false
 
         // 刷新引用关系
         val summary = state.allPresets.find { it.preset.id == detail.preset.id }
@@ -262,6 +315,7 @@ class StrategyPresetDetailPane(
         txtName.text = ""
         txtDescription.text = ""
         btnDelete.isDisable = true
+        btnClone.isDisable = true
         referenceListLabel.text = "新建预设尚未被任何卡组引用"
         referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
 
@@ -280,12 +334,18 @@ class StrategyPresetDetailPane(
         txtName.text = ""
         txtDescription.text = ""
         btnDelete.isDisable = true
+        btnClone.isDisable = true
         referenceListLabel.text = "无"
         referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
 
         treeSelectionPanel.loadTrees(emptyList(), emptyMap())
         timingOverridePanel.loadTimings(emptyList(), emptyMap())
         disabledPurposesBoard.updatePurposes(emptySet(), emptySet())
+    }
+
+    /** 供工作台回显 Store 返回的失败原因（复用本面板既有弹窗工具，不另造一套）。 */
+    fun showError(content: String) {
+        showAlert(Alert.AlertType.WARNING, "操作失败", content)
     }
 
     private fun showAlert(type: Alert.AlertType, title: String, content: String) {
