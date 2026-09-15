@@ -56,7 +56,7 @@ data class PurposeTagIntentRule(
  * 预设值先设后实战校准（Q-026 拍板②）；多标签命中取 max（见意图推导器），无冲突异常。
  */
 class DefaultPurposeTagIntentRuleProvider : PurposeTagIntentRuleProvider {
-    /** 共 6 条（FINISH 无条目，见下方注释）。 */
+    /** 共 5 条（`FINISH` / `EXTRA_COST` 无条目，见下方注释）。 */
     override fun rules(): List<PurposeTagIntentRule> = listOf(
         PurposeTagIntentRule(
             tagId = PurposeTagId.SAVE_LIFE,
@@ -93,16 +93,12 @@ class DefaultPurposeTagIntentRuleProvider : PurposeTagIntentRuleProvider {
             priority = 50,
             defaultSurplusIdleThreshold = null
         ),
-        // T-003/T-004：特殊查询牌——持有 EXTRA_COST 标签的牌由 ExtCostStrategy 接管（额外费用双世界比较），
-        // 出牌时机写死在 find 阶段先于组合打出，不进 UsePlanOrderer → stage 不被消费，
-        // GENERAL 仅作意图模型的惰性默认落点（"无特殊时序要求"恰好成立：时序由别处决定）。
-        // 机制牌（硬币）由 COINProvide.mechanismPurposes 启动期硬编码注入，不依赖 DB 配置。
-        PurposeTagIntentRule(
-            tagId = PurposeTagId.EXTRA_COST,
-            defaultStage = UseStage.GENERAL,
-            priority = 50,
-            defaultSurplusIdleThreshold = null
-        ),
+        // EXTRA_COST **无规则条目**（T-TG-031 删行）：持有该标签的牌由 ExtCostStrategy 接管
+        // （额外费用双世界比较），出牌时机写死在 find 阶段先于组合打出、**不进 UsePlanOrderer**
+        // ⇒ 规则行是**无效旋钮**（stage/orderWeight 不被消费），留着只会以 priority=50 与 VALUE 平手、
+        // 在 `UseIntentDeriver.maxByOrNull` 里制造不确定的 stage 平局。
+        // 它仍是**查询/路由标签**保留（`PurposeTagId.EXTRA_COST` + `COINProvide.mechanismPurposes` 启动期注入，
+        // 不依赖 DB 配置）；需要其时序的场合由评估树/战术分表达（同 FINISH 的处理）。
         // T-030（D-017）：DRAW_CARD 从 GENERAL 迁到 MID——与解牌同段，靠 defaultOrderWeight 分先后
         // （CLEAN=1 > DRAW_CARD=0，见上）。过牌仍先于 LATE/GENERAL；个别卡组可用 stageOverride 拉回。
         // Q-033 复核：N 由 1 改 null。早过牌早赚，惜售与过牌目的相反。

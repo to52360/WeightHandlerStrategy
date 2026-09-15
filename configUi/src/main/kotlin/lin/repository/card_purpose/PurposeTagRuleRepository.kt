@@ -134,7 +134,12 @@ class PurposeTagRuleRepository(private val jdbcTemplate: JdbcTemplate) {
     }
 
     companion object {
-        /** 与 `DefaultPurposeTagIntentRuleProvider` 现值逐字对齐（FINISH 无条目）。 */
+        /**
+         * 与 `DefaultPurposeTagIntentRuleProvider` 现值逐字对齐。
+         *
+         * **无条目**：`FINISH`（斩杀是局面属性，Q-033）／`EXTRA_COST`（T-TG-031：由 `ExtCostStrategy`
+         * 接管时机、不进 `UsePlanOrderer` ⇒ 规则行是无效旋钮，且会以 priority=50 与 VALUE 平手）。
+         */
         val BUILTIN_RULES: List<PurposeTagRuleEntity> = listOf(
             PurposeTagRuleEntity(
                 tagId = "SAVE_LIFE", defaultStage = "LATE",
@@ -146,7 +151,6 @@ class PurposeTagRuleRepository(private val jdbcTemplate: JdbcTemplate) {
             ),
             PurposeTagRuleEntity(tagId = "GREED", defaultStage = "SETUP", priority = 100),
             PurposeTagRuleEntity(tagId = "VALUE", defaultStage = "GENERAL", priority = 50),
-            PurposeTagRuleEntity(tagId = "EXTRA_COST", defaultStage = "GENERAL", priority = 50),
             PurposeTagRuleEntity(tagId = "DRAW_CARD", defaultStage = "MID", priority = 60)
         )
     }

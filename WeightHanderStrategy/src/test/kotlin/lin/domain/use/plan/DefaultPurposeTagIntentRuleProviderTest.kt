@@ -44,9 +44,8 @@ class DefaultPurposeTagIntentRuleProviderTest {
     }
 
     @Test
-    fun `价值牌与额外费用牌不设惜售门槛`() {
+    fun `价值牌不设惜售门槛`() {
         assertNull(rules[PurposeTagId.VALUE]?.defaultSurplusIdleThreshold)
-        assertNull(rules[PurposeTagId.EXTRA_COST]?.defaultSurplusIdleThreshold)
     }
 
     /** FINISH 无条目：斩杀是局面属性，编排映射已取消（查询用途保留在 PurposeTagProvider）。 */
@@ -55,13 +54,22 @@ class DefaultPurposeTagIntentRuleProviderTest {
         assertNull("FINISH 不应有编排规则条目", rules[PurposeTagId.FINISH])
     }
 
+    /**
+     * EXTRA_COST 无条目（T-TG-031）：由 `ExtCostStrategy` 接管时机、不进 `UsePlanOrderer`
+     * ⇒ 规则行是无效旋钮，且 priority=50 会与 VALUE 平手制造不确定的 stage。
+     * 它仍是查询/路由标签（`COINProvide.mechanismPurposes` 启动期注入）。
+     */
+    @Test
+    fun `EXTRA_COST无规则条目`() {
+        assertNull("EXTRA_COST 不应有编排规则条目（T-TG-031 删行）", rules[PurposeTagId.EXTRA_COST])
+    }
+
     @Test
     fun `阶段映射保持稳定`() {
         assertEquals(UseStage.LATE, rules[PurposeTagId.SAVE_LIFE]?.defaultStage)
         assertEquals(UseStage.MID, rules[PurposeTagId.CLEAN]?.defaultStage)
         assertEquals(UseStage.SETUP, rules[PurposeTagId.GREED]?.defaultStage)
         assertEquals(UseStage.GENERAL, rules[PurposeTagId.VALUE]?.defaultStage)
-        assertEquals(UseStage.GENERAL, rules[PurposeTagId.EXTRA_COST]?.defaultStage)
         // T-030（D-017）：过牌与解牌同段，靠 defaultOrderWeight 分先后
         assertEquals(UseStage.MID, rules[PurposeTagId.DRAW_CARD]?.defaultStage)
     }
