@@ -16,14 +16,15 @@ import lin.repository.card_group.TimingOverride
 import lin.repository.card_purpose.PurposeTagRuleEntity
 
 /**
- * 用途出牌时序覆盖面板（T-TG-017）。
+ * 用途出牌时序**声明**面板（T-TG-017）。
  *
- * 仅针对在 purpose_tag_rule 表中有规则行的用途提供时序覆盖能力。
+ * 候选用途 = 全局 `purpose_tag_rule` 有规则行的用途（同时充当**默认值预填**来源）；
+ * 填了任意字段 = **声明该用途**（该用途在本预设下产生一条完整规则），全空 = 未声明 = 无规则。
  * 门槛与重规划开关严格遵循 Q5 裁定，采用三态设计表达 presence 语义。
  * 供 StrategyPresetDetailPane 使用，且可供 T-TG-018 卡组增量项复用。
  */
 class TimingOverridePanel(
-    title: String = "⏱️ 用途出牌时序覆盖（仅有全局规则行的用途生效，未覆盖项回落全局）："
+    title: String = "⏱️ 用途出牌时序声明（填任一字段 = 声明该用途；全空 = 未声明 = 无规则）："
 ) : VBox(8.0) {
 
     private val scrollContent = VBox(8.0).apply {
@@ -123,6 +124,13 @@ class TimingOverridePanel(
             prefWidth = 80.0
         }
 
+        // priority 可选覆盖（D-TG-018）：不填 = 用全局规则行的 priority
+        val txtPriority = TextField().apply {
+            promptText = "默认: ${rule.priority}"
+            text = initial?.priority?.toString() ?: ""
+            prefWidth = 60.0
+        }
+
         // Q5: 门槛三态控件（不覆盖 / 设值 / 清除为无门槛）
         val comboThresholdMode = ComboBox<String>().apply {
             val defaultHint = rule.defaultSurplusIdleThreshold?.let { "默认: $it" } ?: "默认: 无门槛"
@@ -189,6 +197,8 @@ class TimingOverridePanel(
                 add(thresholdBox, 1, 1)
                 add(Label("重规划:"), 2, 1)
                 add(comboReplan, 3, 1)
+                add(Label("优先级:"), 0, 2)
+                add(txtPriority, 1, 2)
             }
 
             val header = Label("🎯 用途 [${rule.tagId}] 出牌时序覆盖").apply {
@@ -213,6 +223,12 @@ class TimingOverridePanel(
             if (weightText.isNotEmpty() && weightText.toDoubleOrNull() == null) {
                 return "排序权重不是有效数字: \"$weightText\""
             }
+            val priorityText = txtPriority.text.trim()
+            if (priorityText.isNotEmpty()) {
+                val value = priorityText.toIntOrNull()
+                    ?: return "优先级不是有效整数: \"$priorityText\""
+                if (value !in 1..9999) return "优先级超出范围: $value（可填 1~9999）"
+            }
             return null
         }
 
@@ -236,7 +252,8 @@ class TimingOverridePanel(
                 defaultStage = stage,
                 defaultOrderWeight = weight,
                 defaultReplanAfterUse = replan,
-                surplusIdleThreshold = thresholdPatch
+                surplusIdleThreshold = thresholdPatch,
+                priority = txtPriority.text.trim().toIntOrNull()
             )
         }
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import lin.myLog
 import lin.repository.delete_snapshot.*
 import lin.rule.condition.ConditionPayload
 import lin.rule.condition.ConditionTreeConfig
@@ -131,6 +132,45 @@ class ConditionTreeConfigService(
     fun delete(id: String) {
         repository.deleteById(id)
     }
+
+    /**
+     * K-TG-014：声明本域在「卡组」聚合根下的**从属资源** = 该卡组的**私有条件树**
+     * （`manager_id = 卡组`；全局共享树 `manager_id IS NULL` **不属于任何卡组**，不参与）。
+     *
+     * ⚠️ 级联删**豁免"引用中拒绝"**（引用方 aura / 评估树同属本聚合、也在被删）
+     * —— 引用校验仍只在单资源删除路径（`ConditionTreeToolProvider.guardedConditionTreeOps`）。
+     * 逐条 payload 复用 [SnapshotPayloads.conditionTree]、恢复交给 [restoreFromSnapshot]（id 在 `config.id` 内）。
+     */
+    fun cardGroupChild(): CardGroupChild = CardGroupChild(
+        key = "privateConditionTrees",
+        collect = { managerId ->
+            SnapshotPayloads.itemsArray(
+                loadAll()
+                    .filter { it.first.managerId == managerId }
+                    .mapNotNull { (entity, config) ->
+                        if (config == null) {
+                            myLog.warn {
+                                "卡组 $managerId 的私有条件树 ${entity.id} 配置解析失败 ⇒ 快照不含它（删除后不可恢复）"
+                            }
+                            null
+                        } else {
+                            SnapshotPayloads.conditionTree(entity, config)
+                        }
+                    }
+            )
+        },
+        delete = { managerId -> repository.deleteByManager(managerId) },
+        restore = { _, payload ->
+            val failures = payload.mapNotNull { item ->
+                restoreFromSnapshot(item["config"]["id"].asText(), item.toString()).takeIf { it.isError }
+            }
+            RestoreResult(
+                "恢复 condition_tree ${payload.size()} 棵" +
+                        if (failures.isEmpty()) "" else "，${failures.size} 棵失败：${failures.first().message}",
+                isError = failures.isNotEmpty()
+            )
+        }
+    )
 
     /**
      * 返回条件树元数据（含 inlineCreated 标记）。

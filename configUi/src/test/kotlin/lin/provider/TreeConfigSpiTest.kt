@@ -1,12 +1,11 @@
 package lin.provider
 
 import lin.mcp.McpTestEnv
-import lin.repository.card_group.CardGroupService
-import lin.repository.card_group.CurrentDeckContext
-import lin.repository.card_group.DimensionItemResolver
-import lin.repository.card_group.StrategyPresetRepository
+import lin.repository.card_group.*
+import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
+import lin.rule.tree.RuleLeafConfig
 import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
@@ -17,7 +16,9 @@ import org.koin.core.context.GlobalContext
 /**
  * SPI 侧评估树加载的回归网 —— K-TG-007（反序列化全失败）/ K-TG-008（GROUP 绑定 id 空间）修复验收。
  *
- * 用**库中真实树**（只读，不改数据）：诊断时实测 `DB enabled 树 = 3` 而 `SPI 输出 = 0`。
+ * ⚠️ **自建 fixture**（2026-09-15 起）：此前两个用例直接断言「**库里本来就有**评估树 / 叶子配置」，
+ * 依赖开发库里的残留数据 —— 库被清干净后必然失败（依赖外部数据的用例不是回归网）。
+ * 现统一由 [createFixtureTreeWithLeaf] 自建「启用卡组 + 绑定 + 带叶子的 GROUP 树」。
  */
 class TreeConfigSpiTest : McpTestEnv() {
 
@@ -39,13 +40,47 @@ class TreeConfigSpiTest : McpTestEnv() {
 
     @org.junit.After
     fun cleanUp() {
-        treeRepository.deleteById(testTreeId)
-        treeRepository.deleteById(testTagTreeId)
-        treeRepository.deleteById(testGlobalTreeId)
-        treeRepository.deleteById(testOwnTreeId)
-        treeRepository.deleteById(testDanglingTreeId)
+        // 走域服务删（K-TG-013 同族坑：repository 直删只清 tree_config、叶子行会留孤儿）
+        val treeService = GlobalContext.get().get<TreeConfigService>()
+        listOf(testTreeId, testTagTreeId, testGlobalTreeId, testOwnTreeId, testDanglingTreeId)
+            .forEach { treeService.delete(it) }
         GlobalContext.get().get<StrategyPresetRepository>().deletePreset(testPresetId)
         groupRepository.deleteManager(testManagerId)
+    }
+
+    /**
+     * 自建 fixture：启用卡组 + 一条绑定 + 一棵**带叶子行**的 GROUP 树（`ROOT_JSON` 的叶子 nodeId = `r1`）。
+     *
+     * 直接落 repository / 叶子表（不经 MCP 保存路径）—— 本类只验 SPI 侧加载与组装。
+     */
+    private fun createFixtureTreeWithLeaf(id: String) {
+        groupRepository.saveManager(
+            lin.repository.card_group.CardManagerEntity(
+                id = testManagerId, name = testManagerId,
+                sourceFile = "$testManagerId.cardgroup", enabled = true
+            )
+        )
+        groupRepository.saveBinding(
+            lin.repository.card_group.CardBindingEntity(
+                id = testBindingId, managerId = testManagerId, name = "g", cardIds = "[]"
+            )
+        )
+        GlobalContext.get().get<EvaluatorLeafConfigRepository>().saveAll(
+            id,
+            mapOf("r1" to RuleLeafConfig(nodeId = "r1", sourceId = "spi_fixture_source")),
+            createTreeConfigMapper()
+        )
+        treeRepository.save(
+            lin.repository.tree_config.TreeConfigEntity(
+                id = id,
+                bindingType = EvaluatorTreeBindingType.GROUP.name,
+                bindingIds = testBindingId,
+                name = id,
+                configData = ROOT_JSON,
+                enabled = true,
+                managerId = testManagerId
+            )
+        )
     }
 
     private fun provider(): SqliteTreeConfigProvider = SqliteTreeConfigProvider(
@@ -68,28 +103,27 @@ class TreeConfigSpiTest : McpTestEnv() {
      */
     @Test
     fun `库中已启用的分组与单卡绑定树都应加载出来`() {
+        createFixtureTreeWithLeaf(testTreeId)
         val dbCount = treeRepository.findAll()
             .count { it.enabled && it.bindingType != EvaluatorTreeBindingType.PURPOSE_TAG.name }
         val loadedCount = provider().findAll()
             .count { it.bindingType != EvaluatorTreeBindingType.PURPOSE_TAG }
 
-        assertTrue("库中应存在已启用的分组/单卡树", dbCount > 0)
+        assertTrue("前置：fixture 的启用分组树应已入库", dbCount > 0)
         assertEquals("K-TG-007：SPI 不得整批丢失评估树", dbCount, loadedCount)
     }
 
     /** K-TG-007：叶子配置也要组装进来（否则树虽在、叶子编译必失败）。 */
     @Test
     fun `加载出的树带上了叶子配置`() {
-        val withLeaves = GlobalContext.get().get<lin.repository.tree_config.EvaluatorLeafConfigRepository>()
-            .findAllRaw()
-            .map { it.first }
-            .toSet()
-        assertTrue("库中应存在叶子配置数据", withLeaves.isNotEmpty())
+        createFixtureTreeWithLeaf(testTreeId)
 
         val loaded = provider().findAll()
+        val fixture = loaded.firstOrNull { it.bindingType == EvaluatorTreeBindingType.GROUP }
+        assertNotNull("fixture 的 GROUP 树应被加载（此前 K-TG-007 是整批丢失）", fixture)
         assertTrue(
-            "至少有一棵树带上了叶子配置",
-            loaded.any { it.leafConfigs.isNotEmpty() }
+            "K-TG-007：叶子行必须随树组装进来（否则叶子编译必失败）：keys=${fixture!!.leafConfigs.keys}",
+            fixture.leafConfigs.containsKey("r1")
         )
     }
 
@@ -134,13 +168,13 @@ class TreeConfigSpiTest : McpTestEnv() {
     }
 
     /**
-     * T-TG-020：卡组引用的预设**行已不存在**（悬空引用）⇒ 语义保持「引用即受控」，
-     * 白名单取到空集 ⇒ 用途树全禁（等同空预设），**不**回落成"全部生效"。
+     * T-TG-020 / D-TG-018：卡组未引用预设或引用的预设**行已不存在**（悬空引用）⇒ 用途树全禁。
      *
-     * 对照组（未引用预设 ⇒ 该树正常输出）证明本用例的判定链是通的，不是恒 null 蒙对。
+     * 声明模型下两者**同效**（都取不到任何声明 ⇒ 空集白名单）；对照组的"正向输出"改用
+     * 「引用了预设且声明保留该树」构造，证明判定链是通的，不是恒 null 蒙对。
      */
     @Test
-    fun `悬空预设引用使用途树全禁而未被静默放行`() {
+    fun `悬空或未引用预设使用途树全禁而未被静默放行`() {
         assertTrue(
             "前置：$testPresetTag 必须是启用标签，否则该用途树本就出不来、用例证不了任何事",
             testPresetTag in PurposeTagTreeBindingPolicy(GlobalContext.get().get()).enabledTags.map { it.value }
@@ -167,10 +201,26 @@ class TreeConfigSpiTest : McpTestEnv() {
             CurrentDeckContext(groupRepository).current()?.id
         )
 
-        // 对照组：未引用预设 ⇒ 用途树正常输出
-        assertNotNull("未引用预设时用途树应输出", provider().findById(testTagTreeId))
+        // ① 未引用预设 ⇒ 无任何声明 ⇒ 用途树不输出（D-TG-018，与 T-TG-020 的悬空引用同效）
+        assertNull(
+            "D-TG-018：未引用预设 ⇒ 全局共享用途树不输出",
+            provider().findById(testTagTreeId)
+        )
 
-        // 悬空引用：卡组指向一个不存在的预设
+        // ② 对照组：引用预设且显式声明保留该树 ⇒ 正常输出（证明判定链是通的，不是恒 null 蒙对）
+        val presetRepository = GlobalContext.get().get<StrategyPresetRepository>()
+        presetRepository.savePreset(
+            lin.repository.card_group.StrategyPresetEntity(
+                id = testPresetId, name = "spi", description = null, createdAt = null
+            )
+        )
+        presetRepository.replaceTreeSelections(
+            DimensionScope.PRESET, testPresetId, mapOf(testPresetTag to listOf(testTagTreeId))
+        )
+        groupRepository.updateManagerPreset(testManagerId, testPresetId)
+        assertNotNull("对照：声明保留该树时应输出", provider().findById(testTagTreeId))
+
+        // ③ 悬空引用：卡组指向一个不存在的预设 ⇒ 取不到声明 ⇒ 回到全禁
         groupRepository.updateManagerPreset(testManagerId, DANGLING_PRESET_ID)
         assertNull(
             "T-TG-020：悬空引用 ⇒ 全禁（不得回落成兜底全开）",

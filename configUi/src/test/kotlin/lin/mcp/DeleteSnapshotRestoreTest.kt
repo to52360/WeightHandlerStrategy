@@ -82,6 +82,10 @@ class DeleteSnapshotRestoreTest : McpTestEnv() {
         assertEquals(2.5, loaded["score"].asDouble(), 0.001)
         assertEquals(condId, loaded["conditionId"].asText())
         assertEquals(condId, loaded["targetConditionId"].asText())
+
+        // 清理：本用例的 aura 挂在 `t010_restore_groups`（**从未建过 manager** 的名字）上
+        // ⇒ McpTestEnv 的按-manager 级联清理覆盖不到，必须自己删（否则每跑一次留 1 行孤儿）
+        GlobalContext.get().get<JdbcTemplate>().update("DELETE FROM aura_boost WHERE id = ?", boostId)
     }
 
     // ─────────────────── condition_tree roundtrip ───────────────────
@@ -158,6 +162,103 @@ class DeleteSnapshotRestoreTest : McpTestEnv() {
             "SELECT name FROM card_group_binding WHERE manager_id = ?", String::class.java, mid
         )
         assertEquals("恢复组", bindName)
+    }
+
+    /**
+     * K-TG-014（@verify）：卡组级联删的**覆盖面** —— `aura_boost` / `combo_plan_definition` /
+     * 卡组**私有**条件树此前既不在清理范围、也不在快照范围（删后留孤儿行，且 `restore_snapshot` 恢复不回）。
+     * 逐表断言：删后归零 → 恢复后逐项一致（原 id + 关键字段值）。
+     */
+    @Test
+    fun `cardGroup级联删除覆盖aura与combo与私有条件树`() {
+        val jdbc = GlobalContext.get().get<JdbcTemplate>()
+
+        // 1) 建方案 + 两个绑定（combo 的核心组 / 依赖组）
+        val mgrResp = call(
+            "save_card_group",
+            """{"sourceFile":"$poolName","managerName":"$managerName","bindings":[
+                 {"name":"从属核心组","cardIds":["ICC_820"]},
+                 {"name":"从属依赖组","cardIds":["GDB_138"]}
+               ]}"""
+        )
+        assertFalse("建方案应成功: ${mgrResp.contentJson}", mgrResp.isError)
+        val mid = mapper.readTree(mgrResp.contentJson)["managerId"].asText()
+        managerId = mid
+        val bindingIdsFromGet = call("get", """{"resource":"card_group","id":"$mid"}""")
+            .let { mapper.readTree(it.contentJson)["bindings"].map { b -> b["id"].asText() } }
+        assertEquals("应有两个绑定", 2, bindingIdsFromGet.size)
+
+        // 2) 三类从属资源：aura（内联建 2 棵**卡组私有**条件树）+ combo
+        val boostResp = call(
+            "save_aura_boost",
+            """{"name":"t010_child_boost","score":1.5,"managerId":"$mid",
+                "conditionTreeJson":${treeJsonParam()},"targetConditionTreeJson":${treeJsonParam()}}"""
+        )
+        assertFalse("save_aura_boost 应成功: ${boostResp.contentJson}", boostResp.isError)
+        val boostId = mapper.readTree(boostResp.contentJson)["id"].asText()
+
+        val comboResp = call(
+            "save_combo_plan",
+            """{"managerId":"$mid","coreGroupIds":["${bindingIdsFromGet[0]}"],
+                "depGroupIds":["${bindingIdsFromGet[1]}"],"score":4.5,"relation":"SCORE_ONLY"}"""
+        )
+        assertFalse("save_combo_plan 应成功: ${comboResp.contentJson}", comboResp.isError)
+        val comboId = mapper.readTree(comboResp.contentJson)["id"].asText()
+
+        fun countOf(table: String): Int = jdbc.queryForObject(
+            "SELECT count(*) FROM $table WHERE manager_id = ?", Int::class.java, mid
+        )!!
+        assertEquals("前置：1 条 aura", 1, countOf("aura_boost"))
+        assertEquals("前置：1 条 combo", 1, countOf("combo_plan_definition"))
+        assertEquals("前置：2 棵卡组私有条件树（内联触发 + 受益）", 2, countOf("condition_tree_config"))
+
+        // 3) 级联删
+        val del = call("delete", """{"resource":"card_group","id":"$mid"}""")
+        assertFalse("delete(card_group) 应成功: ${del.contentJson}", del.isError)
+        val delContent = mapper.readTree(del.contentJson)
+        val snapshotId = delContent["snapshotId"].asText()
+        val deletedChildren = delContent["deletedChildren"]
+        assertEquals("回显应含 1 条 aura", 1, deletedChildren["auraBoosts"].asInt())
+        assertEquals("回显应含 1 条 combo", 1, deletedChildren["comboPlans"].asInt())
+        assertEquals("回显应含 2 棵私有条件树", 2, deletedChildren["privateConditionTrees"].asInt())
+
+        // 4) 三类从属资源全部归零（此前会留孤儿行）
+        assertEquals("aura 应被级联删", 0, countOf("aura_boost"))
+        assertEquals("combo 应被级联删", 0, countOf("combo_plan_definition"))
+        assertEquals("私有条件树应被级联删", 0, countOf("condition_tree_config"))
+        assertEquals(
+            "manager 应被删",
+            0,
+            jdbc.queryForObject("SELECT count(*) FROM card_group_manager WHERE id = ?", Int::class.java, mid)
+        )
+        // 自证守卫（K-TG-014 §5.4）：按库结构反查「带归属键的表」是否还有本卡组的行 ——
+        // 比逐表断言更强：将来新增归属表却忘了登记为 CardGroupChild，这里会直接失败
+        val residues = GlobalContext.get()
+            .get<lin.repository.delete_snapshot.OrphanRowGuard>().residues(mid)
+        assertTrue("级联删后不应有任何归属行残留（残留=$residues）", residues.isEmpty())
+
+        // 5) 一键恢复：三类逐项回来（原 id + 关键字段值）
+        val restore = call("restore_snapshot", """{"snapshotId":"$snapshotId"}""")
+        assertFalse("restore(card_group) 应成功: ${restore.contentJson}", restore.isError)
+        assertEquals("aura 应恢复", 1, countOf("aura_boost"))
+        assertEquals("combo 应恢复", 1, countOf("combo_plan_definition"))
+        assertEquals("私有条件树应恢复", 2, countOf("condition_tree_config"))
+        assertEquals(
+            "aura 原 id 保留", boostId,
+            jdbc.queryForObject("SELECT id FROM aura_boost WHERE manager_id = ?", String::class.java, mid)
+        )
+        assertEquals(
+            "combo 原 id 保留", comboId,
+            jdbc.queryForObject("SELECT id FROM combo_plan_definition WHERE manager_id = ?", String::class.java, mid)
+        )
+        assertEquals(
+            "aura name 还原", "t010_child_boost",
+            jdbc.queryForObject("SELECT name FROM aura_boost WHERE id = ?", String::class.java, boostId)
+        )
+        assertEquals(
+            "aura score 还原", 1.5,
+            jdbc.queryForObject("SELECT score FROM aura_boost WHERE id = ?", Double::class.java, boostId)!!, 0.001
+        )
     }
 
     // ─────────────────── card_pool 文件 roundtrip ───────────────────

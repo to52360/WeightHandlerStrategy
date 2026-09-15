@@ -20,6 +20,7 @@ import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
 import lin.repository.delete_snapshot.DeleteSnapshotRepository
+import lin.repository.delete_snapshot.OrphanRowGuard
 import lin.repository.delete_snapshot.SnapshotStore
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.EvaluatorLeafSourceCatalog
@@ -173,8 +174,19 @@ val uiDBModule = module {
     single { CardGroupRepository(get(), get()) }
     // 卡池（文件资源）同属卡组域 ⇒ card_pool 的快照能力由本服务导出
     single { CardGroupService(get(), get()) }
-    // T-TG-010：卡组级联删（关联树 + manager + 卡组维度项）+ 其快照/恢复
-    single { CardGroupCascadeDeleteService(get(), get(), get(), get()) }
+    // K-TG-014：卡组**从属资源清单**（唯一装配点）—— 各域自己声明（`cardGroupChild()`），这里只列清单。
+    // 新增从属资源 = 本列表 +1 项（忘加则由"残留守卫"告警兜住，见 K-TG-014 专项 §5.4）。
+    single {
+        listOf(
+            get<AuraBoostConfigService>().cardGroupChild(),
+            get<ComboPlanService>().cardGroupChild(),
+            get<ConditionTreeConfigService>().cardGroupChild()
+        )
+    }
+    // T-TG-010 + K-TG-014：卡组级联删（关联树 + manager + 卡组维度项 + 从属资源清单）+ 其快照/恢复
+    // K-TG-014 §5.4：残留自证守卫（机制依赖）—— 漏登记从属资源时告警，防"漏写一步不报错"
+    single { OrphanRowGuard(get()) }
+    single { CardGroupCascadeDeleteService(get(), get(), get(), get(), get(), get()) }
     // T-TG-015：用途预设（锚 + 维度项单表）+ 卡组增量项
     single { StrategyPresetRepository(get()) }
     single { StrategyPresetService(get(), get(), get()) }

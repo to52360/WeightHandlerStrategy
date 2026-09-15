@@ -7,6 +7,9 @@ import java.time.Instant
 /** delete_snapshot 保留条数上限（T-010：先常量，后续可配置化）。 */
 private const val SNAPSHOT_KEEP_N = 50
 
+/** 快照 id 分配重试次数（`nextShortId()` 同秒随机位仅 2 位 ⇒ 必须重试，见 [SnapshotStore.insert]）。 */
+private const val SNAPSHOT_ID_ATTEMPTS = 8
+
 /**
  * 删除被拒（校验未通过：实体不存在 / 引用中禁删 / 无法采集）。
  *
@@ -81,7 +84,7 @@ class SnapshotStore(
 
     /** 写一条快照（返回 snapshotId）并按保留策略清理超限条目。调用方应在自己的事务内调用。 */
     fun insert(resource: String, entityId: String, entityName: String?, payload: String): String {
-        val snapshotId = nextShortId()
+        val snapshotId = allocateId()
         repository.save(
             DeleteSnapshotEntity(
                 snapshotId = snapshotId,
@@ -94,6 +97,22 @@ class SnapshotStore(
         )
         repository.trimTo(SNAPSHOT_KEEP_N)
         return snapshotId
+    }
+
+    /**
+     * 分配一个**未被占用**的快照 id。
+     *
+     * [nextShortId] 的后 2 位只有 256 种取值 ⇒ **同一秒内多次删除会以 1/256 概率撞车**
+     * （实测：一个测试类跑 10+ 次删除即偶发 `UNIQUE constraint failed: delete_snapshot.snapshot_id`,
+     * 表现为"delete 偶发 Internal server error"）。这里循环重试把撞车概率降到可忽略；
+     * **不换 UUID** —— 快照 id 要给人念 / 传给 `restore_snapshot`，短 id 是刻意的交互设计。
+     */
+    private fun allocateId(): String {
+        repeat(SNAPSHOT_ID_ATTEMPTS) {
+            val candidate = nextShortId()
+            if (repository.findById(candidate) == null) return candidate
+        }
+        error("快照 id 分配失败：连续 $SNAPSHOT_ID_ATTEMPTS 次与既有快照冲突（同秒随机位过短）")
     }
 
     /** 取单条完整快照（含 payload）。 */

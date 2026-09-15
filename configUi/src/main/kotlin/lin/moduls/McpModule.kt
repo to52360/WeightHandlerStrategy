@@ -31,7 +31,6 @@ import lin.repository.delete_snapshot.SnapshotStore
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
 import lin.repository.tree_config.EvaluatorTreeTemplateRepository
 import lin.repository.tree_config.TreeConfigRepository
-import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.service.EvaluatorTreeTemplateService
 import lin.ui.service.TreeConfigService
@@ -124,7 +123,6 @@ val mcpModule = module {
     single {
         StrategyPresetToolProvider(
             get<StrategyPresetService>(),
-            get<PurposeTagRuleRepository>(),
             get<TreeConfigRepository>(),
             get<DimensionItemResolver>(),
             get<TreeConfigService>()
@@ -143,7 +141,7 @@ val mcpModule = module {
             get<PurposeTagProvider>(),
             get<CardPurposeRepository>(),
             get<PurposeTagDefRepository>(),
-            get<PurposeTagIntentRuleProvider>(),
+            get<PurposeTagRuleRepository>(),
             get<TreeConfigService>(),
             get<PurposeTagService>()
         )

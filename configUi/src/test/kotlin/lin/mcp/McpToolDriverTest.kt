@@ -1,7 +1,10 @@
 package lin.mcp
 
+import lin.ui.service.EvaluatorTreeTemplateService
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.koin.core.context.GlobalContext
 
 /**
  * MCP 工具实战验证驱动器（对应 T-102 端到端验证）。
@@ -13,6 +16,20 @@ import org.junit.Test
  * 环境搭建能力已提取至 [McpTestEnv]，本类只保留验证逻辑。
  */
 class McpToolDriverTest : McpTestEnv() {
+
+    /** 本类经 MCP 沉淀的模板 id（`evaluator_tree_template` 无级联清理，必须自己删）。 */
+    private val createdTemplateIds = mutableListOf<String>()
+
+    /**
+     * 模板清理由本类负责 —— `McpTestEnv` 的清理只覆盖树 / 卡组 / 条件树，**不含 `tree_template`**；
+     * 此前 cleanup 被注释掉 ⇒ 每跑一次就留一条 `verify_tpl_1`（曾累积 77 条）。
+     */
+    @After
+    fun cleanUpTemplates() {
+        val service = GlobalContext.get().get<EvaluatorTreeTemplateService>()
+        createdTemplateIds.forEach { service.deleteTemplate(it) }
+        createdTemplateIds.clear()
+    }
 
     private val deckCode =
         "AAEBAZ8FBPfQArjFBdaABtK5Bg3YxwKd7ALZ/gL9uAPruQPTvQTi0wSZjgb1lQbt3waS4Aac6Aaf6AYAAA=="
@@ -176,7 +193,11 @@ class McpToolDriverTest : McpTestEnv() {
             call(
                 "save_evaluator_tree_template",
                 """{"name":"verify_tpl_1","contentJson":$rootLiteral,"description":"端到端验证模板"}"""
-            )
+            ).also { r ->
+                runCatching { mapper.readValue(r.contentJson, Map::class.java)["id"] as String? }
+                    .getOrNull()
+                    ?.let { createdTemplateIds.add(it) }
+            }
 
             assertTrue(true)
         } finally {

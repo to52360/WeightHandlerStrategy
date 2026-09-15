@@ -99,13 +99,11 @@ class StrategyPresetTest : McpTestEnv() {
     // ─────────────────────── 时序 ───────────────────────
 
     @Test
-    fun `预设覆盖用途时序参数且未声明字段回落全局`() {
+    fun `预设声明用途即产生规则且未声明字段回落全局行`() {
         val deck = createEnabledDeck("TG_PRESET_DECK_A")
         testDeckId = deck
 
-        // 全局基线：CLEAN = MID / N=1
-        assertEquals(UseStage.MID, rulesByTag().getValue("CLEAN").defaultStage)
-
+        // 全局基线：CLEAN = MID / N=1（现仅作「缺省值来源」）
         val id = savePreset("""{"name":"TG_PRESET_A","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
         assertEquals(
             false,
@@ -113,8 +111,21 @@ class StrategyPresetTest : McpTestEnv() {
         )
 
         val clean = rulesByTag().getValue("CLEAN")
-        assertEquals("预设应把 CLEAN 的 stage 改成 LATE", UseStage.LATE, clean.defaultStage)
-        assertEquals("未声明的 N 应回落全局值 1", 1, clean.defaultSurplusIdleThreshold)
+        assertEquals("预设声明的 stage 应生效", UseStage.LATE, clean.defaultStage)
+        assertEquals("声明里没写的 N 应回落全局行 1", 1, clean.defaultSurplusIdleThreshold)
+        assertEquals("声明里没写的 priority 应回落全局行 300", 300, clean.priority)
+    }
+
+    @Test
+    fun `未声明的用途不再有规则`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_UNKNOWN")
+        testDeckId = deck
+
+        // 只声明 CLEAN ⇒ GREED / SAVE_LIFE 等一律无规则（D-TG-018：未声明 = 无规则）
+        val id = savePreset("""{"name":"TG_PRESET_UNKNOWN","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+
+        assertEquals("只应剩 CLEAN 一条规则", setOf("CLEAN"), rulesByTag().keys)
     }
 
     @Test
@@ -126,18 +137,53 @@ class StrategyPresetTest : McpTestEnv() {
         call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
         assertEquals(UseStage.LATE, rulesByTag().getValue("CLEAN").defaultStage)
 
-        // 卡组只覆盖 stage → 压过预设
+        // 卡组只声明 stage → 压过预设
         val delta = call(
             "save_card_group_preset_delta",
             """{"managerId":"$deck","timings":[{"tagId":"CLEAN","defaultStage":"GENERAL"}]}"""
         )
         assertEquals(false, delta.isError)
         assertEquals(UseStage.GENERAL, rulesByTag().getValue("CLEAN").defaultStage)
-        assertEquals("未声明的 N 仍回落全局", 1, rulesByTag().getValue("CLEAN").defaultSurplusIdleThreshold)
+        assertEquals("未声明的 N 仍回落全局行", 1, rulesByTag().getValue("CLEAN").defaultSurplusIdleThreshold)
     }
 
     @Test
-    fun `K-TG-005 可把用途的 N 覆盖为无门槛`() {
+    fun `消费方增量项可声明预设没声明的用途`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_ADD")
+        testDeckId = deck
+
+        val id = savePreset("""{"name":"TG_PRESET_ADD","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertEquals(setOf("CLEAN"), rulesByTag().keys)
+
+        // Q-TG-009 的"消费侧加项"在声明模型下自然成立：增量项自行声明一个新用途
+        val delta = call(
+            "save_card_group_preset_delta",
+            """{"managerId":"$deck","timings":[{"tagId":"GREED","defaultStage":"SETUP"}]}"""
+        )
+        assertEquals(false, delta.isError)
+        assertEquals("增量项声明的用途也应产出规则", setOf("CLEAN", "GREED"), rulesByTag().keys)
+        assertEquals(UseStage.SETUP, rulesByTag().getValue("GREED").defaultStage)
+    }
+
+    @Test
+    fun `priority 可在声明里可选覆盖`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_PRIO")
+        testDeckId = deck
+
+        val id = savePreset(
+            """{"name":"TG_PRESET_PRIO","timings":[{"tagId":"CLEAN","defaultStage":"MID","priority":777}]}"""
+        )
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertEquals("声明的 priority 应生效", 777, rulesByTag().getValue("CLEAN").priority)
+
+        // 读回也应带上 priority
+        val got = call("get", """{"resource":"strategy_preset","id":"$id"}""")
+        assertEquals(777, mapper.readTree(got.contentJson).get("timings").get(0).get("priority").asInt())
+    }
+
+    @Test
+    fun `K-TG-005 可把用途的 N 声明为无门槛`() {
         val deck = createEnabledDeck("TG_PRESET_DECK_A3")
         testDeckId = deck
 
@@ -146,7 +192,7 @@ class StrategyPresetTest : McpTestEnv() {
         )
         call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
         assertNull(
-            "clearSurplusIdleThreshold 应把 N 覆盖为「不设门槛」",
+            "clearSurplusIdleThreshold 应把 N 声明为「不设门槛」",
             rulesByTag().getValue("CLEAN").defaultSurplusIdleThreshold
         )
     }
@@ -161,16 +207,16 @@ class StrategyPresetTest : McpTestEnv() {
     }
 
     @Test
-    fun `不引用预设时完全走全局`() {
+    fun `不引用预设时无任何时序规则`() {
         createEnabledDeck("TG_PRESET_DECK_B").also { testDeckId = it }
 
         savePreset("""{"name":"TG_PRESET_B","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
-        // 建了预设但**不引用** → 全局不变
-        assertEquals(UseStage.MID, rulesByTag().getValue("CLEAN").defaultStage)
+        // 建了预设但**不引用** ⇒ 无声明 ⇒ 空规则集（D-TG-018：合法终态，无隐式作用）
+        assertTrue("不引用预设 ⇒ 不得有任何时序规则", rulesByTag().isEmpty())
     }
 
     @Test
-    fun `清除引用后回落全局`() {
+    fun `清除引用后规则集清空`() {
         val deck = createEnabledDeck("TG_PRESET_DECK_C")
         testDeckId = deck
 
@@ -179,19 +225,24 @@ class StrategyPresetTest : McpTestEnv() {
         assertEquals(UseStage.LATE, rulesByTag().getValue("CLEAN").defaultStage)
 
         assertEquals(false, call("save_card_group_preset", """{"managerId":"$deck"}""").isError)
-        assertEquals(UseStage.MID, rulesByTag().getValue("CLEAN").defaultStage)
+        assertTrue("解除引用 ⇒ 回到「无声明」⇒ 规则集清空", rulesByTag().isEmpty())
     }
 
     // ─────────────────────── 校验 ───────────────────────
 
     @Test
-    fun `无全局规则行的用途不能被覆盖`() {
-        // FINISH 无全局规则行（无规则 = 不参与选优，D-TG-003）→ 覆盖它必须报错
-        val r = call(
-            "save_strategy_preset",
-            """{"name":"TG_PRESET_D","timings":[{"tagId":"FINISH","defaultStage":"MID"}]}"""
+    fun `无全局规则行的用途也能被声明`() {
+        // T-TG-028 起：声明即规则 —— FINISH 不再被拒（此前 T-TG-025 的"加时序死结"就此解开）
+        // ⚠️ 必须走 savePreset 助手（登记 presetId）—— 先前直接 call ⇒ 该预设从不被清理（实测累积 5 行残留）
+        val id = savePreset(
+            """{"name":"TG_PRESET_D","timings":[{"tagId":"FINISH","defaultStage":"LAST","priority":900}]}"""
         )
-        assertTrue("覆盖无规则行的用途应被拒", r.isError)
+        val got = call("get", """{"resource":"strategy_preset","id":"$id"}""")
+        assertEquals(
+            "声明无全局行的用途应被接受且 priority 生效",
+            900,
+            mapper.readTree(got.contentJson).get("timings").get(0).get("priority").asInt()
+        )
     }
 
     @Test

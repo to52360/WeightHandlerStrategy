@@ -1,5 +1,6 @@
 package lin.repository.aura_boost
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.resolveConditionTreeReference
@@ -170,5 +171,33 @@ class AuraBoostConfigService(
 
     fun delete(id: String) {
         repository.deleteById(id)
+    }
+
+    /**
+     * K-TG-014：声明本域在「卡组」聚合根下的**从属资源**（采集 / 级联删 / 恢复三面同源）。
+     *
+     * 逐条 payload 复用 [SnapshotPayloads.auraBoost]、恢复逐条交给 [restoreFromSnapshot]
+     * ⇒ 与单资源删除 / 恢复共用同一编解码，**不产生第二套 JSON 形态**。
+     * ⚠️ 级联删**无条件删**（聚合整体消失，内部引用不构成约束）；单资源删除路径不变。
+     */
+    fun cardGroupChild(): CardGroupChild = CardGroupChild(
+        key = "auraBoosts",
+        collect = { managerId ->
+            SnapshotPayloads.itemsArray(repository.findByManager(managerId).map { SnapshotPayloads.auraBoost(it) })
+        },
+        delete = { managerId -> repository.deleteByManager(managerId) },
+        restore = { _, payload -> restoreAll(payload) }
+    )
+
+    /** 逐条写回并汇总（空数组 ⇒ 无事可做）。 */
+    private fun restoreAll(payload: JsonNode): RestoreResult {
+        val failures = payload.mapNotNull { item ->
+            restoreFromSnapshot(item["id"].asText(), item.toString()).takeIf { it.isError }
+        }
+        return RestoreResult(
+            "恢复 aura_boost ${payload.size()} 条" +
+                    if (failures.isEmpty()) "" else "，${failures.size} 条失败：${failures.first().message}",
+            isError = failures.isNotEmpty()
+        )
     }
 }

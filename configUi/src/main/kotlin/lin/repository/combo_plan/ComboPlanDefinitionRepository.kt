@@ -86,6 +86,17 @@ class ComboPlanDefinitionRepository(private val jdbcTemplate: JdbcTemplate) {
         jdbcTemplate.update(sql, id)
     }
 
+    /** 归属卡组名下的全部 Combo 方案（K-TG-014：卡组从属资源采集用）。 */
+    fun findByManager(managerId: String): List<ComboPlanDefinitionEntity> {
+        val sql = "SELECT * FROM combo_plan_definition WHERE manager_id = ?"
+        return jdbcTemplate.query(sql, rowMapper, managerId)
+    }
+
+    /** 整类删除（K-TG-014：级联删卡组用；不做引用校验）。 */
+    fun deleteByManager(managerId: String) {
+        jdbcTemplate.update("DELETE FROM combo_plan_definition WHERE manager_id = ?", managerId)
+    }
+
     fun findByManagerIds(managerIds: Set<String>): List<ComboPlanDefinitionEntity> {
         if (managerIds.isEmpty()) return emptyList()
         val placeholders = managerIds.joinToString(",") { "?" }

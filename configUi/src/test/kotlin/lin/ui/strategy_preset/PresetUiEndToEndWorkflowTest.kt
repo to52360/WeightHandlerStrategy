@@ -42,6 +42,9 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
     private val activeManagerHolder: ActiveManagerHolder by lazy {
         GlobalContext.get().get<ActiveManagerHolder>()
     }
+    private val cascadeDeleteService: lin.repository.card_group.CardGroupCascadeDeleteService by lazy {
+        GlobalContext.get().get()
+    }
 
     private lateinit var presetStore: StrategyPresetStore
     private lateinit var cardGroupStore: WorkbenchStore
@@ -53,12 +56,13 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
     @Before
     fun setUp() {
         presetStore = StrategyPresetStore(presetService, activeManagerHolder, catalogLoader)
-        cardGroupStore = WorkbenchStore(cardGroupService, presetService, catalogLoader)
+        cardGroupStore = WorkbenchStore(cardGroupService, presetService, catalogLoader, cascadeDeleteService)
     }
 
     @After
     fun tearDown() {
-        createdManagerIds.forEach { cardGroupService.deleteManager(it) }
+        // ⚠️ 必须走**级联删**：本用例写过卡组增量项，`cardGroupService.deleteManager` 会留下孤儿维度项
+        createdManagerIds.forEach { cascadeDeleteService.cascadeDelete(it) }
         createdPresetIds.forEach { presetService.deletePreset(it) }
         createdTreeIds.forEach { treeRepository.deleteById(it) }
     }

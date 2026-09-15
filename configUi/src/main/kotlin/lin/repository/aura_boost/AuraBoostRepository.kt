@@ -55,6 +55,15 @@ class AuraBoostRepository(private val jdbcTemplate: JdbcTemplate) {
         jdbcTemplate.update("DELETE FROM aura_boost WHERE id = ?", id)
     }
 
+    /** 归属卡组名下的全部规则（K-TG-014：卡组从属资源采集用）。 */
+    fun findByManager(managerId: String): List<AuraBoostEntity> =
+        jdbcTemplate.query("SELECT * FROM aura_boost WHERE manager_id = ?", rowMapper, managerId)
+
+    /** 整类删除（K-TG-014：级联删卡组用；不做引用校验）。 */
+    fun deleteByManager(managerId: String) {
+        jdbcTemplate.update("DELETE FROM aura_boost WHERE manager_id = ?", managerId)
+    }
+
     private val rowMapper = RowMapper { rs, _ ->
         AuraBoostEntity(
             id = rs.getString("id"),

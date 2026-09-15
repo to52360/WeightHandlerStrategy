@@ -14,6 +14,26 @@ import lin.dao.CardGroupJsonParser
  */
 class ManagerListPane(private val store: WorkbenchStore) : VBox(10.0) {
 
+    /**
+     * 删除确认（T-TG-035）：级联删的**覆盖面要提前说清** —— 否则用户以为只删了卡组方案。
+     *
+     * UI 删除**不落快照、不可恢复**（`D-TG-016` 裁定：UI 删除是用户自主操作），
+     * 需要可恢复请走 MCP `delete(resource=card_group)`（落快照 + `restore_snapshot`）。
+     */
+    private fun confirmDelete() {
+        val alert = Alert(Alert.AlertType.CONFIRMATION).apply {
+            title = "删除卡组方案"
+            headerText = "确认删除该卡组方案？"
+            contentText = "将一并删除：绑定条目、关联评估树、用途增量项、光环加分（AuraBoost）、" +
+                    "Combo 方案、卡组私有条件树。\n\n⚠️ UI 删除不落快照、不可恢复；" +
+                    "如需可恢复，请改用 MCP：delete(resource=card_group) + restore_snapshot。"
+            buttonTypes.setAll(ButtonType.OK, ButtonType.CANCEL)
+        }
+        if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+            store.deleteCurrentManager()
+        }
+    }
+
     private val managerListView = ListView<CardManagerItem>()
     private val observableItems = FXCollections.observableArrayList<CardManagerItem>()
 
@@ -24,7 +44,7 @@ class ManagerListPane(private val store: WorkbenchStore) : VBox(10.0) {
         val toolBar = HBox(5.0).apply {
             val btnNew = Button("新建").apply { setOnAction { showCreateDialog() } }
             val btnSave = Button("保存").apply { setOnAction { store.saveCurrentManager() } }
-            val btnDelete = Button("删除").apply { setOnAction { store.deleteCurrentManager() } }
+            val btnDelete = Button("删除").apply { setOnAction { confirmDelete() } }
             children.addAll(btnNew, btnSave, btnDelete)
         }
 

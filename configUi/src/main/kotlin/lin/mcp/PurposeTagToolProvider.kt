@@ -1,10 +1,12 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
+import lin.bean.usePlan.PurposeTagId
+import lin.bean.usePlan.PurposeTagIntentRule
+import lin.bean.usePlan.UseStage
 import lin.mcp.action.*
 import lin.repository.card_purpose.*
 import lin.rule.tree.EvaluatorTreeBindingType
-import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.service.TreeConfigService
 import java.time.LocalDate
@@ -111,7 +113,8 @@ class PurposeTagToolProvider(
     private val tagProvider: PurposeTagProvider,
     private val cardPurposeRepository: CardPurposeRepository,
     private val tagDefRepository: PurposeTagDefRepository,
-    private val ruleProvider: PurposeTagIntentRuleProvider,
+    /** 展示的是**全局缺省值来源**（声明模型下不等于"当前生效规则"，见 [globalRulesByTag]）。 */
+    private val ruleRepository: PurposeTagRuleRepository,
     private val treeConfigService: TreeConfigService,
     private val purposeTagService: PurposeTagService
 ) : McpToolProvider {
@@ -270,10 +273,29 @@ class PurposeTagToolProvider(
 
     // ── 能力实现（purpose_tag 的 get / list）：具名私有函数，行为可点名 ──
 
+    /**
+     * 全局用途规则行（T-TG-028）：**本页展示的是全局缺省值来源，不是某卡组当前生效的规则** ——
+     * 声明模型下生效规则由「卡组引用预设 + 增量项」决定（见 `SqlitePurposeTagIntentRuleProvider`），
+     * 而本工具的职责是回答「该标签的出厂默认是什么、新建预设时会被预填成什么」。
+     */
+    private fun globalRulesByTag() =
+        ruleRepository.findAll().mapNotNull { row ->
+            runCatching { UseStage.valueOf(row.defaultStage) }.getOrNull()?.let { stage ->
+                row.tagId to PurposeTagIntentRule(
+                    tagId = PurposeTagId(row.tagId),
+                    defaultStage = stage,
+                    defaultOrderWeight = row.defaultOrderWeight,
+                    priority = row.priority,
+                    defaultReplanAfterUse = row.defaultReplanAfterUse,
+                    defaultSurplusIdleThreshold = row.defaultSurplusIdleThreshold
+                )
+            }
+        }.toMap()
+
     /** list：标签摘要（含规则默认值 + 关联卡数）。 */
     private fun tagSummaries(): McpToolResult {
         val tags = tagProvider.tags()
-        val rules = ruleProvider.rules().associateBy { it.tagId.value }
+        val rules = globalRulesByTag()
         val defs = tagDefRepository.findAll().associateBy { it.tagId }
         val allCardPurposes = cardPurposeRepository.findAll()
         val cardTagSets = allCardPurposes.map { entity ->
@@ -308,8 +330,7 @@ class PurposeTagToolProvider(
         }
 
         val tagDef = availableTags.first { it.id.value == targetTagId }
-        val rules = ruleProvider.rules().associateBy { it.tagId.value }
-        val rule = rules[targetTagId]
+        val rule = globalRulesByTag()[targetTagId]
 
         val allCardPurposes = cardPurposeRepository.findAll()
         val associatedCards = allCardPurposes

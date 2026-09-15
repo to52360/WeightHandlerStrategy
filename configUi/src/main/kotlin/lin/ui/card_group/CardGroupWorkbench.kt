@@ -1,6 +1,7 @@
 package lin.ui.card_group
 
 import javafx.scene.control.SplitPane
+import lin.repository.card_group.CardGroupCascadeDeleteService
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.StrategyPresetService
 import lin.ui.ActiveAware
@@ -19,8 +20,9 @@ class CardGroupWorkbench : SplitPane(), KoinComponent, ActiveAware {
     private val service: CardGroupService by inject()
     private val presetService: StrategyPresetService by inject()
     private val catalogLoader: PresetCatalogLoader by inject()
+    private val cascadeDeleteService: CardGroupCascadeDeleteService by inject()
 
-    private val store = WorkbenchStore(service, presetService, catalogLoader)
+    private val store = WorkbenchStore(service, presetService, catalogLoader, cascadeDeleteService)
 
     init {
         // 1. 左侧：Manager 列表区

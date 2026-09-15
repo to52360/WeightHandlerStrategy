@@ -8,7 +8,6 @@ import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.ThresholdPatch
 import lin.repository.card_group.TimingOverride
-import lin.repository.card_purpose.PurposeTagRuleRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.service.TreeConfigService
@@ -53,23 +52,30 @@ data class PurposeTimingInput(
     @field:JsonPropertyDescription("用途标签 ID（如 CLEAN / DRAW_CARD，由 list(resource=purpose_tag) 返回）。")
     val tagId: String,
 
-    @field:JsonPropertyDescription("覆盖：默认出牌阶段。可选 FIRST/SETUP/MID/LATE/GENERAL/LAST；不传 = 不覆盖该字段。")
+    @field:JsonPropertyDescription("默认出牌阶段。可选 FIRST/SETUP/MID/LATE/GENERAL/LAST；不传 = 用全局规则行的值。")
     val defaultStage: String? = null,
 
-    @field:JsonPropertyDescription("覆盖：默认排序权重。不传 = 不覆盖。")
+    @field:JsonPropertyDescription("默认排序权重。不传 = 用全局规则行的值。")
     val defaultOrderWeight: Double? = null,
 
-    @field:JsonPropertyDescription("覆盖：默认余费门槛 N（正整数）。不传 = 不覆盖该字段。")
+    @field:JsonPropertyDescription("默认余费门槛 N（正整数）。不传 = 用全局规则行的值。")
     val defaultSurplusIdleThreshold: Int? = null,
 
     @field:JsonPropertyDescription(
-        "覆盖：把余费门槛 N 置为「不设门槛」。与 defaultSurplusIdleThreshold 互斥（同时传会报错）。" +
-                "⚠️ 只有本开关能表达「覆盖为无门槛」—— 不传任何门槛字段只表示「不覆盖」。"
+        "把余费门槛 N 置为「不设门槛」。与 defaultSurplusIdleThreshold 互斥（同时传会报错）。" +
+                "⚠️ 只有本开关能表达「声明为无门槛」—— 不传任何门槛字段只表示「用全局规则行的值」。"
     )
     val clearSurplusIdleThreshold: Boolean = false,
 
-    @field:JsonPropertyDescription("覆盖：打出后是否必须重新评估。不传 = 不覆盖。")
-    val defaultReplanAfterUse: Boolean? = null
+    @field:JsonPropertyDescription("打出后是否必须重新评估。不传 = 用全局规则行的值。")
+    val defaultReplanAfterUse: Boolean? = null,
+
+    @field:JsonPropertyDescription(
+        "优先级（一张卡同时挂多个用途时用来裁决 stage 等唯一字段，数值越大越优先）。" +
+                "**不传 = 用该用途全局规则行的 priority**（无全局行则用内置默认 100）。" +
+                "priority 只在一张卡内部比较、不跨卡，故可按预设分化。"
+    )
+    val priority: Int? = null
 )
 
 data class SaveStrategyPresetInput(
@@ -91,8 +97,10 @@ data class SaveStrategyPresetInput(
     val treeSelections: List<PresetTreeKeepInput>? = null,
 
     @field:JsonPropertyDescription(
-        "本预设对用途的时序覆盖（**整体替换**语义）。不传 = 不修改；传空数组 = 清空。" +
-                "只能覆盖**已有全局规则行**的用途（无规则行的用途报错）。"
+        "本预设对用途的**时序声明**（**整体替换**语义）。不传 = 不修改；传空数组 = 清空。" +
+                "⚠️ 声明即规则：**声明的用途 = 有规则（参与 priority 选优），未声明的用途 = 无规则**" +
+                "（阶段回落 GENERAL、门槛回落 0），与树白名单同向。" +
+                "声明里没写的字段用全局 purpose_tag_rule 行的值兜底。"
     )
     val timings: List<PurposeTimingInput>? = null
 )
@@ -114,7 +122,8 @@ data class SaveCardGroupPresetInput(
 
     @field:JsonPropertyDescription(
         "该卡组引用的预设 id；不传或空 = 不用预设。" +
-                "⚠️ 不用预设 ⇒ 该卡组**全部用途树生效**（现状）；引用**空预设**才是「关掉全部兜底」。"
+                "⚠️ 不用预设 = **无任何声明**（合法的「精准规则」场景）⇒ 该卡组**用途树不生效、时序无规则**；" +
+                "引用**空预设** = 声明了但一无所有 ⇒ 用途树全禁（与前者在树维度同效，但语义不同）。"
     )
     val presetId: String? = null
 )
@@ -139,8 +148,6 @@ data class SaveCardGroupPresetDeltaInput(
 
 class StrategyPresetToolProvider(
     private val service: StrategyPresetService,
-    /** 前置校验用：时序覆盖只能作用于「已有全局规则行」的用途（见 D-TG-003）。 */
-    private val ruleRepository: PurposeTagRuleRepository,
     /** 前置校验用：树必须存在、必须是 PURPOSE_TAG 绑定、且确实绑了该用途。 */
     private val treeRepository: TreeConfigRepository,
     /** 「被禁用的用途清单」计算（纯规则）。 */
@@ -179,15 +186,17 @@ class StrategyPresetToolProvider(
 
                 与「精细层」的分工：逐卡/逐组的精细调整走卡组私有分组，预设只管跨卡组共享的用途级兜底。
 
-                两个维度：
+                两个维度（**同向语义：声明 = 生效，未声明 = 不生效**）：
                 - **treeSelections（白名单）**：某用途**保留**哪些树。
                   ⚠️ 未列出的用途 = 未声明 ⇒ **该用途的用途树全部禁用**（响应里的 disabledPurposes 会列出）。
-                - **timings（覆盖）**：按用途覆盖 stage / orderWeight / N / replan；
-                  不传的字段**不覆盖**（回落全局 purpose_tag_rule）；把 N 覆盖为「不设门槛」用 clearSurplusIdleThreshold。
+                - **timings（时序声明）**：某用途的 stage / orderWeight / N / replan（+ 可选 priority）。
+                  ⚠️ **声明即规则**：未声明的用途 = **无规则**（不参与 priority 选优，阶段回落 GENERAL、门槛 0），
+                  与树白名单同向；声明里没写的**字段**才回落全局 purpose_tag_rule 行。
+                  把 N 声明为「不设门槛」用 clearSurplusIdleThreshold。
 
                 粒度：树维度是 **(用途, 树)** —— 一棵树绑了多个用途时，各自独立取舍（实现是按用途收窄绑定）。
 
-                ⚠️ 解析链为「卡组私有（组级/卡级） > 消费方增量项 > 预设 > 全局用途规则」；
+                ⚠️ 解析链为「卡组私有（组级/卡级） > 消费方增量项 > 预设声明 > 全局行（仅作缺省值） > 内置默认」；
                   切换预设或卡组后**需重启**引擎装配（配置侧装配期一次性解析）。
                 删除预设走 delete(resource=strategy_preset)：**仍被卡组引用时拒绝**（回显引用卡组），
                   需先 save_card_group_preset（不带 presetId）解除引用；删除前落快照，可 restore_snapshot 恢复。
@@ -203,7 +212,6 @@ class StrategyPresetToolProvider(
                 tag to item.treeIds.map { it.trim() }.distinct()
             }
             val timings = input.timings?.associate { it.toDomain() }
-            timings?.let { validateTimingTargets(it) }
 
             val result = service.savePreset(
                 presetId = input.presetId?.trim()?.takeIf { it.isNotBlank() },
@@ -270,9 +278,10 @@ class StrategyPresetToolProvider(
             description = """
                 设置卡组引用的用途预设（不传 presetId = 不用预设）。
 
-                ⚠️ 语义差别：
-                - **不引用预设** = **全部用途树生效**（＝不做兜底裁剪，现状行为）；
-                - **引用空预设** = **关闭全部用途树**（即"我不要兜底策略、我要精准策略"的正规表达）。
+                ⚠️ 语义（声明模型）：
+                - **不引用预设** = **一条声明都没有** ⇒ 该卡组**全局用途树不生效、时序无规则**
+                  （合法的「精准规则」场景 —— 只靠卡组私有分组/评估树；**卡组专属用途树不受影响**，建树即声明）；
+                - **引用空预设** = 引用了但没声明任何内容 ⇒ 同样全禁（语义更明确，推荐用「不引用」表达精准意图）。
                 ⚠️ 本操作只改引用，不动卡组的分组/元信息、也不动增量项；切换后需重启引擎装配才生效。
             """.trimIndent()
         ) { input ->
@@ -291,10 +300,11 @@ class StrategyPresetToolProvider(
                 设置卡组的**用途增量项**（③微调层）—— 在引用的预设之上做小偏差调整。
 
                 - **excludeTreeSelections**：本卡组在某用途下**再排除**若干棵树（只能减，不能启用被预设禁用的树）；
-                - **timings**：本卡组对该用途时序的覆盖（逐字段压过预设值）。
+                - **timings**：本卡组对该用途的**时序声明**（逐字段压过预设声明；也可**自行声明预设没声明的用途**）。
 
-                ⚠️ 这是"共享预设 + 本卡组微调"的正规通道：想整套换掉请改用「空预设 + 自己的精细分组」，
+                ⚠️ 这是"共享预设 + 本卡组微调"的正规通道：想整套换掉请改用「不引用预设 + 自己的精细分组」，
                   而不是在这里逐项排除；**整体替换**语义（不传 = 不改 / 空数组 = 清空）。
+                ⚠️ 未声明的用途 = 无规则（阶段回落 GENERAL、门槛 0），声明里没写的字段回落全局行。
                 ⚠️ 改完需重启引擎装配才生效。
             """.trimIndent()
         ) { input ->
@@ -305,7 +315,6 @@ class StrategyPresetToolProvider(
                 tag to item.treeIds.map { it.trim() }.distinct()
             }
             val timings = input.timings?.associate { it.toDomain() }
-            timings?.let { validateTimingTargets(it) }
             val error = service.saveDeckDelta(
                 managerId = input.managerId.trim(),
                 treeExclusions = excludes,
@@ -339,19 +348,39 @@ class StrategyPresetToolProvider(
     }
 
     /**
-     * 时序覆盖只能作用于「**已有全局规则行**」的用途 —— 无规则行 = 不参与 priority 选优（D-TG-003），
-     * 新增行会改变选优集合且默认 priority 会与他人平手 ⇒ 必须在 MCP 层报错而非静默失效。
+     * 校验并转换为 [TimingOverride]；stage 非法 / priority 越界直接报错（防脏数据让引擎侧静默丢弃）。
+     *
+     * ⚠️ **不校验「有全局规则行」**（T-TG-028 起声明即规则）：未声明的用途**可以**被声明，
+     * 未写的字段才回落全局行，全局无行则用内置默认（D-TG-018）。
      */
-    private fun validateTimingTargets(timings: Map<String, TimingOverride>) {
-        timings.keys.forEach { tag ->
-            if (ruleRepository.findByTagId(tag) == null) {
-                throw McpBadInput(
-                    "用途 $tag 没有全局规则行，无法覆盖其时序。" +
-                            "该用途当前不参与排序默认值推导（无规则 = 不参与，见 D-TG-003）；" +
-                            "若确需其有默认值，请先为其建立全局规则。"
-                )
-            }
+    private fun PurposeTimingInput.toDomain(): Pair<String, TimingOverride> {
+        val tag = tagId.trim()
+        if (tag.isBlank()) throw McpBadInput("timings[].tagId 不能为空")
+        if (clearSurplusIdleThreshold && defaultSurplusIdleThreshold != null) {
+            throw McpBadInput("$tag: clearSurplusIdleThreshold 与 defaultSurplusIdleThreshold 互斥")
         }
+        val stage = defaultStage?.trim()?.takeIf { it.isNotBlank() }
+        if (stage != null && UseStage.entries.none { it.name == stage }) {
+            throw McpBadInput(
+                "timings[$tag].defaultStage 非法: $stage。" +
+                        "可选值: ${UseStage.entries.joinToString("/") { it.name }}"
+            )
+        }
+        if (priority != null && priority !in PRIORITY_RANGE) {
+            throw McpBadInput("timings[$tag].priority 超出范围: $priority（可填 ${PRIORITY_RANGE.first}~${PRIORITY_RANGE.last}）")
+        }
+        val threshold = when {
+            clearSurplusIdleThreshold -> ThresholdPatch(null)
+            defaultSurplusIdleThreshold != null -> ThresholdPatch(defaultSurplusIdleThreshold)
+            else -> null
+        }
+        return tag to TimingOverride(
+            defaultStage = stage,
+            defaultOrderWeight = defaultOrderWeight,
+            defaultReplanAfterUse = defaultReplanAfterUse,
+            surplusIdleThreshold = threshold,
+            priority = priority
+        )
     }
 
     /** 「被禁用的用途清单」= 库中已有用途树（已启用）的用途 − 本预设已声明的用途。 */
@@ -408,7 +437,9 @@ class StrategyPresetToolProvider(
                         "defaultSurplusIdleThreshold" to override.surplusIdleThreshold?.value,
                         "surplusIdleThresholdCleared" to (override.surplusIdleThreshold?.value == null &&
                                 override.surplusIdleThreshold != null),
-                        "defaultReplanAfterUse" to override.defaultReplanAfterUse
+                        "defaultReplanAfterUse" to override.defaultReplanAfterUse,
+                        // 未声明 ⇒ null（引擎侧取全局行的 priority，无全局行则内置默认 100）
+                        "priority" to override.priority
                     )
                 },
                 // 防"以为在用其实被禁"：列出被本预设禁用的用途
@@ -420,31 +451,7 @@ class StrategyPresetToolProvider(
     }
 
     private companion object {
-        /** 校验并转换为 [TimingOverride]；stage 非法直接报错（防脏数据让引擎侧静默丢弃）。 */
-        fun PurposeTimingInput.toDomain(): Pair<String, TimingOverride> {
-            val tag = tagId.trim()
-            if (tag.isBlank()) throw McpBadInput("timings[].tagId 不能为空")
-            if (clearSurplusIdleThreshold && defaultSurplusIdleThreshold != null) {
-                throw McpBadInput("$tag: clearSurplusIdleThreshold 与 defaultSurplusIdleThreshold 互斥")
-            }
-            val stage = defaultStage?.trim()?.takeIf { it.isNotBlank() }
-            if (stage != null && UseStage.entries.none { it.name == stage }) {
-                throw McpBadInput(
-                    "timings[$tag].defaultStage 非法: $stage。" +
-                            "可选值: ${UseStage.entries.joinToString("/") { it.name }}"
-                )
-            }
-            val threshold = when {
-                clearSurplusIdleThreshold -> ThresholdPatch(null)
-                defaultSurplusIdleThreshold != null -> ThresholdPatch(defaultSurplusIdleThreshold)
-                else -> null
-            }
-            return tag to TimingOverride(
-                defaultStage = stage,
-                defaultOrderWeight = defaultOrderWeight,
-                defaultReplanAfterUse = defaultReplanAfterUse,
-                surplusIdleThreshold = threshold
-            )
-        }
+        /** priority 合法区间：只用于挡明显误填（0 会让该用途在任何冲突中垫底，负值无意义）。 */
+        val PRIORITY_RANGE = 1..9999
     }
 }

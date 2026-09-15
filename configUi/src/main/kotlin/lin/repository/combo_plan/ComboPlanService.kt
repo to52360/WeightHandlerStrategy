@@ -36,4 +36,26 @@ class ComboPlanService(
         repository.save(entity)
         return RestoreResult("已恢复 combo_plan ${entity.id}（原 id 保留）", isError = false)
     }
+
+    /**
+     * K-TG-014：声明本域在「卡组」聚合根下的**从属资源**（采集 / 级联删 / 恢复三面同源），
+     * 逐条复用 [SnapshotPayloads.comboPlan] 与 [restoreFromSnapshot] ⇒ 零第二套 JSON 形态。
+     */
+    fun cardGroupChild(): CardGroupChild = CardGroupChild(
+        key = "comboPlans",
+        collect = { managerId ->
+            SnapshotPayloads.itemsArray(repository.findByManager(managerId).map { SnapshotPayloads.comboPlan(it) })
+        },
+        delete = { managerId -> repository.deleteByManager(managerId) },
+        restore = { _, payload ->
+            val failures = payload.mapNotNull { item ->
+                restoreFromSnapshot(item["id"].asText(), item.toString()).takeIf { it.isError }
+            }
+            RestoreResult(
+                "恢复 combo_plan ${payload.size()} 条" +
+                        if (failures.isEmpty()) "" else "，${failures.size} 条失败：${failures.first().message}",
+                isError = failures.isNotEmpty()
+            )
+        }
+    )
 }

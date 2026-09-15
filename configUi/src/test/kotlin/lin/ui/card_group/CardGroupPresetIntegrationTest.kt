@@ -26,6 +26,9 @@ class CardGroupPresetIntegrationTest : McpTestEnv() {
     private val treeRepository: lin.repository.tree_config.TreeConfigRepository by lazy {
         GlobalContext.get().get()
     }
+    private val cascadeDeleteService: CardGroupCascadeDeleteService by lazy {
+        GlobalContext.get().get<CardGroupCascadeDeleteService>()
+    }
 
     private lateinit var store: WorkbenchStore
     private val createdManagerIds = mutableListOf<String>()
@@ -34,12 +37,14 @@ class CardGroupPresetIntegrationTest : McpTestEnv() {
 
     @Before
     fun setUp() {
-        store = WorkbenchStore(cardGroupService, presetService, catalogLoader)
+        store = WorkbenchStore(cardGroupService, presetService, catalogLoader, cascadeDeleteService)
     }
 
     @After
     fun tearDown() {
-        createdManagerIds.forEach { cardGroupService.deleteManager(it) }
+        // ⚠️ 必须走**级联删**：`cardGroupService.deleteManager` 只删绑定/行为/manager，
+        // 本类写过的卡组增量项（`strategy_dimension_item`）会留成孤儿（实测 3 组残留）
+        createdManagerIds.forEach { cascadeDeleteService.cascadeDelete(it) }
         createdPresetIds.forEach { presetService.deletePreset(it) }
         createdTreeIds.forEach { treeRepository.deleteById(it) }
     }

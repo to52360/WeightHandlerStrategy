@@ -99,6 +99,18 @@ abstract class McpTestEnv {
                     }
                     // 连带删除该 manager 内联创建的谓词组条件树（condition_tree_config，manager_id 挂在此）
                     jdbc.update("DELETE FROM condition_tree_config WHERE manager_id = ?", mgrId)
+                    // K-TG-014：卡组的从属资源也要清 —— raw SQL 删 binding 不带行为行，且 aura/combo 各有归属键，
+                    // 漏清就每跑一次留孤儿行（曾累积 32 aura + 48 behavior，见 K-TG-013/014）
+                    jdbc.update(
+                        "DELETE FROM card_group_behavior WHERE binding_id IN (SELECT id FROM card_group_binding WHERE manager_id = ?)",
+                        mgrId
+                    )
+                    jdbc.update("DELETE FROM aura_boost WHERE manager_id = ?", mgrId)
+                    jdbc.update("DELETE FROM combo_plan_definition WHERE manager_id = ?", mgrId)
+                    jdbc.update(
+                        "DELETE FROM strategy_dimension_item WHERE scope = 'CARD_GROUP' AND owner_id = ?",
+                        mgrId
+                    )
                     jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mgrId)
                     jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mgrId)
                     cleaned++
@@ -122,12 +134,30 @@ abstract class McpTestEnv {
                         jdbc.update("DELETE FROM tree_config WHERE id = ?", tid)
                     }
                     jdbc.update("DELETE FROM condition_tree_config WHERE manager_id = ?", mgrId)
+                    jdbc.update(
+                        "DELETE FROM card_group_behavior WHERE binding_id IN (SELECT id FROM card_group_binding WHERE manager_id = ?)",
+                        mgrId
+                    )
+                    jdbc.update("DELETE FROM aura_boost WHERE manager_id = ?", mgrId)
+                    jdbc.update("DELETE FROM combo_plan_definition WHERE manager_id = ?", mgrId)
+                    jdbc.update(
+                        "DELETE FROM strategy_dimension_item WHERE scope = 'CARD_GROUP' AND owner_id = ?",
+                        mgrId
+                    )
                     jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mgrId)
                     jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mgrId)
                     cleaned++
                     println("   删除孤儿 manager: ${row["name"]} ($mgrId)")
                 }
             }.onFailure { e -> println("   孤儿 manager 清理失败: ${e.message}") }
+
+            // 3.c **伪归属**：测试惯用"卡组名"当 managerId（如 aura 挂在从未创建的 manager 名上）
+            // ⇒ 按-manager 清理覆盖不到，这里按名字补一刀（K-TG-014 家族：漏清即每跑一次留孤儿）
+            runCatching {
+                val jdbc = GlobalContext.get().get<JdbcTemplate>()
+                jdbc.update("DELETE FROM aura_boost WHERE manager_id = ?", managerName)
+                jdbc.update("DELETE FROM combo_plan_definition WHERE manager_id = ?", managerName)
+            }.onFailure { e -> println("   伪归属清理失败: ${e.message}") }
 
             println(">>> 清理完毕，共清理 $cleaned 项")
         }
@@ -246,7 +276,7 @@ abstract class McpTestEnv {
                 jdbc.update("DELETE FROM evaluator_leaf_config WHERE config_id = ?", id)
                 jdbc.update("DELETE FROM tree_config WHERE id = ?", id)
             }
-            // 2. manager 级联删除（全部关联树 + bindings + 该 manager 内联创建的谓词组条件树）
+            // 2. manager 级联删除（全部关联树 + bindings + 行为行 + 该 manager 的从属资源 + 内联条件树）
             managerId?.let { mid ->
                 jdbc.update(
                     "DELETE FROM evaluator_leaf_config WHERE config_id IN (SELECT id FROM tree_config WHERE manager_id = ?)",
@@ -254,6 +284,13 @@ abstract class McpTestEnv {
                 )
                 jdbc.update("DELETE FROM tree_config WHERE manager_id = ?", mid)
                 jdbc.update("DELETE FROM condition_tree_config WHERE manager_id = ?", mid)
+                jdbc.update(
+                    "DELETE FROM card_group_behavior WHERE binding_id IN (SELECT id FROM card_group_binding WHERE manager_id = ?)",
+                    mid
+                )
+                jdbc.update("DELETE FROM aura_boost WHERE manager_id = ?", mid)
+                jdbc.update("DELETE FROM combo_plan_definition WHERE manager_id = ?", mid)
+                jdbc.update("DELETE FROM strategy_dimension_item WHERE scope = 'CARD_GROUP' AND owner_id = ?", mid)
                 jdbc.update("DELETE FROM card_group_binding WHERE manager_id = ?", mid)
                 jdbc.update("DELETE FROM card_group_manager WHERE id = ?", mid)
             }

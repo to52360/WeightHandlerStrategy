@@ -47,6 +47,20 @@ class ConditionTreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
     }
 
     /**
+     * **卡组私有**条件树（`manager_id = ?`）——全局共享树（`manager_id IS NULL`）**不含**
+     * （K-TG-014：全局资源不属于任何卡组，不随卡组删）。
+     */
+    fun findByManager(managerId: String): List<ConditionTreeConfigEntity> {
+        val sql = "SELECT * FROM condition_tree_config WHERE manager_id = ?"
+        return jdbcTemplate.query(sql, rowMapper, managerId)
+    }
+
+    /** 整类删除本卡组的私有条件树（级联删用；级联场景**豁免**引用校验，见 K-TG-014 专项 §6.0）。 */
+    fun deleteByManager(managerId: String) {
+        jdbcTemplate.update("DELETE FROM condition_tree_config WHERE manager_id = ?", managerId)
+    }
+
+    /**
      * 按卡组查询可用的条件树元数据：返回当前卡组私有条件树 + 全局共享条件树（manager_id 为 NULL）。
      * 与 tree_config（评估树）的 null 语义保持一致；写入端已将空字符串归一化为 NULL。
      * managerId 为空时等价全量返回。

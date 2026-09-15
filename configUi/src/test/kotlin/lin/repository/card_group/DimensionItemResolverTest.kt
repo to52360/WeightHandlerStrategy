@@ -17,7 +17,7 @@ class DimensionItemResolverTest {
     private val resolver = DimensionItemResolver()
 
     private fun selection(
-        presetKeep: Map<String, Set<String>>?,
+        presetKeep: Map<String, Set<String>>,
         consumerExclude: Map<String, Set<String>> = emptyMap()
     ) = DimensionItemResolver.TreeSelection(presetKeep, consumerExclude)
 
@@ -44,9 +44,11 @@ class DimensionItemResolverTest {
     }
 
     @Test
-    fun `未引用预设时不做白名单裁剪`() {
-        val sel = selection(presetKeep = null)
-        assertEquals(listOf("CLEAN"), resolver.narrowTreeTags("treeA", listOf("CLEAN"), sel))
+    fun `未引用预设时用途树不输出`() {
+        // D-TG-018：不引用预设 = 一条声明都没有 ⇒ 全局共享用途树全部不输出（与空预设同效）
+        val sel = resolver.treeSelection(false, mapOf("CLEAN" to setOf("treeA")), emptyMap())
+        assertEquals(emptyList<String>(), resolver.narrowTreeTags("treeA", listOf("CLEAN"), sel))
+        assertEquals(emptyList<String>(), resolver.narrowTreeTags("treeB", listOf("GREED"), sel))
     }
 
     @Test
@@ -81,7 +83,7 @@ class DimensionItemResolverTest {
 
     @Test
     fun `卡组专属树仍受消费方增量项约束`() {
-        val sel = selection(presetKeep = null, consumerExclude = mapOf("CLEAN" to setOf("own")))
+        val sel = selection(presetKeep = emptyMap(), consumerExclude = mapOf("CLEAN" to setOf("own")))
         assertEquals("本卡组可把自己的专属树再排除（微调入口保留）", emptyList<String>(), resolver.narrowOwnTreeTags("own", listOf("CLEAN"), sel))
         assertEquals(listOf("CLEAN"), resolver.narrowOwnTreeTags("other", listOf("CLEAN"), sel))
     }
@@ -103,12 +105,20 @@ class DimensionItemResolverTest {
     }
 
     @Test
-    fun `treeSelection 在未引用预设时白名单为 null`() {
+    fun `treeSelection 在未引用预设时白名单为空表`() {
+        // D-TG-018：`null`（放行全部）语义已废除 —— 未引用预设取空表 ⇒ 与"空预设"同效（全禁）
         val none = resolver.treeSelection(false, mapOf("CLEAN" to setOf("treeA")), emptyMap())
-        assertNull(none.presetKeepByTag)
+        assertTrue("未引用预设 ⇒ 白名单为空表（不是 null）", none.presetKeepByTag.isEmpty())
 
         val referenced = resolver.treeSelection(true, mapOf("CLEAN" to setOf("treeA")), emptyMap())
         assertEquals(mapOf("CLEAN" to setOf("treeA")), referenced.presetKeepByTag)
+    }
+
+    @Test
+    fun `TreeSelection NONE 与未引用预设同效（用途树全不输出）`() {
+        val none = DimensionItemResolver.TreeSelection.NONE
+        assertTrue(none.presetKeepByTag.isEmpty())
+        assertEquals(emptyList<String>(), resolver.narrowTreeTags("treeA", listOf("CLEAN"), none))
     }
 
     @Test
@@ -137,11 +147,28 @@ class DimensionItemResolverTest {
     )
 
     @Test
-    fun `未声明的字段回落全局值`() {
-        val merged = resolver.applyTiming(rule(), TimingOverride(defaultStage = "LATE"))
-        assertEquals(UseStage.LATE, merged.defaultStage)
-        assertEquals("未声明的 N 应回落全局", 1, merged.defaultSurplusIdleThreshold)
-        assertEquals(1.0, merged.defaultOrderWeight, 0.0)
+    fun `声明未写的字段回落全局规则行`() {
+        val rule = resolver.toRule("CLEAN", TimingOverride(defaultStage = "LATE"), fallback = rule())
+        assertEquals(UseStage.LATE, rule.defaultStage)
+        assertEquals("未声明的 N 应回落全局", 1, rule.defaultSurplusIdleThreshold)
+        assertEquals(1.0, rule.defaultOrderWeight, 0.0)
+        assertEquals("未声明的 priority 应回落全局", 300, rule.priority)
+    }
+
+    @Test
+    fun `priority 可在声明里可选覆盖`() {
+        val rule = resolver.toRule("CLEAN", TimingOverride(priority = 999), fallback = rule())
+        assertEquals(999, rule.priority)
+    }
+
+    @Test
+    fun `无全局规则行时用内置默认`() {
+        // 不是兜底：只在"用途已被声明、但字段没填"时落位（D-TG-018）
+        val rule = resolver.toRule("FINISH", TimingOverride(defaultStage = "MID"), fallback = null)
+        assertEquals(UseStage.MID, rule.defaultStage)
+        assertEquals("内置默认 priority", 100, rule.priority)
+        assertNull("内置默认 N = null", rule.defaultSurplusIdleThreshold)
+        assertFalse("内置默认 replan = false", rule.defaultReplanAfterUse)
     }
 
     @Test
@@ -155,22 +182,45 @@ class DimensionItemResolverTest {
     }
 
     @Test
-    fun `K-TG-005 显式声明 null 可把 N 覆盖为无门槛`() {
-        val merged =
-            resolver.applyTiming(rule(threshold = 1), TimingOverride(surplusIdleThreshold = ThresholdPatch(null)))
-        assertNull("显式 null 应覆盖为「不设门槛」", merged.defaultSurplusIdleThreshold)
+    fun `增量项只改其它字段时预设声明的 priority 不被丢弃`() {
+        // 回归：mergeTiming 曾漏合并 priority ⇒ 增量项一碰该用途，预设声明的 priority 就静默回落全局行
+        val merged = resolver.mergeTiming(
+            lower = TimingOverride(priority = 999, defaultStage = "LATE"),
+            upper = TimingOverride(surplusIdleThreshold = ThresholdPatch(5))
+        )
+        assertEquals("upper 未声明 priority ⇒ 保留 lower 的", 999, merged.priority)
+        assertEquals(
+            "upper 声明了 priority ⇒ 覆盖 lower", 7,
+            resolver.mergeTiming(lower = TimingOverride(priority = 999), upper = TimingOverride(priority = 7)).priority
+        )
     }
 
     @Test
-    fun `未出现该字段时不覆盖 N`() {
-        val merged = resolver.applyTiming(rule(threshold = 1), TimingOverride(defaultStage = "LATE"))
-        assertEquals(1, merged.defaultSurplusIdleThreshold)
+    fun `两层声明都缺席时合并结果为未声明`() {
+        val merged = resolver.mergeTiming(lower = null, upper = null)
+        assertTrue("两层都没声明 ⇒ 空声明（调用方据此判定「未声明 = 无规则」）", merged.isEmpty)
     }
 
     @Test
-    fun `空覆盖不改变规则`() {
-        val base = rule()
-        assertEquals(base, resolver.applyTiming(base, TimingOverride()))
+    fun `K-TG-005 显式声明 null 可把 N 声明为无门槛`() {
+        val rule = resolver.toRule(
+            "CLEAN",
+            TimingOverride(surplusIdleThreshold = ThresholdPatch(null)),
+            fallback = rule(threshold = 1)
+        )
+        assertNull("显式 null 应声明为「不设门槛」", rule.defaultSurplusIdleThreshold)
+    }
+
+    @Test
+    fun `未出现门槛字段时回落全局 N`() {
+        val rule = resolver.toRule("CLEAN", TimingOverride(defaultStage = "LATE"), fallback = rule(threshold = 1))
+        assertEquals(1, rule.defaultSurplusIdleThreshold)
+    }
+
+    @Test
+    fun `声明里的 stage 非法时回落而不炸`() {
+        val rule = resolver.toRule("CLEAN", TimingOverride(defaultStage = "NOT_A_STAGE"), fallback = rule())
+        assertEquals("非法 stage 应回落全局行的值", UseStage.MID, rule.defaultStage)
     }
 
     // ─────────────────────── payload 编解码（单点） ───────────────────────

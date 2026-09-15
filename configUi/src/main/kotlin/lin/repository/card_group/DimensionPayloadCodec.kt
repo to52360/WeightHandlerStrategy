@@ -13,21 +13,24 @@ import lin.utils.runCatchingLog
 data class ThresholdPatch(val value: Int?)
 
 /**
- * 用途时序覆盖（维度 `PURPOSE_TIMING` 的 payload 模型）。
+ * 用途时序**声明**（维度 `PURPOSE_TIMING` 的 payload 模型，D-TG-018）。
  *
- * **字段未出现 = 不覆盖**（回落下一层）；`surplusIdleThreshold` 例外（见 [ThresholdPatch]）。
- * 语义见 `cross-dialogue/Q-TG-003-use-preset-final.md` §3.3。
+ * **字段未出现 = 未声明**（回落缺省值源：全局 `purpose_tag_rule` 行 ⇒ 内置默认）；
+ * `surplusIdleThreshold` 例外（三态，见 [ThresholdPatch]）。
+ * 声明本身即「该用途有规则」——**未声明 = 无规则 = 不参与 `UseIntentDeriver` 的 priority 选优**。
  */
 data class TimingOverride(
     val defaultStage: String? = null,
     val defaultOrderWeight: Double? = null,
     val defaultReplanAfterUse: Boolean? = null,
-    val surplusIdleThreshold: ThresholdPatch? = null
+    val surplusIdleThreshold: ThresholdPatch? = null,
+    /** priority 可选覆盖（D-TG-018）：未声明 ⇒ 取全局行 ⇒ 无全局行则内置默认 100。 */
+    val priority: Int? = null
 ) {
-    /** 四个字段都没声明 —— 该行是空操作（写库无意义）。 */
+    /** 所有字段都没声明 —— 该行是空操作（写库无意义）。 */
     val isEmpty: Boolean
         get() = defaultStage == null && defaultOrderWeight == null &&
-                defaultReplanAfterUse == null && surplusIdleThreshold == null
+                defaultReplanAfterUse == null && surplusIdleThreshold == null && priority == null
 }
 
 /**
@@ -64,6 +67,7 @@ object DimensionPayloadCodec {
         override.defaultStage?.let { node.put("defaultStage", it) }
         override.defaultOrderWeight?.let { node.put("defaultOrderWeight", it) }
         override.defaultReplanAfterUse?.let { node.put("defaultReplanAfterUse", it) }
+        override.priority?.let { node.put("priority", it) }
         override.surplusIdleThreshold?.let { patch ->
             val value = patch.value
             if (value == null) node.putNull("defaultSurplusIdleThreshold")
@@ -78,6 +82,7 @@ object DimensionPayloadCodec {
             defaultStage = node.textOrNull("defaultStage"),
             defaultOrderWeight = node.doubleOrNull("defaultOrderWeight"),
             defaultReplanAfterUse = node.booleanOrNull("defaultReplanAfterUse"),
+            priority = node.intOrNull("priority"),
             // ⚠️ N 的「是否声明」由键存在性承载 —— 不能被 takeUnless { isNull } 一并抹掉
             surplusIdleThreshold = if (node.has("defaultSurplusIdleThreshold")) {
                 ThresholdPatch(node.get("defaultSurplusIdleThreshold").takeUnless { it.isNull }?.asInt())
@@ -102,4 +107,8 @@ object DimensionPayloadCodec {
     private fun JsonNode.doubleOrNull(field: String): Double? = get(field)?.takeUnless { it.isNull }?.asDouble()
 
     private fun JsonNode.booleanOrNull(field: String): Boolean? = get(field)?.takeUnless { it.isNull }?.asBoolean()
+
+    /** ⚠️ 非数值节点（如脏字符串）⇒ 视为未声明，不得让 `asInt()` 把 `"abc"` 静默解成 0。 */
+    private fun JsonNode.intOrNull(field: String): Int? =
+        get(field)?.takeUnless { it.isNull }?.takeIf { it.isNumber }?.asInt()
 }

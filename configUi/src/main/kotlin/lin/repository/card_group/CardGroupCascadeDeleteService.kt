@@ -1,7 +1,9 @@
 package lin.repository.card_group
 
+import lin.repository.delete_snapshot.CardGroupChild
 import lin.repository.delete_snapshot.CardGroupSnapshot
 import lin.repository.delete_snapshot.EvaluatorTreeSnapshot
+import lin.repository.delete_snapshot.OrphanRowGuard
 import lin.repository.delete_snapshot.RestoreResult
 import lin.repository.delete_snapshot.SnapshotDraft
 import lin.repository.delete_snapshot.SnapshotOps
@@ -13,17 +15,30 @@ import lin.ui.service.TreeConfigService
 import org.springframework.transaction.support.TransactionTemplate
 
 /**
- * 卡组方案的级联删除 / 恢复（T-TG-010：业务归域）。
+ * 卡组方案的级联删除 / 恢复（T-TG-010：业务归域；K-TG-014：从属资源补齐）。
  *
  * 为什么单独成一个类：卡组是**聚合根** —— 关联评估树（`tree_config.manager_id`）、绑定条目、
  * 卡组维度项（`strategy_dimension_item.scope='CARD_GROUP'`）都从属于它，且都以 managerId 为归属键。
  * 也就是说它跨的域与卡组**强相关**，不是"无关域拼装"（refactoring-review Gate 2 #3 的反面）。
+ *
+ * **从属资源清单**（`children`，K-TG-014）：本类**不认识各域** —— 采集 / 删除 / 恢复都按
+ * [CardGroupChild] 值遍历（新增从属资源 = 装配点 +1 行）。`children` **未覆盖**的另两类
+ * （关联评估树、卡组维度项）因其快照载体是**类型化字段**且老快照 JSON 依赖它们，**保持原样不动**
+ * （全量值化会破坏老快照可恢复性，收益只是形式统一 ⇒ 不做，见专项 §4 注）。
  */
 class CardGroupCascadeDeleteService(
     private val groupService: CardGroupService,
     private val treeConfigService: TreeConfigService,
     private val presetRepository: StrategyPresetRepository,
-    private val tx: TransactionTemplate
+    private val tx: TransactionTemplate,
+    /** 从属资源清单（唯一装配点在 `ModelsDefine`；各域自己声明 `cardGroupChild()`）。 */
+    private val children: List<CardGroupChild>,
+    /**
+     * 残留自证守卫（K-TG-014 §5.4）。
+     * ⚠️ 属**机制**依赖（同 [tx] 层级），不是业务域服务 ⇒ 本类业务依赖仍是 3 个
+     * （`groupService` / `treeConfigService` / `presetRepository`）。
+     */
+    private val orphanRowGuard: OrphanRowGuard
 ) {
     /**
      * 导出 card_group 的删除操作值：采集卡组全貌（manager + bindings + 可解析的关联树 + 卡组维度项），
@@ -47,6 +62,8 @@ class CardGroupCascadeDeleteService(
             val found = treeConfigService.findById(treeId)
             if (found?.second == null) null else treeId to found
         }
+        // K-TG-014：值化从属资源（各域自采）—— 与删除侧同源，保证"删得掉、也恢复得回"
+        val childPayloads = children.associate { it.key to it.collect(entityId) }
         val snapshot = CardGroupSnapshot(
             managerName = manager.name,
             sourceFile = manager.sourceFile,
@@ -71,7 +88,8 @@ class CardGroupCascadeDeleteService(
                 )
             },
             presetId = manager.presetId,
-            dimensionItems = presetRepository.findItems(DimensionScope.CARD_GROUP, entityId)
+            dimensionItems = presetRepository.findItems(DimensionScope.CARD_GROUP, entityId),
+            children = childPayloads
         )
 
         return SnapshotDraft(
@@ -83,12 +101,30 @@ class CardGroupCascadeDeleteService(
                 "managerName" to manager.name,
                 "deletedBindings" to bindings.map { it.name },
                 "deletedTrees" to treeNames,
-                "totalDeleted" to (1 + bindings.size + fullTrees.size)
+                // 各从属资源的条数（空的不列，避免回显噪声）
+                "deletedChildren" to childPayloads.filterValues { it.size() > 0 }.mapValues { it.value.size() },
+                "totalDeleted" to (1 + bindings.size + fullTrees.size + childPayloads.values.sumOf { it.size() })
             )
         )
     }
 
-    /** 级联删：关联树 + manager + 卡组维度项（与落快照同事务，由 [SnapshotStore] 编排）。 */
+    /**
+     * **UI 路径**：级联删但**不落快照**（T-TG-035；`D-TG-016`：UI 删除是用户自主操作，不做恢复兜底）。
+     *
+     * 与 MCP 路径**共用同一份 [cascadeRemove]** ⇒ 两条路径的清理覆盖面不再分叉
+     * （此前 UI 路径连评估树 / 卡组维度项都不删）。
+     */
+    fun cascadeDelete(managerId: String) {
+        tx.execute { cascadeRemove(managerId) }
+    }
+
+    /**
+     * 级联删：关联树 + manager + 卡组维度项 + 各域声明的从属资源
+     * （与落快照同事务，由 [SnapshotStore] 编排）。
+     *
+     * 顺序无关：聚合整体消失，聚合内部的相互引用不构成约束
+     * （如私有条件树被 aura / 评估树引用 —— 三者同批被删，故不校验引用）。
+     */
     private fun cascadeRemove(entityId: String) {
         // 关联树全删（不设"可解析"前提，防解析失败的树残留）
         treeConfigService.loadSummaries()
@@ -97,6 +133,10 @@ class CardGroupCascadeDeleteService(
         groupService.deleteManager(entityId)
         // 卡组维度项一并清理：防孤儿行；防恢复复用原 id 时旧增量项意外复活
         presetRepository.deleteItems(DimensionScope.CARD_GROUP, entityId)
+        // 从属资源（aura / combo / 卡组私有条件树 …）：清单由装配点给出，本类不认识各域
+        children.forEach { it.delete(entityId) }
+        // 自证：库中带归属键的表是否还有本卡组的行（漏登记从属资源即告警，只警告不删）
+        orphanRowGuard.assertNoResidue(entityId)
     }
 
     /**
@@ -157,10 +197,21 @@ class CardGroupCascadeDeleteService(
                     description = t.description
                 )
             }
+            // K-TG-014：从属资源按各域声明的 restore 写回（老快照无 children ⇒ 空数组 = 无事可做）
+            val childResults = children.map { child ->
+                child to child.restore(id, p.children[child.key] ?: SnapshotPayloads.mapper.createArrayNode())
+            }
+            val failed = childResults.filter { it.second.isError }
             RestoreResult(
                 "已恢复 card_group $id（manager + ${p.bindings.size} binding + ${p.trees.size} 棵关联树" +
-                        " + preset=${presetId ?: "null"} + ${p.dimensionItems.size} 条维度项，原 id 全保留）",
-                isError = false
+                        " + preset=${presetId ?: "null"} + ${p.dimensionItems.size} 条维度项" +
+                        " + 从属资源 ${childResults.count { !it.second.isError }} 类：${
+                            childResults.joinToString("、") { "${it.first.key} ${it.second.message}" }
+                        }，原 id 全保留）" +
+                        if (failed.isEmpty()) "" else "；❌ ${failed.size} 类失败：${
+                            failed.joinToString("；") { it.second.message }
+                        }",
+                isError = failed.isNotEmpty()
             )
         }!!
     }

@@ -13,7 +13,9 @@ import java.util.*
 class WorkbenchStore(
     private val service: CardGroupService,
     private val presetService: StrategyPresetService,
-    private val catalogLoader: PresetCatalogLoader
+    private val catalogLoader: PresetCatalogLoader,
+    /** T-TG-035：UI 删除走**与 MCP 同一份级联编排**（不落快照）。 */
+    private val cascadeDeleteService: CardGroupCascadeDeleteService
 ) {
 
     val stateProperty = SimpleObjectProperty(WorkbenchState())
@@ -159,10 +161,16 @@ class WorkbenchStore(
         selectManager(newManager)
     }
 
+    /**
+     * 删除当前卡组方案。
+     *
+     * T-TG-035 前：只删绑定 / 行为 / manager，**评估树与卡组维度项等从属资源全留孤儿**
+     * （比 MCP `delete(resource=card_group)` 漏得多）⇒ 现统一走级联编排（仍不落快照，见 `D-TG-016`）。
+     */
     fun deleteCurrentManager() {
         val currentItem = state.selectedManagerItem ?: return
         if (!currentItem.isDraft && currentItem.entity != null) {
-            service.deleteManager(currentItem.entity.id)
+            cascadeDeleteService.cascadeDelete(currentItem.entity.id)
         }
         loadInitialData()
         selectManager(null)

@@ -1,8 +1,10 @@
 package lin.repository.delete_snapshot
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.NamedType
+import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import lin.dao.CardGroupConfig
 import lin.repository.aura_boost.AuraBoostEntity
@@ -44,6 +46,12 @@ data class ConditionTreeSnapshot(
  *
  * [presetId] 与 [dimensionItems]：删除卡组时维度项一并清理、恢复时须写回，
  * 否则「用预设」在恢复后会退化成「不用预设」，且卡组增量项丢失。
+ *
+ * [children]（K-TG-014）：**值化从属资源** —— 键 = [CardGroupChild.key]，
+ * 值 = 该资源内容的 JSON 数组（如 `auraBoosts` / `comboPlans` / `privateConditionTrees`）。
+ * ⚠️ 默认空表 ⇒ **本字段出现前的老快照照常可读**（只是不含这几类）；
+ * [bindings] / [trees] / [dimensionItems] 保持类型化字段不动 —— 兼容既有快照 JSON 契约
+ * （全量改值化会破坏老快照的可恢复性，收益只是形式统一 ⇒ 不做）。
  */
 data class CardGroupSnapshot(
     val managerName: String,
@@ -55,7 +63,8 @@ data class CardGroupSnapshot(
     val bindings: List<CardGroupBinding>,
     val trees: List<EvaluatorTreeSnapshot>,
     val presetId: String? = null,
-    val dimensionItems: List<DimensionItemEntity> = emptyList()
+    val dimensionItems: List<DimensionItemEntity> = emptyList(),
+    val children: Map<String, JsonNode> = emptyMap()
 )
 
 /** 策略预设快照载体（锚 + 两维度原始行，恢复时按维度覆盖写回）。 */
@@ -136,6 +145,15 @@ object SnapshotPayloads {
 
     /** card_group：由 ops 采集侧组装载体后经多态 mapper 序列化。 */
     fun cardGroup(snapshot: CardGroupSnapshot): String = cardGroupMapper.writeValueAsString(snapshot)
+
+    /**
+     * 值化从属资源用：把「逐项 payload JSON」装成数组节点（空表 ⇒ 空数组）。
+     *
+     * 逐项 payload 复用各域既有的 `xxx(entity)` 单条编解码 ⇒ **不产生第二套 JSON 形态**
+     * （恢复侧同样逐项交给各域既有的 `restoreFromSnapshot`）。
+     */
+    fun itemsArray(itemPayloads: List<String>): ArrayNode =
+        mapper.createArrayNode().apply { itemPayloads.forEach { add(mapper.readTree(it)) } }
 }
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
