@@ -19,6 +19,7 @@ import lin.repository.combo_plan.ComboPlanService
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
+import lin.repository.delete_snapshot.CardGroupChild
 import lin.repository.delete_snapshot.DeleteSnapshotRepository
 import lin.repository.delete_snapshot.OrphanRowGuard
 import lin.repository.delete_snapshot.SnapshotStore
@@ -176,7 +177,8 @@ val uiDBModule = module {
     single { CardGroupService(get(), get()) }
     // K-TG-014：卡组**从属资源清单**（唯一装配点）—— 各域自己声明（`cardGroupChild()`），这里只列清单。
     // 新增从属资源 = 本列表 +1 项（忘加则由"残留守卫"告警兜住，见 K-TG-014 专项 §5.4）。
-    single {
+    // key 唯一性由 CardGroupCascadeDeleteService 采集侧断言兜住（防静默覆盖漏恢复）。
+    single<List<CardGroupChild>> {
         listOf(
             get<AuraBoostConfigService>().cardGroupChild(),
             get<ComboPlanService>().cardGroupChild(),

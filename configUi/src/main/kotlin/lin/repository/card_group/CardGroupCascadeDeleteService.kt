@@ -63,7 +63,14 @@ class CardGroupCascadeDeleteService(
             if (found?.second == null) null else treeId to found
         }
         // K-TG-014：值化从属资源（各域自采）—— 与删除侧同源，保证"删得掉、也恢复得回"
-        val childPayloads = children.associate { it.key to it.collect(entityId) }
+        // key 唯一闲断言：装配点漏查不会把重复 key 静默压缩成一份（集合写回/恢复会随之漏一类）
+        val childPayloads = buildMap {
+            for (child in children) {
+                check(put(child.key, child.collect(entityId)) == null) {
+                    "CardGroupChild key 重复: ${child.key}（请在 ModelsDefine 装配清单去重）"
+                }
+            }
+        }
         val snapshot = CardGroupSnapshot(
             managerName = manager.name,
             sourceFile = manager.sourceFile,
@@ -163,56 +170,68 @@ class CardGroupCascadeDeleteService(
                 isError = true
             )
         }
-        return tx.execute {
-            groupService.saveManager(
-                ManagerSaveCommand(
-                    name = p.managerName,
-                    sourceFile = p.sourceFile,
-                    enabled = p.enabled,
-                    bindings = p.bindings.map { it.copy(managerId = "") },
-                    existingId = id,
-                    managerDescription = p.managerDescription,
-                    managerStatus = p.managerStatus,
-                    defaultIncludeDerived = p.defaultIncludeDerived
-                )
+        return tx.execute { restoreTx(id, p, presetId) }!!
+    }
+
+    /** 事务内写回（冲突校验已通过）：manager → 预设引用 → 维度项 → 关联树 → 从属资源。 */
+    private fun restoreTx(id: String, p: CardGroupSnapshot, presetId: String?): RestoreResult {
+        groupService.saveManager(
+            ManagerSaveCommand(
+                name = p.managerName,
+                sourceFile = p.sourceFile,
+                enabled = p.enabled,
+                bindings = p.bindings.map { it.copy(managerId = "") },
+                existingId = id,
+                managerDescription = p.managerDescription,
+                managerStatus = p.managerStatus,
+                defaultIncludeDerived = p.defaultIncludeDerived
             )
-            // saveManager 有意不写 preset_id（整体替换语义），故恢复时单独写回（用上面校验过的 presetId）
-            groupService.setPresetReference(id, presetId)
-            // 卡组维度项按维度覆盖写回（replaceItems 先删同维度再插，满足联合主键覆盖语义）
-            p.dimensionItems.groupBy { it.dimension }.forEach { (dimension, items) ->
-                presetRepository.replaceItems(DimensionScope.CARD_GROUP, id, dimension, items)
-            }
-            p.trees.forEach { t ->
-                treeConfigService.saveConfig(
-                    name = t.name,
-                    config = EvaluatorTreeConfig(
-                        bindingType = EvaluatorTreeBindingType.valueOf(t.bindingType),
-                        bindingIds = t.bindingIds,
-                        root = t.root,
-                        leafConfigs = t.leafConfigs
-                    ),
-                    existingId = t.id,
-                    enabled = t.enabled,
-                    managerId = t.managerId,
-                    description = t.description
-                )
-            }
-            // K-TG-014：从属资源按各域声明的 restore 写回（老快照无 children ⇒ 空数组 = 无事可做）
-            val childResults = children.map { child ->
-                child to child.restore(id, p.children[child.key] ?: SnapshotPayloads.mapper.createArrayNode())
-            }
-            val failed = childResults.filter { it.second.isError }
-            RestoreResult(
-                "已恢复 card_group $id（manager + ${p.bindings.size} binding + ${p.trees.size} 棵关联树" +
-                        " + preset=${presetId ?: "null"} + ${p.dimensionItems.size} 条维度项" +
-                        " + 从属资源 ${childResults.count { !it.second.isError }} 类：${
-                            childResults.joinToString("、") { "${it.first.key} ${it.second.message}" }
-                        }，原 id 全保留）" +
-                        if (failed.isEmpty()) "" else "；❌ ${failed.size} 类失败：${
-                            failed.joinToString("；") { it.second.message }
-                        }",
-                isError = failed.isNotEmpty()
-            )
-        }!!
+        )
+        // saveManager 有意不写 preset_id（整体替换语义），故恢复时单独写回（用上面校验过的 presetId）
+        groupService.setPresetReference(id, presetId)
+        // 卡组维度项按维度覆盖写回（replaceItems 先删同维度再插，满足联合主键覆盖语义）
+        p.dimensionItems.groupBy { it.dimension }.forEach { (dimension, items) ->
+            presetRepository.replaceItems(DimensionScope.CARD_GROUP, id, dimension, items)
+        }
+        p.trees.forEach { restoreTree(it) }
+        return restoreChildren(id, p)
+    }
+
+    private fun restoreTree(t: EvaluatorTreeSnapshot) {
+        treeConfigService.saveConfig(
+            name = t.name,
+            config = EvaluatorTreeConfig(
+                bindingType = EvaluatorTreeBindingType.valueOf(t.bindingType),
+                bindingIds = t.bindingIds,
+                root = t.root,
+                leafConfigs = t.leafConfigs
+            ),
+            existingId = t.id,
+            enabled = t.enabled,
+            managerId = t.managerId,
+            description = t.description
+        )
+    }
+
+    /**
+     * 从属资源按各域声明的 restore 写回（老快照无 children ⇒ 空数组 = 无事可做），
+     * 汇总各域的成败并聚合成结果消息。
+     */
+    private fun restoreChildren(id: String, p: CardGroupSnapshot): RestoreResult {
+        val childResults = children.map { child ->
+            child to child.restore(id, p.children[child.key] ?: SnapshotPayloads.mapper.createArrayNode())
+        }
+        val failed = childResults.filter { it.second.isError }
+        return RestoreResult(
+            "已恢复 card_group $id（manager + ${p.bindings.size} binding + ${p.trees.size} 棵关联树" +
+                    " + preset=${p.presetId?.takeIf { it.isNotBlank() } ?: "null"} + ${p.dimensionItems.size} 条维度项" +
+                    " + 从属资源 ${childResults.count { !it.second.isError }} 类：${
+                        childResults.joinToString("、") { "${it.first.key} ${it.second.message}" }
+                    }，原 id 全保留）" +
+                    if (failed.isEmpty()) "" else "；❌ ${failed.size} 类失败：${
+                        failed.joinToString("；") { it.second.message }
+                    }",
+            isError = failed.isNotEmpty()
+        )
     }
 }
