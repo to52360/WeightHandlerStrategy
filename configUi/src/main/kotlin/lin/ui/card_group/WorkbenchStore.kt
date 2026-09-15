@@ -117,16 +117,17 @@ class WorkbenchStore(
     }
 
     /**
-     * 保存卡组微调层增量项（T-TG-018）。
+     * 保存卡组微调层增量项（T-TG-018；T-TG-029 起含独立的惜售维度）。
      */
     fun saveDeckDelta(
         treeExclusions: Map<String, Collection<String>>?,
-        timings: Map<String, TimingOverride>?
+        timings: Map<String, TimingOverride>?,
+        surplus: Map<String, SurplusOverride>? = null
     ): String? {
         val currentItem = state.selectedManagerItem ?: return "未选择卡组"
         val managerId = currentItem.entity?.id ?: return "卡组尚未保存"
 
-        val error = presetService.saveDeckDelta(managerId, treeExclusions, timings)
+        val error = presetService.saveDeckDelta(managerId, treeExclusions, timings, surplus)
         if (error != null) return error
 
         val updatedDelta = presetService.findDeckDelta(managerId)

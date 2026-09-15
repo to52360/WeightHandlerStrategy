@@ -2,6 +2,7 @@ package lin.ui.strategy_preset
 
 import lin.mcp.McpTestEnv
 import lin.repository.card_group.StrategyPresetService
+import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.ThresholdPatch
 import lin.repository.card_group.TimingOverride
 import lin.repository.tree_config.TreeConfigEntity
@@ -75,25 +76,28 @@ class StrategyPresetEditorTest : McpTestEnv() {
             "CLEAN" to TimingOverride(
                 defaultStage = "FIRST",
                 defaultOrderWeight = 3.5,
-                defaultReplanAfterUse = true,
-                surplusIdleThreshold = ThresholdPatch(2)
+                defaultReplanAfterUse = true
             ),
             "DRAW_CARD" to TimingOverride(
                 defaultStage = "MID",
                 defaultOrderWeight = 1.0,
-                defaultReplanAfterUse = false,
-                surplusIdleThreshold = ThresholdPatch(null) // 清除为无门槛
+                defaultReplanAfterUse = false
             )
+        )
+        // T-TG-029：惜售门槛独立维度（三态：声明值 / 声明为无门槛 / 不声明）
+        val surplus = mapOf(
+            "CLEAN" to SurplusOverride(surplusIdleThreshold = ThresholdPatch(2)),
+            "DRAW_CARD" to SurplusOverride(surplusIdleThreshold = ThresholdPatch(null)) // 声明为无门槛
         )
 
         // 1. 新建完整预设
-        val err = store.savePreset(null, "TG_FULL_PRESET", "完整预设测试", treeSelections, timings)
+        val err = store.savePreset(null, "TG_FULL_PRESET", "完整预设测试", treeSelections, timings, surplus)
         assertNull("保存应成功", err)
         val presetId = store.state.selectedPresetId
         assertNotNull(presetId)
         createdPresetIds += presetId!!
 
-        // 2. 读回并校验两维度数据
+        // 2. 读回并校验各维度数据
         val detail = service.findDetail(presetId)
         assertNotNull(detail)
         assertEquals("TG_FULL_PRESET", detail!!.preset.name)
@@ -105,14 +109,15 @@ class StrategyPresetEditorTest : McpTestEnv() {
         assertEquals("FIRST", cleanTiming!!.defaultStage)
         assertEquals(3.5, cleanTiming.defaultOrderWeight!!, 0.0)
         assertEquals(true, cleanTiming.defaultReplanAfterUse)
-        assertEquals(2, cleanTiming.surplusIdleThreshold?.value)
 
         val drawTiming = detail.timings["DRAW_CARD"]
         assertNotNull(drawTiming)
         assertEquals("MID", drawTiming!!.defaultStage)
         assertEquals(false, drawTiming.defaultReplanAfterUse)
-        assertNotNull("门槛已声明", drawTiming.surplusIdleThreshold)
-        assertNull("清除为无门槛时 value 应为 null", drawTiming.surplusIdleThreshold?.value)
+
+        assertEquals("惜售门槛落在独立维度", 2, detail.surplus["CLEAN"]?.surplusIdleThreshold?.value)
+        assertNotNull("门槛已声明（声明为无门槛）", detail.surplus["DRAW_CARD"]?.surplusIdleThreshold)
+        assertNull("声明为无门槛时 value 应为 null", detail.surplus["DRAW_CARD"]?.surplusIdleThreshold?.value)
     }
 
     @Test

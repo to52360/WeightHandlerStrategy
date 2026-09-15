@@ -18,7 +18,12 @@ data class PresetCatalog(
     val presets: List<PresetSummary>,
     /** 全局共享用途树候选（manager_id IS NULL 且 PURPOSE_TAG，含禁用项） */
     val candidateTrees: List<TreeConfigEntity>,
-    /** 拥有全局规则行的用途列表（可覆盖时序，按 priority 排序） */
+    /**
+     * 拥有全局规则行的用途列表（按 priority 排序）。
+     *
+     * ⚠️ **时序面板与惜售面板共用**这份候选（T-TG-029 起两者是并列维度）：
+     * 它既决定"哪些用途可声明"，也充当两个面板的**默认值提示来源**。
+     */
     val timingRules: List<PurposeTagRuleEntity>,
     /** 库中已启用的全局用途标签全集（禁用用途看板口径，D-TG-015） */
     val purposeUniverse: Set<String>

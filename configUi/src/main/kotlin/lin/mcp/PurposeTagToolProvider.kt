@@ -42,6 +42,12 @@ data class PurposeTagSummaryDto(
     val displayName: String,
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
+    @field:JsonPropertyDescription(
+        "**是否有全局规则行**。false = 该用途无规则条目（如 FINISH / EXTRA_COST）⇒ " +
+                "下列 defaultStage / priority / N 等字段**只是展示用的内置默认落点，不是生效规则**：" +
+                "无规则 = 不参与出牌阶段选优，配置面调它无效。"
+    )
+    val hasRule: Boolean,
     @field:JsonPropertyDescription("默认映射的出牌阶段（时序命名，非用途）。可选值：FIRST, SETUP, MID, LATE, GENERAL, LAST")
     val defaultStage: String,
     val defaultOrderWeight: Double,
@@ -59,6 +65,12 @@ data class PurposeTagDetailDto(
     val displayName: String,
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
+    @field:JsonPropertyDescription(
+        "**是否有全局规则行**。false = 该用途无规则条目（如 FINISH / EXTRA_COST）⇒ " +
+                "下列 defaultStage / priority / N 等字段**只是展示用的内置默认落点，不是生效规则**：" +
+                "无规则 = 不参与出牌阶段选优，配置面调它无效。"
+    )
+    val hasRule: Boolean,
     @field:JsonPropertyDescription("默认映射的出牌阶段（时序命名，非用途）。可选值：FIRST, SETUP, MID, LATE, GENERAL, LAST")
     val defaultStage: String,
     val defaultOrderWeight: Double,
@@ -308,6 +320,7 @@ class PurposeTagToolProvider(
                 tagId = tagIdStr,
                 displayName = tagDef.displayName,
                 boundPurpose = defs[tagIdStr]?.boundPurpose,
+                hasRule = rule != null,
                 defaultStage = rule?.defaultStage?.name ?: "GENERAL",
                 defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
                 defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,
@@ -364,6 +377,7 @@ class PurposeTagToolProvider(
             tagId = targetTagId,
             displayName = tagDef.displayName,
             boundPurpose = tagDefRepository.findByTagId(targetTagId)?.boundPurpose,
+            hasRule = rule != null,
             defaultStage = rule?.defaultStage?.name ?: "GENERAL",
             defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
             defaultReplanAfterUse = rule?.defaultReplanAfterUse ?: false,

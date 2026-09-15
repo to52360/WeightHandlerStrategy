@@ -8,25 +8,27 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.repository.card_group.StrategyPresetService
+import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.TimingOverride
 
 /**
- * 策略预设详情面板（T-TG-016 / T-TG-017）。
+ * 策略预设详情面板（T-TG-016 / T-TG-017；T-TG-030 拆出惜售面板）。
  *
- * 整合预设元数据编辑、全局树正向白名单选择、用途出牌时序覆盖、
+ * 整合预设元数据编辑、全局树正向白名单选择、用途时序声明、用途惜售声明、
  * 被禁用用途看板（口径单点化）与防误删前置阻断拦截。
  */
 class StrategyPresetDetailPane(
     private val service: StrategyPresetService
 ) : VBox(10.0) {
 
-    /** 保存预设（含元数据 + 树白名单 + 时序覆盖，维度级整体替换） */
+    /** 保存预设（含元数据 + 树白名单 + 时序声明 + 惜售声明，维度级整体替换） */
     var onSavePreset: ((
         presetId: String?,
         name: String,
         description: String?,
         treeSelections: Map<String, Collection<String>>?,
-        timings: Map<String, TimingOverride>?
+        timings: Map<String, TimingOverride>?,
+        surplus: Map<String, SurplusOverride>?
     ) -> Unit)? = null
 
     /** 物理删除预设 */
@@ -77,21 +79,13 @@ class StrategyPresetDetailPane(
         )
     }
 
-    // 三大功能子组件（T-TG-017）
+    // 功能子组件（T-TG-017；T-TG-030 起时序与惜售分为两个独立面板）
     private val treeSelectionPanel = TreeSelectionPanel()
     private val timingOverridePanel = TimingOverridePanel()
+    private val surplusOverridePanel = SurplusOverridePanel()
     private val disabledPurposesBoard = DisabledPurposesBoard()
 
-    // Tab 导航组织
-    private val tabPane = TabPane()
-    private val tabTrees = Tab("🌲 树正向白名单", treeSelectionPanel).apply { isClosable = false }
-    private val tabTimings = Tab("⏱️ 用途时序覆盖", timingOverridePanel).apply { isClosable = false }
-    private val tabDisabled = Tab("🚫 被禁用用途看板", disabledPurposesBoard).apply { isClosable = false }
-
-    // 引用卡组展示区
-    private val referenceSection = VBox(4.0).apply {
-        style = "-fx-border-color: #bdc3c7; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-padding: 6px;"
-    }
+    // 引用卡组展示区（referenceListLabel 常被模式刷新读写；外层容器仅 init 装配用，就地构建）
     private val referenceListLabel = Label()
 
     private var currentPresetId: String? = null
@@ -122,12 +116,22 @@ class StrategyPresetDetailPane(
             children.addAll(btnSave, btnClone, btnDelete)
         }
 
-        referenceSection.children.addAll(
-            Label("🔗 被引用卡组：").apply { style = "-fx-font-weight: bold; -fx-font-size: 11px;" },
-            referenceListLabel
-        )
+        val referenceSection = VBox(4.0).apply {
+            style = "-fx-border-color: #bdc3c7; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-padding: 6px;"
+            children.addAll(
+                Label("🔗 被引用卡组：").apply { style = "-fx-font-weight: bold; -fx-font-size: 11px;" },
+                referenceListLabel
+            )
+        }
 
-        tabPane.tabs.addAll(tabTrees, tabTimings, tabDisabled)
+        val tabPane = TabPane().apply {
+            tabs.addAll(
+                Tab("🌲 树正向白名单", treeSelectionPanel).apply { isClosable = false },
+                Tab("⏱️ 用途时序声明", timingOverridePanel).apply { isClosable = false },
+                Tab("💰 惜售门槛声明", surplusOverridePanel).apply { isClosable = false },
+                Tab("🚫 被禁用用途看板", disabledPurposesBoard).apply { isClosable = false }
+            )
+        }
         VBox.setVgrow(tabPane, Priority.ALWAYS)
 
         children.addAll(headerBox, metaGrid, buttonBox, tabPane, referenceSection)
@@ -168,14 +172,19 @@ class StrategyPresetDetailPane(
             return
         }
 
-        // Q5 三态语义防呆：门槛「设值」模式数值无效时必须拦截（否则会被静默解释为清除门槛）
+        // 防呆：门槛「声明为」模式数值无效时必须拦截（否则会被静默解释为"声明为无门槛"）
         timingOverridePanel.validate()?.let {
-            showAlert(Alert.AlertType.WARNING, "时序覆盖校验失败", it)
+            showAlert(Alert.AlertType.WARNING, "时序声明校验失败", it)
+            return
+        }
+        surplusOverridePanel.validate()?.let {
+            showAlert(Alert.AlertType.WARNING, "惜售声明校验失败", it)
             return
         }
 
         val treeSelections = treeSelectionPanel.collectTreeSelections()
         val timings = timingOverridePanel.collectTimings()
+        val surplus = surplusOverridePanel.collectSurplus()
 
         // Q8 防呆二次确认：空预设（0 项树声明）
         if (treeSelections.isEmpty()) {
@@ -195,7 +204,8 @@ class StrategyPresetDetailPane(
             name,
             txtDescription.text.trim().takeIf { it.isNotBlank() },
             treeSelections,
-            timings
+            timings,
+            surplus
         )
     }
 
@@ -300,9 +310,10 @@ class StrategyPresetDetailPane(
             referenceListLabel.style = "-fx-text-fill: #27ae60; -fx-font-weight: bold;"
         }
 
-        // 加载两大维度数据与刷新看板
+        // 加载各维度数据与刷新看板（T-TG-029：时序与惜售是并列的两个维度）
         treeSelectionPanel.loadTrees(state.candidateTrees, detail.treeSelections)
         timingOverridePanel.loadTimings(state.timingRules, detail.timings)
+        surplusOverridePanel.loadSurplus(state.timingRules, detail.surplus)
         disabledPurposesBoard.updatePurposes(state.purposeUniverse, detail.treeSelections.keys)
     }
 
@@ -322,6 +333,7 @@ class StrategyPresetDetailPane(
         // 新建模式初始化空选择
         treeSelectionPanel.loadTrees(state.candidateTrees, emptyMap())
         timingOverridePanel.loadTimings(state.timingRules, emptyMap())
+        surplusOverridePanel.loadSurplus(state.timingRules, emptyMap())
         disabledPurposesBoard.updatePurposes(state.purposeUniverse, emptySet())
     }
 
@@ -340,6 +352,7 @@ class StrategyPresetDetailPane(
 
         treeSelectionPanel.loadTrees(emptyList(), emptyMap())
         timingOverridePanel.loadTimings(emptyList(), emptyMap())
+        surplusOverridePanel.loadSurplus(emptyList(), emptyMap())
         disabledPurposesBoard.updatePurposes(emptySet(), emptySet())
     }
 

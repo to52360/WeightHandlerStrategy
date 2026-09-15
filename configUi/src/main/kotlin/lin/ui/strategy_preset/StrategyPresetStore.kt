@@ -4,6 +4,7 @@ import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
 import lin.repository.card_group.PresetSummary
 import lin.repository.card_group.StrategyPresetService
+import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.TimingOverride
 import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.service.PresetCatalogLoader
@@ -119,11 +120,12 @@ class StrategyPresetStore(
         savePreset(presetId, name, description, treeSelections = null, timings = null)
 
     /**
-     * 保存完整预设（含元数据、树正向白名单选择与用途时序覆盖）。
+     * 保存完整预设（含元数据、树白名单、时序声明与惜售声明）。
      *
      * ⚠️ 整体替换语义（StrategyPresetService 契约）：
-     * [treeSelections] 与 [timings] 为 null 表示不修改该维度；非 null 时按当前传入的内容进行整体替换。
+     * 各维度传 null 表示不修改；非 null 时按当前传入的内容整体替换。
      *
+     * @param surplus T-TG-029 惜售维度（独立于 timings）
      * @return 错误信息；null 表示保存成功
      */
     fun savePreset(
@@ -131,7 +133,8 @@ class StrategyPresetStore(
         name: String,
         description: String?,
         treeSelections: Map<String, Collection<String>>?,
-        timings: Map<String, TimingOverride>?
+        timings: Map<String, TimingOverride>?,
+        surplus: Map<String, SurplusOverride>? = null
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank()) return "预设名称不能为空"
@@ -143,7 +146,8 @@ class StrategyPresetStore(
             name = cleanName,
             description = description?.trim()?.takeIf { it.isNotBlank() },
             treeSelections = treeSelections,
-            timings = timings
+            timings = timings,
+            surplus = surplus
         ) ?: return "更新失败：预设不存在 ($targetId)"
 
         // 保存成功后刷新数据并选中该预设

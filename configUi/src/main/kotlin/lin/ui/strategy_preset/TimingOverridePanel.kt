@@ -1,30 +1,29 @@
 package lin.ui.strategy_preset
 
 import javafx.geometry.Insets
-import javafx.geometry.Pos
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.TextField
 import javafx.scene.layout.GridPane
-import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.UseStage
-import lin.repository.card_group.ThresholdPatch
 import lin.repository.card_group.TimingOverride
 import lin.repository.card_purpose.PurposeTagRuleEntity
 
 /**
- * 用途出牌时序**声明**面板（T-TG-017）。
+ * 用途出牌时序**声明**面板（T-TG-017；T-TG-030 收窄为「时序」）。
  *
  * 候选用途 = 全局 `purpose_tag_rule` 有规则行的用途（同时充当**默认值预填**来源）；
  * 填了任意字段 = **声明该用途**（该用途在本预设下产生一条完整规则），全空 = 未声明 = 无规则。
- * 门槛与重规划开关严格遵循 Q5 裁定，采用三态设计表达 presence 语义。
- * 供 StrategyPresetDetailPane 使用，且可供 T-TG-018 卡组增量项复用。
+ * 重规划开关遵循 Q5 裁定，采用三态设计表达 presence 语义。
+ *
+ * ⚠️ **门槛 N 不在这里**（T-TG-029 起迁到 [SurplusOverridePanel] 的独立维度）——
+ * 两个面板各自"填任一字段 = 声明该用途"，因此**两面都空**才真正等于"该用途无规则"。
  */
 class TimingOverridePanel(
-    title: String = "⏱️ 用途出牌时序声明（填任一字段 = 声明该用途；全空 = 未声明 = 无规则）："
+    title: String = "⏱️ 用途出牌时序声明（填任一字段 = 声明该用途；全部留空 = 未声明）："
 ) : VBox(8.0) {
 
     private val scrollContent = VBox(8.0).apply {
@@ -89,9 +88,9 @@ class TimingOverridePanel(
     }
 
     /**
-     * 表单校验（Q5 三态语义防呆）：
-     * 「设门槛为」模式下数值必须可解析 —— 否则该输入会被静默解释为
-     * `ThresholdPatch(null)`（清除为无门槛），语义完全反转，必须拦截。
+     * 表单校验（声明语义防呆）：
+     * 排序权重填了必须是数字；priority 非空必须在 1~9999 —— 否则非法输入会被
+     * 静默转成 null（「不覆盖」），语义与用户输入相反，必须拦截。
      *
      * @return 首个校验错误描述；null 表示全部通过
      */
@@ -131,18 +130,6 @@ class TimingOverridePanel(
             prefWidth = 60.0
         }
 
-        // Q5: 门槛三态控件（不覆盖 / 设值 / 清除为无门槛）
-        val comboThresholdMode = ComboBox<String>().apply {
-            val defaultHint = rule.defaultSurplusIdleThreshold?.let { "默认: $it" } ?: "默认: 无门槛"
-            items.addAll("不覆盖 ($defaultHint)", "设门槛为", "清除为无门槛")
-            prefWidth = 130.0
-        }
-
-        val txtThresholdValue = TextField().apply {
-            promptText = "门槛N"
-            prefWidth = 60.0
-        }
-
         // Q5: 重规划三态控件（不覆盖 / 开启 / 关闭）
         val comboReplan = ComboBox<String>().apply {
             items.addAll("不覆盖 (默认: ${rule.defaultReplanAfterUse})", "开启 (true)", "关闭 (false)")
@@ -150,30 +137,6 @@ class TimingOverridePanel(
         }
 
         init {
-            // 初始化门槛三态
-            val patch = initial?.surplusIdleThreshold
-            when {
-                patch == null -> {
-                    comboThresholdMode.selectionModel.select(0)
-                    txtThresholdValue.isDisable = true
-                }
-
-                patch.value != null -> {
-                    comboThresholdMode.selectionModel.select(1)
-                    txtThresholdValue.isDisable = false
-                    txtThresholdValue.text = patch.value.toString()
-                }
-
-                else -> {
-                    comboThresholdMode.selectionModel.select(2)
-                    txtThresholdValue.isDisable = true
-                }
-            }
-
-            comboThresholdMode.valueProperty().addListener { _, _, selection ->
-                txtThresholdValue.isDisable = (selection != "设门槛为")
-            }
-
             // 初始化重规划三态
             when (initial?.defaultReplanAfterUse) {
                 null -> comboReplan.selectionModel.select(0)
@@ -188,20 +151,13 @@ class TimingOverridePanel(
                 add(comboStage, 1, 0)
                 add(Label("排序权重:"), 2, 0)
                 add(txtWeight, 3, 0)
-
-                val thresholdBox = HBox(4.0).apply {
-                    alignment = Pos.CENTER_LEFT
-                    children.addAll(comboThresholdMode, txtThresholdValue)
-                }
-                add(Label("余费门槛:"), 0, 1)
-                add(thresholdBox, 1, 1)
-                add(Label("重规划:"), 2, 1)
-                add(comboReplan, 3, 1)
-                add(Label("优先级:"), 0, 2)
-                add(txtPriority, 1, 2)
+                add(Label("重规划:"), 0, 1)
+                add(comboReplan, 1, 1)
+                add(Label("优先级:"), 2, 1)
+                add(txtPriority, 3, 1)
             }
 
-            val header = Label("🎯 用途 [${rule.tagId}] 出牌时序覆盖").apply {
+            val header = Label("🎯 用途 [${rule.tagId}] 出牌时序声明").apply {
                 style = "-fx-font-weight: bold; -fx-text-fill: #2980b9; -fx-font-size: 11px;"
             }
 
@@ -209,16 +165,10 @@ class TimingOverridePanel(
         }
 
         /**
-         * 行级校验：门槛「设值」模式数值必须有效；权重填了就必须是数字。
+         * 行级校验：权重填了就必须是数字；priority 必须落在合法区间。
          * @return 错误描述；null 表示通过
          */
         fun validate(): String? {
-            if (comboThresholdMode.selectionModel.selectedIndex == 1) {
-                val value = txtThresholdValue.text.trim().toIntOrNull()
-                    ?: return "门槛模式为「设门槛为」但数值无效（\"${txtThresholdValue.text}\"），" +
-                            "如需清除门槛请改选「清除为无门槛」"
-                if (value < 0) return "门槛 N 不能为负数: $value"
-            }
             val weightText = txtWeight.text.trim()
             if (weightText.isNotEmpty() && weightText.toDoubleOrNull() == null) {
                 return "排序权重不是有效数字: \"$weightText\""
@@ -236,12 +186,6 @@ class TimingOverridePanel(
             val stage = if (comboStage.selectionModel.selectedIndex > 0) comboStage.value else null
             val weight = txtWeight.text.trim().toDoubleOrNull()
 
-            val thresholdPatch = when (comboThresholdMode.selectionModel.selectedIndex) {
-                1 -> ThresholdPatch(txtThresholdValue.text.trim().toIntOrNull())
-                2 -> ThresholdPatch(null) // 清除为无门槛
-                else -> null // 不覆盖
-            }
-
             val replan = when (comboReplan.selectionModel.selectedIndex) {
                 1 -> true
                 2 -> false
@@ -252,7 +196,6 @@ class TimingOverridePanel(
                 defaultStage = stage,
                 defaultOrderWeight = weight,
                 defaultReplanAfterUse = replan,
-                surplusIdleThreshold = thresholdPatch,
                 priority = txtPriority.text.trim().toIntOrNull()
             )
         }

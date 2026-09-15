@@ -52,15 +52,23 @@ class SqlitePurposeTagIntentRuleProvider(
         val consumerTimings = deck
             ?.let { presetRepository.findTimings(DimensionScope.CARD_GROUP, it.id) }
             ?: emptyMap()
+        // T-TG-029：惜售是**独立维度**（同两层：预设声明 + 卡组增量项）
+        val presetSurplus = presetId
+            ?.let { presetRepository.findSurplus(DimensionScope.PRESET, it) }
+            ?: emptyMap()
+        val consumerSurplus = deck
+            ?.let { presetRepository.findSurplus(DimensionScope.CARD_GROUP, it.id) }
+            ?: emptyMap()
 
-        // 两层声明取并集：缺席的用途 = 未声明 ⇒ 无规则（D-TG-018）。
+        // 两层声明取并集（时序 ∪ 惜售：**任一维度声明了该用途 = 有规则**）：缺席的用途 = 未声明 ⇒ 无规则（D-TG-018）。
         // ⚠️ 增量项不能"只减"或凭空造规则 —— 它只能覆盖已声明用途的字段，或自行声明一个新用途。
-        return (presetTimings.keys + consumerTimings.keys).map { tag ->
+        return (presetTimings.keys + consumerTimings.keys + presetSurplus.keys + consumerSurplus.keys).map { tag ->
             val declared = resolver.mergeTiming(
                 lower = presetTimings[tag],
                 upper = consumerTimings[tag]
             )
-            resolver.toRule(tagId = tag, declared = declared, fallback = globalByTag[tag])
+            val surplus = resolver.mergeSurplus(lower = presetSurplus[tag], upper = consumerSurplus[tag])
+            resolver.toRule(tagId = tag, declared = declared, surplus = surplus, fallback = globalByTag[tag])
         }
     }
 

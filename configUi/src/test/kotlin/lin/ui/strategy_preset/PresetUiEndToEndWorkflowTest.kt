@@ -102,15 +102,18 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
             "DRAW" to TimingOverride(
                 defaultStage = "FIRST",
                 defaultOrderWeight = 2.0,
-                surplusIdleThreshold = ThresholdPatch(3), // 设值
                 defaultReplanAfterUse = true
             ),
             "SURPLUS" to TimingOverride(
                 defaultStage = "MID",
                 defaultOrderWeight = 1.0,
-                surplusIdleThreshold = ThresholdPatch(null), // 清除为无门槛（三态）
                 defaultReplanAfterUse = false
             )
+        )
+        // T-TG-029：惜售门槛是**独立维度**（三态：声明值 / 声明为无门槛 / 不声明）
+        val surplus = mapOf(
+            "DRAW" to SurplusOverride(surplusIdleThreshold = ThresholdPatch(3)),
+            "SURPLUS" to SurplusOverride(surplusIdleThreshold = ThresholdPatch(null))
         )
 
         val saveErr = presetStore.savePreset(
@@ -118,7 +121,8 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
             name = "E2E全流程预设",
             description = "端到端联调测试预设",
             treeSelections = treeSelections,
-            timings = timings
+            timings = timings,
+            surplus = surplus
         )
         assertNull("保存预设成功", saveErr)
 
@@ -131,8 +135,9 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
         assertNotNull("应能通过 service 查出预设详情", detail)
         assertEquals("E2E全流程预设", detail!!.preset.name)
         assertEquals(listOf(drawTree), detail.treeSelections["DRAW"]?.toList())
-        assertEquals(3, detail.timings["DRAW"]?.surplusIdleThreshold?.value)
-        assertNull("SURPLUS 门槛应被清除为 null", detail.timings["SURPLUS"]?.surplusIdleThreshold?.value)
+        assertEquals(3, detail.surplus["DRAW"]?.surplusIdleThreshold?.value)
+        assertNull("SURPLUS 门槛应被声明为无门槛（value = null）", detail.surplus["SURPLUS"]?.surplusIdleThreshold?.value)
+        assertNotNull("且属于「已声明」而非「未声明」", detail.surplus["SURPLUS"]?.surplusIdleThreshold)
 
         // 3. 卡组工作台：新建卡组并关联此预设
         val managerId = cardGroupService.saveManager(

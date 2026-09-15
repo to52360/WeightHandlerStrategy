@@ -174,18 +174,18 @@ class CardGroupPresetIntegrationTest : McpTestEnv() {
         val item = store.state.managers.find { it.entity?.id == managerId }
         store.selectManager(item)
 
-        // 保存排除树与时序覆盖微调
+        // 保存排除树 + 时序声明 + 惜售声明（T-TG-029 起惜售是独立维度）
         val exclusions = mapOf("SURPLUS" to listOf("tree-surplus-1"))
         val timings = mapOf(
             "SURPLUS" to TimingOverride(
                 defaultStage = "TURN_END",
                 defaultOrderWeight = 150.0,
-                surplusIdleThreshold = ThresholdPatch(5),
                 defaultReplanAfterUse = true
             )
         )
+        val surplus = mapOf("SURPLUS" to SurplusOverride(surplusIdleThreshold = ThresholdPatch(5)))
 
-        val err = store.saveDeckDelta(exclusions, timings)
+        val err = store.saveDeckDelta(exclusions, timings, surplus)
         assertNull("保存卡组增量项成功", err)
 
         val updatedDelta = store.state.currentDeckDelta
@@ -194,13 +194,14 @@ class CardGroupPresetIntegrationTest : McpTestEnv() {
         val timing = updatedDelta?.timings?.get("SURPLUS")
         assertEquals("TURN_END", timing?.defaultStage)
         assertEquals(150.0, timing?.defaultOrderWeight)
-        assertEquals(5, timing?.surplusIdleThreshold?.value)
         assertEquals(true, timing?.defaultReplanAfterUse)
+        assertEquals("惜售门槛应落在独立维度", 5, updatedDelta?.surplus?.get("SURPLUS")?.surplusIdleThreshold?.value)
 
         // 从 DB 直接读回验证
         val fromDb = presetService.findDeckDelta(managerId)
         assertEquals(listOf("tree-surplus-1"), fromDb.treeExclusions["SURPLUS"]?.toList())
         assertEquals("TURN_END", fromDb.timings["SURPLUS"]?.defaultStage)
+        assertEquals(5, fromDb.surplus["SURPLUS"]?.surplusIdleThreshold?.value)
     }
 
     @Test

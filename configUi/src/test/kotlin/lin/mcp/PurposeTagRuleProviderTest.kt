@@ -136,25 +136,25 @@ class PurposeTagRuleProviderTest : McpTestEnv() {
     /**
      * T-TG-028 核心：**表空 = 无兜底**（此前是"回落整套硬编码 + warn"，正是要消灭的隐式兜底）。
      *
-     * 清空全局行后，声明里没写的字段取**内置默认**（`stage = GENERAL` / `priority = 100` / N = null），
-     * **不是**硬编码里 CLEAN 的 MID/300/1 —— 断言必须落在"声明没写的字段"上才验得出这个差别。
+     * 清空全局行后，声明里没写的字段取**内置默认**（`stage = GENERAL` / `priority = 100`），
+     * **不是**硬编码里 CLEAN 的 MID/300 —— 断言必须落在"声明没写的字段"上才验得出这个差别。
+     *
+     * T-TG-029 起：只声明**惜售**（独立维度）也足以让该用途"有规则"（声明即规则，两个维度同效）。
      */
     @Test
     fun `全局规则表为空时不再回落硬编码而是用内置默认`() {
         createEnabledDeck(testPresetId)
-        // 只声明 N（刻意不写 stage / priority）⇒ 这两项分别验"内置默认"与"不是硬编码"
+        // 只在**惜售维度**声明 N（刻意不写 stage / priority）⇒ 这两项验"内置默认"、且验证"惜售声明同样算声明"
         presetRepository.savePreset(
             lin.repository.card_group.StrategyPresetEntity(
                 id = testPresetId, name = testPresetId, description = null, createdAt = null
             )
         )
-        presetRepository.replaceTimings(
+        presetRepository.replaceSurplus(
             DimensionScope.PRESET, testPresetId,
             mapOf(
-                "CLEAN" to lin.repository.card_group.TimingOverride(
-                    surplusIdleThreshold = lin.repository.card_group.ThresholdPatch(
-                        7
-                    )
+                "CLEAN" to lin.repository.card_group.SurplusOverride(
+                    surplusIdleThreshold = lin.repository.card_group.ThresholdPatch(7)
                 )
             )
         )

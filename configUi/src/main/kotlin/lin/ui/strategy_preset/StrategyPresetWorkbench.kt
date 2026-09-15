@@ -59,9 +59,9 @@ class StrategyPresetWorkbench : SplitPane(), KoinComponent, ActiveAware {
             store.loadInitialData()
         }
 
-        // 右侧详情交互绑定（完整预设保存：元数据 + 树白名单 + 时序覆盖）
-        detailPane.onSavePreset = { presetId, name, description, treeSelections, timings ->
-            val error = store.savePreset(presetId, name, description, treeSelections, timings)
+        // 右侧详情交互绑定（完整预设保存：元数据 + 树白名单 + 时序声明 + 惜售声明）
+        detailPane.onSavePreset = { presetId, name, description, treeSelections, timings, surplus ->
+            val error = store.savePreset(presetId, name, description, treeSelections, timings, surplus)
             if (error != null) {
                 println("[StrategyPresetWorkbench] 保存预设失败: $error")
             }

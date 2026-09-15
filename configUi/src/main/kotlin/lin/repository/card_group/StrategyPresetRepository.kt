@@ -24,6 +24,15 @@ object DimensionScope {
 object Dimension {
     const val PURPOSE_TREE = "PURPOSE_TREE"
     const val PURPOSE_TIMING = "PURPOSE_TIMING"
+
+    /**
+     * 惜售门槛 N（T-TG-029）。
+     *
+     * 为什么独立维度：N 的语义是「**够不够余费才垫**」（惜售），与 `PURPOSE_TIMING` 的
+     * 「**何时出**」（阶段/次序/重规划）是两件事；此前挤在同一 payload 里，
+     * 导致"只想调惜售"必须动时序声明，且 UI 面板把两件事混在一起。
+     */
+    const val PURPOSE_SURPLUS = "PURPOSE_SURPLUS"
 }
 
 /**
@@ -219,4 +228,25 @@ class StrategyPresetRepository(private val jdbcTemplate: JdbcTemplate) {
     fun findTimings(scope: String, ownerId: String): Map<String, TimingOverride> =
         findItems(scope, ownerId, Dimension.PURPOSE_TIMING)
             .associate { it.purposeTag to DimensionPayloadCodec.decodeTiming(it.payload) }
+
+    // ─────────────────────── 惜售维度（T-TG-029，便捷读写） ───────────────────────
+
+    /** 整体替换惜售声明；[SurplusOverride.isEmpty] 的行**不落库**（空操作无意义）。 */
+    fun replaceSurplus(scope: String, ownerId: String, byTag: Map<String, SurplusOverride>) {
+        val items = byTag.filterValues { !it.isEmpty }.map { (tag, override) ->
+            DimensionItemEntity(
+                scope = scope,
+                ownerId = ownerId,
+                dimension = Dimension.PURPOSE_SURPLUS,
+                purposeTag = tag,
+                payload = DimensionPayloadCodec.encodeSurplus(override)
+            )
+        }
+        replaceItems(scope, ownerId, Dimension.PURPOSE_SURPLUS, items)
+    }
+
+    /** @return `用途 → 惜售声明` */
+    fun findSurplus(scope: String, ownerId: String): Map<String, SurplusOverride> =
+        findItems(scope, ownerId, Dimension.PURPOSE_SURPLUS)
+            .associate { it.purposeTag to DimensionPayloadCodec.decodeSurplus(it.payload) }
 }

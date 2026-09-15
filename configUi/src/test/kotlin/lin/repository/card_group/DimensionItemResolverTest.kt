@@ -186,13 +186,32 @@ class DimensionItemResolverTest {
         // 回归：mergeTiming 曾漏合并 priority ⇒ 增量项一碰该用途，预设声明的 priority 就静默回落全局行
         val merged = resolver.mergeTiming(
             lower = TimingOverride(priority = 999, defaultStage = "LATE"),
-            upper = TimingOverride(surplusIdleThreshold = ThresholdPatch(5))
+            upper = TimingOverride(defaultOrderWeight = 5.0)
         )
         assertEquals("upper 未声明 priority ⇒ 保留 lower 的", 999, merged.priority)
         assertEquals(
             "upper 声明了 priority ⇒ 覆盖 lower", 7,
             resolver.mergeTiming(lower = TimingOverride(priority = 999), upper = TimingOverride(priority = 7)).priority
         )
+    }
+
+    /**
+     * T-TG-029：惜售是**独立维度**，合并链独立于时序 ——
+     * 只声明惜售的层也参与合并，且不因时序侧缺席而被丢弃。
+     */
+    @Test
+    fun `惜售维度独立合并且上层优先`() {
+        val presetOnly = resolver.mergeSurplus(lower = SurplusOverride(surplusIdleThreshold = ThresholdPatch(3)), upper = null)
+        assertEquals(3, presetOnly.surplusIdleThreshold?.value)
+
+        val upperWins = resolver.mergeSurplus(
+            lower = SurplusOverride(surplusIdleThreshold = ThresholdPatch(3)),
+            upper = SurplusOverride(surplusIdleThreshold = ThresholdPatch(null))
+        )
+        assertTrue("上层显式声明「无门槛」应压过下层", upperWins.surplusIdleThreshold != null)
+        assertNull("且值为 null", upperWins.surplusIdleThreshold!!.value)
+
+        assertTrue("两层都缺席 ⇒ 未声明", resolver.mergeSurplus(lower = null, upper = null).isEmpty)
     }
 
     @Test
@@ -205,7 +224,8 @@ class DimensionItemResolverTest {
     fun `K-TG-005 显式声明 null 可把 N 声明为无门槛`() {
         val rule = resolver.toRule(
             "CLEAN",
-            TimingOverride(surplusIdleThreshold = ThresholdPatch(null)),
+            TimingOverride(),
+            SurplusOverride(surplusIdleThreshold = ThresholdPatch(null)),
             fallback = rule(threshold = 1)
         )
         assertNull("显式 null 应声明为「不设门槛」", rule.defaultSurplusIdleThreshold)
@@ -233,17 +253,28 @@ class DimensionItemResolverTest {
     }
 
     @Test
-    fun `时序 payload 用键存在性区分未声明与显式 null`() {
-        val cleared = DimensionPayloadCodec.decodeTiming(
-            DimensionPayloadCodec.encodeTiming(TimingOverride(surplusIdleThreshold = ThresholdPatch(null)))
+    fun `惜售 payload 用键存在性区分未声明与显式 null`() {
+        val cleared = DimensionPayloadCodec.decodeSurplus(
+            DimensionPayloadCodec.encodeSurplus(SurplusOverride(surplusIdleThreshold = ThresholdPatch(null)))
         )
         assertTrue("键存在 ⇒ 已声明", cleared.surplusIdleThreshold != null)
         assertNull("值为 null ⇒ 无门槛", cleared.surplusIdleThreshold!!.value)
 
-        val absent = DimensionPayloadCodec.decodeTiming(
+        val declared = DimensionPayloadCodec.decodeSurplus(
+            DimensionPayloadCodec.encodeSurplus(SurplusOverride(surplusIdleThreshold = ThresholdPatch(4)))
+        )
+        assertEquals(4, declared.surplusIdleThreshold?.value)
+
+        assertTrue("空声明不落库 ⇒ 解出即未声明", DimensionPayloadCodec.decodeSurplus("{}").isEmpty)
+    }
+
+    @Test
+    fun `时序 payload 不再承载 N（T-TG-029 剥离）`() {
+        val decoded = DimensionPayloadCodec.decodeTiming(
             DimensionPayloadCodec.encodeTiming(TimingOverride(defaultStage = "MID"))
         )
-        assertNull("键不存在 ⇒ 未声明", absent.surplusIdleThreshold)
-        assertFalse("stage 已声明却被当成空", absent.isEmpty)
+        assertEquals("MID", decoded.defaultStage)
+        assertFalse("有字段声明 ⇒ 非空操作", decoded.isEmpty)
+        assertTrue("未声明任何字段 ⇒ 空操作", DimensionPayloadCodec.decodeTiming("{}").isEmpty)
     }
 }

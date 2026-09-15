@@ -182,13 +182,18 @@ class StrategyPresetTest : McpTestEnv() {
         assertEquals(777, mapper.readTree(got.contentJson).get("timings").get(0).get("priority").asInt())
     }
 
+    /**
+     * K-TG-005（T-TG-029 后的契约）：惜售门槛走**独立的 `surplus` 参数**，
+     * `clearSurplusIdleThreshold` 可把 N 声明为「不设门槛」（显式 null ≠ 未声明）。
+     */
     @Test
     fun `K-TG-005 可把用途的 N 声明为无门槛`() {
         val deck = createEnabledDeck("TG_PRESET_DECK_A3")
         testDeckId = deck
 
         val id = savePreset(
-            """{"name":"TG_PRESET_A3","timings":[{"tagId":"CLEAN","clearSurplusIdleThreshold":true}]}"""
+            """{"name":"TG_PRESET_A3","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}],
+                "surplus":[{"tagId":"CLEAN","clearSurplusIdleThreshold":true}]}"""
         )
         call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
         assertNull(
@@ -197,11 +202,24 @@ class StrategyPresetTest : McpTestEnv() {
         )
     }
 
+    /** T-TG-029：`surplus` 声明值应生效，且未声明惜售的用途回落全局行 N。 */
+    @Test
+    fun `惜售声明值生效且未声明时回落全局行`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_S1")
+        testDeckId = deck
+
+        val id = savePreset(
+            """{"name":"TG_PRESET_S1","surplus":[{"tagId":"GREED","defaultSurplusIdleThreshold":4}]}"""
+        )
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertEquals("指定的惜售门槛应生效", 4, rulesByTag().getValue("GREED").defaultSurplusIdleThreshold)
+    }
+
     @Test
     fun `N 与清除开关互斥`() {
         val r = call(
             "save_strategy_preset",
-            """{"name":"TG_PRESET_A4","timings":[{"tagId":"CLEAN","defaultSurplusIdleThreshold":2,"clearSurplusIdleThreshold":true}]}"""
+            """{"name":"TG_PRESET_A4","surplus":[{"tagId":"CLEAN","defaultSurplusIdleThreshold":2,"clearSurplusIdleThreshold":true}]}"""
         )
         assertTrue("同时传 N 与清除开关应报错", r.isError)
     }

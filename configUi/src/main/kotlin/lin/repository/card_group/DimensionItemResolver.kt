@@ -106,11 +106,18 @@ class DimensionItemResolver {
             defaultStage = upper.defaultStage ?: lower.defaultStage,
             defaultOrderWeight = upper.defaultOrderWeight ?: lower.defaultOrderWeight,
             defaultReplanAfterUse = upper.defaultReplanAfterUse ?: lower.defaultReplanAfterUse,
-            surplusIdleThreshold = upper.surplusIdleThreshold ?: lower.surplusIdleThreshold,
             // ⚠️ 必须逐字段合并（漏掉本行 ⇒ 预设声明的 priority 一旦被增量项触碰即静默丢失，回落全局行）
             priority = upper.priority ?: lower.priority
         )
     }
+
+    // ─────────────────────── 惜售（T-TG-029）───────────────────────
+
+    /** 两层惜售声明合并（[upper] 优先；两层都缺席 ⇒ 未声明）。单字段维度，故直取。 */
+    fun mergeSurplus(
+        lower: SurplusOverride?,
+        upper: SurplusOverride?
+    ): SurplusOverride = upper ?: lower ?: SurplusOverride()
 
     /**
      * 由**声明**生成一条完整规则（D-TG-018：规则由声明产生，不再"改全局规则行的字段"）。
@@ -120,11 +127,16 @@ class DimensionItemResolver {
      * ⚠️ 内置默认只在「**已被声明**、但某字段没填」时落位 ⇒ 未声明的用途**根本不进本函数**，
      * 因此它不构成「未声明 = 吃全局」的隐式兜底。
      *
+     * N（惜售门槛）来自**独立维度**（T-TG-029）⇒ 单独取值链：本声明（[surplus]）> [fallback] 全局行。
+     *
+     * @param declared 时序声明（`PURPOSE_TIMING`）
+     * @param surplus 惜售声明（`PURPOSE_SURPLUS`）
      * @param fallback 全局规则行（`purpose_tag_rule`）；null = 无该行
      */
     fun toRule(
         tagId: String,
         declared: TimingOverride,
+        surplus: SurplusOverride = SurplusOverride(),
         fallback: PurposeTagIntentRule? = null
     ): PurposeTagIntentRule {
         val stage = declared.defaultStage?.let { name ->
@@ -147,10 +159,10 @@ class DimensionItemResolver {
             defaultReplanAfterUse = declared.defaultReplanAfterUse
                 ?: fallback?.defaultReplanAfterUse
                 ?: defaults.defaultReplanAfterUse,
-            defaultSurplusIdleThreshold = if (declared.surplusIdleThreshold != null) {
-                declared.surplusIdleThreshold.value   // 键存在 ⇒ 已声明（显式 null = 「不设门槛」）
-            } else {
-                fallback?.defaultSurplusIdleThreshold
+            defaultSurplusIdleThreshold = when {
+                // 键存在 ⇒ 已声明（`value == null` = 显式声明「不设门槛」）
+                surplus.surplusIdleThreshold != null -> surplus.surplusIdleThreshold.value
+                else -> fallback?.defaultSurplusIdleThreshold
             }
         )
     }

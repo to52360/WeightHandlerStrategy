@@ -15,22 +15,38 @@ data class ThresholdPatch(val value: Int?)
 /**
  * 用途时序**声明**（维度 `PURPOSE_TIMING` 的 payload 模型，D-TG-018）。
  *
- * **字段未出现 = 未声明**（回落缺省值源：全局 `purpose_tag_rule` 行 ⇒ 内置默认）；
- * `surplusIdleThreshold` 例外（三态，见 [ThresholdPatch]）。
+ * **字段未出现 = 未声明**（回落缺省值源：全局 `purpose_tag_rule` 行 ⇒ 内置默认）。
  * 声明本身即「该用途有规则」——**未声明 = 无规则 = 不参与 `UseIntentDeriver` 的 priority 选优**。
+ *
+ * ⚠️ **N（惜售门槛）不属于本维度**（T-TG-029）：惜售与"何时出"是两件事（门槛管"够不够余费才垫"），
+ * 已剥离到独立维度 [Dimension.PURPOSE_SURPLUS]，见 [SurplusOverride]。
  */
 data class TimingOverride(
     val defaultStage: String? = null,
     val defaultOrderWeight: Double? = null,
     val defaultReplanAfterUse: Boolean? = null,
-    val surplusIdleThreshold: ThresholdPatch? = null,
     /** priority 可选覆盖（D-TG-018）：未声明 ⇒ 取全局行 ⇒ 无全局行则内置默认 100。 */
     val priority: Int? = null
 ) {
     /** 所有字段都没声明 —— 该行是空操作（写库无意义）。 */
     val isEmpty: Boolean
         get() = defaultStage == null && defaultOrderWeight == null &&
-                defaultReplanAfterUse == null && surplusIdleThreshold == null && priority == null
+                defaultReplanAfterUse == null && priority == null
+}
+
+/**
+ * 用途**惜售声明**（维度 `PURPOSE_SURPLUS` 的 payload 模型，T-TG-029）。
+ *
+ * 语义：某用途的牌「平时惜售、余费充足才垫」的门槛 N。
+ * 三态由 [ThresholdPatch] 承载 —— `null`（整行不存在/字段缺失）= **未声明**（回落全局行）
+ * vs `ThresholdPatch(null)` = **声明为「不设门槛」**。
+ */
+data class SurplusOverride(
+    val surplusIdleThreshold: ThresholdPatch? = null
+) {
+    /** 未声明任何字段 —— 该行是空操作（写库无意义）。 */
+    val isEmpty: Boolean
+        get() = surplusIdleThreshold == null
 }
 
 /**
@@ -38,10 +54,14 @@ data class TimingOverride(
  *
  * 规则：**键留列**（`scope` / `owner_id` / `dimension` / `purpose_tag`），**值进 payload**。
  * - `PURPOSE_TREE` → `{"treeIds":[…]}`（空数组 = 声明为「一棵都不要」）
- * - `PURPOSE_TIMING` → `{"defaultStage":…}`（**只写已声明字段** ⇒
- *   「字段未出现」与「字段出现且为 null」天然可分：前者 = 不覆盖、后者 = 覆盖为「无门槛」）
+ * - `PURPOSE_TIMING` → `{"defaultStage":…}`（**只写已声明字段** ⇒「字段未出现」= 不覆盖）
+ * - `PURPOSE_SURPLUS`（T-TG-029）→ `{"defaultSurplusIdleThreshold":…}`（**键一直写**，
+ *   JSON `null` = 声明为「不设门槛」vs 键缺失 = 未声明）
  */
 object DimensionPayloadCodec {
+
+    /** 惜售门槛在 payload 里的字段名（编解码两侧共用，防手抄漂移）。 */
+    private const val FIELD_SURPLUS_THRESHOLD = "defaultSurplusIdleThreshold"
 
     private val mapper = jacksonObjectMapper()
 
@@ -68,11 +88,6 @@ object DimensionPayloadCodec {
         override.defaultOrderWeight?.let { node.put("defaultOrderWeight", it) }
         override.defaultReplanAfterUse?.let { node.put("defaultReplanAfterUse", it) }
         override.priority?.let { node.put("priority", it) }
-        override.surplusIdleThreshold?.let { patch ->
-            val value = patch.value
-            if (value == null) node.putNull("defaultSurplusIdleThreshold")
-            else node.put("defaultSurplusIdleThreshold", value)
-        }
         return mapper.writeValueAsString(node)
     }
 
@@ -82,10 +97,30 @@ object DimensionPayloadCodec {
             defaultStage = node.textOrNull("defaultStage"),
             defaultOrderWeight = node.doubleOrNull("defaultOrderWeight"),
             defaultReplanAfterUse = node.booleanOrNull("defaultReplanAfterUse"),
-            priority = node.intOrNull("priority"),
-            // ⚠️ N 的「是否声明」由键存在性承载 —— 不能被 takeUnless { isNull } 一并抹掉
-            surplusIdleThreshold = if (node.has("defaultSurplusIdleThreshold")) {
-                ThresholdPatch(node.get("defaultSurplusIdleThreshold").takeUnless { it.isNull }?.asInt())
+            priority = node.intOrNull("priority")
+        )
+    }
+
+    // ─────────────────────── PURPOSE_SURPLUS（T-TG-029）───────────────────────
+
+    /** 编码惜售声明：**键一直写**（`null` 落成 JSON null ⇒ 与"未声明"可分）。 */
+    fun encodeSurplus(override: SurplusOverride): String {
+        val node = mapper.createObjectNode()
+        val patch = override.surplusIdleThreshold
+        if (patch != null) {
+            val value = patch.value
+            if (value == null) node.putNull(FIELD_SURPLUS_THRESHOLD)
+            else node.put(FIELD_SURPLUS_THRESHOLD, value)
+        }
+        return mapper.writeValueAsString(node)
+    }
+
+    fun decodeSurplus(payload: String?): SurplusOverride {
+        val node = parse(payload) ?: return SurplusOverride()
+        // ⚠️ 「是否声明」由键存在性承载 —— 不能被 takeUnless { isNull } 一并抹掉
+        return SurplusOverride(
+            surplusIdleThreshold = if (node.has(FIELD_SURPLUS_THRESHOLD)) {
+                ThresholdPatch(node.get(FIELD_SURPLUS_THRESHOLD).takeUnless { it.isNull }?.asInt())
             } else {
                 null
             }

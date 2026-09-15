@@ -7,6 +7,7 @@ import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.ui.strategy_preset.SurplusOverridePanel
 import lin.ui.strategy_preset.TimingOverridePanel
 import lin.ui.strategy_preset.TreeSelectionPanel
 
@@ -26,7 +27,11 @@ class DeckDeltaDialog(
     )
 
     private val timingOverridePanel = TimingOverridePanel(
-        title = "⏱️ 卡组级用途时序微调（覆盖预设及全局规则）："
+        title = "⏱️ 卡组级用途时序声明（压过预设及全局规则）："
+    )
+
+    private val surplusOverridePanel = SurplusOverridePanel(
+        title = "💰 卡组级用途惜售门槛声明（压过预设及全局规则）："
     )
 
     private val errorLabel = Label().apply {
@@ -54,7 +59,7 @@ class DeckDeltaDialog(
         okBtn?.text = "💾 保存微调"
         okBtn?.style = "-fx-font-weight: bold; -fx-background-color: #27ae60; -fx-text-fill: white; -fx-cursor: hand;"
 
-        // 载入数据
+        // 载入数据（初始加载 + 重置按钮复用）
         fun reloadData() {
             val candidateTrees = store.state.candidateTrees
             val timingRules = store.state.timingRules
@@ -62,21 +67,25 @@ class DeckDeltaDialog(
 
             treeExclusionPanel.loadTrees(candidateTrees, delta?.treeExclusions ?: emptyMap())
             timingOverridePanel.loadTimings(timingRules, delta?.timings ?: emptyMap())
+            surplusOverridePanel.loadSurplus(timingRules, delta?.surplus ?: emptyMap())
             errorLabel.isVisible = false
             errorLabel.isManaged = false
         }
 
         reloadData()
+        resetBtn.setOnAction { reloadData() }
+        dialogPane.content = buildContent()
+        installSaveGate(okBtn)
+    }
 
-        resetBtn.setOnAction {
-            reloadData()
-        }
-
+    /** 弹窗内容：三个页签（排除树 / 时序 / 惜售）+ 底部工具条。 */
+    private fun buildContent(): VBox {
         val tabPane = TabPane().apply {
             tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
             tabs.addAll(
                 Tab("🌲 排除用途树", treeExclusionPanel),
-                Tab("⏱️ 时序微调覆盖", timingOverridePanel)
+                Tab("⏱️ 时序声明", timingOverridePanel),
+                Tab("💰 惜售门槛声明", surplusOverridePanel)
             )
         }
         VBox.setVgrow(tabPane, Priority.ALWAYS)
@@ -87,35 +96,38 @@ class DeckDeltaDialog(
             children.addAll(resetBtn, errorLabel)
         }
 
-        val contentBox = VBox(8.0).apply {
+        return VBox(8.0).apply {
             padding = Insets(10.0)
             children.addAll(tabPane, toolBar)
         }
+    }
 
-        dialogPane.content = contentBox
-
-        // 提交与校验拦截
+    /**
+     * 提交校验与保存拦截。
+     * 三态语义防呆：门槛/priority 填了非法值时必须拦截（否则会被静默解释成语义相反的结果）。
+     */
+    private fun installSaveGate(okBtn: Button?) {
         okBtn?.addEventFilter(ActionEvent.ACTION) { event ->
-            // Q5 三态语义防呆：门槛「设值」模式数值无效时必须拦截
-            val validationError = timingOverridePanel.validate()
+            val validationError = timingOverridePanel.validate() ?: surplusOverridePanel.validate()
             if (validationError != null) {
-                errorLabel.text = "❌ $validationError"
-                errorLabel.isVisible = true
-                errorLabel.isManaged = true
-                event.consume()
+                flagError("$validationError", event)
                 return@addEventFilter
             }
 
             val exclusions = treeExclusionPanel.collectTreeSelections()
             val timings = timingOverridePanel.collectTimings()
-            val saveError = store.saveDeckDelta(exclusions, timings)
+            val surplus = surplusOverridePanel.collectSurplus()
+            val saveError = store.saveDeckDelta(exclusions, timings, surplus)
             if (saveError != null) {
-                errorLabel.text = "❌ 保存失败: $saveError"
-                errorLabel.isVisible = true
-                errorLabel.isManaged = true
-                event.consume()
-                return@addEventFilter
+                flagError("保存失败: $saveError", event)
             }
         }
+    }
+
+    private fun flagError(message: String, event: ActionEvent) {
+        errorLabel.text = "❌ $message"
+        errorLabel.isVisible = true
+        errorLabel.isManaged = true
+        event.consume()
     }
 }
