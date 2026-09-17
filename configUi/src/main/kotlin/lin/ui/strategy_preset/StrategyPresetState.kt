@@ -30,5 +30,7 @@ data class StrategyPresetState(
     /** 拥有全局规则行的用途列表（可覆盖时序） */
     val timingRules: List<PurposeTagRuleEntity> = emptyList(),
     /** 库中已启用的全局用途标签全集（用于计算禁用用途看板） */
-    val purposeUniverse: Set<String> = emptySet()
+    val purposeUniverse: Set<String> = emptySet(),
+    /** 标签显示名字典（tag_id -> display_name，数据源自 purpose_tag_def 表） */
+    val tagDisplayNames: Map<String, String> = emptyMap()
 )

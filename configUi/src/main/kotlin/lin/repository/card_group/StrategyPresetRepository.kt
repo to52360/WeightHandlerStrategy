@@ -33,7 +33,32 @@ object Dimension {
      * 导致"只想调惜售"必须动时序声明，且 UI 面板把两件事混在一起。
      */
     const val PURPOSE_SURPLUS = "PURPOSE_SURPLUS"
-}
+
+    /**
+     * 卡组侧的**用途排除**（「本卡组不使用该用途」= 消费侧的「去除」通道）。
+     *
+     * 为什么单独一个维度：D-TG-007 的「消费侧 = 只减 + 覆盖」里，"减"此前只落实在**树维度**
+     * （`PURPOSE_TREE` 的额外排除若干棵树），时序 / 惜售**没有取消预设声明的通道**（只能逐字段覆盖值）。
+     * 本维度补的正是这条：命中该维度的用途**整体退出本卡组** ——
+     * ① **规则层**：从本卡组的规则集合里被减掉 ⇒ **无规则**（不参与 priority 选优、stage 落 GENERAL）；
+     * ② **评估层**：该用途的用途树（全局共享 + 专属）**一并停用**（见 `DimensionItemResolver.purposeExcluded`）。
+     *
+     * ⚠️ **不会回落到全局默认值**：全局 `purpose_tag_rule` 只是**缺省值来源**、不是规则层，
+     * 故"排除"的语义是**无规则**而非"用全局值"。
+     * ⚠️ **只对 `scope = CARD_GROUP` 有意义**（预设是声明层，不声明即无，无需"去除"）。
+     * ⚠️ 与 `PURPOSE_TREE` 的消费侧排除是**粗 / 细两层**：本维度 = 用途级（整个作用退出）；
+     * 树级排除 = 在用途照常使用的前提下挑掉某几棵树。
+     */
+    const val PURPOSE_EXCLUDE = "PURPOSE_EXCLUDE"
+ 
+    /**
+     * 可被「用途排除」禁用的维度全集（D-TG-021）。
+     *
+     * `PURPOSE_EXCLUDE` payload 的 `{}` / 缺省解码为该全集（= 整用途退出）；
+     * 新增可禁维度时须同步登记于此，以让「整用途退出」前向兼容新维度。
+     */
+    val EXCLUDABLE_DIMENSIONS = setOf(PURPOSE_TREE, PURPOSE_TIMING, PURPOSE_SURPLUS)
+ }
 
 /**
  * 维度项（`strategy_dimension_item` 一行）。
@@ -249,4 +274,29 @@ class StrategyPresetRepository(private val jdbcTemplate: JdbcTemplate) {
     fun findSurplus(scope: String, ownerId: String): Map<String, SurplusOverride> =
         findItems(scope, ownerId, Dimension.PURPOSE_SURPLUS)
             .associate { it.purposeTag to DimensionPayloadCodec.decodeSurplus(it.payload) }
+    /**
+     * 整体替换「本卡组不使用」的用途及其被禁维度（只对 `scope = CARD_GROUP` 有意义）。
+     *
+     * [byTag] = `用途 → 被禁维度集合`；**空集合 = 清除该用途的排除行**（= 不再排除）。
+     * 维度集合 = [Dimension.EXCLUDABLE_DIMENSIONS] ⇒ payload 落 `{}`（整用途退出）；
+     * 任一子集 ⇒ `{"dimensions":[…]}`（只禁列出的维度）。编解码统一走 [DimensionPayloadCodec.encodeExclusion]。
+     */
+    fun replaceExclusions(scope: String, ownerId: String, byTag: Map<String, Set<String>>) {
+        val items = byTag.filterValues { it.isNotEmpty() }.map { (tag, dimensions) ->
+            DimensionItemEntity(
+                scope = scope,
+                ownerId = ownerId,
+                dimension = Dimension.PURPOSE_EXCLUDE,
+                purposeTag = tag,
+                payload = DimensionPayloadCodec.encodeExclusion(dimensions)
+            )
+        }
+        replaceItems(scope, ownerId, Dimension.PURPOSE_EXCLUDE, items)
+    }
+
+    /** @return 被排除用途 → **被禁维度集合**（全集 = 整用途退出）。 */
+    fun findExclusions(scope: String, ownerId: String): Map<String, Set<String>> =
+        findItems(scope, ownerId, Dimension.PURPOSE_EXCLUDE).associate {
+            it.purposeTag to DimensionPayloadCodec.decodeExclusion(it.payload)
+        }
 }

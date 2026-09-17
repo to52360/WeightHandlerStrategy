@@ -57,33 +57,22 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
         isDisable = true
     }
 
+    private val btnPresetDetail = Button("📋 预设详情...").apply {
+        style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-radius: 3px;"
+        tooltip = Tooltip("查看当前策略预设的完整声明、用途树与禁用用途详情")
+        isDisable = true
+    }
+
     private val restartNotice = Label("⚠️ 提示：预设切换保存后，需重启引擎装配生效").apply {
         style =
             "-fx-text-fill: #d35400; -fx-font-size: 11px; -fx-background-color: #fef5e7; -fx-padding: 3 6 3 6; -fx-background-radius: 3;"
     }
 
-    // 预设摘要卡片
-    private val summaryCard = VBox(4.0).apply {
-        style =
-            "-fx-border-color: #e2e8f0; -fx-border-radius: 4px; -fx-background-color: #f8fafc; -fx-padding: 6 10 6 10;"
-        isVisible = false
-        isManaged = false
-    }
-
-    private val summaryTitle = Label().apply {
-        style = "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #2c3e50;"
-    }
-
-    private val summaryDetails = Label().apply {
-        style = "-fx-font-size: 11px; -fx-text-fill: #64748b;"
-    }
-
-    private val disabledTagsFlow = FlowPane(4.0, 4.0).apply {
-        alignment = Pos.CENTER_LEFT
-    }
-
     private var isUpdating = false
     private var currentSelectedPresetId: String? = null
+    private var currentPresetDetail: PresetDetail? = null
+    private var currentPurposeUniverse: Set<String> = emptySet()
+    private var currentTagDisplayNames: Map<String, String> = emptyMap()
 
     init {
         padding = Insets(4.0, 0.0, 4.0, 0.0)
@@ -93,25 +82,19 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
             children.addAll(
                 Label("策略预设:").apply { style = "-fx-font-weight: bold; -fx-text-fill: #34495e;" },
                 presetComboBox,
+                btnPresetDetail,
                 jumpButton,
                 restartNotice
             )
         }
 
-        summaryCard.children.addAll(
-            summaryTitle,
-            summaryDetails,
-            HBox(6.0, Label("🚫 禁用用途:").apply {
-                style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;"
-            }, disabledTagsFlow)
-        )
-
-        children.addAll(selectorBox, statusLabel, summaryCard)
+        children.addAll(selectorBox, statusLabel)
 
         presetComboBox.valueProperty().addListener { _, _, newValue ->
             if (!isUpdating && newValue != null) {
                 currentSelectedPresetId = newValue.presetId
                 jumpButton.isDisable = newValue.presetId == null
+                btnPresetDetail.isDisable = newValue.presetId == null || currentPresetDetail == null
                 val error = onPresetChanged?.invoke(newValue.presetId)
                 if (error != null) {
                     statusLabel.text = "❌ 预设关联失败: $error"
@@ -121,6 +104,13 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
                     statusLabel.isVisible = false
                     statusLabel.isManaged = false
                 }
+            }
+        }
+
+        btnPresetDetail.setOnAction {
+            val detail = currentPresetDetail
+            if (detail != null) {
+                CardGroupPresetDetailDialog(detail, currentPurposeUniverse, currentTagDisplayNames, navigator).showAndWait()
             }
         }
 
@@ -139,12 +129,18 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
         currentPresetId: String?,
         availablePresets: List<PresetSummary>,
         presetDetail: PresetDetail?,
-        purposeUniverse: Set<String>
+        purposeUniverse: Set<String>,
+        tagDisplayNames: Map<String, String> = emptyMap()
     ) {
         isUpdating = true
         try {
             currentSelectedPresetId = currentPresetId
+            currentPresetDetail = presetDetail
+            currentPurposeUniverse = purposeUniverse
+            currentTagDisplayNames = tagDisplayNames
+
             jumpButton.isDisable = currentPresetId.isNullOrBlank()
+            btnPresetDetail.isDisable = currentPresetId.isNullOrBlank() || presetDetail == null
 
             // 状态同步时清除上一轮的操作提示
             statusLabel.isVisible = false
@@ -152,7 +148,7 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
 
             // 构造下拉项
             val items = mutableListOf<PresetComboItem>()
-            items.add(PresetComboItem(null, "（不用预设 - 全局用途树生效）"))
+            items.add(PresetComboItem(null, "（不用预设 - 无全局预设兜底）"))
             for (p in availablePresets) {
                 val displayText = "${p.preset.name} (${p.treeItemCount}树 / ${p.timingCount}时序)"
                 items.add(PresetComboItem(p.preset.id, displayText))
@@ -162,41 +158,6 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
             // 设置当前选中项
             val matched = items.find { it.presetId == currentPresetId } ?: items.first()
             presetComboBox.value = matched
-
-            // 摘要卡片渲染
-            if (currentPresetId.isNullOrBlank() || presetDetail == null) {
-                summaryCard.isVisible = false
-                summaryCard.isManaged = false
-            } else {
-                summaryCard.isVisible = true
-                summaryCard.isManaged = true
-
-                val preset = presetDetail.preset
-                summaryTitle.text = "📋 预设信息：${preset.name} (id: ${preset.id})"
-                val declaredTags = presetDetail.treeSelections.keys
-                val treeCount = presetDetail.treeSelections.values.sumOf { it.size }
-                val timingCount = presetDetail.timings.size
-                val desc = preset.description?.takeIf { it.isNotBlank() } ?: "暂无描述"
-                summaryDetails.text =
-                    "描述: $desc | 已声明 ${declaredTags.size} 个用途，保留 $treeCount 棵全局树 | 时序覆盖: $timingCount 项"
-
-                // 计算并展示禁用用途摘要
-                val disabledTags = (purposeUniverse - declaredTags).sorted()
-                disabledTagsFlow.children.clear()
-                if (disabledTags.isEmpty()) {
-                    disabledTagsFlow.children.add(Label("无（全局用途全集均已声明）").apply {
-                        style = "-fx-font-size: 11px; -fx-text-fill: #27ae60;"
-                    })
-                } else {
-                    for (tag in disabledTags) {
-                        val badge = Label(tag).apply {
-                            style =
-                                "-fx-background-color: #fadbd8; -fx-text-fill: #c0392b; -fx-padding: 1 4 1 4; -fx-background-radius: 3; -fx-font-size: 10px;"
-                        }
-                        disabledTagsFlow.children.add(badge)
-                    }
-                }
-            }
         } finally {
             isUpdating = false
         }

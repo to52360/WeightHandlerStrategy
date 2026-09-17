@@ -127,6 +127,39 @@ object DimensionPayloadCodec {
         )
     }
 
+ 
+    // ─────────────────────── PURPOSE_EXCLUDE（D-TG-021：维度级排除） ───────────────────────
+ 
+    /** 排除 payload 里携带被禁维度的字段名（编解码两侧共用）。 */
+    private const val FIELD_EXCLUDED_DIMENSIONS = "dimensions"
+ 
+    /**
+     * 编码「被禁维度集合」。
+     *
+     * `null` 或**等于已知全集** ⇒ 落 `{}`（**整用途退出**，与存量同形，零迁移）；
+     * 否则 ⇒ `{"dimensions":["PURPOSE_TREE",…]}`（**只禁列出的维度**）。
+     */
+    fun encodeExclusion(dimensions: Set<String>?): String {
+        if (dimensions == null || dimensions == Dimension.EXCLUDABLE_DIMENSIONS) return "{}"
+        val node = mapper.createObjectNode()
+        val array = node.putArray(FIELD_EXCLUDED_DIMENSIONS)
+        dimensions.distinct().sorted().forEach { array.add(it) }
+        return mapper.writeValueAsString(node)
+    }
+ 
+    /**
+     * 解码为「被禁维度集合」。
+     *
+     * `{}` / 缺键 / 非数组 / **空数组** ⇒ 全集（= 整用途退出，守住「行存在 = 被排除」不变式）；
+     * 否则 ⇒ 列出的子集。
+     */
+    fun decodeExclusion(payload: String?): Set<String> {
+        val array = parse(payload)?.get(FIELD_EXCLUDED_DIMENSIONS) ?: return Dimension.EXCLUDABLE_DIMENSIONS
+        if (!array.isArray) return Dimension.EXCLUDABLE_DIMENSIONS
+        val dims = array.mapNotNull { it.takeUnless { n -> n.isNull }?.asText() }.toSet()
+        return dims.ifEmpty { Dimension.EXCLUDABLE_DIMENSIONS }
+    }
+
     // ─────────────────────── 内部 ───────────────────────
 
     private fun parse(payload: String?): JsonNode? {

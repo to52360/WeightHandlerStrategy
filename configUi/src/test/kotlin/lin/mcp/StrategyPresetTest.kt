@@ -147,6 +147,52 @@ class StrategyPresetTest : McpTestEnv() {
         assertEquals("未声明的 N 仍回落全局行", 1, rulesByTag().getValue("CLEAN").defaultSurplusIdleThreshold)
     }
 
+    /** 消费侧「去除」通道：`excludePurposes` 把该用途从本卡组规则集合里减掉（≠ 回落全局默认值）。 */
+    @Test
+    fun `消费侧可排除预设声明的用途`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_EXCL")
+        testDeckId = deck
+
+        val id = savePreset("""{"name":"TG_PRESET_EXCL","timings":[{"tagId":"CLEAN","defaultStage":"LATE"}]}""")
+        call("save_card_group_preset", """{"managerId":"$deck","presetId":"$id"}""")
+        assertEquals(setOf("CLEAN"), rulesByTag().keys)
+
+        val excluded = call(
+            "save_card_group_preset_delta",
+            """{"managerId":"$deck","excludePurposes":["CLEAN"]}"""
+        )
+        assertEquals(false, excluded.isError)
+        assertTrue("被排除的用途不应有规则（且不回落全局默认值）", rulesByTag().isEmpty())
+
+        val restored = call(
+            "save_card_group_preset_delta",
+            """{"managerId":"$deck","excludePurposes":[]}"""
+        )
+        assertEquals(false, restored.isError)
+        assertEquals("清空排除后应恢复按预设声明生效", setOf("CLEAN"), rulesByTag().keys)
+    }
+
+    /** 排除项同样受「只有内置作用」边界约束（与 timings / surplus 一致）。 */
+    @Test
+    fun `清单外用途不能被排除`() {
+        val deck = createEnabledDeck("TG_PRESET_DECK_EXCL2")
+        testDeckId = deck
+        val r = call(
+            "save_card_group_preset_delta",
+            """{"managerId":"$deck","excludePurposes":["FINISH"]}"""
+        )
+        assertTrue("清单外标记不应被接受为排除项", r.isError)
+    }
+
+    /** T-TG-039：空声明元素（一个字段都不给）必须报错，不能静默丢弃。 */
+    @Test
+    fun `空声明元素被拒而不是静默丢弃`() {
+        val r1 = call("save_strategy_preset", """{"name":"TG_PRESET_EMPTY_T","timings":[{"tagId":"CLEAN"}]}""")
+        assertTrue("timings 空元素应报错: ${r1.contentJson}", r1.isError)
+        val r2 = call("save_strategy_preset", """{"name":"TG_PRESET_EMPTY_S","surplus":[{"tagId":"CLEAN"}]}""")
+        assertTrue("surplus 空元素应报错: ${r2.contentJson}", r2.isError)
+    }
+
     @Test
     fun `消费方增量项可声明预设没声明的用途`() {
         val deck = createEnabledDeck("TG_PRESET_DECK_ADD")
@@ -248,19 +294,34 @@ class StrategyPresetTest : McpTestEnv() {
 
     // ─────────────────────── 校验 ───────────────────────
 
+    /**
+     * T-TG-038 / D-TG-019 **收窄**：可声明者 = 内置作用清单（现 5 个），**不是**"有全局规则行"。
+     *
+     * `FINISH` 无编排行为（Q-033：斩杀是局面属性）⇒ 声明时序应被拒。
+     * 注：T-TG-028 曾放开"任意 tagId 可声明"，本用例是那次放开的**反向收回**；
+     * 若失败被拒则不会落库，故无需 savePreset 助手登记清理。
+     */
     @Test
-    fun `无全局规则行的用途也能被声明`() {
-        // T-TG-028 起：声明即规则 —— FINISH 不再被拒（此前 T-TG-025 的"加时序死结"就此解开）
-        // ⚠️ 必须走 savePreset 助手（登记 presetId）—— 先前直接 call ⇒ 该预设从不被清理（实测累积 5 行残留）
-        val id = savePreset(
+    fun `清单外的标记不能被声明为时序`() {
+        val r = call(
+            "save_strategy_preset",
             """{"name":"TG_PRESET_D","timings":[{"tagId":"FINISH","defaultStage":"LAST","priority":900}]}"""
         )
-        val got = call("get", """{"resource":"strategy_preset","id":"$id"}""")
-        assertEquals(
-            "声明无全局行的用途应被接受且 priority 生效",
-            900,
-            mapper.readTree(got.contentJson).get("timings").get(0).get("priority").asInt()
+        assertTrue("清单外标记（无编排行为）的时序声明应被拒绝", r.isError)
+        assertTrue(
+            "错误信息应回显被拒的 tagId 与可选清单: ${r.contentJson}",
+            r.contentJson.contains("FINISH") && r.contentJson.contains("CLEAN")
         )
+    }
+
+    /** 同上，惜售维度（独立入参）同样受"只有内置作用可声明"约束。 */
+    @Test
+    fun `清单外的标记不能被声明为惜售门槛`() {
+        val r = call(
+            "save_strategy_preset",
+            """{"name":"TG_PRESET_D2","surplus":[{"tagId":"FINISH","defaultSurplusIdleThreshold":2}]}"""
+        )
+        assertTrue("清单外标记的惜售声明应被拒绝", r.isError)
     }
 
     @Test

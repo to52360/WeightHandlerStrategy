@@ -106,7 +106,16 @@ class SqliteTreeConfigProvider(
                     ?: emptyMap(),
                 consumerExcludeByTag = deck
                     ?.let { presetRepository.findTreeSelections(DimensionScope.CARD_GROUP, it.id) }
-                    ?: emptyMap()
+                    ?: emptyMap(),
+                // 用途排除（D-TG-021 维度级）：只把「树维度被禁」的用途传给收窄 —— 树只该在这一维被禁时停用。
+                // 规则侧按维度过滤；这里 filterValues 只留 TREE 命中者，其余（TIMING/SURPLUS 被禁）用途的树照常参与打分。
+                excludedPurposes = if (deck == null) {
+                    emptySet()
+                } else {
+                    presetRepository.findExclusions(DimensionScope.CARD_GROUP, deck.id)
+                        .filterValues { Dimension.PURPOSE_TREE in it }
+                        .keys
+                }
             )
         )
     }

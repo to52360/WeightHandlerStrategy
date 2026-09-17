@@ -58,7 +58,8 @@ class StrategyPresetStore(
                 isCreating = state.isCreating && targetId == null,
                 candidateTrees = catalog.candidateTrees,
                 timingRules = catalog.timingRules,
-                purposeUniverse = catalog.purposeUniverse
+                purposeUniverse = catalog.purposeUniverse,
+                tagDisplayNames = catalog.tagDisplayNames
             )
         )
     }

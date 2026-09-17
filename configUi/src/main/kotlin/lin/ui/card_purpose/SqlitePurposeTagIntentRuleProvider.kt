@@ -6,6 +6,10 @@ import lin.bean.usePlan.UseStage
 import lin.myLog
 import lin.repository.card_group.CurrentDeckContext
 import lin.repository.card_group.DimensionItemResolver
+import lin.repository.card_group.Dimension
+import lin.repository.card_group.SurplusOverride
+import lin.repository.card_group.TimingOverride
+
 import lin.repository.card_group.DimensionScope
 import lin.repository.card_group.StrategyPresetRepository
 import lin.repository.card_purpose.PurposeTagRuleEntity
@@ -60,14 +64,30 @@ class SqlitePurposeTagIntentRuleProvider(
             ?.let { presetRepository.findSurplus(DimensionScope.CARD_GROUP, it.id) }
             ?: emptyMap()
 
-        // 两层声明取并集（时序 ∪ 惜售：**任一维度声明了该用途 = 有规则**）：缺席的用途 = 未声明 ⇒ 无规则（D-TG-018）。
-        // ⚠️ 增量项不能"只减"或凭空造规则 —— 它只能覆盖已声明用途的字段，或自行声明一个新用途。
-        return (presetTimings.keys + consumerTimings.keys + presetSurplus.keys + consumerSurplus.keys).map { tag ->
-            val declared = resolver.mergeTiming(
-                lower = presetTimings[tag],
-                upper = consumerTimings[tag]
-            )
-            val surplus = resolver.mergeSurplus(lower = presetSurplus[tag], upper = consumerSurplus[tag])
+        // 消费侧「去除」通道（D-TG-021 维度级）：`用途 → 被禁维度集合`（全集 = 整用途退出）
+        val exclusions = deck
+            ?.let { presetRepository.findExclusions(DimensionScope.CARD_GROUP, it.id) }
+            .orEmpty()
+        fun dimExcluded(tag: String, dim: String) = dim in exclusions[tag].orEmpty()
+
+        // 两层声明取并集前，先**按维度过滤**：某维度被禁 ⇒ 该用途在该维度的声明视为不存在（不吃 merge、不产规则内容）。
+        // 声明集合 = 时序 ∪ 惜售（任一维度幸存 = 该用途仍有规则，D-TG-018）。
+        val timingDeclared = (presetTimings.keys + consumerTimings.keys)
+            .filterNot { dimExcluded(it, Dimension.PURPOSE_TIMING) }
+        val surplusDeclared = (presetSurplus.keys + consumerSurplus.keys)
+            .filterNot { dimExcluded(it, Dimension.PURPOSE_SURPLUS) }
+        return (timingDeclared + surplusDeclared).map { tag ->
+            // 被禁维度的声明不参与 merge，让字段回落全局行（缺省值来源）；被禁维度无关则不碰原逻辑。
+            val declared = if (dimExcluded(tag, Dimension.PURPOSE_TIMING)) {
+                TimingOverride()
+            } else {
+                resolver.mergeTiming(lower = presetTimings[tag], upper = consumerTimings[tag])
+            }
+            val surplus = if (dimExcluded(tag, Dimension.PURPOSE_SURPLUS)) {
+                SurplusOverride()
+            } else {
+                resolver.mergeSurplus(lower = presetSurplus[tag], upper = consumerSurplus[tag])
+            }
             resolver.toRule(tagId = tag, declared = declared, surplus = surplus, fallback = globalByTag[tag])
         }
     }

@@ -3,36 +3,29 @@ package lin.ui.card_group
 import javafx.event.ActionEvent
 import javafx.geometry.Insets
 import javafx.geometry.Pos
-import javafx.scene.control.*
+import javafx.scene.control.Button
+import javafx.scene.control.ButtonType
+import javafx.scene.control.Dialog
+import javafx.scene.control.Label
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
-import lin.ui.strategy_preset.SurplusOverridePanel
-import lin.ui.strategy_preset.TimingOverridePanel
-import lin.ui.strategy_preset.TreeSelectionPanel
 
 /**
- * 卡组增量项（微调层 Delta）编辑弹窗（T-TG-018 优化）。
+ * 卡组增量项（微调层）编辑弹窗（T-TG-018 优化；2026-09-16 改为**按用途聚合的单页表**）。
  *
  * 对应三层模型微调层：预设 > 卡组增量项 > 全局规则。
- * 提供充裕的弹窗编辑空间（720x560），避免在主界面展开折叠面板导致的垂直挤压与不可用。
+ *
+ * ⚠️ **不再按维度分页签**（原「排除树 / 时序覆盖 / 惜售覆盖」三个页签）——
+ * "这个用途到底怎么调"要跨页签拼，而且"去除"藏在树页签里、看起来像按用途去标签。
+ * 现改为一行一个用途（[DeckPurposeTable]）：行首「使用」是**唯一的去除入口**（用途级，D-TG-020），
+ * 三个维度各自「覆盖 / 继承」，细节进 [DeckPurposeEditDialog]（不切页签）。
  */
 class DeckDeltaDialog(
     private val store: WorkbenchStore
 ) : Dialog<Unit>() {
 
-    private val treeExclusionPanel = TreeSelectionPanel(
-        title = "🌲 卡组排除全局用途树（勾选表示本卡组额外排除此树）：",
-        summaryFormatter = { tags, trees -> "已针对 $tags 个用途，排除了 $trees 棵用途树" }
-    )
-
-    private val timingOverridePanel = TimingOverridePanel(
-        title = "⏱️ 卡组级用途时序声明（压过预设及全局规则）："
-    )
-
-    private val surplusOverridePanel = SurplusOverridePanel(
-        title = "💰 卡组级用途惜售门槛声明（压过预设及全局规则）："
-    )
+    private val purposeTable = DeckPurposeTable()
 
     private val errorLabel = Label().apply {
         style = "-fx-font-size: 11px; -fx-text-fill: #c0392b; -fx-font-weight: bold;"
@@ -48,11 +41,12 @@ class DeckDeltaDialog(
         val currentItem = store.state.selectedManagerItem
         val managerName = currentItem?.entity?.name?.ifBlank { "未命名方案" } ?: "未命名方案"
         title = "⚙️ 卡组策略微调 (Delta) - [$managerName]"
-        headerText = "卡组增量项配置（解析链：预设 > 卡组增量项 > 全局规则）。此处的排除与覆盖仅对当前卡组生效。"
+        headerText = "卡组增量项（解析链：预设 > 卡组增量项 > 全局规则）。\n" +
+                "「使用」不勾 = 该用途整体退出本卡组；点击 ✏️ 或双击行可对「树 / 时序 / 惜售」进行维度级控制（继承 / 覆盖 / 禁用维度）。"
 
         val dialogPane = this.dialogPane
-        dialogPane.prefWidth = 720.0
-        dialogPane.prefHeight = 560.0
+        dialogPane.prefWidth = 820.0
+        dialogPane.prefHeight = 520.0
         dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
 
         val okBtn = dialogPane.lookupButton(ButtonType.OK) as? Button
@@ -61,13 +55,17 @@ class DeckDeltaDialog(
 
         // 载入数据（初始加载 + 重置按钮复用）
         fun reloadData() {
-            val candidateTrees = store.state.candidateTrees
-            val timingRules = store.state.timingRules
             val delta = store.state.currentDeckDelta
-
-            treeExclusionPanel.loadTrees(candidateTrees, delta?.treeExclusions ?: emptyMap())
-            timingOverridePanel.loadTimings(timingRules, delta?.timings ?: emptyMap())
-            surplusOverridePanel.loadSurplus(timingRules, delta?.surplus ?: emptyMap())
+            purposeTable.load(
+                rules = store.state.timingRules,
+                candidateTrees = store.state.candidateTrees,
+                excludedPurposes = delta?.excludedPurposes ?: emptySet(),
+                exclusionDimensions = delta?.exclusionDimensions ?: emptyMap(),
+                treeExclusions = delta?.treeExclusions ?: emptyMap(),
+                timings = delta?.timings ?: emptyMap(),
+                surplus = delta?.surplus ?: emptyMap(),
+                tagDisplayNames = store.state.tagDisplayNames
+            )
             errorLabel.isVisible = false
             errorLabel.isManaged = false
         }
@@ -78,17 +76,9 @@ class DeckDeltaDialog(
         installSaveGate(okBtn)
     }
 
-    /** 弹窗内容：三个页签（排除树 / 时序 / 惜售）+ 底部工具条。 */
+    /** 弹窗内容：按用途聚合的微调表 + 底部工具条。 */
     private fun buildContent(): VBox {
-        val tabPane = TabPane().apply {
-            tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
-            tabs.addAll(
-                Tab("🌲 排除用途树", treeExclusionPanel),
-                Tab("⏱️ 时序声明", timingOverridePanel),
-                Tab("💰 惜售门槛声明", surplusOverridePanel)
-            )
-        }
-        VBox.setVgrow(tabPane, Priority.ALWAYS)
+        VBox.setVgrow(purposeTable, Priority.ALWAYS)
 
         val toolBar = HBox(10.0).apply {
             alignment = Pos.CENTER_LEFT
@@ -98,26 +88,30 @@ class DeckDeltaDialog(
 
         return VBox(8.0).apply {
             padding = Insets(10.0)
-            children.addAll(tabPane, toolBar)
+            children.addAll(
+                Label("🚫 不勾「使用」= 本卡组不使用该用途：它不再影响本卡组的出牌编排，其用途树也不再参与打分。")
+                    .apply { style = "-fx-font-size: 11px; -fx-text-fill: #7f8c8d;" },
+                purposeTable,
+                toolBar
+            )
         }
     }
 
     /**
-     * 提交校验与保存拦截。
-     * 三态语义防呆：门槛/priority 填了非法值时必须拦截（否则会被静默解释成语义相反的结果）。
+     * 提交校验与保存拦截（**覆盖语义**：留空 = 继承预设/默认，故字段级三态是必需的）。
+     * 数值合法性已在 [DeckPurposeEditDialog] 应用前拦截 ⇒ 此处只做收集与保存。
+     *
+     * ⚠️ 排除通道走 [DeckPurposeTable.collectExclusionDimensions]（全禁 ∪ 部分禁合成），
+     * 不再单独走被弃用的 `collectExcludedPurposes`。
      */
     private fun installSaveGate(okBtn: Button?) {
         okBtn?.addEventFilter(ActionEvent.ACTION) { event ->
-            val validationError = timingOverridePanel.validate() ?: surplusOverridePanel.validate()
-            if (validationError != null) {
-                flagError("$validationError", event)
-                return@addEventFilter
-            }
-
-            val exclusions = treeExclusionPanel.collectTreeSelections()
-            val timings = timingOverridePanel.collectTimings()
-            val surplus = surplusOverridePanel.collectSurplus()
-            val saveError = store.saveDeckDelta(exclusions, timings, surplus)
+            val saveError = store.saveDeckDelta(
+                treeExclusions = purposeTable.collectTreeExclusions(),
+                timings = purposeTable.collectTimings(),
+                surplus = purposeTable.collectSurplus(),
+                exclusionDimensions = purposeTable.collectExclusionDimensions()
+            )
             if (saveError != null) {
                 flagError("保存失败: $saveError", event)
             }

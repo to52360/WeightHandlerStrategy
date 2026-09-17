@@ -288,7 +288,8 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                     currentPresetId = newState.managerPresetId,
                     availablePresets = newState.availablePresets,
                     presetDetail = newState.currentPresetDetail,
-                    purposeUniverse = newState.purposeUniverse
+                    purposeUniverse = newState.purposeUniverse,
+                    tagDisplayNames = newState.tagDisplayNames
                 )
 
                 // 卡组微调项状态更新

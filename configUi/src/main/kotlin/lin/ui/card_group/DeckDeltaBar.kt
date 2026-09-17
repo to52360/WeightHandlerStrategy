@@ -7,6 +7,7 @@ import javafx.scene.control.Label
 import javafx.scene.control.Tooltip
 import javafx.scene.layout.HBox
 import lin.repository.card_group.DeckDelta
+import lin.repository.card_group.Dimension
 
 /**
  * 卡组微调层（Delta）紧凑状态呈现与弹窗触发条。
@@ -22,7 +23,7 @@ class DeckDeltaBar(
         style = "-fx-font-weight: bold; -fx-text-fill: #34495e; -fx-font-size: 11px;"
     }
 
-    private val summaryLabel = Label("无增量微调 (继承预设与全局规则)").apply {
+    private val summaryLabel = Label("无专属微调 (继承预设)").apply {
         style = "-fx-font-size: 11px; -fx-text-fill: #7f8c8d;"
     }
 
@@ -51,18 +52,26 @@ class DeckDeltaBar(
             return
         }
 
-        configureButton.tooltip = Tooltip("点击打开独立弹窗配置本卡组的排除树与时序覆盖")
+        configureButton.tooltip = Tooltip("点击打开独立弹窗配置本卡组专属微调（排除树/时序/惜售/维度禁用）")
 
         val treeCount = delta?.treeExclusions?.values?.sumOf { it.size } ?: 0
         val timingCount = delta?.timings?.size ?: 0
+        val surplusCount = delta?.surplus?.size ?: 0
+        val exclusionCount = delta?.exclusionDimensions?.size ?: 0
+        // 部分禁（只禁部分维度，非整体退出）的用途单独计数，便于文案表达（D-TG-021）
+        val partialExclusionCount = delta?.exclusionDimensions
+            ?.count { it.value != Dimension.EXCLUDABLE_DIMENSIONS } ?: 0
 
-        if (treeCount == 0 && timingCount == 0) {
-            summaryLabel.text = "无增量微调 (完全继承预设与全局规则)"
+        if (treeCount == 0 && timingCount == 0 && surplusCount == 0 && exclusionCount == 0) {
+            summaryLabel.text = "无专属微调 (继承预设)"
             summaryLabel.style = "-fx-font-size: 11px; -fx-text-fill: #7f8c8d;"
         } else {
             val parts = mutableListOf<String>()
             if (treeCount > 0) parts.add("已排除 $treeCount 棵用途树")
             if (timingCount > 0) parts.add("覆盖 $timingCount 项时序")
+            if (surplusCount > 0) parts.add("覆盖 $surplusCount 项惜售")
+            if (exclusionCount > 0) parts.add("不使用 $exclusionCount 个用途")
+            if (partialExclusionCount > 0) parts.add("其中 $partialExclusionCount 个仅部分维度禁用")
             summaryLabel.text = "已启用专属微调: [${parts.joinToString("，")}]"
             summaryLabel.style = "-fx-font-size: 11px; -fx-text-fill: #2980b9; -fx-font-weight: bold;"
         }

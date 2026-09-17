@@ -153,5 +153,16 @@ class PurposeTagRuleRepository(private val jdbcTemplate: JdbcTemplate) {
             PurposeTagRuleEntity(tagId = "VALUE", defaultStage = "GENERAL", priority = 50),
             PurposeTagRuleEntity(tagId = "DRAW_CARD", defaultStage = "MID", priority = 60)
         )
+
+        /**
+         * **可被声明的「作用」清单**（T-TG-038 / D-TG-019）= 有行为定义的内置作用。
+         *
+         * 为什么必须与「有全局规则行」区分：用途预设 / 卡组增量项**只允许**对清单内的 tagId 声明时序与惜售。
+         * 若改拿 `purpose_tag_rule` **表行**当候选，删一行 / 漏一次迁移就会让 UI 候选**静默缩水**，
+         * 并在保存（维度级整体替换）时抹掉"UI 看不见的声明"。清单是**能力**（代码常量，恒在），表行是**业务值**
+         * （默认值预填，可缺 ⇒ 缺失时回落 [BUILTIN_RULES]）。
+         * ⚠️ 新增 / 删除作用 = 同时改本清单与引擎 `DefaultPurposeTagIntentRuleProvider`（守门用例保证逐字一致）。
+         */
+        val DECLARABLE_PURPOSES: Set<String> = BUILTIN_RULES.map { it.tagId }.toSet()
     }
 }

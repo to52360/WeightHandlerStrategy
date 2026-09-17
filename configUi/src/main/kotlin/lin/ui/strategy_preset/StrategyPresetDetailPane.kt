@@ -12,10 +12,13 @@ import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.TimingOverride
 
 /**
- * 策略预设详情面板（T-TG-016 / T-TG-017；T-TG-030 拆出惜售面板）。
+ * 策略预设详情面板（T-TG-016 / T-TG-017；T-TG-037 改为**按用途聚合的单页声明表**）。
  *
- * 整合预设元数据编辑、全局树正向白名单选择、用途时序声明、用途惜售声明、
- * 被禁用用途看板（口径单点化）与防误删前置阻断拦截。
+ * 整合：预设元数据编辑 + 「用途 × 三维度声明」聚合表（[PresetPurposeTable]，细节编辑进
+ * [PresetPurposeEditDialog]，不再切页签）+ 被禁用用途看板（口径单点化）+ 防误删前置阻断拦截。
+ *
+ * 声明语义见 D-TG-019：预设侧 = **纯声明**（无「不覆盖」，勾 = 声明并落具体值、不勾 = 未声明）；
+ * 覆盖语义只归卡组增量项。
  */
 class StrategyPresetDetailPane(
     private val service: StrategyPresetService
@@ -79,10 +82,8 @@ class StrategyPresetDetailPane(
         )
     }
 
-    // 功能子组件（T-TG-017；T-TG-030 起时序与惜售分为两个独立面板）
-    private val treeSelectionPanel = TreeSelectionPanel()
-    private val timingOverridePanel = TimingOverridePanel()
-    private val surplusOverridePanel = SurplusOverridePanel()
+    // 功能子组件（T-TG-037 / D-TG-019：按用途聚合的声明表取代「按维度分页签」）
+    private val purposeTable = PresetPurposeTable()
     private val disabledPurposesBoard = DisabledPurposesBoard()
 
     // 引用卡组展示区（referenceListLabel 常被模式刷新读写；外层容器仅 init 装配用，就地构建）
@@ -90,6 +91,7 @@ class StrategyPresetDetailPane(
 
     private var currentPresetId: String? = null
     private var currentUniverse: Set<String> = emptySet()
+    private var currentTagDisplayNames: Map<String, String> = emptyMap()
     private var isCreatingMode = false
 
     init {
@@ -124,17 +126,9 @@ class StrategyPresetDetailPane(
             )
         }
 
-        val tabPane = TabPane().apply {
-            tabs.addAll(
-                Tab("🌲 树正向白名单", treeSelectionPanel).apply { isClosable = false },
-                Tab("⏱️ 用途时序声明", timingOverridePanel).apply { isClosable = false },
-                Tab("💰 惜售门槛声明", surplusOverridePanel).apply { isClosable = false },
-                Tab("🚫 被禁用用途看板", disabledPurposesBoard).apply { isClosable = false }
-            )
-        }
-        VBox.setVgrow(tabPane, Priority.ALWAYS)
+        VBox.setVgrow(purposeTable, Priority.ALWAYS)
 
-        children.addAll(headerBox, metaGrid, buttonBox, tabPane, referenceSection)
+        children.addAll(headerBox, metaGrid, buttonBox, purposeTable, disabledPurposesBoard, referenceSection)
 
         setupListeners()
         clearForm()
@@ -155,9 +149,9 @@ class StrategyPresetDetailPane(
             handleClone(sourceId)
         }
 
-        // 树选择变化时，动态联动更新被禁用用途看板
-        treeSelectionPanel.onSelectionsChanged = { declaredTags ->
-            disabledPurposesBoard.updatePurposes(currentUniverse, declaredTags)
+        // 树维度声明变化时，动态联动更新被禁用用途看板（口径 = 全局用途全集 − 树维度已声明用途）
+        purposeTable.onTreeDeclarationsChanged = { declaredTags ->
+            disabledPurposesBoard.updatePurposes(currentUniverse, declaredTags, currentTagDisplayNames)
         }
     }
 
@@ -172,25 +166,16 @@ class StrategyPresetDetailPane(
             return
         }
 
-        // 防呆：门槛「声明为」模式数值无效时必须拦截（否则会被静默解释为"声明为无门槛"）
-        timingOverridePanel.validate()?.let {
-            showAlert(Alert.AlertType.WARNING, "时序声明校验失败", it)
-            return
-        }
-        surplusOverridePanel.validate()?.let {
-            showAlert(Alert.AlertType.WARNING, "惜售声明校验失败", it)
-            return
-        }
+        // 数字合法性已在 [PresetPurposeEditDialog] 应用前拦截 ⇒ 此处只做收集（字段值均为具体值）
+        val treeSelections = purposeTable.collectTreeSelections()
+        val timings = purposeTable.collectTimings()
+        val surplus = purposeTable.collectSurplus()
 
-        val treeSelections = treeSelectionPanel.collectTreeSelections()
-        val timings = timingOverridePanel.collectTimings()
-        val surplus = surplusOverridePanel.collectSurplus()
-
-        // Q8 防呆二次确认：空预设（0 项树声明）
+        // Q8 防呆二次确认：没有任何用途声明树维度 ⇒ 引用方的全局用途树全部被关（后果大）
         if (treeSelections.isEmpty()) {
             val confirmEmpty = Alert(Alert.AlertType.CONFIRMATION).apply {
                 title = "空预设保存二次确认"
-                headerText = "当前预设未勾选声明任何全局用途树（0 项树选择）"
+                headerText = "当前预设没有任何用途声明「树白名单」"
                 contentText = "⚠️ 注意：保存后将关闭引用该预设的卡组的全部全局用途树兜底策略！\n" +
                         "（空预设是合法的纯私有策略表达，但后果较大）。\n\n确定要保存为空预设吗？"
             }.showAndWait()
@@ -275,6 +260,7 @@ class StrategyPresetDetailPane(
     /** 同步展示当前预设详情或新建状态 */
     fun updateState(state: StrategyPresetState) {
         currentUniverse = state.purposeUniverse
+        currentTagDisplayNames = state.tagDisplayNames
 
         if (state.isCreating) {
             enterCreatingMode(state)
@@ -310,16 +296,26 @@ class StrategyPresetDetailPane(
             referenceListLabel.style = "-fx-text-fill: #27ae60; -fx-font-weight: bold;"
         }
 
-        // 加载各维度数据与刷新看板（T-TG-029：时序与惜售是并列的两个维度）
-        treeSelectionPanel.loadTrees(state.candidateTrees, detail.treeSelections)
-        timingOverridePanel.loadTimings(state.timingRules, detail.timings)
-        surplusOverridePanel.loadSurplus(state.timingRules, detail.surplus)
-        disabledPurposesBoard.updatePurposes(state.purposeUniverse, detail.treeSelections.keys)
+        // 装载「用途 × 三维度声明」聚合表，并刷新被禁用用途看板（口径 = 树维度声明）
+        purposeTable.load(
+            rules = state.timingRules,
+            candidateTrees = state.candidateTrees,
+            treeSelections = detail.treeSelections,
+            timings = detail.timings,
+            surplus = detail.surplus,
+            tagDisplayNames = state.tagDisplayNames
+        )
+        disabledPurposesBoard.updatePurposes(
+            state.purposeUniverse,
+            purposeTable.collectTreeSelections().keys,
+            state.tagDisplayNames
+        )
     }
 
     private fun enterCreatingMode(state: StrategyPresetState) {
         isCreatingMode = true
         currentPresetId = null
+        currentTagDisplayNames = state.tagDisplayNames
         headerLabel.text = "➕ 新建策略预设"
         createdAtLabel.text = ""
         txtId.text = "(系统自动生成)"
@@ -330,16 +326,22 @@ class StrategyPresetDetailPane(
         referenceListLabel.text = "新建预设尚未被任何卡组引用"
         referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
 
-        // 新建模式初始化空选择
-        treeSelectionPanel.loadTrees(state.candidateTrees, emptyMap())
-        timingOverridePanel.loadTimings(state.timingRules, emptyMap())
-        surplusOverridePanel.loadSurplus(state.timingRules, emptyMap())
-        disabledPurposesBoard.updatePurposes(state.purposeUniverse, emptySet())
+        // 新建模式初始化空声明
+        purposeTable.load(
+            state.timingRules,
+            state.candidateTrees,
+            emptyMap(),
+            emptyMap(),
+            emptyMap(),
+            state.tagDisplayNames
+        )
+        disabledPurposesBoard.updatePurposes(state.purposeUniverse, emptySet(), state.tagDisplayNames)
     }
 
     private fun clearForm() {
         isCreatingMode = false
         currentPresetId = null
+        currentTagDisplayNames = emptyMap()
         headerLabel.text = "请在左侧选择或新建预设"
         createdAtLabel.text = ""
         txtId.text = ""
@@ -350,10 +352,8 @@ class StrategyPresetDetailPane(
         referenceListLabel.text = "无"
         referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
 
-        treeSelectionPanel.loadTrees(emptyList(), emptyMap())
-        timingOverridePanel.loadTimings(emptyList(), emptyMap())
-        surplusOverridePanel.loadSurplus(emptyList(), emptyMap())
-        disabledPurposesBoard.updatePurposes(emptySet(), emptySet())
+        purposeTable.load(emptyList(), emptyList(), emptyMap(), emptyMap(), emptyMap(), emptyMap())
+        disabledPurposesBoard.updatePurposes(emptySet(), emptySet(), emptyMap())
     }
 
     /** 供工作台回显 Store 返回的失败原因（复用本面板既有弹窗工具，不另造一套）。 */

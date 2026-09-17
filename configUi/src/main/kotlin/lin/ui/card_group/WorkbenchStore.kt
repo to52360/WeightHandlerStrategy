@@ -42,7 +42,8 @@ class WorkbenchStore(
                 catalog.presets,
                 catalog.candidateTrees,
                 catalog.timingRules,
-                catalog.purposeUniverse
+                catalog.purposeUniverse,
+                catalog.tagDisplayNames
             )
         )
     }
@@ -117,17 +118,27 @@ class WorkbenchStore(
     }
 
     /**
-     * 保存卡组微调层增量项（T-TG-018；T-TG-029 起含独立的惜售维度）。
+     * 保存卡组微调层增量项（T-TG-018；T-TG-029 起含独立的惜售维度；含「不使用用途」去除通道；
+     * T-TG-041 起支持**维度级排除**）。
      */
     fun saveDeckDelta(
         treeExclusions: Map<String, Collection<String>>?,
         timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>? = null
+        surplus: Map<String, SurplusOverride>? = null,
+        excludedPurposes: Set<String>? = null,
+        exclusionDimensions: Map<String, Set<String>>? = null
     ): String? {
         val currentItem = state.selectedManagerItem ?: return "未选择卡组"
         val managerId = currentItem.entity?.id ?: return "卡组尚未保存"
 
-        val error = presetService.saveDeckDelta(managerId, treeExclusions, timings, surplus)
+        val error = presetService.saveDeckDelta(
+            managerId,
+            treeExclusions,
+            timings,
+            surplus,
+            excludedPurposes,
+            exclusionDimensions
+        )
         if (error != null) return error
 
         val updatedDelta = presetService.findDeckDelta(managerId)

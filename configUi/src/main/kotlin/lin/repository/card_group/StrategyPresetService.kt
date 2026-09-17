@@ -45,7 +45,22 @@ data class DeckDelta(
     val treeExclusions: Map<String, Set<String>>,
     val timings: Map<String, TimingOverride>,
     /** 用途 → 惜售门槛声明（T-TG-029；与预设逐项覆盖）。 */
-    val surplus: Map<String, SurplusOverride> = emptyMap()
+    val surplus: Map<String, SurplusOverride> = emptyMap(),
+    /**
+     * **本卡组不使用**的用途（消费侧「去除」通道；**整用途退出**视图，D-TG-020）。
+     *
+     * 语义 = 这些用途**整体退出本卡组**：① 从本卡组的规则集合里减掉 ⇒ **无规则**
+     * （**不回落全局默认值**）；② 其**用途树**（全局共享 + 专属）一并停用。
+     * ⚠️ 与 `treeExclusions` 是**粗 / 细两层**：本项 = 用途级；树排除 = 挑掉某几棵树。
+     */
+    val excludedPurposes: Set<String> = emptySet(),
+    /**
+     * **维度级排除**的完整映射（D-TG-021）：`用途 → 被禁维度集合`。
+     *
+     * `excludedPurposes` 只是本字段 { **TREE,TIMING,SURPLUS 全命中** 的用途 } 的便捷视图；
+     * 一个用途若**只禁部分维度**，只会出现在本字段、不会进 [excludedPurposes]。
+     */
+    val exclusionDimensions: Map<String, Set<String>> = emptyMap()
 )
 
 /**
@@ -234,7 +249,10 @@ class StrategyPresetService(
     }
 
     /**
-     * 卡组选预设（`presetId` 为 null/空白 = 不用预设 ⇒ 全部用途树生效）。
+     * 卡组选预设（`presetId` 为 null/空白 = **不用预设**）。
+     *
+     * ⚠️ 声明模型（D-TG-018）下"不用预设" = **一条声明都没有** ⇒ 该卡组的**全局用途树与时序规则都不生效**
+     * （旧文案"不用预设 = 全部用途树生效"已作废；卡组专属用途树不受影响，建树即声明）。
      *
      * @return 失败原因文案；null = 成功
      */
@@ -249,16 +267,21 @@ class StrategyPresetService(
         groupRepository.updateManagerPreset(managerId, target)
         return null
     }
-
+ 
     // ─────────────────────── 卡组增量项（③微调层） ───────────────────────
-
+ 
     /** 读卡组增量项；无卡组 / 无项时返回空集。 */
-    fun findDeckDelta(managerId: String): DeckDelta = DeckDelta(
-        managerId = managerId,
-        treeExclusions = presetRepository.findTreeSelections(DimensionScope.CARD_GROUP, managerId),
-        timings = presetRepository.findTimings(DimensionScope.CARD_GROUP, managerId),
-        surplus = presetRepository.findSurplus(DimensionScope.CARD_GROUP, managerId)
-    )
+    fun findDeckDelta(managerId: String): DeckDelta {
+        val exclusions = presetRepository.findExclusions(DimensionScope.CARD_GROUP, managerId)
+        return DeckDelta(
+            managerId = managerId,
+            treeExclusions = presetRepository.findTreeSelections(DimensionScope.CARD_GROUP, managerId),
+            timings = presetRepository.findTimings(DimensionScope.CARD_GROUP, managerId),
+            surplus = presetRepository.findSurplus(DimensionScope.CARD_GROUP, managerId),
+            excludedPurposes = exclusions.filterValues { it == Dimension.EXCLUDABLE_DIMENSIONS }.keys,
+            exclusionDimensions = exclusions
+        )
+    }
 
     /**
      * 写卡组增量项（**整体替换**语义：各项为 null = 不改，空集合 = 清空）。
@@ -266,13 +289,18 @@ class StrategyPresetService(
      * ⚠️ 与 [setCardGroupPreset] 分开：只改增量项，不动预设引用。
      *
      * @param surplus T-TG-029 惜售维度（独立替换；null = 不改）
+     * @param excludedPurposes 消费侧「去除」通道（**全禁简写**，D-TG-020）：这些用途**整用途退出**（独立替换；null = 不改）
+     * @param exclusionDimensions **维度级排除**完整映射（D-TG-021）：`用途 → 被禁维度集合`（优先级高于 [excludedPurposes]；
+     *   null = 不改）。两侧都传时，[exclusionDimensions] 表里的用途以其维度集为准，其余用 [excludedPurposes] 的全禁兜底。
      * @return 失败原因文案；null = 成功
      */
     fun saveDeckDelta(
         managerId: String,
         treeExclusions: Map<String, Collection<String>>?,
         timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>? = null
+        surplus: Map<String, SurplusOverride>? = null,
+        excludedPurposes: Set<String>? = null,
+        exclusionDimensions: Map<String, Set<String>>? = null
     ): String? = tx.execute {
         if (groupRepository.findManagerById(managerId) == null) {
             return@execute "卡组不存在: $managerId"
@@ -282,6 +310,15 @@ class StrategyPresetService(
         }
         timings?.let { presetRepository.replaceTimings(DimensionScope.CARD_GROUP, managerId, it) }
         surplus?.let { presetRepository.replaceSurplus(DimensionScope.CARD_GROUP, managerId, it) }
+
+        // 排除通道两种入参合并成一张「用途 → 被禁维度」表：维度级优先，全禁简写填充其余。
+        if (exclusionDimensions != null || excludedPurposes != null) {
+            val merged = buildMap {
+                exclusionDimensions?.forEach { (tag, dims) -> put(tag, dims) }
+                excludedPurposes?.forEach { tag -> put(tag, Dimension.EXCLUDABLE_DIMENSIONS) }
+            }
+            presetRepository.replaceExclusions(DimensionScope.CARD_GROUP, managerId, merged)
+        }
         null
     }
 }

@@ -61,6 +61,27 @@ class DimensionItemResolverTest {
         assertEquals(emptyList<String>(), resolver.narrowTreeTags("treeB", listOf("CLEAN"), sel))
     }
 
+    @Test
+    fun `用途级排除（本卡组不使用）连带停用其用途树`() {
+        // D-TG-020：排除是**用途级**的粗粒度 —— 规则被减掉，用途树（全局共享 + 专属）也一并停用
+        val sel = resolver.treeSelection(
+            presetReferenced = true,
+            presetKeepByTag = mapOf("CLEAN" to setOf("treeA")),
+            consumerExcludeByTag = emptyMap(),
+            excludedPurposes = setOf("CLEAN")
+        )
+        assertEquals(
+            "全局共享用途树：被排除的用途不输出",
+            emptyList<String>(),
+            resolver.narrowTreeTags("treeA", listOf("CLEAN"), sel)
+        )
+        assertEquals(
+            "卡组专属树：同样受用途级排除约束",
+            emptyList<String>(),
+            resolver.narrowOwnTreeTags("own", listOf("CLEAN"), sel)
+        )
+    }
+
     // ─────────────────── 树：卡组专属（Q-TG-004 形态 D：归属即拥有） ───────────────────
 
     @Test

@@ -27,11 +27,14 @@ class DimensionItemResolver {
      *
      * @param presetKeepByTag 用途 → 本维度**已声明**的树 id 集合（预设白名单；未引用预设时为**空表**）。
      *   空缺的用途 = 未声明 ⇒ 该用途的用途树不输出（空预设 = 全禁）。
-     * @param consumerExcludeByTag 用途 → 卡组**额外排除**的树 id 集合。
+     * @param consumerExcludeByTag 用途 → 卡组**额外排除**的树 id 集合（细粒度：挑掉某几棵树）。
+     * @param excludedPurposes 卡组**整体不使用**的用途（粗粒度，消费侧「去除」通道，D-TG-020）：
+     *   这些用途的规则被减掉**且**其用途树不输出 —— 用途级排除横跨"评估层（树）+ 编排层（规则）"两层。
      */
     data class TreeSelection(
         val presetKeepByTag: Map<String, Set<String>>,
-        val consumerExcludeByTag: Map<String, Set<String>>
+        val consumerExcludeByTag: Map<String, Set<String>>,
+        val excludedPurposes: Set<String> = emptySet()
     ) {
         companion object {
             /** 无任何声明且无增量项 —— 用途树全不输出（D-TG-018：不引用预设 = 合法终态，无隐式作用）。 */
@@ -48,31 +51,43 @@ class DimensionItemResolver {
     fun treeSelection(
         presetReferenced: Boolean,
         presetKeepByTag: Map<String, Set<String>>,
-        consumerExcludeByTag: Map<String, Set<String>>
+        consumerExcludeByTag: Map<String, Set<String>>,
+        excludedPurposes: Set<String> = emptySet()
     ): TreeSelection = TreeSelection(
         presetKeepByTag = if (presetReferenced) presetKeepByTag else emptyMap(),
-        consumerExcludeByTag = consumerExcludeByTag
+        consumerExcludeByTag = consumerExcludeByTag,
+        excludedPurposes = excludedPurposes
     )
 
     /**
      * 某棵**全局共享树**的收窄后的用途 tag 列表（即新的 `bindingIds`）。
      *
-     * 逐 tag 判定：有预设白名单而该 tag 未声明 ⇒ 禁；白名单不含本树 ⇒ 禁；消费方已排除 ⇒ 禁。
-     * **返回空列表 ⇒ 整棵树不输出**（调用方负责丢弃）。
+     * 逐 tag 判定：被本卡组**整体排除** ⇒ 禁；有预设白名单而该 tag 未声明 ⇒ 禁；白名单不含本树 ⇒ 禁；
+     * 消费方已排除该树 ⇒ 禁。 **返回空列表 ⇒ 整棵树不输出**（调用方负责丢弃）。
      */
     fun narrowTreeTags(treeId: String, treeTags: List<String>, selection: TreeSelection): List<String> =
         treeTags.filter { tag ->
-            inPresetWhitelist(treeId, tag, selection) && !consumerExcluded(treeId, tag, selection)
+            !purposeExcluded(tag, selection) &&
+                    inPresetWhitelist(treeId, tag, selection) &&
+                    !consumerExcluded(treeId, tag, selection)
         }
 
     /**
      * 某棵**卡组专属树**（`manager_id` = 当前卡组）的收窄。
      *
      * 归属即拥有 ⇒ **不受预设白名单约束**（预设管的是公共资源怎么用，私有资源天然属于本卡组），
-     * 但**仍受消费方增量项约束** —— 保留"本卡组再减"这个微调入口（需要时仍可把它排除）。
+     * 但**仍受消费方增量项约束** —— 保留"本卡组再减"这个微调入口（需要时仍可把它排除）；
+     * **也受用途级排除约束**（「本卡组不使用该用途」= 该用途退出本卡组，专属树一并停用）。
      */
     fun narrowOwnTreeTags(treeId: String, treeTags: List<String>, selection: TreeSelection): List<String> =
-        treeTags.filter { tag -> !consumerExcluded(treeId, tag, selection) }
+        treeTags.filter { tag -> !purposeExcluded(tag, selection) && !consumerExcluded(treeId, tag, selection) }
+
+    /**
+     * **用途级排除**（消费侧「去除」通道，D-TG-020）：该用途被本卡组整体不使用 ⇒
+     * 既不产出规则，也不输出其用途树（含专属树）。
+     */
+    private fun purposeExcluded(tag: String, selection: TreeSelection): Boolean =
+        tag in selection.excludedPurposes
 
     /** 预设白名单判定：该用途必须**显式声明**本树 —— 未引用预设（空表）⇒ 该用途未声明 ⇒ 不放行。 */
     private fun inPresetWhitelist(treeId: String, tag: String, selection: TreeSelection): Boolean {

@@ -81,8 +81,8 @@ val serviceModule = module {
     // 全局卡组选择状态
     single { ActiveManagerHolder() }
     single { lin.ui.WorkbenchNavigator() }
-    // 预设域目录单点装配（候选树/时序规则/用途全集/预设列表）
-    single { lin.ui.service.PresetCatalogLoader(get(), get(), get()) }
+    // 预设域目录单点装配（候选树/时序规则/用途全集/预设列表/标签显示名）
+    single { lin.ui.service.PresetCatalogLoader(get(), get(), get(), get()) }
 
 }
 

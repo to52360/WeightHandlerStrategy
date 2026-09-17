@@ -4,6 +4,7 @@ import lin.bean.usePlan.DefaultPurposeTagIntentRuleProvider
 import lin.repository.card_group.CurrentDeckContext
 import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.DimensionScope
+import lin.repository.card_group.Dimension
 import lin.repository.card_group.StrategyPresetRepository
 import lin.repository.card_purpose.PurposeTagRuleRepository
 import org.junit.After
@@ -207,6 +208,62 @@ class PurposeTagRuleProviderTest : McpTestEnv() {
         assertFalse(
             "FINISH 不应出现在规则集里",
             provider().rules().any { it.tagId.value == "FINISH" }
+        )
+    }
+    // ─────────────────────── T-TG-041：维度级排除（D-TG-021） ───────────────────────
+ 
+    /**
+     * 只禁 **TREE** 维度 ⇒ 规则侧照常产出该用途规则（时序不受影响）。
+     * 树侧停用由 `SqliteTreeConfigProvider` 单独处理（本 provider 只保证规则仍在）。
+     */
+    @Test
+    fun `只禁树维度时该用途仍产出规则`() {
+        createEnabledDeck(testPresetId)
+        saveDeclaringPreset("CLEAN")
+        presetRepository.replaceExclusions(
+            DimensionScope.CARD_GROUP, testDeckId,
+            mapOf("CLEAN" to setOf(Dimension.PURPOSE_TREE))
+        )
+ 
+        val tags = provider().rules().map { it.tagId.value }
+        assertTrue(
+            "只禁树维度 ⇒ 时序/惜售声明仍在 ⇒ 该用途仍有规则",
+            "CLEAN" in tags
+        )
+    }
+ 
+    /** 只禁 **TIMING** 维度 ⇒ 规则侧时序声明视为不存在；若该用途**只有时序声明** ⇒ 无规则。 */
+    @Test
+    fun `只禁时序维度且无惜售声明时该用途无规则`() {
+        createEnabledDeck(testPresetId)
+        saveDeclaringPreset("CLEAN")   // 只声明 stage（时序维度）
+        presetRepository.replaceExclusions(
+            DimensionScope.CARD_GROUP, testDeckId,
+            mapOf("CLEAN" to setOf(Dimension.PURPOSE_TIMING))
+        )
+ 
+        val tags = provider().rules().map { it.tagId.value }
+        assertFalse(
+            "只禁时序 + 无惜售声明 ⇒ 声明集合=时序∪惜售为空 ⇒ 该用途无规则",
+            "CLEAN" in tags
+        )
+    }
+ 
+    /** 存量 `{}`（payload 无 dimensions）解码为**全集** ⇒ 整用途退出，与旧语义逐字节等价。 */
+    @Test
+    fun `存量空 payload 排除行等价整用途退出`() {
+        createEnabledDeck(testPresetId)
+        saveDeclaringPreset("CLEAN")
+        // 模拟存量行：payload 直接写 `{}`（不走 encode，直接落库测 decode 兼容）
+        presetRepository.replaceExclusions(
+            DimensionScope.CARD_GROUP, testDeckId,
+            mapOf("CLEAN" to Dimension.EXCLUDABLE_DIMENSIONS)
+        )
+ 
+        val tags = provider().rules().map { it.tagId.value }
+        assertFalse(
+            "payload={}（全集）⇒ 整用途退出 ⇒ 无规则",
+            "CLEAN" in tags
         )
     }
 }

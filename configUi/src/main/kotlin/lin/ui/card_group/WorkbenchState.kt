@@ -47,6 +47,7 @@ data class WorkbenchState(
     val candidateTrees: List<TreeConfigEntity> = emptyList(),
     val timingRules: List<PurposeTagRuleEntity> = emptyList(),
     val purposeUniverse: Set<String> = emptySet(),
+    val tagDisplayNames: Map<String, String> = emptyMap(),
     val currentDeckDelta: DeckDelta? = null
 )
 
@@ -66,13 +67,15 @@ object WorkbenchActions {
         presets: List<PresetSummary>,
         candidateTrees: List<TreeConfigEntity>,
         timingRules: List<PurposeTagRuleEntity>,
-        purposeUniverse: Set<String>
+        purposeUniverse: Set<String>,
+        tagDisplayNames: Map<String, String> = emptyMap()
     ): Action = { state ->
         state.copy(
             availablePresets = presets,
             candidateTrees = candidateTrees,
             timingRules = timingRules,
-            purposeUniverse = purposeUniverse
+            purposeUniverse = purposeUniverse,
+            tagDisplayNames = tagDisplayNames
         )
     }
 

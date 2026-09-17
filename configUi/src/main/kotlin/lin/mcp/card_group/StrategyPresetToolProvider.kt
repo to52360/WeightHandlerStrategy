@@ -4,11 +4,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.UseStage
 import lin.mcp.*
 import lin.mcp.action.*
+import lin.repository.card_group.Dimension
 import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.ThresholdPatch
 import lin.repository.card_group.TimingOverride
+import lin.repository.card_purpose.PurposeTagRuleRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.service.TreeConfigService
@@ -48,9 +50,26 @@ data class DeckTreeExcludeInput(
     )
     val treeIds: List<String> = emptyList()
 )
+ 
+/**
+ * 维度级排除的单条入参（D-TG-021）：某用途**只禁列出的维度**、其余照常。
+ */
+data class DeckExclusionScopeInput(
+    @field:JsonPropertyDescription("用途标签 ID（如 CLEAN / DRAW_CARD）。")
+    val tagId: String,
+ 
+    @field:JsonPropertyDescription(
+        "本卡组对该用途**禁用的维度**列表（可禁：PURPOSE_TREE / PURPOSE_TIMING / PURPOSE_SURPLUS）。" +
+                "不传或空 = 整用途退出（所有维度都禁）；只禁某维度 ⇒ 其余维度照常生效。"
+    )
+    val dimensions: List<String> = emptyList()
+)
 
 data class PurposeTimingInput(
-    @field:JsonPropertyDescription("用途标签 ID（如 CLEAN / DRAW_CARD，由 list(resource=purpose_tag) 返回）。")
+    @field:JsonPropertyDescription(
+        "用途标签 ID。⚠️ **只有内置作用可被声明**（当前：SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD）；" +
+                "纯标记 / 查询标签（如 FINISH / EXTRA_COST、自定义标记）没有编排行为 ⇒ 传入会被报错拒绝。"
+    )
     val tagId: String,
 
     @field:JsonPropertyDescription("默认出牌阶段。可选 FIRST/SETUP/MID/LATE/GENERAL/LAST；不传 = 用全局规则行的值。")
@@ -76,7 +95,10 @@ data class PurposeTimingInput(
  * 语义：某用途的牌「平时惜售，等余费足够才垫」的门槛 N（与"何时出"是两件事）。
  */
 data class PurposeSurplusInput(
-    @field:JsonPropertyDescription("用途标签 ID（如 CLEAN / SAVE_LIFE，由 list(resource=purpose_tag) 返回）。")
+    @field:JsonPropertyDescription(
+        "用途标签 ID。⚠️ 同 timings：**只有内置作用可被声明**（当前：SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD），" +
+                "清单外的 tagId 会被报错拒绝。"
+    )
     val tagId: String,
 
     @field:JsonPropertyDescription(
@@ -168,7 +190,25 @@ data class SaveCardGroupPresetDeltaInput(
         "本卡组对用途**惜售门槛**的声明（T-TG-029 独立维度；压过预设值；**整体替换**语义）。" +
                 "不传 = 不修改；传空数组 = 清空。"
     )
-    val surplus: List<PurposeSurplusInput>? = null
+    val surplus: List<PurposeSurplusInput>? = null,
+
+    @field:JsonPropertyDescription(
+        "**本卡组不使用**的用途（消费侧「去除」通道；**整体替换**语义）：传入的用途**整体退出本卡组** —— " +
+                "① 从规则集合里减掉 ⇒ **无规则**（不参与阶段排序 / priority 选优），且**不回落全局默认值**；" +
+                "② 其**用途树**（全局共享 + 本卡组专属）**一并停用**。" +
+                "不传 = 不修改；传空数组 = 清空（恢复按预设声明生效）。" +
+                "⚠️ 与 excludeTreeSelections 是**粗 / 细两层**：本项 = 用途级；树排除 = 用途照用时挑掉某几棵树。" +
+                "⚠️ 与 excludeScopes 是同通道的两档：本项 = 全禁简写；excludeScopes = 只禁列出的维度。"
+    )
+    val excludePurposes: List<String>? = null,
+    @field:JsonPropertyDescription(
+        "**维度级排除**（D-TG-021；消费侧「去除」通道的**细档**；**整体替换**语义）：每条只禁某用途的**列出的维度**，" +
+                "其余维度照常生效。" +
+                "元素 dimensions 为空 = 该用途**整用途退出**（等价 excludePurposes）。" +
+                "⚠️ 与本工具 excludePurposes 传**同 tag** 会**报错**（全禁与维度级二选一，不给同一用途双写）；" +
+                "清单外维度 / 用途会被报错拒绝。"
+    )
+    val excludeScopes: List<DeckExclusionScopeInput>? = null
 )
 
 // ── Provider ──
@@ -222,6 +262,10 @@ class StrategyPresetToolProvider(
                 - **surplus（惜售门槛声明，独立于时序的维度）**：`defaultSurplusIdleThreshold` = 声明为门槛 N；
                   `clearSurplusIdleThreshold` = 声明为「不设门槛」；两者都不传 = 未声明（回落全局 rule 行的默认门槛）。
                   ⚠️ 未声明与「声明为无门槛」语义相反：前者用全局默认，后者强制不设门槛。
+
+                ⚠️ **可声明的用途 = 内置作用**（当前：SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD）：
+                  `timings` / `surplus` 里出现清单外的 tagId 会被**报错拒绝**（纯标记 / 查询标签如 FINISH / EXTRA_COST
+                  没有编排行为，其时机请用评估树 / 战术分表达）。树维度不受此限（其 key 是树实际绑定的标记）。
 
                 粒度：树维度是 **(用途, 树)** —— 一棵树绑了多个用途时，各自独立取舍（实现是按用途收窄绑定）。
 
@@ -335,10 +379,14 @@ class StrategyPresetToolProvider(
                 - **excludeTreeSelections**：本卡组在某用途下**再排除**若干棵树（只能减，不能启用被预设禁用的树）；
                 - **timings**：本卡组对该用途的**时序声明**（逐字段压过预设声明；也可**自行声明预设没声明的用途**）；
                 - **surplus**：本卡组对该用途的**惜售门槛**声明（T-TG-029 独立维度，同"压过预设"语义）。
+                - **excludePurposes**：本卡组**不使用**的用途（「去除」通道，**用途级**）—— 该用途**整体退出本卡组**：
+                  规则被减掉（**无规则、不回落全局默认值**）+ 其用途树一并停用。
+                  与 `excludeTreeSelections` 是**粗 / 细两层**（树排除 = 用途照用时挑掉某几棵树）。
 
                 ⚠️ 这是"共享预设 + 本卡组微调"的正规通道：想整套换掉请改用「不引用预设 + 自己的精细分组」，
                   而不是在这里逐项排除；**整体替换**语义（不传 = 不改 / 空数组 = 清空）。
                 ⚠️ 未声明的用途 = 无规则（阶段回落 GENERAL），声明里没写的字段回落全局行。
+                ⚠️ **可声明的用途 = 内置作用**（同 save_strategy_preset，当前 5 个）：清单外 tagId 会被报错拒绝。
                 ⚠️ 改完需重启引擎装配才生效。
             """.trimIndent()
         ) { input ->
@@ -350,11 +398,40 @@ class StrategyPresetToolProvider(
             }
             val timings = input.timings?.associate { it.toDomain() }
             val surplus = input.surplus?.associate { it.toDomain() }
+            val exclusions = input.excludePurposes?.map { raw ->
+                val tag = raw.trim()
+                if (tag.isBlank()) throw McpBadInput("excludePurposes 含空 tagId")
+                requireDeclarablePurpose(tag, "excludePurposes")
+                tag
+            }?.toSet()
+            val exclusionDimensions = input.excludeScopes?.associate { item ->
+                val tag = item.tagId.trim()
+                if (tag.isBlank()) throw McpBadInput("excludeScopes[].tagId 不能为空")
+                requireDeclarablePurpose(tag, "excludeScopes")
+                val dims = item.dimensions.map { it.trim() }.toSet()
+                val illegal = dims - Dimension.EXCLUDABLE_DIMENSIONS
+                if (illegal.isNotEmpty()) {
+                    throw McpBadInput("excludeScopes[].dimensions 含不可禁维度: $illegal（可禁 ${Dimension.EXCLUDABLE_DIMENSIONS}）")
+                }
+                // 空 = 整用途退出（所有维度都禁）
+                tag to (dims.ifEmpty { Dimension.EXCLUDABLE_DIMENSIONS })
+            }
+            // D-TG-021 拍板③：excludePurposes（全禁简写）与 excludeScopes（维度级）**同一 tag 双写 = 报错**
+            // （一个用途既不能被既全禁又部分禁 —— 语义冲突，让调用方明确二选一）。
+            val overlap = exclusions?.intersect(exclusionDimensions?.keys.orEmpty()).orEmpty()
+            if (overlap.isNotEmpty()) {
+                throw McpBadInput(
+                    "同 tag 双写排除: $overlap —— excludePurposes（全禁简写）与 excludeScopes（维度级）不可同时给同一用途，" +
+                            "请二选一（部分禁走 excludeScopes；全禁走 excludePurposes 或 excludeScopes.dimensions 留空）。"
+                )
+            }
             val error = service.saveDeckDelta(
                 managerId = input.managerId.trim(),
                 treeExclusions = excludes,
                 timings = timings,
-                surplus = surplus
+                surplus = surplus,
+                excludedPurposes = exclusions,
+                exclusionDimensions = exclusionDimensions
             )
             if (error != null) return@typedTool mcpError(error)
             mcpSuccess(
@@ -362,13 +439,32 @@ class StrategyPresetToolProvider(
                     "managerId" to input.managerId.trim(),
                     "excludedTreeCount" to excludes?.values?.sumOf { it.size },
                     "timingCount" to timings?.size,
-                    "surplusCount" to surplus?.size
+                    "surplusCount" to surplus?.size,
+                    "excludedPurposeCount" to exclusions?.size,
+                    "exclusionScopeCount" to exclusionDimensions?.size
                 )
             )
         }
     )
 
     // ── 校验与转换 ──
+
+    /**
+     * 声明边界（T-TG-038 / D-TG-019）：**只有内置作用能被声明**。
+     *
+     * 清单 = `PurposeTagRuleRepository.DECLARABLE_PURPOSES`（有行为定义的那几个，现 5 个）。清单外的标记
+     * （纯标记 / 查询标签，如 FINISH / EXTRA_COST、自定义标记）**没有编排行为可声明** ⇒ 直接拒绝：
+     * 否则库里会出现"UI 看不见的声明"，而 UI 保存是维度级整体替换 ⇒ 会被**静默抹掉**。
+     * ⚠️ 描述文案里枚举的那 5 个名字须与 `DECLARABLE_PURPOSES` 同批维护。
+     */
+    private fun requireDeclarablePurpose(tagId: String, where: String) {
+        if (tagId in PurposeTagRuleRepository.DECLARABLE_PURPOSES) return
+        throw McpBadInput(
+            "$where[].tagId 不是可声明的作用: $tagId。" +
+                    "当前可选: ${PurposeTagRuleRepository.DECLARABLE_PURPOSES.sorted()}；" +
+                    "纯标记 / 查询标签（如 FINISH / EXTRA_COST）没有编排行为，其时机请用评估树 / 战术分表达"
+        )
+    }
 
     /** 树必须存在、必须是 `PURPOSE_TAG` 绑定、且确实绑了该用途（"CLEAN 只能选 CLEAN 的树"）。 */
     private fun validateTreeBinding(tagId: String, treeId: String) {
@@ -393,6 +489,7 @@ class StrategyPresetToolProvider(
     private fun PurposeTimingInput.toDomain(): Pair<String, TimingOverride> {
         val tag = tagId.trim()
         if (tag.isBlank()) throw McpBadInput("timings[].tagId 不能为空")
+        requireDeclarablePurpose(tag, "timings")
         val stage = defaultStage?.trim()?.takeIf { it.isNotBlank() }
         if (stage != null && UseStage.entries.none { it.name == stage }) {
             throw McpBadInput(
@@ -403,12 +500,21 @@ class StrategyPresetToolProvider(
         if (priority != null && priority !in PRIORITY_RANGE) {
             throw McpBadInput("timings[$tag].priority 超出范围: $priority（可填 ${PRIORITY_RANGE.first}~${PRIORITY_RANGE.last}）")
         }
-        return tag to TimingOverride(
+        val override = TimingOverride(
             defaultStage = stage,
             defaultOrderWeight = defaultOrderWeight,
             defaultReplanAfterUse = defaultReplanAfterUse,
             priority = priority
         )
+        // 空元素（一个字段都没给）= 无声明内容，落库时会被静默丢弃 ⇒ 在入口拦下（别让调用方以为声明生效了）
+        if (override.isEmpty) {
+            throw McpBadInput(
+                "timings[$tag]: 该元素没有给任何字段（defaultStage / defaultOrderWeight / " +
+                        "defaultReplanAfterUse / priority 至少要有一个）—— 空声明会被静默丢弃。" +
+                        "「不声明该用途」请直接移除该元素；「本卡组不使用某用途」用 excludePurposes。"
+            )
+        }
+        return tag to override
     }
 
     /**
@@ -419,6 +525,7 @@ class StrategyPresetToolProvider(
     private fun PurposeSurplusInput.toDomain(): Pair<String, SurplusOverride> {
         val tag = tagId.trim()
         if (tag.isBlank()) throw McpBadInput("surplus[].tagId 不能为空")
+        requireDeclarablePurpose(tag, "surplus")
         if (clearSurplusIdleThreshold && defaultSurplusIdleThreshold != null) {
             throw McpBadInput("surplus[$tag]: clearSurplusIdleThreshold 与 defaultSurplusIdleThreshold 互斥")
         }
@@ -429,6 +536,14 @@ class StrategyPresetToolProvider(
             clearSurplusIdleThreshold -> ThresholdPatch(null)
             defaultSurplusIdleThreshold != null -> ThresholdPatch(defaultSurplusIdleThreshold)
             else -> null
+        }
+        // 空元素（既无 N 也无 clear）= 无声明内容，落库时会被静默丢弃 ⇒ 在入口拦下
+        if (threshold == null) {
+            throw McpBadInput(
+                "surplus[$tag]: 需要 defaultSurplusIdleThreshold（声明为 N）或 clearSurplusIdleThreshold" +
+                        "（声明为「不设门槛」）之一 —— 两者都不传的元素没有声明内容，会被静默丢弃。" +
+                        "「不声明该用途」请直接移除该元素。"
+            )
         }
         return tag to SurplusOverride(surplusIdleThreshold = threshold)
     }

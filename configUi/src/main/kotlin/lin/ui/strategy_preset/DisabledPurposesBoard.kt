@@ -35,7 +35,11 @@ class DisabledPurposesBoard : VBox(6.0) {
     /**
      * 根据全局用途全集与预设当前已声明的用途刷新看板。
      */
-    fun updatePurposes(universe: Set<String>, declaredTags: Set<String>) {
+    fun updatePurposes(
+        universe: Set<String>,
+        declaredTags: Set<String>,
+        tagDisplayNames: Map<String, String> = emptyMap()
+    ) {
         val disabled = (universe - declaredTags).sorted()
         tagContainer.children.clear()
 
@@ -55,9 +59,11 @@ class DisabledPurposesBoard : VBox(6.0) {
             tagContainer.isManaged = true
 
             for (tag in disabled) {
-                val badge = Label(tag).apply {
+                val displayName = tagDisplayNames[tag] ?: tag
+                val badge = Label(displayName).apply {
                     style =
                         "-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-padding: 2 6; -fx-background-radius: 3px; -fx-font-size: 11px; -fx-font-weight: bold;"
+                    tooltip = javafx.scene.control.Tooltip(tag)
                 }
                 tagContainer.children.add(badge)
             }
