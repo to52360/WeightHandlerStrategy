@@ -31,8 +31,9 @@ fun interface CardPurposeProvider {
  *
  * SPI 入口，configUi 通过此接口读取 `purpose_tag_rule` 表（T-TG-007）。
  * 引擎端**必须**保留硬编码 fallback（`DefaultPurposeTagIntentRuleProvider`）：
- * 纯引擎运行（无 configUi）或表为空时回落内置 6 条，禁止静默退化为「全无规则」
+ * 纯引擎运行（无 configUi，Koin 取不到 provider）时回落内置 5 条，禁止静默退化为「全无规则」
  * （那会让所有标签失去 stage/N/replan 默认值）。
+ * ⚠️ 表为空 **不**触发回落 —— 声明模型下「未声明 = 无规则」是合法终态（T-TG-008 已移除 configUi 侧的表空回落）。
  *
  * 注意：规则的**有无**由「是否存在该 tagId 的规则」表达 —— 无规则的标签（如 FINISH）
  * 不参与 `UseIntentDeriver` 的 priority 选优，故不可用「全默认值规则」冒充（D-TG-003）。

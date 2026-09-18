@@ -43,6 +43,14 @@ data class PurposeTagSummaryDto(
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
     @field:JsonPropertyDescription(
+        "**是否可声明作用**（D-DP-004）：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
+                "自定义标记需先经 save_purpose_tag_def(declarable=true) 晋级）。" +
+                "⚠️ 内置 7 个里的 FINISH / EXTRA_COST 恒 false（它们是查询 / 路由标签，无编排行为）。"
+    )
+    val declarable: Boolean = false,
+    @field:JsonPropertyDescription("是否内置战略用途（内置行的 declarable 由代码常量决定，写侧忽略该入参）")
+    val builtin: Boolean = false,
+    @field:JsonPropertyDescription(
         "**是否有全局规则行**。false = 该用途无规则条目（如 FINISH / EXTRA_COST）⇒ " +
                 "下列 defaultStage / priority / N 等字段**只是展示用的内置默认落点，不是生效规则**：" +
                 "无规则 = 不参与出牌阶段选优，配置面调它无效。"
@@ -65,6 +73,14 @@ data class PurposeTagDetailDto(
     val displayName: String,
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
+    @field:JsonPropertyDescription(
+        "**是否可声明作用**（D-DP-004）：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
+                "自定义标记需先经 save_purpose_tag_def(declarable=true) 晋级）。" +
+                "⚠️ 内置 7 个里的 FINISH / EXTRA_COST 恒 false（它们是查询 / 路由标签，无编排行为）。"
+    )
+    val declarable: Boolean = false,
+    @field:JsonPropertyDescription("是否内置战略用途（内置行的 declarable 由代码常量决定，写侧忽略该入参）")
+    val builtin: Boolean = false,
     @field:JsonPropertyDescription(
         "**是否有全局规则行**。false = 该用途无规则条目（如 FINISH / EXTRA_COST）⇒ " +
                 "下列 defaultStage / priority / N 等字段**只是展示用的内置默认落点，不是生效规则**：" +
@@ -112,7 +128,15 @@ data class SavePurposeTagDefInput(
                 "只允许一层，且目标只能是战略用途（SAVE_LIFE / CLEAN / GREED / FINISH / VALUE / EXTRA_COST / DRAW_CARD），" +
                 "禁止绑到自定义标记。"
     )
-    val boundPurpose: String? = null
+    val boundPurpose: String? = null,
+
+    @field:JsonPropertyDescription(
+        "**晋级为「可声明作用」**（D-DP-004）：true = 该自定义标记可被预设 / 卡组增量项声明时序与惜售，" +
+                "拥有自己的编排行为；false = 降级回不可声明（仍被声明引用时会被拒绝）；null = 不修改。" +
+                "⚠️ 与 boundPurpose **互斥**（绑定的语义是「继承某作用的行为」，晋级是「自己就是作用」）——" +
+                "同时成立会报错，请先解绑。⚠️ 内置 7 个忽略该入参（其可声明性由代码常量决定）。"
+    )
+    val declarable: Boolean? = null
 )
 
 // ── Provider ──
@@ -165,11 +189,13 @@ class PurposeTagToolProvider(
 
                 典型场景：给过牌卡打 DRAW_CARD 标签，或给某卡增补/移除用途标签。
 
-                ⚠️ 打标前先确认标签的隐式编排含义：标签命中 PurposeTagIntentRule 后会自动带来四项默认值
-                ——defaultStage / defaultOrderWeight / defaultSurplusIdleThreshold(N) / defaultReplanAfterUse
-                （N 多标签取 max、replan 取 any，均属保守方向合并，且不因 stageOverride 而跳过）。
-                用 get(resource=purpose_tag, id=标签ID) 查看这四项再决定是否打标；
-                不需要任何编排默认值时改用纯查询标签（如 FINISH / EXTRA_COST，无规则条目）。
+                ⚠️ 打标前先确认该标签的编排含义：**打标本身不产生行为**，行为来自「该用途被声明」
+                （预设 / 卡组增量项，D-TG-018）——被声明后它才带来四项默认值：
+                defaultStage / defaultOrderWeight / defaultSurplusIdleThreshold(N) / defaultReplanAfterUse
+                （N 多标签取 max、replan 取 any，均属保守方向合并，且不因 stageOverride 而跳过）；
+                未被声明 ⇒ 无规则、不参与阶段选优。
+                用 get(resource=purpose_tag, id=标签ID) 查看这四项与 declarable 再决定是否打标；
+                不需要任何编排行为时用纯查询标签（如 FINISH / EXTRA_COST）。
 
                 标签不存在时先用 save_purpose_tag_def 登记（登记后本工具的标签白名单自动放行）。
                 绑定了战略用途的标记会在此处自动展开——打 AOE_REMOVAL 若其绑定 CLEAN，
@@ -185,14 +211,19 @@ class PurposeTagToolProvider(
                 登记或修改一个标记定义（Tag Definition），登记后即可用于 save_card_purpose 与条件树查询。
                 按 tagId 覆盖，重复调用幂等。
 
-                两种形态（术语见项目术语表）：
+                三种形态（术语见项目术语表）：
                 - boundPurpose = null：**纯标记**，零编排副作用，仅供条件树查询
                   （has_purpose_tag / purpose_filter），不会带来 stage / N / replan 默认值，也不挂评估树。
-                - boundPurpose = "CLEAN"：绑定战略用途，继承其排序兜底与评估层绑定。
+                - boundPurpose = "CLEAN"：**绑定**战略用途，继承其排序兜底与评估层绑定。
+                - declarable = true（仅自定义标记）：**晋级为「可声明作用」**（D-DP-004）——此后预设 /
+                  卡组增量项可对其声明时序与惜售，该标记拥有**自己的**编排行为（可独立配 stage / N）。
 
                 ⚠️ 绑定只允许一层，目标只能是战略用途（内置那 7 个），禁止绑到自定义标记。
+                ⚠️ 晋级与绑定**互斥**（继承别人的行为 vs 自己就是作用）：同时传会报错，请先解绑再晋级。
+                ⚠️ 降级（declarable = false）时若仍被预设 / 卡组 Delta 的声明引用 ⇒ 报错拒绝。
                 内置标记（SAVE_LIFE / CLEAN / GREED / FINISH / VALUE / EXTRA_COST / DRAW_CARD）可改显示名，
-                但其 boundPurpose 恒为 null（它们自己就是战略用途）。
+                但其 boundPurpose 恒为 null、declarable 由内置清单决定（入参被忽略）。
+                `declarable` 的实际取值用 list / get(resource=purpose_tag) 查看。
 
                 ⚠️ 已知限制（实现形态 A：展开式）：改绑定后**已打标的卡不会回溯**——
                 展开结果在打标时已写入 card_purpose，需要重新调用 save_card_purpose 才会生效。
@@ -245,40 +276,24 @@ class PurposeTagToolProvider(
     }
 
     private fun handleSaveTagDef(input: SavePurposeTagDefInput): McpToolResult {
-        val tagId = input.tagId.trim()
-        if (tagId.isBlank()) throw McpBadInput("tagId 不能为空")
-        if (input.displayName.isBlank()) throw McpBadInput("displayName 不能为空")
-
-        val existing = tagDefRepository.findByTagId(tagId)
-        val bound = input.boundPurpose?.trim()?.takeIf { it.isNotBlank() }
-
-        if (bound != null) {
-            if (bound == tagId) throw McpBadInput("不能绑定到自身: $tagId")
-            // D-TG-002：只允许一层，目标只能是战略用途，禁止 tag → tag 链式
-            val target = tagDefRepository.findByTagId(bound)
-                ?: throw McpBadInput("绑定目标不存在: $bound")
-            if (!target.builtin) {
-                throw McpBadInput("绑定目标必须是战略用途，不能是自定义标记: $bound")
-            }
-        }
-
-        val entity = PurposeTagDefEntity(
-            tagId = tagId,
-            displayName = input.displayName.trim(),
-            description = input.description,
-            // 战略用途自身不参与绑定（其 boundPurpose 恒为 null），故内置标记忽略该入参
-            boundPurpose = if (existing?.builtin == true) null else bound,
-            builtin = existing?.builtin ?: false,
-            createdDate = existing?.createdDate
+        // 校验单点在 PurposeTagService.saveTagDef（UI 走同一入口，防两处各写一遍守门而漂移）
+        val result = purposeTagService.saveTagDef(
+            SaveTagDefCommand(
+                tagId = input.tagId,
+                displayName = input.displayName,
+                description = input.description,
+                boundPurpose = input.boundPurpose,
+                declarable = input.declarable
+            )
         )
-        tagDefRepository.save(entity)
-
+        val entity = result.entity ?: throw McpBadInput(result.error ?: "保存标记定义失败")
         return mcpSuccess(
             mapOf(
                 "tagId" to entity.tagId,
                 "displayName" to entity.displayName,
                 "boundPurpose" to entity.boundPurpose,
-                "builtin" to entity.builtin
+                "builtin" to entity.builtin,
+                "declarable" to entity.declarable
             )
         )
     }
@@ -309,6 +324,7 @@ class PurposeTagToolProvider(
         val tags = tagProvider.tags()
         val rules = globalRulesByTag()
         val defs = tagDefRepository.findAll().associateBy { it.tagId }
+        val declarableTagIds = tagDefRepository.declarableTagIds()
         val allCardPurposes = cardPurposeRepository.findAll()
         val cardTagSets = allCardPurposes.map { entity ->
             entity.purposeTags.split(",").map { it.trim() }.toSet()
@@ -320,6 +336,8 @@ class PurposeTagToolProvider(
                 tagId = tagIdStr,
                 displayName = tagDef.displayName,
                 boundPurpose = defs[tagIdStr]?.boundPurpose,
+                declarable = tagIdStr in declarableTagIds,
+                builtin = defs[tagIdStr]?.builtin == true,
                 hasRule = rule != null,
                 defaultStage = rule?.defaultStage?.name ?: "GENERAL",
                 defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,
@@ -373,10 +391,13 @@ class PurposeTagToolProvider(
                 )
             }
 
+        val detailDef = tagDefRepository.findByTagId(targetTagId)
         val detail = PurposeTagDetailDto(
             tagId = targetTagId,
             displayName = tagDef.displayName,
-            boundPurpose = tagDefRepository.findByTagId(targetTagId)?.boundPurpose,
+            boundPurpose = detailDef?.boundPurpose,
+            declarable = targetTagId in tagDefRepository.declarableTagIds(),
+            builtin = detailDef?.builtin == true,
             hasRule = rule != null,
             defaultStage = rule?.defaultStage?.name ?: "GENERAL",
             defaultOrderWeight = rule?.defaultOrderWeight ?: 0.0,

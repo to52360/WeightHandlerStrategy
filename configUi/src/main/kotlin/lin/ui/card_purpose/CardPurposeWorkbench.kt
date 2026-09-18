@@ -98,7 +98,12 @@ class CardPurposeWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 setOnAction { showAddCustomCardDialog() }
             }
 
-            children.addAll(searchField, groupCombo, tagCombo, dateCombo, btnAdd)
+            // D-DP-004：标记定义管理（晋级 / 降级「可声明作用」）—— 与"给卡打标"分开，故独立对话框
+            val btnTagDef = Button("标记定义…").apply {
+                setOnAction { PurposeTagDefDialog().showAndWait() }
+            }
+
+            children.addAll(searchField, groupCombo, tagCombo, dateCombo, btnAdd, btnTagDef)
         }
 
         // 配置 TableView
