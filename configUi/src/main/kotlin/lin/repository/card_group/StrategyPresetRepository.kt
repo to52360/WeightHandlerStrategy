@@ -61,7 +61,7 @@ object Dimension {
 
     /**
      * 光环作用域声明（D-DP-001 / Q-DP-002）—— **不是用途维度**：光环不按用途分组（`purpose_tag` 用哨兵
-     * [AURA_ALL_TAGS] 整包承载），也**不受「用途排除」影响** ⇒ **不进** [EXCLUDABLE_DIMENSIONS]
+     * [ALL_SUBJECTS] 整包承载），也**不受「用途排除」影响** ⇒ **不进** [EXCLUDABLE_DIMENSIONS]
      * （加进去会把光环卷进排除通道，且历史 `{}` payload 的解码含义会跟着变）。
      *
      * payload：预设侧 `{"auraIds":[…]}`（白名单）；消费侧 `{"extra":[…],"exclude":[…],"scoreOverrides":{…}}`。
@@ -69,24 +69,30 @@ object Dimension {
     const val AURA_BOOST = "AURA_BOOST"
 
     /**
-     * `AURA_BOOST` 行的 `purpose_tag` **哨兵** —— 整包声明（光环不按用途分组）。
+     * **整包声明哨兵** —— 主体列（`purpose_tag`）的占位值：本行**不按主体细分**，整条声明作用于全部。
+     *
+     * 用途维度填用途 tagId；**整包维度**（如 [AURA_BOOST]，光环不按用途分组）填本哨兵。
+     * ⚠️ **新增整包维度无需任何 schema 改动**：加一个 `Dimension` 常量 + 复用本哨兵即可。
+     * **不要**为此加「全局 / 按用途」判别列 —— 每个维度只有一种粒度时，那种列只是 `dimension`
+     * 的派生函数（物化冗余、两份值可能不一致）；仅当**同一维度出现第二种粒度**时才需要真列。
      *
      * 安全性（Q-DP-002 §8.1 已核查）：所有按用途读取的查询都带 `dimension` 过滤；唯一不带 dimension 的两处
      * 是快照的**原始行采集**（删预设 / 级联删卡组），对新维度天然通用。
      */
-    const val AURA_ALL_TAGS = "_ALL_"
+    const val ALL_SUBJECTS = "_ALL_"
 }
 
 /**
  * 维度项（`strategy_dimension_item` 一行）。
  *
- * **统一语义**：**行 = (归属域, 归属方, 维度, 用途) 的一条声明；[payload] = 该声明的值**。
+ * **统一语义**：**行 = (归属域, 归属方, 维度, 主体) 的一条声明；[payload] = 该声明的值**。
  * 键留列、值进 payload（如 `PURPOSE_TREE` → `{"treeIds":[…]}`），编解码走 [DimensionPayloadCodec]。
  */
 data class DimensionItemEntity(
     val scope: String,
     val ownerId: String,
     val dimension: String,
+    /** **声明主体**：用途维度 = 用途 tagId；整包维度 = 哨兵 [Dimension.ALL_SUBJECTS]。 */
     val purposeTag: String,
     val payload: String
 )
@@ -332,7 +338,7 @@ class StrategyPresetRepository(private val jdbcTemplate: JdbcTemplate) {
                     scope = scope,
                     ownerId = ownerId,
                     dimension = Dimension.AURA_BOOST,
-                    purposeTag = Dimension.AURA_ALL_TAGS,
+                    purposeTag = Dimension.ALL_SUBJECTS,
                     payload = DimensionPayloadCodec.encodeAuraSelection(auraIds)
                 )
             )
@@ -355,7 +361,7 @@ class StrategyPresetRepository(private val jdbcTemplate: JdbcTemplate) {
                     scope = scope,
                     ownerId = ownerId,
                     dimension = Dimension.AURA_BOOST,
-                    purposeTag = Dimension.AURA_ALL_TAGS,
+                    purposeTag = Dimension.ALL_SUBJECTS,
                     payload = DimensionPayloadCodec.encodeAuraDelta(delta)
                 )
             )

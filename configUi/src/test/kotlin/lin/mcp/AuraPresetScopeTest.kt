@@ -1,22 +1,13 @@
 package lin.mcp
 
+import lin.provider.SqliteAuraBoostConfigProvider
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.AuraBoostRepository
-import lin.repository.card_group.AuraDelta
-import lin.repository.card_group.CardGroupRepository
-import lin.repository.card_group.CardManagerEntity
-import lin.repository.card_group.Dimension
-import lin.repository.card_group.DimensionPayloadCodec
-import lin.repository.card_group.DimensionScope
-import lin.repository.card_group.StrategyPresetRepository
-import lin.repository.card_group.StrategyPresetService
-import lin.provider.SqliteAuraBoostConfigProvider
+import lin.repository.card_group.*
 import lin.serviceLoader.provider.AuraBoostConfigProvider
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import org.koin.core.context.GlobalContext
 
@@ -173,7 +164,7 @@ class AuraPresetScopeTest : McpTestEnv() {
         val auraItems = presetRepository.findItems(DimensionScope.PRESET, pid)
             .filter { it.dimension == Dimension.AURA_BOOST }
         assertEquals("AURA_BOOST 行应恰好一行", 1, auraItems.size)
-        assertEquals("行应使用整包哨兵", Dimension.AURA_ALL_TAGS, auraItems.first().purposeTag)
+        assertEquals("行应使用整包哨兵", Dimension.ALL_SUBJECTS, auraItems.first().purposeTag)
     }
 
     // ── helpers ──
