@@ -4,13 +4,15 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import lin.bean.usePlan.UseStage
 import lin.mcp.*
 import lin.mcp.action.*
+import lin.repository.aura_boost.AuraBoostConfigService
+import lin.repository.card_group.AuraDelta
 import lin.repository.card_group.Dimension
 import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.ThresholdPatch
 import lin.repository.card_group.TimingOverride
-import lin.repository.card_purpose.PurposeTagRuleRepository
+import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
 import lin.ui.service.TreeConfigService
@@ -67,8 +69,9 @@ data class DeckExclusionScopeInput(
 
 data class PurposeTimingInput(
     @field:JsonPropertyDescription(
-        "用途标签 ID。⚠️ **只有内置作用可被声明**（当前：SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD）；" +
-                "纯标记 / 查询标签（如 FINISH / EXTRA_COST、自定义标记）没有编排行为 ⇒ 传入会被报错拒绝。"
+        "用途标签 ID。⚠️ 只有**可声明作用**能被声明：内置 5 个作用（SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD），" +
+                "或已**晋级**的自定义标记（save_purpose_tag_def(declarable=true)）；其余（FINISH / EXTRA_COST 等" +
+                "查询 / 路由标签、未晋级标记）没有编排行为 ⇒ 传入会被报错拒绝。用 list(resource=purpose_tag) 看 declarable。"
     )
     val tagId: String,
 
@@ -96,8 +99,8 @@ data class PurposeTimingInput(
  */
 data class PurposeSurplusInput(
     @field:JsonPropertyDescription(
-        "用途标签 ID。⚠️ 同 timings：**只有内置作用可被声明**（当前：SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD），" +
-                "清单外的 tagId 会被报错拒绝。"
+        "用途标签 ID。⚠️ 同 timings：只有**可声明作用**能被声明（内置 5 个，或已晋级的自定义标记），" +
+                "清单外的 tagId 会被报错拒绝（用 list(resource=purpose_tag) 看 declarable）。"
     )
     val tagId: String,
 
@@ -121,7 +124,11 @@ data class SaveStrategyPresetInput(
     @field:JsonPropertyDescription("预设名称（如 \"快攻-标准\"）。")
     val name: String,
 
-    @field:JsonPropertyDescription("可选：预设说明。")
+    @field:JsonPropertyDescription(
+        "可选：预设说明。⚠️ 更新已有预设时**不传 = 清空现有说明**" +
+                "（注意与 treeSelections / timings / surplus 的「不传 = 不修改」相反）；" +
+                "要保留原说明须把原值显式回传，改完用 get 复查。"
+    )
     val description: String? = null,
 
     @field:JsonPropertyDescription(
@@ -145,7 +152,16 @@ data class SaveStrategyPresetInput(
         "本预设对用途的**惜售声明**（独立维度，**整体替换**语义）。不传 = 不修改；传空数组 = 清空。" +
                 "⚠️ 在这里声明某用途 = 该用途**有规则**（与 timings 同效）；门槛没写 = 回落全局行。"
     )
-    val surplus: List<PurposeSurplusInput>? = null
+    val surplus: List<PurposeSurplusInput>? = null,
+
+    @field:JsonPropertyDescription(
+        "本预设声明的**全局光环白名单**（D-DP-001，独立维度；**整体替换**语义）：只列出要生效的全局 aura_boost 行 id。" +
+                "不传 = 不修改；传空数组 = 清空（= 本预设不要任何全局光环）。" +
+                "⚠️ 只接受**存在且 manager_id IS NULL（全局行）**的 id（卡组私有行归属其卡组，引用会被拒绝）；" +
+                "⚠️ 卡组私有光环不受本白名单约束（归属即拥有）；**不引用预设的卡组 = 无全局光环**。" +
+                "id 由 list(resource=aura_boost) 获取。"
+    )
+    val auraBoostIds: List<String>? = null
 )
 
 data class CloneStrategyPresetInput(
@@ -208,7 +224,25 @@ data class SaveCardGroupPresetDeltaInput(
                 "⚠️ 与本工具 excludePurposes 传**同 tag** 会**报错**（全禁与维度级二选一，不给同一用途双写）；" +
                 "清单外维度 / 用途会被报错拒绝。"
     )
-    val excludeScopes: List<DeckExclusionScopeInput>? = null
+    val excludeScopes: List<DeckExclusionScopeInput>? = null,
+
+    @field:JsonPropertyDescription(
+        "**光环增量 · 增**（D-DP-002）：在白名单之外**补声明**的全局 aura_boost id 列表（把被预设排除的、或预设没声明的拉回来）。" +
+                "null = **本档不修改**（保留现值）；传空数组 = 清空本档。只能引用存在且 manager_id IS NULL 的行。"
+    )
+    val extraAuraBoostIds: List<String>? = null,
+
+    @field:JsonPropertyDescription(
+        "**光环增量 · 减**（D-DP-002）：在白名单 ∪ extra 之上**再减掉**的全局 aura_boost id 列表。" +
+                "null = **本档不修改**；传空数组 = 清空本档。⚠️ 与 extraAuraBoostIds 传**同 id** 会报错（同一行不能既加又减）。"
+    )
+    val excludedAuraBoostIds: List<String>? = null,
+
+    @field:JsonPropertyDescription(
+        "**光环增量 · 覆盖**（D-DP-002）：`aura_boost行id → 覆盖分值`（费值口径）—— 只改分值、不改生效集。" +
+                "null = **本档不修改**；传空对象 = 清空本档。key 必须存在且为全局行。"
+    )
+    val auraScoreOverrides: Map<String, Double>? = null
 )
 
 // ── Provider ──
@@ -220,7 +254,11 @@ class StrategyPresetToolProvider(
     /** 「被禁用的用途清单」计算（纯规则）。 */
     private val resolver: DimensionItemResolver,
     /** 全局用途树候选与用途全集口径（T-TG-024）。 */
-    private val treeConfigService: TreeConfigService
+    private val treeConfigService: TreeConfigService,
+    /** 可声明作用候选的**单点门面**（D-DP-004）：内置常量 ∪ 库中晋级行，与 UI 候选共用。 */
+    private val tagDefRepository: PurposeTagDefRepository,
+    /** D-DP-001 校验用：光环引用只能指向**存在且全局**（`manager_id IS NULL`）的 `aura_boost` 行。 */
+    private val auraBoostService: AuraBoostConfigService
 ) : McpToolProvider {
 
     override val actions: List<ResourceActions> = listOf(
@@ -253,7 +291,7 @@ class StrategyPresetToolProvider(
 
                 与「精细层」的分工：逐卡/逐组的精细调整走卡组私有分组，预设只管跨卡组共享的用途级兜底。
 
-                三个维度（**同向语义：声明 = 生效，未声明 = 不生效**）：
+                四个维度（**同向语义：声明 = 生效，未声明 = 不生效**）：
                 - **treeSelections（白名单）**：某用途**保留**哪些树。
                   ⚠️ 未列出的用途 = 未声明 ⇒ **该用途的用途树全部禁用**（响应里的 disabledPurposes 会列出）。
                 - **timings（时序声明）**：某用途的 stage / orderWeight / replan（+ 可选 priority）。
@@ -262,10 +300,15 @@ class StrategyPresetToolProvider(
                 - **surplus（惜售门槛声明，独立于时序的维度）**：`defaultSurplusIdleThreshold` = 声明为门槛 N；
                   `clearSurplusIdleThreshold` = 声明为「不设门槛」；两者都不传 = 未声明（回落全局 rule 行的默认门槛）。
                   ⚠️ 未声明与「声明为无门槛」语义相反：前者用全局默认，后者强制不设门槛。
+                - **auraBoostIds（光环白名单，D-DP-001）**：本预设声明**保留哪些全局光环行**
+                  （`manager_id IS NULL` 的 aura_boost，id 由 list(resource=aura_boost) 取）。
+                  ⚠️ **未引用预设的卡组 = 无全局光环**；**卡组私有光环**不受白名单约束（归属即拥有，见 D-TG-015）。
 
-                ⚠️ **可声明的用途 = 内置作用**（当前：SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD）：
-                  `timings` / `surplus` 里出现清单外的 tagId 会被**报错拒绝**（纯标记 / 查询标签如 FINISH / EXTRA_COST
-                  没有编排行为，其时机请用评估树 / 战术分表达）。树维度不受此限（其 key 是树实际绑定的标记）。
+                ⚠️ **可声明的用途 = 可声明作用**（内置 5 个作用，或已**晋级**的自定义标记 ——
+                  见 list(resource=purpose_tag) 的 declarable 字段）：
+                  `timings` / `surplus` 里出现清单外的 tagId 会被**报错拒绝**（FINISH / EXTRA_COST 等查询 / 路由标签
+                  没有编排行为，其时机请用评估树 / 战术分表达；自定义标记请先 save_purpose_tag_def(declarable=true)）。
+                  树维度不受此限（其 key 是树实际绑定的标记）。
 
                 粒度：树维度是 **(用途, 树)** —— 一棵树绑了多个用途时，各自独立取舍（实现是按用途收窄绑定）。
 
@@ -286,6 +329,9 @@ class StrategyPresetToolProvider(
             }
             val timings = input.timings?.associate { it.toDomain() }
             val surplus = input.surplus?.associate { it.toDomain() }
+            // D-DP-001：光环白名单（null = 不修改；[] = 清空）—— 引用只能指向存在且全局的行
+            val auraBoostIds = input.auraBoostIds?.map { it.trim() }?.distinct()
+            requireGlobalAuraBoosts(auraBoostIds.orEmpty(), "auraBoostIds")
 
             val result = service.savePreset(
                 presetId = input.presetId?.trim()?.takeIf { it.isNotBlank() },
@@ -293,7 +339,8 @@ class StrategyPresetToolProvider(
                 description = input.description,
                 treeSelections = treeSelections,
                 timings = timings,
-                surplus = surplus
+                surplus = surplus,
+                auraSelection = auraBoostIds?.toSet()
             ) ?: return@typedTool mcpError("更新失败：预设不存在（presetId=${input.presetId}）")
 
             // 树维度**已声明**的用途从**保存后的库态**取（含空数组声明的行）——
@@ -307,6 +354,7 @@ class StrategyPresetToolProvider(
                     "treeItemCount" to result.treeItemCount,
                     "timingCount" to result.timingCount,
                     "surplusCount" to result.surplusCount,
+                    "auraCount" to result.auraCount,
                     "disabledPurposes" to disabledPurposes(declared)
                 )
             )
@@ -379,6 +427,9 @@ class StrategyPresetToolProvider(
                 - **excludeTreeSelections**：本卡组在某用途下**再排除**若干棵树（只能减，不能启用被预设禁用的树）；
                 - **timings**：本卡组对该用途的**时序声明**（逐字段压过预设声明；也可**自行声明预设没声明的用途**）；
                 - **surplus**：本卡组对该用途的**惜售门槛**声明（T-TG-029 独立维度，同"压过预设"语义）。
+                - **extraAuraBoostIds / excludedAuraBoostIds / auraScoreOverrides**：本卡组的**光环增量**三档
+                  （D-DP-002，独立维度）—— 在白名单基础上**再减** / 白名单外**补声明** / **覆盖分值**。
+                  ⚠️ 三档**各自 null = 该档不改**（与 timings / surplus 的「整维度替换」不同）；extra 与 exclude 传同 id 报错。
                 - **excludePurposes**：本卡组**不使用**的用途（「去除」通道，**用途级**）—— 该用途**整体退出本卡组**：
                   规则被减掉（**无规则、不回落全局默认值**）+ 其用途树一并停用。
                   与 `excludeTreeSelections` 是**粗 / 细两层**（树排除 = 用途照用时挑掉某几棵树）。
@@ -425,13 +476,43 @@ class StrategyPresetToolProvider(
                             "请二选一（部分禁走 excludeScopes；全禁走 excludePurposes 或 excludeScopes.dimensions 留空）。"
                 )
             }
+            // D-DP-002：光环增量三档（**按档合并、各档 null = 不改**）—— 与 timings / surplus 的"整维度替换"不同：
+            // 三档同在一行 payload 内，只改一档时另两档必须保留现值。
+            val touchedAura = input.extraAuraBoostIds != null ||
+                    input.excludedAuraBoostIds != null ||
+                    input.auraScoreOverrides != null
+            val auraDelta = if (!touchedAura) {
+                null
+            } else {
+                val current = service.findDeckDelta(input.managerId.trim()).auraDelta
+                AuraDelta(
+                    extra = input.extraAuraBoostIds?.map { it.trim() }?.distinct()?.toSet() ?: current.extra,
+                    exclude = input.excludedAuraBoostIds?.map { it.trim() }?.distinct()?.toSet() ?: current.exclude,
+                    scoreOverrides = input.auraScoreOverrides
+                        ?.mapKeys { (id, _) -> id.trim() }
+                        ?: current.scoreOverrides
+                )
+            }
+            val auraOverlap = auraDelta?.extra.orEmpty().intersect(auraDelta?.exclude.orEmpty())
+            if (auraOverlap.isNotEmpty()) {
+                throw McpBadInput(
+                    "同 id 双写光环增量（extraAuraBoostIds 与 excludedAuraBoostIds 同时给）: $auraOverlap —— 请二选一"
+                )
+            }
+            requireGlobalAuraBoosts(
+                auraDelta?.extra.orEmpty() + auraDelta?.exclude.orEmpty() +
+                        auraDelta?.scoreOverrides.orEmpty().keys,
+                "光环增量"
+            )
+
             val error = service.saveDeckDelta(
                 managerId = input.managerId.trim(),
                 treeExclusions = excludes,
                 timings = timings,
                 surplus = surplus,
                 excludedPurposes = exclusions,
-                exclusionDimensions = exclusionDimensions
+                exclusionDimensions = exclusionDimensions,
+                auraDelta = auraDelta
             )
             if (error != null) return@typedTool mcpError(error)
             mcpSuccess(
@@ -441,7 +522,14 @@ class StrategyPresetToolProvider(
                     "timingCount" to timings?.size,
                     "surplusCount" to surplus?.size,
                     "excludedPurposeCount" to exclusions?.size,
-                    "exclusionScopeCount" to exclusionDimensions?.size
+                    "exclusionScopeCount" to exclusionDimensions?.size,
+                    "auraDelta" to auraDelta?.let {
+                        mapOf(
+                            "extra" to it.extra.sorted(),
+                            "exclude" to it.exclude.sorted(),
+                            "scoreOverrides" to it.scoreOverrides.toSortedMap()
+                        )
+                    }
                 )
             )
         }
@@ -450,20 +538,44 @@ class StrategyPresetToolProvider(
     // ── 校验与转换 ──
 
     /**
-     * 声明边界（T-TG-038 / D-TG-019）：**只有内置作用能被声明**。
+     * 声明边界（D-DP-004，取代 T-TG-038 / D-TG-019 的「仅 5 个内置作用」）：**只有可声明作用能被声明**。
      *
-     * 清单 = `PurposeTagRuleRepository.DECLARABLE_PURPOSES`（有行为定义的那几个，现 5 个）。清单外的标记
-     * （纯标记 / 查询标签，如 FINISH / EXTRA_COST、自定义标记）**没有编排行为可声明** ⇒ 直接拒绝：
-     * 否则库里会出现"UI 看不见的声明"，而 UI 保存是维度级整体替换 ⇒ 会被**静默抹掉**。
-     * ⚠️ 描述文案里枚举的那 5 个名字须与 `DECLARABLE_PURPOSES` 同批维护。
+     * 清单 = `PurposeTagDefRepository.declarableTagIds()`（单一门面：内置 5 个能力常量 ∪ 库中
+     * `declarable = 1` 的自定义晋级行）。清单外的标记（FINISH / EXTRA_COST 等查询 / 路由标签、未晋级标记）
+     * **没有编排行为可声明** ⇒ 直接拒绝：否则库里会出现"UI 看不见的声明"，而 UI 保存是维度级整体替换
+     * ⇒ 会被**静默抹掉**。文案不再逐字枚举名字（指向 `list(resource=purpose_tag)` 的 declarable 字段）。
      */
     private fun requireDeclarablePurpose(tagId: String, where: String) {
-        if (tagId in PurposeTagRuleRepository.DECLARABLE_PURPOSES) return
+        val declarable = tagDefRepository.declarableTagIds()
+        if (tagId in declarable) return
         throw McpBadInput(
             "$where[].tagId 不是可声明的作用: $tagId。" +
-                    "当前可选: ${PurposeTagRuleRepository.DECLARABLE_PURPOSES.sorted()}；" +
-                    "纯标记 / 查询标签（如 FINISH / EXTRA_COST）没有编排行为，其时机请用评估树 / 战术分表达"
+                    "当前可选: ${declarable.sorted()}；" +
+                    "FINISH / EXTRA_COST 等查询 / 路由标签没有编排行为，其时机请用评估树 / 战术分表达；" +
+                    "自定义标记请先 save_purpose_tag_def(declarable=true) 晋级为可声明作用"
         )
+    }
+
+    /**
+     * 光环行引用校验（D-DP-001 / D-DP-002）：白名单 / extra / scoreOverrides 只能引用**存在且全局**
+     * （`manager_id IS NULL`）的 `aura_boost` 行。
+     *
+     * 为什么拒私有行：预设是**跨卡组资产**，引用别卡组的私有行对其他卡组是**静默 no-op**（该行只归属它的卡组）
+     * ⇒ 直接拒绝，避免"配了但不生效"。
+     */
+    private fun requireGlobalAuraBoosts(ids: Collection<String>, where: String) {
+        if (ids.isEmpty()) return
+        val globals = auraBoostService.loadAll()
+            .filter { it.managerId == null }
+            .mapTo(mutableSetOf()) { it.id }
+        val illegal = ids.filter { it !in globals }
+        if (illegal.isNotEmpty()) {
+            throw McpBadInput(
+                "$where 引用了不存在或非全局的光环行: $illegal。" +
+                        "只有**存在且 manager_id IS NULL（全局行）**的 aura_boost 可被预设 / 卡组增量项引用" +
+                        "（卡组私有行归属其卡组，引用对其他卡组静默无效）；当前全局行: ${globals.sorted()}"
+            )
+        }
     }
 
     /** 树必须存在、必须是 `PURPOSE_TAG` 绑定、且确实绑了该用途（"CLEAN 只能选 CLEAN 的树"）。 */
@@ -569,6 +681,7 @@ class StrategyPresetToolProvider(
                 "treeItemCount" to s.treeItemCount,
                 "timingCount" to s.timingCount,
                 "surplusCount" to s.surplusCount,
+                "auraCount" to s.auraCount,
                 "referencedBy" to s.referencedBy.map {
                     mapOf(
                         "managerId" to it.managerId,
@@ -614,6 +727,8 @@ class StrategyPresetToolProvider(
                                 override.surplusIdleThreshold.value == null)
                     )
                 },
+                // D-DP-001：光环白名单（全局 aura_boost 行 id；卡组私有光环不在本列）
+                "auraBoostIds" to detail.auraSelection.sorted(),
                 // 防"以为在用其实被禁"：列出被本预设禁用的用途
                 "disabledPurposes" to resolver.disabledPurposes(universe, detail.treeSelections.keys),
                 "referencedBy" to service.findReferences(detail.preset.id)

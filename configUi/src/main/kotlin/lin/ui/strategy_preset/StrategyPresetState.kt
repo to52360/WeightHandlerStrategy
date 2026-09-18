@@ -32,5 +32,7 @@ data class StrategyPresetState(
     /** 库中已启用的全局用途标签全集（用于计算禁用用途看板） */
     val purposeUniverse: Set<String> = emptySet(),
     /** 标签显示名字典（tag_id -> display_name，数据源自 purpose_tag_def 表） */
-    val tagDisplayNames: Map<String, String> = emptyMap()
+    val tagDisplayNames: Map<String, String> = emptyMap(),
+    /** **全局光环行**候选（D-DP-001：预设「光环声明」区可勾选的白名单来源） */
+    val candidateAuraBoosts: List<lin.ui.service.AuraBoostOption> = emptyList()
 )

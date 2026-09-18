@@ -10,6 +10,7 @@ import javafx.scene.layout.VBox
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.TimingOverride
+import lin.ui.service.AuraBoostOption
 
 /**
  * 策略预设详情面板（T-TG-016 / T-TG-017；T-TG-037 改为**按用途聚合的单页声明表**）。
@@ -24,14 +25,15 @@ class StrategyPresetDetailPane(
     private val service: StrategyPresetService
 ) : VBox(10.0) {
 
-    /** 保存预设（含元数据 + 树白名单 + 时序声明 + 惜售声明，维度级整体替换） */
+    /** 保存预设（含元数据 + 树白名单 + 时序声明 + 惜售声明 + 光环白名单，维度级整体替换） */
     var onSavePreset: ((
         presetId: String?,
         name: String,
         description: String?,
         treeSelections: Map<String, Collection<String>>?,
         timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>?
+        surplus: Map<String, SurplusOverride>?,
+        auraSelection: Set<String>?
     ) -> Unit)? = null
 
     /** 物理删除预设 */
@@ -86,6 +88,17 @@ class StrategyPresetDetailPane(
     private val purposeTable = PresetPurposeTable()
     private val disabledPurposesBoard = DisabledPurposesBoard()
 
+    // ── D-DP-001「光环声明」区（全局 aura_boost 行的白名单；与用途维度并列的独立维度）──
+    private val auraSection = VBox(4.0).apply {
+        style = "-fx-border-color: #bdc3c7; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-padding: 6px;"
+    }
+    private val auraTitle = Label("📡 光环声明（全局光环白名单）").apply {
+        style = "-fx-font-weight: bold; -fx-font-size: 11px;"
+    }
+    /** id → 勾选框（每次刷新按候选重建）。 */
+    private val auraCheckBoxes = linkedMapOf<String, CheckBox>()
+    private val auraHint = Label().apply { style = "-fx-font-size: 11px; -fx-text-fill: #7f8c8d;"; isWrapText = true }
+
     // 引用卡组展示区（referenceListLabel 常被模式刷新读写；外层容器仅 init 装配用，就地构建）
     private val referenceListLabel = Label()
 
@@ -128,7 +141,7 @@ class StrategyPresetDetailPane(
 
         VBox.setVgrow(purposeTable, Priority.ALWAYS)
 
-        children.addAll(headerBox, metaGrid, buttonBox, purposeTable, disabledPurposesBoard, referenceSection)
+        children.addAll(headerBox, metaGrid, buttonBox, purposeTable, auraSection, disabledPurposesBoard, referenceSection)
 
         setupListeners()
         clearForm()
@@ -190,7 +203,8 @@ class StrategyPresetDetailPane(
             txtDescription.text.trim().takeIf { it.isNotBlank() },
             treeSelections,
             timings,
-            surplus
+            surplus,
+            collectAuraSelection()
         )
     }
 
@@ -310,6 +324,8 @@ class StrategyPresetDetailPane(
             purposeTable.collectTreeSelections().keys,
             state.tagDisplayNames
         )
+        // D-DP-001：装载「光环声明」区（候选 = 全局光环行；勾选 = 本预设白名单）
+        refreshAuraSection(state.candidateAuraBoosts, detail.auraSelection)
     }
 
     private fun enterCreatingMode(state: StrategyPresetState) {
@@ -336,6 +352,7 @@ class StrategyPresetDetailPane(
             state.tagDisplayNames
         )
         disabledPurposesBoard.updatePurposes(state.purposeUniverse, emptySet(), state.tagDisplayNames)
+        refreshAuraSection(state.candidateAuraBoosts, emptySet())
     }
 
     private fun clearForm() {
@@ -354,7 +371,39 @@ class StrategyPresetDetailPane(
 
         purposeTable.load(emptyList(), emptyList(), emptyMap(), emptyMap(), emptyMap(), emptyMap())
         disabledPurposesBoard.updatePurposes(emptySet(), emptySet(), emptyMap())
+        refreshAuraSection(emptyList(), emptySet())
     }
+
+    /**
+     * 刷新「光环声明」区（D-DP-001）：候选恒为**全局行**（`manager_id IS NULL`）；
+     * 勾选 = 本预设白名单成员；**不勾 = 未声明 ⇒ 该行对本预设的引用方不生效**。
+     */
+    private fun refreshAuraSection(candidates: List<AuraBoostOption>, selected: Set<String>) {
+        auraSection.children.clear()
+        auraCheckBoxes.clear()
+        auraSection.children.add(auraTitle)
+
+        if (candidates.isEmpty()) {
+            auraHint.text = "库中没有全局光环行（manager_id 为空）。可先用 MCP save_aura_boost（不带 managerId）创建；" +
+                    "卡组私有光环不需要在此声明（归属即拥有）。"
+            auraSection.children.add(auraHint)
+            return
+        }
+        candidates.forEach { option ->
+            val cb = CheckBox("${option.name}（${option.id}）").apply {
+                isSelected = option.id in selected
+            }
+            auraCheckBoxes[option.id] = cb
+            auraSection.children.add(cb)
+        }
+        auraHint.text = "勾选 = 本预设声明保留该全局光环；全部不勾 = 不要任何全局光环。" +
+                "⚠️ 未引用本预设的卡组没有全局光环；卡组私有光环不受此约束（归属即拥有）。"
+        auraSection.children.add(auraHint)
+    }
+
+    /** 收集「光环声明」勾选（白名单）。 */
+    private fun collectAuraSelection(): Set<String> =
+        auraCheckBoxes.filterValues { it.isSelected }.keys.toSet()
 
     /** 供工作台回显 Store 返回的失败原因（复用本面板既有弹窗工具，不另造一套）。 */
     fun showError(content: String) {

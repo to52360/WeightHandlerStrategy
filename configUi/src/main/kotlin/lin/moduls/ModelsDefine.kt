@@ -81,8 +81,8 @@ val serviceModule = module {
     // 全局卡组选择状态
     single { ActiveManagerHolder() }
     single { lin.ui.WorkbenchNavigator() }
-    // 预设域目录单点装配（候选树/时序规则/用途全集/预设列表/标签显示名）
-    single { lin.ui.service.PresetCatalogLoader(get(), get(), get(), get()) }
+    // 预设域目录单点装配（候选树/时序规则/用途全集/预设列表/标签显示名/全局光环候选）
+    single { lin.ui.service.PresetCatalogLoader(get(), get(), get(), get(), get()) }
 
 }
 
@@ -196,8 +196,8 @@ val uiDBModule = module {
     single { DimensionItemResolver() }
     single { CurrentDeckContext(get()) }
     single { CardPurposeRepository(get()) }
-    // T-TG-010：标记定义的删除 / 恢复（业务归域）
-    single { PurposeTagService(get(), get()) }
+    // T-TG-010：标记定义的删除 / 恢复（业务归域）；D-DP-004：追加"仍被声明引用"守卫（依赖维度项仓储）
+    single { PurposeTagService(get(), get(), get()) }
     single { HsCardRepository(get()) }
 
     single { ComboPlanDefinitionRepository(get()) }

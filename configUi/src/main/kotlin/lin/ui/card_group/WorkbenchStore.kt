@@ -43,7 +43,8 @@ class WorkbenchStore(
                 catalog.candidateTrees,
                 catalog.timingRules,
                 catalog.purposeUniverse,
-                catalog.tagDisplayNames
+                catalog.tagDisplayNames,
+                catalog.candidateAuraBoosts
             )
         )
     }
@@ -126,7 +127,8 @@ class WorkbenchStore(
         timings: Map<String, TimingOverride>?,
         surplus: Map<String, SurplusOverride>? = null,
         excludedPurposes: Set<String>? = null,
-        exclusionDimensions: Map<String, Set<String>>? = null
+        exclusionDimensions: Map<String, Set<String>>? = null,
+        auraDelta: lin.repository.card_group.AuraDelta? = null
     ): String? {
         val currentItem = state.selectedManagerItem ?: return "未选择卡组"
         val managerId = currentItem.entity?.id ?: return "卡组尚未保存"
@@ -137,7 +139,8 @@ class WorkbenchStore(
             timings,
             surplus,
             excludedPurposes,
-            exclusionDimensions
+            exclusionDimensions,
+            auraDelta
         )
         if (error != null) return error
 

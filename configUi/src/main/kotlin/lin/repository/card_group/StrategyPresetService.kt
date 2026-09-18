@@ -12,17 +12,21 @@ data class SavePresetResult(
     val treeItemCount: Int,
     val timingCount: Int,
     /** T-TG-029：惜售声明条数（独立维度）。 */
-    val surplusCount: Int
+    val surplusCount: Int,
+    /** D-DP-001：光环白名单条数（`AURA_BOOST` 维度）。 */
+    val auraCount: Int = 0
 )
 
-/** 预设详情（**三个维度**的完整内容）。 */
+/** 预设详情（**四个维度**的完整内容）。 */
 data class PresetDetail(
     val preset: StrategyPresetEntity,
     /** 用途 → 保留的树 id 集合（**缺席的用途 = 未声明 ⇒ 该用途树全禁**）。 */
     val treeSelections: Map<String, Set<String>>,
     val timings: Map<String, TimingOverride>,
     /** 用途 → 惜售门槛声明（T-TG-029；缺席 = 未声明 ⇒ 回落全局行）。 */
-    val surplus: Map<String, SurplusOverride>
+    val surplus: Map<String, SurplusOverride>,
+    /** 光环白名单（D-DP-001；空集 = 未声明，或声明为「不要任何全局光环」）。 */
+    val auraSelection: Set<String> = emptySet()
 )
 
 /** 预设的引用者。 */
@@ -35,7 +39,9 @@ data class PresetSummary(
     val timingCount: Int,
     /** T-TG-029：惜售声明条数（独立维度）。 */
     val surplusCount: Int,
-    val referencedBy: List<PresetReference>
+    val referencedBy: List<PresetReference>,
+    /** D-DP-001：光环白名单条数。 */
+    val auraCount: Int = 0
 )
 
 /** 卡组增量项（③微调层）。 */
@@ -60,7 +66,9 @@ data class DeckDelta(
      * `excludedPurposes` 只是本字段 { **TREE,TIMING,SURPLUS 全命中** 的用途 } 的便捷视图；
      * 一个用途若**只禁部分维度**，只会出现在本字段、不会进 [excludedPurposes]。
      */
-    val exclusionDimensions: Map<String, Set<String>> = emptyMap()
+    val exclusionDimensions: Map<String, Set<String>> = emptyMap(),
+    /** **光环增量**（D-DP-002：增 / 减 / 覆盖三档；[AuraDelta.NONE] = 未声明）。 */
+    val auraDelta: AuraDelta = AuraDelta.NONE
 )
 
 /**
@@ -137,6 +145,7 @@ class StrategyPresetService(
      *   （`用途 → 保留的树 id`；某用途出现但集合为空 = 该用途保留零棵树；**未出现的用途 = 未声明 ⇒ 全禁**）
      * @param timings null = 不修改；非 null = 整体替换
      * @param surplus null = 不修改；非 null = 整体替换（T-TG-029 惜售维度）
+     * @param auraSelection null = 不修改；非 null = 整体替换光环白名单（D-DP-001；空集 = 不要任何全局光环）
      * @return null = 更新目标不存在
      */
     fun savePreset(
@@ -145,7 +154,8 @@ class StrategyPresetService(
         description: String?,
         treeSelections: Map<String, Collection<String>>?,
         timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>? = null
+        surplus: Map<String, SurplusOverride>? = null,
+        auraSelection: Set<String>? = null
     ): SavePresetResult? = tx.execute {
         val id = presetId ?: UUID.randomUUID().toString().substring(0, 8)
         val existing = presetRepository.findPresetById(id)
@@ -162,13 +172,15 @@ class StrategyPresetService(
         treeSelections?.let { presetRepository.replaceTreeSelections(DimensionScope.PRESET, id, it) }
         timings?.let { presetRepository.replaceTimings(DimensionScope.PRESET, id, it) }
         surplus?.let { presetRepository.replaceSurplus(DimensionScope.PRESET, id, it) }
+        auraSelection?.let { presetRepository.replaceAuraSelection(DimensionScope.PRESET, id, it) }
 
         SavePresetResult(
             presetId = id,
             name = name,
             treeItemCount = presetRepository.findTreeSelections(DimensionScope.PRESET, id).values.sumOf { it.size },
             timingCount = presetRepository.findTimings(DimensionScope.PRESET, id).size,
-            surplusCount = presetRepository.findSurplus(DimensionScope.PRESET, id).size
+            surplusCount = presetRepository.findSurplus(DimensionScope.PRESET, id).size,
+            auraCount = presetRepository.findAuraSelection(DimensionScope.PRESET, id).size
         )
     }
 
@@ -197,16 +209,20 @@ class StrategyPresetService(
         val trees = presetRepository.findTreeSelections(DimensionScope.PRESET, sourceId)
         val timings = presetRepository.findTimings(DimensionScope.PRESET, sourceId)
         val surplus = presetRepository.findSurplus(DimensionScope.PRESET, sourceId)
+        val auraSelection = presetRepository.findAuraSelection(DimensionScope.PRESET, sourceId)
         presetRepository.replaceTreeSelections(DimensionScope.PRESET, newId, trees)
         presetRepository.replaceTimings(DimensionScope.PRESET, newId, timings)
         presetRepository.replaceSurplus(DimensionScope.PRESET, newId, surplus)
+        // D-DP-001：派生复制**内容**（含光环白名单）—— 与三个用途维度同口径
+        presetRepository.replaceAuraSelection(DimensionScope.PRESET, newId, auraSelection)
 
         SavePresetResult(
             presetId = newId,
             name = name,
             treeItemCount = trees.values.sumOf { it.size },
             timingCount = timings.size,
-            surplusCount = surplus.size
+            surplusCount = surplus.size,
+            auraCount = auraSelection.size
         )
     }
 
@@ -216,7 +232,8 @@ class StrategyPresetService(
             preset = preset,
             treeSelections = presetRepository.findTreeSelections(DimensionScope.PRESET, presetId),
             timings = presetRepository.findTimings(DimensionScope.PRESET, presetId),
-            surplus = presetRepository.findSurplus(DimensionScope.PRESET, presetId)
+            surplus = presetRepository.findSurplus(DimensionScope.PRESET, presetId),
+            auraSelection = presetRepository.findAuraSelection(DimensionScope.PRESET, presetId)
         )
     }
 
@@ -232,7 +249,8 @@ class StrategyPresetService(
                 treeItemCount = trees.values.sumOf { it.size },
                 timingCount = presetRepository.findTimings(DimensionScope.PRESET, preset.id).size,
                 surplusCount = presetRepository.findSurplus(DimensionScope.PRESET, preset.id).size,
-                referencedBy = refsByPreset[preset.id].orEmpty()
+                referencedBy = refsByPreset[preset.id].orEmpty(),
+                auraCount = presetRepository.findAuraSelection(DimensionScope.PRESET, preset.id).size
             )
         }
     }
@@ -279,7 +297,8 @@ class StrategyPresetService(
             timings = presetRepository.findTimings(DimensionScope.CARD_GROUP, managerId),
             surplus = presetRepository.findSurplus(DimensionScope.CARD_GROUP, managerId),
             excludedPurposes = exclusions.filterValues { it == Dimension.EXCLUDABLE_DIMENSIONS }.keys,
-            exclusionDimensions = exclusions
+            exclusionDimensions = exclusions,
+            auraDelta = presetRepository.findAuraDelta(DimensionScope.CARD_GROUP, managerId)
         )
     }
 
@@ -300,7 +319,8 @@ class StrategyPresetService(
         timings: Map<String, TimingOverride>?,
         surplus: Map<String, SurplusOverride>? = null,
         excludedPurposes: Set<String>? = null,
-        exclusionDimensions: Map<String, Set<String>>? = null
+        exclusionDimensions: Map<String, Set<String>>? = null,
+        auraDelta: AuraDelta? = null
     ): String? = tx.execute {
         if (groupRepository.findManagerById(managerId) == null) {
             return@execute "卡组不存在: $managerId"
@@ -310,6 +330,8 @@ class StrategyPresetService(
         }
         timings?.let { presetRepository.replaceTimings(DimensionScope.CARD_GROUP, managerId, it) }
         surplus?.let { presetRepository.replaceSurplus(DimensionScope.CARD_GROUP, managerId, it) }
+        // D-DP-002：光环增量三档（null = 不改；`AuraDelta.NONE` / 三档皆空 = 清除该行）
+        auraDelta?.let { presetRepository.replaceAuraDelta(DimensionScope.CARD_GROUP, managerId, it) }
 
         // 排除通道两种入参合并成一张「用途 → 被禁维度」表：维度级优先，全禁简写填充其余。
         if (exclusionDimensions != null || excludedPurposes != null) {

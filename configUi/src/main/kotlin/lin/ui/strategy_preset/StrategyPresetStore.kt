@@ -59,7 +59,8 @@ class StrategyPresetStore(
                 candidateTrees = catalog.candidateTrees,
                 timingRules = catalog.timingRules,
                 purposeUniverse = catalog.purposeUniverse,
-                tagDisplayNames = catalog.tagDisplayNames
+                tagDisplayNames = catalog.tagDisplayNames,
+                candidateAuraBoosts = catalog.candidateAuraBoosts
             )
         )
     }
@@ -135,7 +136,8 @@ class StrategyPresetStore(
         description: String?,
         treeSelections: Map<String, Collection<String>>?,
         timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>? = null
+        surplus: Map<String, SurplusOverride>? = null,
+        auraSelection: Set<String>? = null
     ): String? {
         val cleanName = name.trim()
         if (cleanName.isBlank()) return "预设名称不能为空"
@@ -148,7 +150,8 @@ class StrategyPresetStore(
             description = description?.trim()?.takeIf { it.isNotBlank() },
             treeSelections = treeSelections,
             timings = timings,
-            surplus = surplus
+            surplus = surplus,
+            auraSelection = auraSelection
         ) ?: return "更新失败：预设不存在 ($targetId)"
 
         // 保存成功后刷新数据并选中该预设

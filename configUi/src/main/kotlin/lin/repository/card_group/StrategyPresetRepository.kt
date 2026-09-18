@@ -58,7 +58,24 @@ object Dimension {
      * 新增可禁维度时须同步登记于此，以让「整用途退出」前向兼容新维度。
      */
     val EXCLUDABLE_DIMENSIONS = setOf(PURPOSE_TREE, PURPOSE_TIMING, PURPOSE_SURPLUS)
- }
+
+    /**
+     * 光环作用域声明（D-DP-001 / Q-DP-002）—— **不是用途维度**：光环不按用途分组（`purpose_tag` 用哨兵
+     * [AURA_ALL_TAGS] 整包承载），也**不受「用途排除」影响** ⇒ **不进** [EXCLUDABLE_DIMENSIONS]
+     * （加进去会把光环卷进排除通道，且历史 `{}` payload 的解码含义会跟着变）。
+     *
+     * payload：预设侧 `{"auraIds":[…]}`（白名单）；消费侧 `{"extra":[…],"exclude":[…],"scoreOverrides":{…}}`。
+     */
+    const val AURA_BOOST = "AURA_BOOST"
+
+    /**
+     * `AURA_BOOST` 行的 `purpose_tag` **哨兵** —— 整包声明（光环不按用途分组）。
+     *
+     * 安全性（Q-DP-002 §8.1 已核查）：所有按用途读取的查询都带 `dimension` 过滤；唯一不带 dimension 的两处
+     * 是快照的**原始行采集**（删预设 / 级联删卡组），对新维度天然通用。
+     */
+    const val AURA_ALL_TAGS = "_ALL_"
+}
 
 /**
  * 维度项（`strategy_dimension_item` 一行）。
@@ -299,4 +316,81 @@ class StrategyPresetRepository(private val jdbcTemplate: JdbcTemplate) {
         findItems(scope, ownerId, Dimension.PURPOSE_EXCLUDE).associate {
             it.purposeTag to DimensionPayloadCodec.decodeExclusion(it.payload)
         }
+
+    // ─────────────────────── 光环维度（D-DP-001 / D-DP-002）───────────────────────
+
+    /**
+     * 整体替换预设侧**光环白名单**（`{"auraIds":[…]}`，整体替换语义）。
+     *
+     * 传空集合 ⇒ 落 `{"auraIds":[]}` = **声明为「不要任何全局光环」**（与"行不存在"在下游同效，但语义明确）。
+     */
+    fun replaceAuraSelection(scope: String, ownerId: String, auraIds: Collection<String>) {
+        replaceItems(
+            scope, ownerId, Dimension.AURA_BOOST,
+            listOf(
+                DimensionItemEntity(
+                    scope = scope,
+                    ownerId = ownerId,
+                    dimension = Dimension.AURA_BOOST,
+                    purposeTag = Dimension.AURA_ALL_TAGS,
+                    payload = DimensionPayloadCodec.encodeAuraSelection(auraIds)
+                )
+            )
+        )
+    }
+
+    /** @return 预设侧白名单（行不存在 = 未声明 ⇒ 空集）。 */
+    fun findAuraSelection(scope: String, ownerId: String): Set<String> =
+        findItems(scope, ownerId, Dimension.AURA_BOOST).firstOrNull()
+            ?.let { DimensionPayloadCodec.decodeAuraSelection(it.payload) }
+            ?: emptySet()
+
+    /** 整体替换消费侧**光环增量**（[AuraDelta.isEmpty] ⇒ 清除该行）。 */
+    fun replaceAuraDelta(scope: String, ownerId: String, delta: AuraDelta) {
+        val items = if (delta.isEmpty) {
+            emptyList()
+        } else {
+            listOf(
+                DimensionItemEntity(
+                    scope = scope,
+                    ownerId = ownerId,
+                    dimension = Dimension.AURA_BOOST,
+                    purposeTag = Dimension.AURA_ALL_TAGS,
+                    payload = DimensionPayloadCodec.encodeAuraDelta(delta)
+                )
+            )
+        }
+        replaceItems(scope, ownerId, Dimension.AURA_BOOST, items)
+    }
+
+    /** @return 消费侧光环增量（未声明 ⇒ [AuraDelta.NONE]）。 */
+    fun findAuraDelta(scope: String, ownerId: String): AuraDelta =
+        findItems(scope, ownerId, Dimension.AURA_BOOST).firstOrNull()
+            ?.let { DimensionPayloadCodec.decodeAuraDelta(it.payload) }
+            ?: AuraDelta.NONE
+
+    /**
+     * 按维度**全表扫描**（跨 scope / owner）—— D-DP-002 的删除悬空守卫用：
+     * 删一条 `aura_boost` 行前，判断它是否被任何 `AURA_BOOST` 维度项引用（白名单 / extra / scoreOverrides）。
+     */
+    fun findAllByDimension(dimension: String): List<DimensionItemEntity> =
+        jdbcTemplate.query(
+            "SELECT * FROM strategy_dimension_item WHERE dimension = ? ORDER BY scope, owner_id, purpose_tag",
+            itemRowMapper,
+            dimension
+        )
+
+    /**
+     * 该 tagId 的**活跃声明数**（任意 scope / 任意维度的维度项行数；D-DP-004 的降级与删除守卫用）。
+     *
+     * 「仍被声明引用」的含义：库里存在以该 tagId 为 `purpose_tag` 的维度项 —— 此时把标记降级
+     * （`declarable = 0`）或删除定义，会让这些声明变成"写侧守门拒绝再编辑、引擎仍按旧值生效"的半悬空态
+     * ⇒ 写侧拒绝该操作。
+     */
+    fun countByPurposeTag(tagId: String): Int =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM strategy_dimension_item WHERE purpose_tag = ?",
+            Int::class.java,
+            tagId
+        ) ?: 0
 }

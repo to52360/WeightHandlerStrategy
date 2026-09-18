@@ -134,6 +134,27 @@ class DimensionItemResolver {
         upper: SurplusOverride?
     ): SurplusOverride = upper ?: lower ?: SurplusOverride()
 
+    // ─────────────────────── 光环作用域（D-DP-001 / D-DP-002）───────────────────────
+
+    /**
+     * 光环**生效集**合并（纯函数，与树 / 时序同款「声明 = 生效」语义）。
+     *
+     * 生效集 = 白名单 ∪ [AuraDelta.extra] − [AuraDelta.exclude]；分值覆盖在 provider 侧套用
+     * （`scoreOverrides[id] ?: 原分值`）。
+     *
+     * [presetReferenced] = false（卡组未引用预设）⇒ 白名单取空 ⇒ **无全局光环**
+     * （与 D-TG-018「不引用预设 = 合法终态、无隐式作用」同向）。
+     * ⚠️ **卡组私有光环不走本函数**（`manager_id` = 本卡组 ⇒ 归属即拥有，D-DP-002）。
+     */
+    fun auraEffective(
+        presetReferenced: Boolean,
+        presetWhitelist: Set<String>,
+        delta: AuraDelta
+    ): Set<String> {
+        val whitelist = if (presetReferenced) presetWhitelist else emptySet()
+        return (whitelist + delta.extra) - delta.exclude
+    }
+
     /**
      * 由**声明**生成一条完整规则（D-TG-018：规则由声明产生，不再"改全局规则行的字段"）。
      *

@@ -102,7 +102,9 @@ val mcpModule = module {
     } bind McpToolProvider::class
     single {
         AuraBoostToolProvider(
-            get<AuraBoostConfigService>()
+            get<AuraBoostConfigService>(),
+            // D-DP-002：删除悬空守卫（扫描 AURA_BOOST 维度项）
+            get<lin.repository.card_group.StrategyPresetRepository>()
         )
     } bind McpToolProvider::class
     single {
@@ -125,7 +127,11 @@ val mcpModule = module {
             get<StrategyPresetService>(),
             get<TreeConfigRepository>(),
             get<DimensionItemResolver>(),
-            get<TreeConfigService>()
+            get<TreeConfigService>(),
+            // D-DP-004：可声明作用候选单点门面（内置常量 ∪ 库中晋级行）
+            get<PurposeTagDefRepository>(),
+            // D-DP-001：光环行引用校验（只能引用存在且 manager_id IS NULL 的行）
+            get<lin.repository.aura_boost.AuraBoostConfigService>()
         )
     } bind McpToolProvider::class
     single {

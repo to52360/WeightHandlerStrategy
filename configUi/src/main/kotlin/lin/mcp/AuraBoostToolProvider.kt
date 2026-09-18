@@ -5,6 +5,12 @@ import lin.mcp.action.*
 import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInlineInput
+import lin.repository.card_group.Dimension
+import lin.repository.card_group.DimensionPayloadCodec
+import lin.repository.card_group.DimensionScope
+import lin.repository.card_group.StrategyPresetRepository
+import lin.repository.delete_snapshot.SnapshotOps
+import lin.repository.delete_snapshot.SnapshotRefused
 
 /**
  * Push 广播评分配置（aura-boost）域 MCP 工具提供者（写工具 + 动作同文件）：
@@ -17,9 +23,14 @@ import lin.repository.aura_boost.SaveAuraBoostInlineInput
  * T-011：内联建树（0~2 棵）+ boost 行多步写的编排与事务已下沉至
  * [lin.repository.aura_boost.AuraBoostConfigService.saveWithInlineTrees]，Provider 不再持有
  * TransactionTemplate / ConditionTreeConfigService。
+ *
+ * D-DP-002 追加：**删除悬空守卫** —— 全局行被预设白名单 / 卡组增量项引用时拒删（见 [guardedDeleteOps]）；
+ * 全局行自 D-DP-001 起是「候选池」，不再隐式对所有启用卡组生效。
  */
 class AuraBoostToolProvider(
-    private val service: AuraBoostConfigService
+    private val service: AuraBoostConfigService,
+    /** 悬空守卫用（D-DP-002）：扫描 `AURA_BOOST` 维度项，判断该光环行是否仍被预设 / 卡组声明引用。 */
+    private val presetRepository: StrategyPresetRepository
 ) : McpToolProvider {
 
     override val actions: List<ResourceActions> = listOf(
@@ -32,8 +43,9 @@ class AuraBoostToolProvider(
                 ListCapability(supportsManagerIdFilter = true) { managerId -> auraBoostSummaries(managerId) },
                 DeleteCapability(
                     fieldHint = "AuraBoost id（由 list(resource=aura_boost) 返回）",
-                    semantics = "删除前落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）",
-                    ops = service.deleteOps()
+                    semantics = "**仍被预设白名单 / 卡组增量项引用时拒绝删除**（回显引用方，D-DP-002）；" +
+                            "删除前落快照（delete_snapshot）并回 snapshotId，可经 restore_snapshot 一键恢复（原 id 保留）",
+                    ops = guardedDeleteOps()
                 ),
                 RestoreCapability { entityId, payload ->
                     service.restoreFromSnapshot(entityId, payload)
@@ -41,6 +53,45 @@ class AuraBoostToolProvider(
             )
         )
     )
+
+    /**
+     * 删除操作值 = 域服务 ops **外包一层悬空守卫**（D-DP-002）：
+     * 目标行若仍被任何 `AURA_BOOST` 维度项引用（预设白名单 / 卡组 extra / exclude / scoreOverrides）
+     * ⇒ 拒绝并回显引用方 —— 否则这些声明会退化为「引擎仍生效、写侧拒绝再编辑」的半悬空态。
+     *
+     * 为什么跨域扫描放 MCP 层：与 condition_tree 的引用扫描同款分工（T-TG-010 拍板：跨域引用扫描属
+     * MCP 层路由职责），避免 `aura_boost` 域反向依赖 `card_group` 域。
+     */
+    private fun guardedDeleteOps(): SnapshotOps {
+        val delegate = service.deleteOps()
+        return SnapshotOps(
+            collect = { entityId ->
+                val refs = auraReferences(entityId)
+                if (refs.isNotEmpty()) {
+                    throw SnapshotRefused(
+                        "AuraBoost $entityId 仍被 ${refs.size} 处引用，删除会让这些声明失去载体" +
+                                "（引擎仍生效、写侧拒绝再编辑）：\n" +
+                                refs.joinToString("\n") { "  - $it" } +
+                                "\n请先在预设 / 卡组 Delta 中移除该引用"
+                    )
+                }
+                delegate.collect(entityId)
+            },
+            remove = { entityId -> delegate.remove(entityId) }
+        )
+    }
+
+    /** 引用方清单（预设侧读白名单 payload、消费侧读增量 payload）。 */
+    private fun auraReferences(id: String): List<String> =
+        presetRepository.findAllByDimension(Dimension.AURA_BOOST).mapNotNull { item ->
+            val referenced = if (item.scope == DimensionScope.PRESET) {
+                id in DimensionPayloadCodec.decodeAuraSelection(item.payload)
+            } else {
+                val delta = DimensionPayloadCodec.decodeAuraDelta(item.payload)
+                id in delta.extra || id in delta.exclude || id in delta.scoreOverrides
+            }
+            if (referenced) "${item.scope} ${item.ownerId}" else null
+        }
 
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<SaveAuraBoostMcpInput>(
@@ -57,10 +108,13 @@ class AuraBoostToolProvider(
 
                 managerId 关联卡组（消费方归属）；引用的条件树是全局资源。传 existingId 更新已有配置。
 
+                【生效口径（D-DP-001：全局行 = 候选池）】
+                - managerId = null（**全局行**）：不再对所有启用卡组隐式生效 —— 需被**预设的 AURA_BOOST 白名单**
+                  纳入（或卡组增量的 extra 补声明）才生效；**未引用预设的卡组没有全局光环**。
+                - managerId = 某卡组（**私有行**）：归属即拥有，只对该卡组生效、不受白名单约束。
+
                 enabled 启用开关（缺省保持原值，新建默认 true）：false = 配置仍留在库中可查，
-                但**不进引擎**（临时停用通道）。⚠️ 这是**行级**开关，只能停用"这一条规则"，
-                做不到"按卡组启停"——引擎侧按"所有已启用卡组"加载，无"当前卡组"概念
-                （见单活卡组约束：启用一个卡组会自动禁用其余卡组）。
+                但**不进引擎**（临时停用通道）。⚠️ 这是**行级**开关，只能停用"这一条规则"。
             """.trimIndent()
         ) { input ->
             val result = service.saveWithInlineTrees(
@@ -131,7 +185,7 @@ private data class SaveAuraBoostMcpInput(
     val targetConditionTreeJson: String? = null,
     @field:JsonPropertyDescription("命中后加给受益卡的费值（Q-024 后即费：1 分 = 0.4 费，如 3.2 = 原 8 分；按「≈ 典型卡等效费」标定，D-PV-012）。")
     val score: Double,
-    @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 list(resource=card_group)）。")
+    @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 list(resource=card_group)）。不传 = 全局行（候选池，需被预设白名单纳入才生效）。")
     val managerId: String? = null,
     @field:JsonPropertyDescription("可选：更新已有 AuraBoost 时传其 id；不传则新建。")
     val existingId: String? = null,

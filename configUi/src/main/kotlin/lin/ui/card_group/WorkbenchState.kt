@@ -48,7 +48,9 @@ data class WorkbenchState(
     val timingRules: List<PurposeTagRuleEntity> = emptyList(),
     val purposeUniverse: Set<String> = emptySet(),
     val tagDisplayNames: Map<String, String> = emptyMap(),
-    val currentDeckDelta: DeckDelta? = null
+    val currentDeckDelta: DeckDelta? = null,
+    /** D-DP-002：**全局光环行**候选（卡组 Delta「光环增量」区的编辑来源；只有全局行可被引用）。 */
+    val candidateAuraBoosts: List<lin.ui.service.AuraBoostOption> = emptyList()
 )
 
 /** 
@@ -68,14 +70,16 @@ object WorkbenchActions {
         candidateTrees: List<TreeConfigEntity>,
         timingRules: List<PurposeTagRuleEntity>,
         purposeUniverse: Set<String>,
-        tagDisplayNames: Map<String, String> = emptyMap()
+        tagDisplayNames: Map<String, String> = emptyMap(),
+        candidateAuraBoosts: List<lin.ui.service.AuraBoostOption> = emptyList()
     ): Action = { state ->
         state.copy(
             availablePresets = presets,
             candidateTrees = candidateTrees,
             timingRules = timingRules,
             purposeUniverse = purposeUniverse,
-            tagDisplayNames = tagDisplayNames
+            tagDisplayNames = tagDisplayNames,
+            candidateAuraBoosts = candidateAuraBoosts
         )
     }
 

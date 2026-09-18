@@ -50,6 +50,29 @@ data class SurplusOverride(
 }
 
 /**
+ * 消费侧**光环增量**（维度 `AURA_BOOST` 的 payload 模型，D-DP-002）。
+ *
+ * 三档：`extra`（白名单外补声明）/ `exclude`（再减）/ `scoreOverrides`（覆盖分值）；
+ * 生效集 = 白名单 ∪ [extra] − [exclude]（见 `DimensionItemResolver.auraEffective`）。
+ *
+ * ⚠️ `extra ∩ exclude` 非空是**非法输入**（写侧报错，对齐 D-TG-021 ③ 的「同 id 双写」拍板）。
+ */
+data class AuraDelta(
+    val extra: Set<String> = emptySet(),
+    val exclude: Set<String> = emptySet(),
+    val scoreOverrides: Map<String, Double> = emptyMap()
+) {
+    /** 三档皆空 —— 该行是空操作（写库无意义）。 */
+    val isEmpty: Boolean
+        get() = extra.isEmpty() && exclude.isEmpty() && scoreOverrides.isEmpty()
+
+    companion object {
+        /** 未声明（未引用预设 / 无增量项）。 */
+        val NONE = AuraDelta()
+    }
+}
+
+/**
  * 维度值的 `payload` JSON **编解码单点**（同 D-007 存储编码单点的精神）—— 其它地方禁止各写一套。
  *
  * 规则：**键留列**（`scope` / `owner_id` / `dimension` / `purpose_tag`），**值进 payload**。
@@ -128,6 +151,58 @@ object DimensionPayloadCodec {
     }
 
  
+    // ─────────────────────── AURA_BOOST（D-DP-001 / D-DP-002：光环作用域）───────────────────────
+
+    private const val FIELD_AURA_IDS = "auraIds"
+    private const val FIELD_AURA_EXTRA = "extra"
+    private const val FIELD_AURA_EXCLUDE = "exclude"
+    private const val FIELD_AURA_SCORE_OVERRIDES = "scoreOverrides"
+
+    /** 预设侧**白名单**：`{"auraIds":[…]}`。 */
+    fun encodeAuraSelection(auraIds: Collection<String>): String {
+        val node = mapper.createObjectNode()
+        val array = node.putArray(FIELD_AURA_IDS)
+        auraIds.distinct().sorted().forEach { array.add(it) }
+        return mapper.writeValueAsString(node)
+    }
+
+    fun decodeAuraSelection(payload: String?): Set<String> =
+        parse(payload)?.get(FIELD_AURA_IDS).stringSet()
+
+    /** 消费侧**三档增量**：`{"extra":[…],"exclude":[…],"scoreOverrides":{"<id>":score}}`。 */
+    fun encodeAuraDelta(delta: AuraDelta): String {
+        val node = mapper.createObjectNode()
+        val extra = node.putArray(FIELD_AURA_EXTRA)
+        delta.extra.distinct().sorted().forEach { extra.add(it) }
+        val exclude = node.putArray(FIELD_AURA_EXCLUDE)
+        delta.exclude.distinct().sorted().forEach { exclude.add(it) }
+        val overrides = node.putObject(FIELD_AURA_SCORE_OVERRIDES)
+        delta.scoreOverrides.toSortedMap().forEach { (id, score) -> overrides.put(id, score) }
+        return mapper.writeValueAsString(node)
+    }
+
+    fun decodeAuraDelta(payload: String?): AuraDelta {
+        val node = parse(payload) ?: return AuraDelta.NONE
+        val overrides = node.get(FIELD_AURA_SCORE_OVERRIDES)
+        return AuraDelta(
+            extra = node.get(FIELD_AURA_EXTRA).stringSet(),
+            exclude = node.get(FIELD_AURA_EXCLUDE).stringSet(),
+            scoreOverrides = if (overrides == null || !overrides.isObject) {
+                emptyMap()
+            } else {
+                overrides.fields().asSequence()
+                    .filter { it.value.isNumber }
+                    .associate { it.key to it.value.asDouble() }
+            }
+        )
+    }
+
+    /** 数组节点 → 字符串集合；null / 非数组 ⇒ 空集（与 `decodeTreeIds` 同口径）。 */
+    private fun JsonNode?.stringSet(): Set<String> {
+        if (this == null || !isArray) return emptySet()
+        return mapNotNull { it.takeUnless { node -> node.isNull }?.asText() }.toSet()
+    }
+
     // ─────────────────────── PURPOSE_EXCLUDE（D-TG-021：维度级排除） ───────────────────────
  
     /** 排除 payload 里携带被禁维度的字段名（编解码两侧共用）。 */

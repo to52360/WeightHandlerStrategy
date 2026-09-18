@@ -110,9 +110,13 @@ val strategyProviderModule = module {
         )
     }
     single<AuraBoostConfigProvider> {
+        // D-DP-001：全局行走「预设白名单 ∪ 卡组增量 − exclude」闸门 ⇒ 追加维度项仓储 / 当前卡组 / 合并纯函数
         SqliteAuraBoostConfigProvider(
             service = get(),
-            cardGroupService = get()
+            cardGroupService = get(),
+            presetRepository = get(),
+            currentDeck = get(),
+            resolver = get()
         )
     }
 
