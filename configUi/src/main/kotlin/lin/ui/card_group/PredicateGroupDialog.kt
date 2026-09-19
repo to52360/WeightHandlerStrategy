@@ -26,8 +26,8 @@ class PredicateGroupDialog(
     private class FormState {
         val nameField = TextField()
         val conditionTreeCombo = ComboBox<ConditionTreeOption>()
-        val newTreeBtn = Button("➕ 新建")
-        val editTreeBtn = Button("✏️ 编辑")
+        val newTreeBtn = Button("新建")
+        val editTreeBtn = Button("编辑")
         val includeDerivedCombo = ComboBox<String>()
     }
 

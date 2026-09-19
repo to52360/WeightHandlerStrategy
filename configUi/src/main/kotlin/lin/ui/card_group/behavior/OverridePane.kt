@@ -16,16 +16,10 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * 条件树下拉项数据封装
+ * 条件树下拉项数据封装（已提升至通用包，此处保留类型别名兼容历史引用）
  */
-data class ConditionTreeOption(
-    val id: String,
-    val name: String
-) {
-    override fun toString(): String {
-        return if (id.isEmpty()) "(未选择条件树)" else name.ifBlank { "[$id] (未命名)" }
-    }
-}
+typealias ConditionTreeOption = lin.ui.condition_tree.components.ConditionTreeOption
+
 
 /**
  * OVERRIDE 类型行为编辑面板：阶段覆盖 + 重规划 + 排序权重 + 条件化阶段（动态排序）。
@@ -69,15 +63,15 @@ class OverridePane(
         disableProperty().bind(disableWhen)
     }
 
-    private val newTreeBtn = Button("➕ 新建").apply {
+    private val newTreeBtn = Button("新建").apply {
         style = "-fx-background-color: #198754; -fx-text-fill: white; -fx-font-size: 11px;"
         disableProperty().bind(disableWhen)
     }
-    private val editTreeBtn = Button("✏️ 编辑").apply {
+    private val editTreeBtn = Button("编辑").apply {
         style = "-fx-background-color: #0d6efd; -fx-text-fill: white; -fx-font-size: 11px;"
         disableProperty().bind(disableWhen)
     }
-    private val previewTreeBtn = Button("👁 预览").apply {
+    private val previewTreeBtn = Button("预览").apply {
         style = "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 11px;"
         disableProperty().bind(disableWhen)
     }

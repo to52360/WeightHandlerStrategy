@@ -78,10 +78,10 @@ class PresetPurposeEditDialog(
         dialogPane.content = buildContent()
 
         val okBtn = dialogPane.lookupButton(ButtonType.OK) as? Button
-        okBtn?.text = "✅ 应用声明"
+        okBtn?.text = "应用声明"
         okBtn?.addEventFilter(ActionEvent.ACTION) { event ->
             validate()?.let { message ->
-                errorLabel.text = "❌ $message"
+                errorLabel.text = message
                 errorLabel.isVisible = true
                 errorLabel.isManaged = true
                 event.consume()
@@ -125,7 +125,7 @@ class PresetPurposeEditDialog(
 
     private fun buildContent(): VBox {
         val treeSection = section(
-            "🌲 树白名单",
+            "树白名单",
             chkTrees,
             VBox(3.0).apply {
                 padding = Insets(0.0, 0.0, 0.0, 20.0)
@@ -140,7 +140,7 @@ class PresetPurposeEditDialog(
         )
 
         val timingSection = section(
-            "⏱️ 出牌时序",
+            "出牌时序",
             chkTiming,
             GridPane().apply {
                 hgap = 8.0
@@ -157,7 +157,7 @@ class PresetPurposeEditDialog(
         )
 
         val surplusSection = section(
-            "💰 惜售门槛",
+            "惜售门槛",
             chkSurplus,
             HBox(8.0).apply {
                 padding = Insets(0.0, 0.0, 0.0, 20.0)

@@ -45,16 +45,16 @@ class DeckDeltaDialog(
         isManaged = false
     }
 
-    private val resetBtn = Button("🔄 恢复为已保存状态").apply {
+    private val resetBtn = Button("恢复为已保存状态").apply {
         style = "-fx-font-size: 11px; -fx-cursor: hand;"
     }
 
     init {
         val currentItem = store.state.selectedManagerItem
         val managerName = currentItem?.entity?.name?.ifBlank { "未命名方案" } ?: "未命名方案"
-        title = "⚙️ 卡组策略微调 (Delta) - [$managerName]"
+        title = "卡组策略微调 (Delta) - [$managerName]"
         headerText = "卡组增量项（解析链：预设 > 卡组增量项 > 全局规则）。\n" +
-                "「使用」不勾 = 该用途整体退出本卡组；点击 ✏️ 或双击行可对「树 / 时序 / 惜售」进行维度级控制（继承 / 覆盖 / 禁用维度）。"
+                "「使用」不勾 = 该用途整体退出本卡组；点击编辑或双击行可对「树 / 时序 / 惜售」进行维度级控制（继承 / 覆盖 / 禁用维度）。"
 
         val dialogPane = this.dialogPane
         dialogPane.prefWidth = 820.0
@@ -62,7 +62,7 @@ class DeckDeltaDialog(
         dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
 
         val okBtn = dialogPane.lookupButton(ButtonType.OK) as? Button
-        okBtn?.text = "💾 保存微调"
+        okBtn?.text = "保存微调"
         okBtn?.style = "-fx-font-weight: bold; -fx-background-color: #27ae60; -fx-text-fill: white; -fx-cursor: hand;"
 
         // 载入数据（初始加载 + 重置按钮复用）
@@ -201,7 +201,7 @@ class DeckDeltaDialog(
     }
 
     private fun flagError(message: String, event: ActionEvent) {
-        errorLabel.text = "❌ $message"
+        errorLabel.text = message
         errorLabel.isVisible = true
         errorLabel.isManaged = true
         event.consume()

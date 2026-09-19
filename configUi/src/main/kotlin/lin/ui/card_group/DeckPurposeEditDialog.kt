@@ -40,13 +40,13 @@ class DeckPurposeEditDialog(
         toggleGroup = tgTree
         style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #2980b9;"
     }
-    private val rbTreeDisable = RadioButton("🚫 禁用树维度 (本用途所有用途树不生效)").apply {
+    private val rbTreeDisable = RadioButton("禁用树维度 (本用途所有用途树不生效)").apply {
         toggleGroup = tgTree
         style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #c0392b;"
     }
     private val treeChecks = mutableMapOf<String, CheckBox>()
 
-    // ── ⏱️ 时序维度单选组 ──
+    // ── 时序维度单选组 ──
     private val tgTiming = ToggleGroup()
     private val rbTimingInherit = RadioButton("继承预设").apply {
         toggleGroup = tgTiming
@@ -56,7 +56,7 @@ class DeckPurposeEditDialog(
         toggleGroup = tgTiming
         style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #2980b9;"
     }
-    private val rbTimingDisable = RadioButton("🚫 禁用时序维度 (不产生时序规则)").apply {
+    private val rbTimingDisable = RadioButton("禁用时序维度 (不产生时序规则)").apply {
         toggleGroup = tgTiming
         style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #c0392b;"
     }
@@ -78,7 +78,7 @@ class DeckPurposeEditDialog(
         prefWidth = 90.0
     }
 
-    // ── 💰 惜售维度单选组 ──
+    // ── 惜售维度单选组 ──
     private val tgSurplus = ToggleGroup()
     private val rbSurplusInherit = RadioButton("继承预设").apply {
         toggleGroup = tgSurplus
@@ -88,7 +88,7 @@ class DeckPurposeEditDialog(
         toggleGroup = tgSurplus
         style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #2980b9;"
     }
-    private val rbSurplusDisable = RadioButton("🚫 禁用惜售维度 (不声明门槛)").apply {
+    private val rbSurplusDisable = RadioButton("禁用惜售维度 (不声明门槛)").apply {
         toggleGroup = tgSurplus
         style = "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #c0392b;"
     }
@@ -118,10 +118,10 @@ class DeckPurposeEditDialog(
         dialogPane.content = buildContent()
 
         val okBtn = dialogPane.lookupButton(ButtonType.OK) as? Button
-        okBtn?.text = "✅ 应用微调"
+        okBtn?.text = "应用微调"
         okBtn?.addEventFilter(ActionEvent.ACTION) { event ->
             validate()?.let { message ->
-                errorLabel.text = "❌ $message"
+                errorLabel.text = message
                 errorLabel.isVisible = true
                 errorLabel.isManaged = true
                 event.consume()

@@ -143,8 +143,8 @@ data class SaveStrategyPresetInput(
         "本预设对用途的**时序声明**（**整体替换**语义）。不传 = 不修改；传空数组 = 清空。" +
                 "⚠️ 声明即规则：**声明的用途 = 有规则（参与 priority 选优），未声明的用途 = 无规则**" +
                 "（阶段回落 GENERAL），与树白名单同向。" +
-                "声明里没写的字段用全局 purpose_tag_rule 行的值兜底。" +
-                "⚠️ 惜售门槛 N **不在此处**（T-TG-029 起独立维度）—— 用 surplus 参数声明。"
+                "声明里没写的字段用全局默认规则行的值兜底。" +
+                "⚠️ 惜售门槛 N **不在此处**（独立维度）—— 用 surplus 参数声明。"
     )
     val timings: List<PurposeTimingInput>? = null,
 
@@ -155,9 +155,9 @@ data class SaveStrategyPresetInput(
     val surplus: List<PurposeSurplusInput>? = null,
 
     @field:JsonPropertyDescription(
-        "本预设声明的**全局光环白名单**（D-DP-001，独立维度；**整体替换**语义）：只列出要生效的全局 aura_boost 行 id。" +
+        "本预设声明的**全局光环白名单**（独立维度；**整体替换**语义）：只列出要生效的全局 aura_boost 行 id。" +
                 "不传 = 不修改；传空数组 = 清空（= 本预设不要任何全局光环）。" +
-                "⚠️ 只接受**存在且 manager_id IS NULL（全局行）**的 id（卡组私有行归属其卡组，引用会被拒绝）；" +
+                "⚠️ 只接受**全局光环行**的 id（卡组私有行归属其卡组，引用会被拒绝）；" +
                 "⚠️ 卡组私有光环不受本白名单约束（归属即拥有）；**不引用预设的卡组 = 无全局光环**。" +
                 "id 由 list(resource=aura_boost) 获取。"
     )
@@ -203,7 +203,7 @@ data class SaveCardGroupPresetDeltaInput(
     val timings: List<PurposeTimingInput>? = null,
 
     @field:JsonPropertyDescription(
-        "本卡组对用途**惜售门槛**的声明（T-TG-029 独立维度；压过预设值；**整体替换**语义）。" +
+        "本卡组对用途**惜售门槛**的声明（独立维度；压过预设值；**整体替换**语义）。" +
                 "不传 = 不修改；传空数组 = 清空。"
     )
     val surplus: List<PurposeSurplusInput>? = null,
@@ -218,7 +218,7 @@ data class SaveCardGroupPresetDeltaInput(
     )
     val excludePurposes: List<String>? = null,
     @field:JsonPropertyDescription(
-        "**维度级排除**（D-TG-021；消费侧「去除」通道的**细档**；**整体替换**语义）：每条只禁某用途的**列出的维度**，" +
+        "**维度级排除**（消费侧「去除」通道的**细档**；**整体替换**语义）：每条只禁某用途的**列出的维度**，" +
                 "其余维度照常生效。" +
                 "元素 dimensions 为空 = 该用途**整用途退出**（等价 excludePurposes）。" +
                 "⚠️ 与本工具 excludePurposes 传**同 tag** 会**报错**（全禁与维度级二选一，不给同一用途双写）；" +
@@ -227,19 +227,19 @@ data class SaveCardGroupPresetDeltaInput(
     val excludeScopes: List<DeckExclusionScopeInput>? = null,
 
     @field:JsonPropertyDescription(
-        "**光环增量 · 增**（D-DP-002）：在白名单之外**补声明**的全局 aura_boost id 列表（把被预设排除的、或预设没声明的拉回来）。" +
-                "null = **本档不修改**（保留现值）；传空数组 = 清空本档。只能引用存在且 manager_id IS NULL 的行。"
+        "**光环增量 · 增**：在白名单之外**补声明**的全局 aura_boost id 列表（把被预设排除的、或预设没声明的拉回来）。" +
+                "null = **本档不修改**（保留现值）；传空数组 = 清空本档。只能引用存在且为全局光环的行。"
     )
     val extraAuraBoostIds: List<String>? = null,
 
     @field:JsonPropertyDescription(
-        "**光环增量 · 减**（D-DP-002）：在白名单 ∪ extra 之上**再减掉**的全局 aura_boost id 列表。" +
+        "**光环增量 · 减**：在白名单 ∪ extra 之上**再减掉**的全局 aura_boost id 列表。" +
                 "null = **本档不修改**；传空数组 = 清空本档。⚠️ 与 extraAuraBoostIds 传**同 id** 会报错（同一行不能既加又减）。"
     )
     val excludedAuraBoostIds: List<String>? = null,
 
     @field:JsonPropertyDescription(
-        "**光环增量 · 覆盖**（D-DP-002）：`aura_boost行id → 覆盖分值`（费值口径）—— 只改分值、不改生效集。" +
+        "**光环增量 · 覆盖**：`aura_boost行id → 覆盖分值`（费值口径）—— 只改分值、不改生效集。" +
                 "null = **本档不修改**；传空对象 = 清空本档。key 必须存在且为全局行。"
     )
     val auraScoreOverrides: Map<String, Double>? = null
@@ -296,13 +296,13 @@ class StrategyPresetToolProvider(
                   ⚠️ 未列出的用途 = 未声明 ⇒ **该用途的用途树全部禁用**（响应里的 disabledPurposes 会列出）。
                 - **timings（时序声明）**：某用途的 stage / orderWeight / replan（+ 可选 priority）。
                   ⚠️ **声明即规则**：未声明的用途 = **无规则**（不参与 priority 选优，阶段回落 GENERAL），
-                  与树白名单同向；声明里没写的**字段**才回落全局 purpose_tag_rule 行。
+                  与树白名单同向；声明里没写的**字段**才回落全局默认规则行。
                 - **surplus（惜售门槛声明，独立于时序的维度）**：`defaultSurplusIdleThreshold` = 声明为门槛 N；
-                  `clearSurplusIdleThreshold` = 声明为「不设门槛」；两者都不传 = 未声明（回落全局 rule 行的默认门槛）。
+                  `clearSurplusIdleThreshold` = 声明为「不设门槛」；两者都不传 = 未声明（回落全局默认规则的默认门槛）。
                   ⚠️ 未声明与「声明为无门槛」语义相反：前者用全局默认，后者强制不设门槛。
-                - **auraBoostIds（光环白名单，D-DP-001）**：本预设声明**保留哪些全局光环行**
-                  （`manager_id IS NULL` 的 aura_boost，id 由 list(resource=aura_boost) 取）。
-                  ⚠️ **未引用预设的卡组 = 无全局光环**；**卡组私有光环**不受白名单约束（归属即拥有，见 D-TG-015）。
+                - **auraBoostIds（光环白名单）**：本预设声明**保留哪些全局光环行**
+                  （id 由 list(resource=aura_boost) 取）。
+                  ⚠️ **未引用预设的卡组 = 无全局光环**；**卡组私有光环**不受白名单约束（归属即拥有）。
 
                 ⚠️ **可声明的用途 = 可声明作用**（内置 5 个作用，或已**晋级**的自定义标记 ——
                   见 list(resource=purpose_tag) 的 declarable 字段）：
@@ -367,7 +367,7 @@ class StrategyPresetToolProvider(
                 用于「快攻通用 / 控制通用」这类**分类通用预设**的快速建站（否则每建一个预设都要重填一遍时序）。
 
                 ⚠️ **fork = 只复制内容、不建立关系**：新预设与源预设此后**各自独立演化** ——
-                改源预设**不会**传导到已派生的预设（"改通用份、派生份跟着变"目前不支持，见 D-TG-017）。
+                改源预设**不会**传导到已派生的预设（"改通用份、派生份跟着变"目前不支持）。
                 ⚠️ 源预设**漏声明的用途会被一并继承**（未声明 = 该用途树全禁）⇒ 务必核对回显的 disabledPurposes。
 
                 派生后仍需 save_card_group_preset 让卡组引用它；切换预设后**需重启**引擎装配。
@@ -426,9 +426,9 @@ class StrategyPresetToolProvider(
 
                 - **excludeTreeSelections**：本卡组在某用途下**再排除**若干棵树（只能减，不能启用被预设禁用的树）；
                 - **timings**：本卡组对该用途的**时序声明**（逐字段压过预设声明；也可**自行声明预设没声明的用途**）；
-                - **surplus**：本卡组对该用途的**惜售门槛**声明（T-TG-029 独立维度，同"压过预设"语义）。
+                - **surplus**：本卡组对该用途的**惜售门槛**声明（独立维度，同"压过预设"语义）。
                 - **extraAuraBoostIds / excludedAuraBoostIds / auraScoreOverrides**：本卡组的**光环增量**三档
-                  （D-DP-002，独立维度）—— 在白名单基础上**再减** / 白名单外**补声明** / **覆盖分值**。
+                  （独立维度）—— 在白名单基础上**再减** / 白名单外**补声明** / **覆盖分值**。
                   ⚠️ 三档**各自 null = 该档不改**（与 timings / surplus 的「整维度替换」不同）；extra 与 exclude 传同 id 报错。
                 - **excludePurposes**：本卡组**不使用**的用途（「去除」通道，**用途级**）—— 该用途**整体退出本卡组**：
                   规则被减掉（**无规则、不回落全局默认值**）+ 其用途树一并停用。
@@ -572,7 +572,7 @@ class StrategyPresetToolProvider(
         if (illegal.isNotEmpty()) {
             throw McpBadInput(
                 "$where 引用了不存在或非全局的光环行: $illegal。" +
-                        "只有**存在且 manager_id IS NULL（全局行）**的 aura_boost 可被预设 / 卡组增量项引用" +
+                        "只有**存在且为全局行**的 aura_boost 可被预设 / 卡组增量项引用" +
                         "（卡组私有行归属其卡组，引用对其他卡组静默无效）；当前全局行: ${globals.sorted()}"
             )
         }

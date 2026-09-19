@@ -27,7 +27,7 @@ class DeckDeltaBar(
         style = "-fx-font-size: 11px; -fx-text-fill: #7f8c8d;"
     }
 
-    private val configureButton = Button("⚙️ 配置微调 (Delta)...").apply {
+    private val configureButton = Button("配置微调 (Delta)...").apply {
         style =
             "-fx-font-size: 11px; -fx-cursor: hand; -fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-radius: 3px;"
         setOnAction { onOpenDialog?.invoke() }

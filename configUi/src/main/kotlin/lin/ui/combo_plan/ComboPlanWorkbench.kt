@@ -56,7 +56,7 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
                 prefWidth = 250.0
                 HBox.setHgrow(this, Priority.ALWAYS)
             }
-            val btnAdd = Button("➕ 新建 Combo 编排").apply {
+            val btnAdd = Button("新建 Combo 编排").apply {
                 style = "-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;"
                 setOnAction { enterCreatingMode() }
             }

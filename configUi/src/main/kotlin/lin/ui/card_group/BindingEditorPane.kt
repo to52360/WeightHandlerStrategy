@@ -77,7 +77,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 val btnAdd = Button("添加分组").apply {
                     setOnAction { store.addBinding() }
                 }
-                val btnAddPredicate = Button("🧬 按条件建组").apply {
+                val btnAddPredicate = Button("按条件建组").apply {
                     style = "-fx-background-color: #6f42c1; -fx-text-fill: white; -fx-font-weight: bold;"
                     tooltip = Tooltip("用条件树定义组成员（谓词组），无需枚举卡牌")
                     setOnAction { PredicateGroupDialog(store).showAndWait() }
@@ -88,7 +88,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                         if (idx >= 0) store.dispatch(WorkbenchActions.removeBinding(idx))
                     }
                 }
-                val btnEditBehavior = Button("⚙️ 行为策略配置").apply {
+                val btnEditBehavior = Button("行为策略配置").apply {
                     style = "-fx-background-color: #0d6efd; -fx-text-fill: white; -fx-font-weight: bold;"
                     disableProperty().bind(bindingTableView.selectionModel.selectedIndexProperty().lessThan(0))
                     setOnAction {
@@ -161,7 +161,7 @@ class BindingEditorPane(private val store: WorkbenchStore) : VBox(10.0) {
                 prefWidth = 110.0
                 setCellFactory {
                     object : TableCell<CardGroupBinding, Void>() {
-                        private val btn = Button("⚙️ 配置策略").apply {
+                        private val btn = Button("配置策略").apply {
                             style =
                                 "-fx-font-size: 11px; -fx-background-color: #f8f9fa; -fx-border-color: #ced4da; -fx-border-radius: 4;"
                             setOnAction {

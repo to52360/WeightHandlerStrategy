@@ -58,7 +58,7 @@ class ConditionTreeToolProvider(
                 PipelineRef（正交管道：sourceId + transforms + operatorId + operatorArgs + refId）。
                 条件树参数（ConditionRef.args / PipelineRef.operatorArgs / transform 参数）直接存树内，
                 GET 读取原样返回；评估树 CONDITION_TREE 叶子引用时叶子 args 优先、树内参数兜底
-                （最终值 = 消费方覆盖 > 树内默认，Q-002 方案 B）。
+                （最终值 = 消费方覆盖 > 树内默认）。
                 可从 get(resource=condition_tree) 拿现有树复制修改后回传；管道积木用 list_orthogonal_components 查询。
                 提供 existingId 更新已有树，否则新建（自动生成 8 位短 id）。
             """.trimIndent()

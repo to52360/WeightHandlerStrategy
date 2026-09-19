@@ -27,11 +27,11 @@ class StrategyPresetListPane : VBox(10.0) {
         prefWidth = 200.0
     }
 
-    private val btnNew = Button("➕ 新建预设").apply {
+    private val btnNew = Button("新建预设").apply {
         style = "-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;"
     }
 
-    private val btnRefresh = Button("🔄 刷新").apply {
+    private val btnRefresh = Button("刷新").apply {
         style = "-fx-background-color: #7f8c8d; -fx-text-fill: white;"
     }
 

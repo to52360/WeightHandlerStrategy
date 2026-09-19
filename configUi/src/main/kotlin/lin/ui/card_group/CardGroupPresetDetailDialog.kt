@@ -137,7 +137,7 @@ class CardGroupPresetDetailDialog(
             val actionBox = HBox(10.0).apply {
                 alignment = Pos.CENTER_RIGHT
                 style = "-fx-padding: 8 0 0 0;"
-                val btnJump = Button("🔗 跳转编辑此预设").apply {
+                val btnJump = Button("跳转编辑此预设").apply {
                     style = "-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"
                     setOnAction {
                         navigator.navigateTo(StrategyPresetExtension.TITLE, preset.id)

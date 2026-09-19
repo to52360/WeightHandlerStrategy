@@ -368,7 +368,7 @@ private data class SaveCardGroupBindingInput(
     val conditionTreeJson: String? = null,
     @field:JsonPropertyDescription("可选：谓词组是否纳入卡池外的卡（衍生/发现/随机生成）。true=纳入、false=仅卡池内、缺省回落卡组级 defaultIncludeDerived（再回落 false）。仅谓词组有效，静态组忽略。")
     val includeDerived: Boolean? = null,
-    @field:JsonPropertyDescription("可选：分组级余费门槛 N（D-012 垫后余量语义：放行 ⟺ 空闲 ≥ 牌费 + N，垫出后仍须剩 N 费）——一类牌统一捏、不用逐卡设置（如解牌组统一 2 = 垫出后仍剩 2 费才肯垫，取值 1~9）。提供则设置，缺省保留原值；传 0 = 清除组级门槛（还原付得起即垫）；空=未配置=付得起即垫（逐卡小数位仍优先）。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由战术分（评估树 ts>0）决定，超低收益牌想「不进主搜索」需让评估树给非正分并配 N 控制垫出。")
+    @field:JsonPropertyDescription("可选：分组级余费门槛 N（垫后余量语义：放行 ⟺ 空闲 ≥ 牌费 + N，垫出后仍须剩 N 费）——一类牌统一捏、不用逐卡设置（如解牌组统一 2 = 垫出后仍剩 2 费才肯垫，取值 1~9）。提供则设置，缺省保留原值；传 0 = 清除组级门槛（还原付得起即垫）；空=未配置=付得起即垫（逐卡小数位仍优先）。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由战术分（评估树 ts>0）决定，超低收益牌想「不进主搜索」需让评估树给非正分并配 N 控制垫出。")
     val surplusIdleThreshold: Int? = null
 )
 

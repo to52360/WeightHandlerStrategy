@@ -29,7 +29,7 @@ class StrategyPresetWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
     init {
         items.addAll(listPane, detailPane)
-        setDividerPositions(0.42)
+        setDividerPositions(0.55)
 
         setupEventBindings()
         setupStateObserver()

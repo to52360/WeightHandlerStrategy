@@ -178,7 +178,7 @@ private data class CardWeightItemInput(
     val name: String? = null,
     @field:JsonPropertyDescription("静态出牌权重 weight（可选）")
     val weight: Double? = null,
-    @field:JsonPropertyDescription("开局换牌权重 changeWeight（费值，可选，正数偏好保留，负数偏好换掉，如 6.0；Q-024 起手通道已费化，原 15.0 分 ≈ 6.0 费。负数为哨兵语义不参与换算，如 -100.0）")
+    @field:JsonPropertyDescription("开局换牌权重 changeWeight（费值，可选，正数偏好保留，负数偏好换掉，如 6.0；原 15.0 分 ≈ 6.0 费。负数为哨兵语义不参与换算，如 -100.0）")
     val changeWeight: Double? = null,
     @field:JsonPropertyDescription("可选：配置等效费用 equivalentCost（>0 时该卡基础价值 = costValue(等效费)，覆盖身材/费用兜底；支持 0.5 档，如 3.5 = 等效 3.5 费，须为 0.1 的整数倍）。传 0 = 清除等效费声明（还原身材/费用兜底）；null = 保留原值。")
     val equivalentCost: Double? = null,

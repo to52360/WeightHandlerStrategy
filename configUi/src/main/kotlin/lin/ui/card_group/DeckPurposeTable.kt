@@ -212,7 +212,7 @@ class DeckPurposeTable : VBox(6.0) {
     // ── 行装配 ──
 
     private fun addHeaderRow() {
-        listOf("使用", "用途", "🌲 树维度", "⏱️ 时序维度", "💰 惜售维度", "编辑").forEachIndexed { col, text ->
+        listOf("使用", "用途", "树维度", "时序维度", "惜售维度", "操作").forEachIndexed { col, text ->
             grid.add(
                 Label(text).apply {
                     style = "-fx-font-weight: bold; -fx-text-fill: #34495e; -fx-font-size: 11px;"
@@ -256,7 +256,10 @@ class DeckPurposeTable : VBox(6.0) {
             setOnMouseClicked { event -> if (event.clickCount == 2) openEditor(draft.tagId) }
         }
 
-        val btnEdit = Button("✏️").apply { style = "-fx-font-size: 11px; -fx-cursor: hand;" }
+        val btnEdit = Button("编辑").apply {
+            style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-padding: 2 8;"
+            tooltip = javafx.scene.control.Tooltip("编辑该用途微调")
+        }
         btnEdit.setOnAction { openEditor(draft.tagId) }
 
         rows[draft.tagId] = RowControls(chkUsed, lblTag, lblTree, lblTiming, lblSurplus, btnEdit)

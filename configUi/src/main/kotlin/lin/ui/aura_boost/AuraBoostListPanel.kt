@@ -26,7 +26,7 @@ class AuraBoostListPanel : VBox(10.0) {
         prefWidth = 160.0
     }
 
-    private val btnAdd = Button("➕ 新建 AuraBoost").apply {
+    private val btnAdd = Button("新建 AuraBoost").apply {
         style = "-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;"
     }
 

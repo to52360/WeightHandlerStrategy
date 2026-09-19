@@ -34,8 +34,8 @@ class ComboPlanEditor : VBox(12.0) {
     private val mustAdjacentCheck = CheckBox("必须相邻使用 (Adjacent)")
 
     // 保存和删除按钮
-    private val btnSave = Button("💾 保存编排")
-    private val btnDelete = Button("🗑 删除编排")
+    private val btnSave = Button("保存编排")
+    private val btnDelete = Button("删除编排")
 
     private var isUpdatingFromState = false
     private var isCreatingMode = false

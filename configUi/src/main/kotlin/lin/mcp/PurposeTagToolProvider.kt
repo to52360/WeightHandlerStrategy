@@ -43,7 +43,7 @@ data class PurposeTagSummaryDto(
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
     @field:JsonPropertyDescription(
-        "**是否可声明作用**（D-DP-004）：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
+        "**是否可声明作用**：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
                 "自定义标记需先经 save_purpose_tag_def(declarable=true) 晋级）。" +
                 "⚠️ 内置 7 个里的 FINISH / EXTRA_COST 恒 false（它们是查询 / 路由标签，无编排行为）。"
     )
@@ -74,7 +74,7 @@ data class PurposeTagDetailDto(
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
     @field:JsonPropertyDescription(
-        "**是否可声明作用**（D-DP-004）：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
+        "**是否可声明作用**：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
                 "自定义标记需先经 save_purpose_tag_def(declarable=true) 晋级）。" +
                 "⚠️ 内置 7 个里的 FINISH / EXTRA_COST 恒 false（它们是查询 / 路由标签，无编排行为）。"
     )
@@ -131,7 +131,7 @@ data class SavePurposeTagDefInput(
     val boundPurpose: String? = null,
 
     @field:JsonPropertyDescription(
-        "**晋级为「可声明作用」**（D-DP-004）：true = 该自定义标记可被预设 / 卡组增量项声明时序与惜售，" +
+        "**晋级为「可声明作用」**：true = 该自定义标记可被预设 / 卡组增量项声明时序与惜售，" +
                 "拥有自己的编排行为；false = 降级回不可声明（仍被声明引用时会被拒绝）；null = 不修改。" +
                 "⚠️ 与 boundPurpose **互斥**（绑定的语义是「继承某作用的行为」，晋级是「自己就是作用」）——" +
                 "同时成立会报错，请先解绑。⚠️ 内置 7 个忽略该入参（其可声明性由代码常量决定）。"
@@ -190,7 +190,7 @@ class PurposeTagToolProvider(
                 典型场景：给过牌卡打 DRAW_CARD 标签，或给某卡增补/移除用途标签。
 
                 ⚠️ 打标前先确认该标签的编排含义：**打标本身不产生行为**，行为来自「该用途被声明」
-                （预设 / 卡组增量项，D-TG-018）——被声明后它才带来四项默认值：
+                （预设 / 卡组增量项）——被声明后它才带来四项默认值：
                 defaultStage / defaultOrderWeight / defaultSurplusIdleThreshold(N) / defaultReplanAfterUse
                 （N 多标签取 max、replan 取 any，均属保守方向合并，且不因 stageOverride 而跳过）；
                 未被声明 ⇒ 无规则、不参与阶段选优。
@@ -215,7 +215,7 @@ class PurposeTagToolProvider(
                 - boundPurpose = null：**纯标记**，零编排副作用，仅供条件树查询
                   （has_purpose_tag / purpose_filter），不会带来 stage / N / replan 默认值，也不挂评估树。
                 - boundPurpose = "CLEAN"：**绑定**战略用途，继承其排序兜底与评估层绑定。
-                - declarable = true（仅自定义标记）：**晋级为「可声明作用」**（D-DP-004）——此后预设 /
+                - declarable = true（仅自定义标记）：**晋级为「可声明作用」**——此后预设 /
                   卡组增量项可对其声明时序与惜售，该标记拥有**自己的**编排行为（可独立配 stage / N）。
 
                 ⚠️ 绑定只允许一层，目标只能是战略用途（内置那 7 个），禁止绑到自定义标记。

@@ -51,13 +51,13 @@ class CardGroupPresetPane : VBox(6.0), KoinComponent {
         prefWidth = 280.0
     }
 
-    private val jumpButton = Button("🔗 跳转编辑预设").apply {
+    private val jumpButton = Button("跳转编辑预设").apply {
         style = "-fx-font-size: 11px; -fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;"
         tooltip = Tooltip("跳转到策略预设工作台并定位到此预设")
         isDisable = true
     }
 
-    private val btnPresetDetail = Button("📋 预设详情...").apply {
+    private val btnPresetDetail = Button("预设详情...").apply {
         style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-radius: 3px;"
         tooltip = Tooltip("查看当前策略预设的完整声明、用途树与禁用用途详情")
         isDisable = true

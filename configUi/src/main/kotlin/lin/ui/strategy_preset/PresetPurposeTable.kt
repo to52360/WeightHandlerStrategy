@@ -2,10 +2,7 @@ package lin.ui.strategy_preset
 
 import javafx.geometry.Insets
 import javafx.geometry.Pos
-import javafx.scene.control.Button
-import javafx.scene.control.CheckBox
-import javafx.scene.control.Label
-import javafx.scene.control.ScrollPane
+import javafx.scene.control.*
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
@@ -21,8 +18,6 @@ import lin.repository.tree_config.TreeConfigEntity
  * 单个用途的**声明草稿**（T-TG-037 / D-TG-019）—— 表格行 ↔ 编辑弹窗之间的载体。
  *
  * **声明粒度 = 维度**：三个维度各自二态（声明 = 给出具体值 / 未声明 = 不落库）。
- * 字段级没有「不覆盖」这一层（预设侧非覆盖语义）⇒ 时序四个字段**全显式**（默认值预填），
- * 布尔字段因此不需要三态（`defaultReplanAfterUse` 勾选即真、不勾即假）。
  */
 data class PurposeDeclarationDraft(
     val tagId: String,
@@ -37,6 +32,9 @@ data class PurposeDeclarationDraft(
     /** 仅 [declaredSurplus] 为真时有意义；null = 声明为「不设门槛」。 */
     val surplusThreshold: Int? = null
 ) {
+    /** 是否声明了至少一个维度 */
+    val isDeclared: Boolean get() = declaredTrees || declaredTiming || declaredSurplus
+
     companion object {
         /** 由全局默认值**预填全字段**（D-TG-019：预设侧字段不带 presence，勾上声明即为具体值）。 */
         fun fresh(
@@ -63,51 +61,63 @@ data class PurposeDeclarationDraft(
     }
 }
 
+/** 表格视图过滤模式 */
+enum class PurposeFilterMode {
+    DECLARED_ONLY,      // 仅显示已配置用途（默认推荐）
+    UNDECLARED_ONLY,    // 仅显示未配置候选用途
+    ALL                 // 显示全部用途
+}
+
 /**
- * 预设侧「用途 × 声明」聚合表（T-TG-037 / D-TG-019，布局候选 L1）。
+ * 预设侧「用途 × 声明」聚合表（T-TG-037 / D-TG-019）。
  *
- * 取代原来按**维度**分的三个页签（树白名单 / 时序声明 / 惜售声明）—— 同一用途的三条信息
- * 散在不同页签里时，"这个用途声明了没、声明了啥"要来回切，且声明开关与声明内容分离。
- * 现改为**一行一个用途**，三个维度各自「勾选 + 摘要」；细节编辑进 [PresetPurposeEditDialog]（不切页签）。
- *
- * ⚠️ 与卡组侧的 [lin.ui.card_group.DeckPurposeTable]（覆盖语义）**形态相似但语义不同**：
- * 预设侧 = 纯声明（勾 = 落具体值，无"继承"），消费侧 = 覆盖（不勾 = 继承预设/默认）。
+ * 升级优化：
+ * 1. 支持按需查看（默认【仅看已声明】，消除死行视觉噪音）；
+ * 2. 支持快速一键声明未配置用途、一键清空/移除已有声明；
+ * 3. 优化宽屏列宽，消除文本截断。
  */
 class PresetPurposeTable : VBox(6.0) {
 
     /** **树维度**声明变化（供外层刷新「被禁用用途」汇总：口径 = 全局用途全集 − 树维度已声明的用途）。 */
     var onTreeDeclarationsChanged: ((declaredTags: Set<String>) -> Unit)? = null
 
+    /** 声明发生变动（新增、修改或移除），通知宿主刷新候选下拉框等 */
+    var onDeclarationsChanged: (() -> Unit)? = null
+
+    /** 视图过滤模式（默认仅显示已配置的用途） */
+    var filterMode: PurposeFilterMode = PurposeFilterMode.DECLARED_ONLY
+        set(value) {
+            field = value
+            renderRows()
+        }
+
     private val grid = GridPane().apply {
-        hgap = 10.0
-        vgap = 4.0
+        hgap = 12.0
+        vgap = 6.0
         padding = Insets(6.0)
         columnConstraints.addAll(
-            ColumnConstraints(100.0),                   // 用途
-            ColumnConstraints(140.0),                   // 树白名单
-            ColumnConstraints(210.0),                   // 时序
-            ColumnConstraints(120.0),                   // 惜售
-            ColumnConstraints(60.0)                     // 编辑
+            ColumnConstraints(110.0),                   // 用途
+            ColumnConstraints(160.0),                   // 树白名单
+            ColumnConstraints(260.0),                   // 时序
+            ColumnConstraints(130.0),                   // 惜售
+            ColumnConstraints(90.0)                     // 操作
         )
     }
 
     private val scrollPane = ScrollPane(grid).apply {
         isFitToWidth = true
-        prefHeight = 320.0
+        prefHeight = 340.0
         style = "-fx-background-color: transparent;"
     }
 
-    private val emptyLabel = Label("当前数据库中无可声明的内置作用").apply {
-        style = "-fx-text-fill: #95a5a6; -fx-padding: 10px;"
+    private val emptyLabel = Label().apply {
+        style = "-fx-text-fill: #95a5a6; -fx-padding: 24px; -fx-font-size: 12px; -fx-alignment: center;"
         isVisible = false
         isManaged = false
     }
 
-    /** 行草稿（顺序 = 装配顺序；收集时按此顺序产出）。 */
+    /** 全部用途的行草稿（顺序 = 装配顺序；收集时按此顺序产出）。 */
     private val drafts = mutableListOf<PurposeDeclarationDraft>()
-
-    /** 每行的控件引用（改草稿后就地刷新，不重建整表）。 */
-    private val rows = mutableMapOf<String, RowControls>()
 
     private var candidateTreesByTag: Map<String, List<TreeConfigEntity>> = emptyMap()
     private var currentTagDisplayNames: Map<String, String> = emptyMap()
@@ -120,13 +130,6 @@ class PresetPurposeTable : VBox(6.0) {
 
     /**
      * 装载可声明的用途与已有声明。
-     *
-     * @param rules 可声明的**作用清单** + 默认值提示（来自 `PresetCatalog.timingRules`，口径见 D-TG-019）
-     * @param candidateTrees 全局共享用途树候选
-     * @param treeSelections 已声明的树白名单（用途 → 保留的树 id）
-     * @param timings 已声明的时序
-     * @param surplus 已声明的惜售门槛
-     * @param tagDisplayNames 标签中文显示名映射（数据源自 purpose_tag_def 表）
      */
     fun load(
         rules: List<PurposeTagRuleEntity>,
@@ -137,24 +140,13 @@ class PresetPurposeTable : VBox(6.0) {
         tagDisplayNames: Map<String, String> = emptyMap()
     ) {
         drafts.clear()
-        rows.clear()
-        grid.children.clear()
         currentTagDisplayNames = tagDisplayNames
         candidateTreesByTag = candidateTrees
             .flatMap { tree -> tree.bindingIdList.map { it to tree } }
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, trees) -> trees.sortedBy { it.name } }
 
-        val isEmpty = rules.isEmpty()
-        emptyLabel.isVisible = isEmpty
-        emptyLabel.isManaged = isEmpty
-        scrollPane.isVisible = !isEmpty
-        scrollPane.isManaged = !isEmpty
-        if (isEmpty) return
-
-        addHeaderRow()
-
-        rules.forEachIndexed { index, rule ->
+        rules.forEach { rule ->
             val timingDeclaration = timings[rule.tagId]
             val surplusDeclaration = surplus[rule.tagId]
             val draft = PurposeDeclarationDraft.fresh(
@@ -164,7 +156,6 @@ class PresetPurposeTable : VBox(6.0) {
                 declaredTiming = timingDeclaration != null,
                 declaredSurplus = surplusDeclaration != null
             ).let { base ->
-                // 已声明的时序：逐字段取「库中值 > 默认值」—— 库中缺席的字段按"全字段显式"补默认值
                 base.copy(
                     timing = if (timingDeclaration == null) base.timing else TimingOverride(
                         defaultStage = timingDeclaration.defaultStage ?: base.timing.defaultStage,
@@ -180,8 +171,34 @@ class PresetPurposeTable : VBox(6.0) {
                 )
             }
             drafts += draft
-            addDataRow(index + 1, rule, draft)
         }
+
+        renderRows()
+        notifyDeclarations()
+    }
+
+    /** 获取所有未声明配置的用途选项 (tagId to displayName) */
+    fun getUndeclaredTagOptions(): List<Pair<String, String>> =
+        drafts.filter { !it.isDeclared }
+            .map { it.tagId to (currentTagDisplayNames[it.tagId] ?: it.tagId) }
+
+    /** 获取所有已声明配置的用途选项 (tagId to displayName) */
+    fun getDeclaredTagOptions(): List<Pair<String, String>> =
+        drafts.filter { it.isDeclared }
+            .map { it.tagId to (currentTagDisplayNames[it.tagId] ?: it.tagId) }
+
+    /** 快速打开特定用途的编辑弹窗（常用于下拉选择后一键激活） */
+    fun openEditorForTag(tagId: String) {
+        openEditor(tagId)
+    }
+
+    /** 清除某用途的全部声明（重置为未声明） */
+    fun clearDeclaration(tagId: String) {
+        val index = drafts.indexOfFirst { it.tagId == tagId }
+        if (index < 0) return
+        val current = drafts[index]
+        drafts[index] = PurposeDeclarationDraft.fresh(current.rule)
+        renderRows()
         notifyDeclarations()
     }
 
@@ -197,16 +214,52 @@ class PresetPurposeTable : VBox(6.0) {
         drafts.filter { it.declaredSurplus }
             .associate { it.tagId to SurplusOverride(ThresholdPatch(it.surplusThreshold)) }
 
-    /** 已声明任一维度的用途（口径同 `SqlitePurposeTagIntentRuleProvider` 的声明集合）。 */
+    /** 已声明任一维度的用途集合 */
     fun declaredTags(): Set<String> =
-        drafts.filter { it.declaredTrees || it.declaredTiming || it.declaredSurplus }
-            .map { it.tagId }
-            .toSet()
+        drafts.filter { it.isDeclared }.map { it.tagId }.toSet()
 
-    // ── 行装配 ──
+    // ── 渲染与排版 ──
+
+    private fun renderRows() {
+        grid.children.clear()
+
+        val visibleDrafts = when (filterMode) {
+            PurposeFilterMode.DECLARED_ONLY -> drafts.filter { it.isDeclared }
+            PurposeFilterMode.UNDECLARED_ONLY -> drafts.filter { !it.isDeclared }
+            PurposeFilterMode.ALL -> drafts
+        }
+
+        if (visibleDrafts.isEmpty()) {
+            scrollPane.isVisible = false
+            scrollPane.isManaged = false
+            emptyLabel.isVisible = true
+            emptyLabel.isManaged = true
+
+            emptyLabel.text = when (filterMode) {
+                PurposeFilterMode.DECLARED_ONLY ->
+                    "当前预设尚未声明任何用途（所有全局用途树均关闭兜底）。\n可在上方「➕ 添加用途声明」下拉框中选择要定制的用途。"
+                PurposeFilterMode.UNDECLARED_ONLY ->
+                    "所有战略用途均已完成声明配置（无未声明候选）。"
+                PurposeFilterMode.ALL ->
+                    "当前数据库中无可声明的战略用途。"
+            }
+            return
+        }
+
+        scrollPane.isVisible = true
+        scrollPane.isManaged = true
+        emptyLabel.isVisible = false
+        emptyLabel.isManaged = false
+
+        addHeaderRow()
+
+        visibleDrafts.forEachIndexed { index, draft ->
+            addDataRow(index + 1, draft)
+        }
+    }
 
     private fun addHeaderRow() {
-        listOf("用途", "🌲 树白名单", "⏱️ 出牌时序", "💰 惜售门槛", "编辑").forEachIndexed { col, text ->
+        listOf("战略用途", "树白名单", "出牌时序", "惜售门槛", "操作").forEachIndexed { col, text ->
             grid.add(
                 Label(text).apply {
                     style = "-fx-font-weight: bold; -fx-text-fill: #34495e; -fx-font-size: 11px;"
@@ -217,11 +270,11 @@ class PresetPurposeTable : VBox(6.0) {
         }
     }
 
-    private fun addDataRow(gridRow: Int, rule: PurposeTagRuleEntity, draft: PurposeDeclarationDraft) {
-        val displayName = currentTagDisplayNames[rule.tagId] ?: rule.tagId
+    private fun addDataRow(gridRow: Int, draft: PurposeDeclarationDraft) {
+        val displayName = currentTagDisplayNames[draft.tagId] ?: draft.tagId
         val purposeLabel = Label(displayName).apply {
             style = "-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #2c3e50; -fx-cursor: hand;"
-            tooltip = javafx.scene.control.Tooltip(rule.tagId)
+            tooltip = Tooltip(draft.tagId)
         }
         val treeLabel = Label(treeSummary(draft)).apply {
             style = dimensionStyle(draft.declaredTrees)
@@ -233,36 +286,49 @@ class PresetPurposeTable : VBox(6.0) {
             style = dimensionStyle(draft.declaredSurplus)
         }
 
-        val btnEdit = Button("✏️").apply {
-            style = "-fx-font-size: 11px; -fx-cursor: hand;"
-            setOnAction { openEditor(rule.tagId) }
-        }
-
         // 双击任意文本单元格即可打开编辑弹窗
         listOf(purposeLabel, treeLabel, timingLabel, surplusLabel).forEach { cell ->
             cell.setOnMouseClicked { event ->
-                if (event.clickCount == 2) openEditor(rule.tagId)
+                if (event.clickCount == 2) openEditor(draft.tagId)
             }
         }
 
-        rows[rule.tagId] = RowControls(
-            treeLabel = treeLabel,
-            timingLabel = timingLabel,
-            surplusLabel = surplusLabel
-        )
+        val actionBox = HBox(6.0).apply {
+            alignment = Pos.CENTER_LEFT
+            if (draft.isDeclared) {
+                val btnEdit = Button("编辑").apply {
+                    style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-padding: 2 8;"
+                    tooltip = Tooltip("编辑该用途的三维度声明")
+                    setOnAction { openEditor(draft.tagId) }
+                }
+                val btnRemove = Button("移除").apply {
+                    style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-text-fill: #c0392b; -fx-padding: 2 8;"
+                    tooltip = Tooltip("清空该用途的全部声明，使其变回未声明状态")
+                    setOnAction { clearDeclaration(draft.tagId) }
+                }
+                children.addAll(btnEdit, btnRemove)
+            } else {
+                val btnDeclare = Button("声明").apply {
+                    style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-background-color: #27ae60; -fx-text-fill: white; -fx-padding: 2 8;"
+                    tooltip = Tooltip("激活并配置该用途的策略声明")
+                    setOnAction { openEditor(draft.tagId) }
+                }
+                children.add(btnDeclare)
+            }
+        }
 
         grid.add(purposeLabel, 0, gridRow)
         grid.add(treeLabel, 1, gridRow)
         grid.add(timingLabel, 2, gridRow)
         grid.add(surplusLabel, 3, gridRow)
-        grid.add(btnEdit, 4, gridRow)
+        grid.add(actionBox, 4, gridRow)
     }
 
     private fun dimensionStyle(declared: Boolean): String =
         if (declared) "-fx-font-size: 11px; -fx-text-fill: #2c3e50; -fx-cursor: hand;"
         else "-fx-font-size: 11px; -fx-text-fill: #95a5a6; -fx-cursor: hand;"
 
-    /** 弹窗返回后回写。 */
+    /** 弹窗编辑返回后回写。 */
     private fun openEditor(tagId: String) {
         val index = drafts.indexOfFirst { it.tagId == tagId }
         if (index < 0) return
@@ -270,22 +336,14 @@ class PresetPurposeTable : VBox(6.0) {
         val dialog = PresetPurposeEditDialog(drafts[index], candidateTreesByTag[tagId].orEmpty(), displayName)
         val edited = dialog.showAndWait().orElse(null) ?: return
         drafts[index] = edited
-        syncRow(tagId, edited)
+        renderRows()
         notifyDeclarations()
     }
 
-    /** 就地刷新某行的摘要文本与高亮样式（不重建整表）。 */
-    private fun syncRow(tagId: String, draft: PurposeDeclarationDraft) {
-        val row = rows[tagId] ?: return
-        row.treeLabel.text = treeSummary(draft)
-        row.treeLabel.style = dimensionStyle(draft.declaredTrees)
-        row.timingLabel.text = timingSummary(draft)
-        row.timingLabel.style = dimensionStyle(draft.declaredTiming)
-        row.surplusLabel.text = surplusSummary(draft)
-        row.surplusLabel.style = dimensionStyle(draft.declaredSurplus)
+    private fun notifyDeclarations() {
+        onTreeDeclarationsChanged?.invoke(collectTreeSelections().keys)
+        onDeclarationsChanged?.invoke()
     }
-
-    private fun notifyDeclarations() = onTreeDeclarationsChanged?.invoke(collectTreeSelections().keys)
 
     // ── 摘要文案 ──
 
@@ -300,7 +358,7 @@ class PresetPurposeTable : VBox(6.0) {
     } else {
         val stage = draft.timing.defaultStage ?: "默认"
         val weight = draft.timing.defaultOrderWeight?.toString() ?: "默认"
-        val replan = if (draft.timing.defaultReplanAfterUse == true) "重规划 是" else "重规划 否"
+        val replan = if (draft.timing.defaultReplanAfterUse == true) "重规划" else "不重规划"
         val priority = draft.timing.priority?.toString() ?: "默认"
         "$stage / 权重$weight / $replan / P$priority"
     }
@@ -310,11 +368,4 @@ class PresetPurposeTable : VBox(6.0) {
         draft.surplusThreshold == null -> "声明为「不设门槛」"
         else -> "门槛 ${draft.surplusThreshold}"
     }
-
-    /** 行内控件引用（就地刷新用，不重建整表）。 */
-    private class RowControls(
-        val treeLabel: Label,
-        val timingLabel: Label,
-        val surplusLabel: Label
-    )
 }
