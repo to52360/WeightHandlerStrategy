@@ -11,6 +11,9 @@ import javafx.scene.layout.VBox
 import lin.repository.card_group.PresetDetail
 import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.TimingOverride
+import lin.ui.components.action.ActionVariant
+import lin.ui.components.action.EntityCapability
+import lin.ui.components.action.ResourcePickerBar
 import lin.ui.service.AuraBoostOption
 
 /**
@@ -40,9 +43,16 @@ class StrategyPresetConfigDialog(
     private val purposeTable = PresetPurposeTable()
 
     // ── 顶部工具栏控件 ──
-    private val comboAddPurpose = ComboBox<TagOptionItem>().apply {
-        promptText = "+ 添加用途声明..."
-        prefWidth = 200.0
+    private val purposePicker = ResourcePickerBar<TagOptionItem>(
+        promptText = "+ 选择要声明的用途...",
+        capabilities = listOf(
+            EntityCapability<TagOptionItem>("添加声明", variant = ActionVariant.SUCCESS) { item, ctx ->
+                purposeTable.openEditorForTag(item.tagId)
+                ctx.select(null)
+            }
+        )
+    ).apply {
+        comboBox.prefWidth = 200.0
     }
 
     private val toggleGroup = ToggleGroup()
@@ -109,17 +119,6 @@ class StrategyPresetConfigDialog(
     }
 
     private fun setupToolBar() {
-        // 下拉选择未声明用途时，自动激活编辑
-        comboAddPurpose.valueProperty().addListener { _, _, selected ->
-            if (selected != null) {
-                val tagId = selected.tagId
-                javafx.application.Platform.runLater {
-                    comboAddPurpose.value = null
-                    purposeTable.openEditorForTag(tagId)
-                }
-            }
-        }
-
         // 过滤切换
         rbDeclared.setOnAction {
             purposeTable.filterMode = PurposeFilterMode.DECLARED_ONLY
@@ -141,8 +140,9 @@ class StrategyPresetConfigDialog(
         rbUndeclared.text = "未配置候选 (${undeclared.size})"
         rbAll.text = "全部 ($total)"
 
-        comboAddPurpose.items.setAll(undeclared.map { TagOptionItem(it.first, "${it.second} (${it.first})") })
-        comboAddPurpose.isDisable = undeclared.isEmpty()
+        val options = undeclared.map { TagOptionItem(it.first, "${it.second} (${it.first})") }
+        purposePicker.setItems(options, retainSelection = false)
+        purposePicker.isDisable = undeclared.isEmpty()
     }
 
     private fun buildAuraSection(candidates: List<AuraBoostOption>, selected: Set<String>) {
@@ -186,7 +186,7 @@ class StrategyPresetConfigDialog(
                 rbUndeclared,
                 rbAll,
                 HBox().apply { HBox.setHgrow(this, Priority.ALWAYS) },
-                comboAddPurpose
+                purposePicker
             )
         }
 

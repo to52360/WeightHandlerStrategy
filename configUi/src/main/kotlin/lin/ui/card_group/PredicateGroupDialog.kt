@@ -6,8 +6,10 @@ import javafx.scene.control.*
 import javafx.scene.layout.HBox
 import javafx.scene.layout.VBox
 import lin.repository.condition_tree.ConditionTreeConfigRepository
-import lin.ui.card_group.behavior.ConditionTreeOption
-import lin.ui.condition_tree.ConditionTreeDialog
+import lin.ui.components.action.ResourcePickerBar
+import lin.ui.condition_tree.components.ConditionTreeCapabilities
+import lin.ui.condition_tree.components.ConditionTreeOption
+import lin.ui.condition_tree.components.selectedTreeId
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -22,16 +24,28 @@ class PredicateGroupDialog(
 
     private val conditionTreeRepository: ConditionTreeConfigRepository by inject()
 
-    /** 表单状态封装：configUi 规范要求 init 中状态变量/数据源超过 4 个须收敛为对象，不零散平铺。 */
-    private class FormState {
+    /** 表单状态封装：收敛为纯业务字段与声明式选择器，符合 UI 状态规范。 */
+    private class FormState(
+        managerIdProvider: () -> String?,
+        onRefreshRequested: () -> Unit
+    ) {
         val nameField = TextField()
-        val conditionTreeCombo = ComboBox<ConditionTreeOption>()
-        val newTreeBtn = Button("新建")
-        val editTreeBtn = Button("编辑")
+        val treePicker = ResourcePickerBar(
+            promptText = "选择条件树...",
+            capabilities = ConditionTreeCapabilities.defaultSet(
+                managerIdProvider = managerIdProvider,
+                onRefreshRequested = onRefreshRequested
+            )
+        ).apply {
+            comboBox.prefWidth = 240.0
+        }
         val includeDerivedCombo = ComboBox<String>()
     }
 
-    private val form = FormState()
+    private val form = FormState(
+        managerIdProvider = { store.state.selectedManagerItem?.entity?.id },
+        onRefreshRequested = { refreshConditionTreeOptions() }
+    )
 
     init {
         title = "按条件建组 (谓词组)"
@@ -53,7 +67,6 @@ class PredicateGroupDialog(
     }
 
     private fun buildContent(): VBox {
-        val managerId = store.state.selectedManagerItem?.entity?.id
         val nextNum = store.state.currentBindings.size + 1
 
         form.nameField.apply {
@@ -66,35 +79,8 @@ class PredicateGroupDialog(
         }
         refreshConditionTreeOptions()
 
-        form.newTreeBtn.setOnAction {
-            val dialog = ConditionTreeDialog(autoCreateDraft = true, managerId = managerId)
-            dialog.showAndWait().ifPresent { createdId ->
-                refreshConditionTreeOptions()
-                selectTreeById(createdId)
-            }
-        }
-        form.editTreeBtn.setOnAction {
-            val selectedId = form.conditionTreeCombo.value?.id
-            if (selectedId.isNullOrEmpty()) {
-                Alert(Alert.AlertType.WARNING, "请先在条件树下拉列表中选择一项。").apply {
-                    headerText = "未选中条件树"
-                }.showAndWait()
-                return@setOnAction
-            }
-            val dialog = ConditionTreeDialog(initialSelectTreeId = selectedId, managerId = managerId)
-            dialog.showAndWait().ifPresent { editedId ->
-                refreshConditionTreeOptions()
-                selectTreeById(editedId ?: selectedId)
-            }
-        }
-
-        val treeRow = HBox(10.0).apply {
-            alignment = Pos.CENTER_LEFT
-            children.addAll(
-                form.conditionTreeCombo,
-                form.newTreeBtn,
-                form.editTreeBtn
-            )
+        form.treePicker.comboBox.setOnShowing {
+            refreshConditionTreeOptions()
         }
 
         val root = VBox(12.0).apply {
@@ -106,7 +92,7 @@ class PredicateGroupDialog(
                 },
                 HBox(10.0).apply {
                     alignment = Pos.CENTER_LEFT
-                    children.addAll(Label("条件树:").apply { style = "-fx-font-weight: bold;" }, treeRow)
+                    children.addAll(Label("条件树:").apply { style = "-fx-font-weight: bold;" }, form.treePicker)
                 },
                 HBox(10.0).apply {
                     alignment = Pos.CENTER_LEFT
@@ -129,7 +115,7 @@ class PredicateGroupDialog(
             Alert(Alert.AlertType.WARNING, "请输入分组名称。").apply { headerText = "校验未通过" }.showAndWait()
             return false
         }
-        val cid = form.conditionTreeCombo.value?.id
+        val cid = form.treePicker.selectedTreeId
         if (cid.isNullOrEmpty()) {
             Alert(Alert.AlertType.WARNING, "请选择或新建一个条件树。").apply { headerText = "校验未通过" }.showAndWait()
             return false
@@ -143,9 +129,10 @@ class PredicateGroupDialog(
             "否" -> false
             else -> null
         }
+        val cid = form.treePicker.selectedTreeId ?: return
         store.addPredicateBinding(
             name = form.nameField.text.trim(),
-            conditionId = form.conditionTreeCombo.value!!.id,
+            conditionId = cid,
             includeDerived = includeDerived
         )
     }
@@ -153,21 +140,6 @@ class PredicateGroupDialog(
     private fun refreshConditionTreeOptions() {
         val managerId = store.state.selectedManagerItem?.entity?.id
         val options = conditionTreeRepository.findMetaByManagerId(managerId).map { ConditionTreeOption(it.id, it.name) }
-        form.conditionTreeCombo.items.setAll(options)
-    }
-
-    private fun selectTreeById(id: String?) {
-        if (id.isNullOrEmpty()) {
-            form.conditionTreeCombo.value = null
-            return
-        }
-        val matched = form.conditionTreeCombo.items.find { it.id == id }
-        if (matched != null) {
-            form.conditionTreeCombo.value = matched
-        } else {
-            val tempOption = ConditionTreeOption(id, "自定义条件树 ($id)")
-            form.conditionTreeCombo.items.add(tempOption)
-            form.conditionTreeCombo.value = tempOption
-        }
+        form.treePicker.setItems(options, retainSelection = true)
     }
 }

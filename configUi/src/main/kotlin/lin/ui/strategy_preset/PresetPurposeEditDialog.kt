@@ -14,7 +14,7 @@ import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
-import lin.bean.usePlan.UseStage
+import lin.ui.card_group.behavior.BehaviorDisplayMappers
 import lin.repository.card_group.TimingOverride
 import lin.repository.tree_config.TreeConfigEntity
 
@@ -38,8 +38,8 @@ class PresetPurposeEditDialog(
 
     private val chkTiming = CheckBox("声明出牌时序（勾 = 该用途产生一条完整规则，参与阶段排序与 priority 选优）")
     private val comboStage = ComboBox<String>().apply {
-        items.addAll(UseStage.entries.map { it.name })
-        prefWidth = 140.0
+        items.setAll(BehaviorDisplayMappers.allStageLabels())
+        prefWidth = 160.0
     }
     private val txtWeight = TextField().apply {
         prefWidth = 90.0
@@ -104,7 +104,8 @@ class PresetPurposeEditDialog(
         }
 
         chkTiming.isSelected = initial.declaredTiming
-        comboStage.value = initial.timing.defaultStage ?: initial.rule.defaultStage
+        val rawStage = initial.timing.defaultStage ?: initial.rule.defaultStage
+        comboStage.value = BehaviorDisplayMappers.stageToLabel(rawStage)
         txtWeight.text = initial.timing.defaultOrderWeight?.toString() ?: ""
         chkReplan.isSelected = initial.timing.defaultReplanAfterUse == true
         txtPriority.text = initial.timing.priority?.toString() ?: ""
@@ -223,7 +224,7 @@ class PresetPurposeEditDialog(
         treeIds = treeChecks.filterValues { it.isSelected }.keys.toSet(),
         declaredTiming = chkTiming.isSelected,
         timing = TimingOverride(
-            defaultStage = comboStage.value,
+            defaultStage = BehaviorDisplayMappers.labelToStageName(comboStage.value),
             defaultOrderWeight = txtWeight.text.trim().toDoubleOrNull(),
             defaultReplanAfterUse = chkReplan.isSelected,
             priority = txtPriority.text.trim().toIntOrNull()

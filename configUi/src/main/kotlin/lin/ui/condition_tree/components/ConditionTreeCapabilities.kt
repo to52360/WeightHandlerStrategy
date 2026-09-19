@@ -16,6 +16,14 @@ data class ConditionTreeOption(
     val id: String,
     val name: String
 ) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ConditionTreeOption) return false
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = id.hashCode()
+
     override fun toString(): String {
         return if (id.isEmpty()) "(未选择条件树)" else name.ifBlank { "[$id] (未命名)" }
     }
@@ -40,14 +48,27 @@ object ConditionTreeCapabilities : KoinComponent {
             val dialog = ConditionTreeDialog(autoCreateDraft = true, managerId = managerIdProvider())
             dialog.showAndWait().ifPresent { createdId ->
                 onRefreshRequested()
-                ctx.select(ConditionTreeOption(createdId, "新建条件树 ($createdId)"))
+                val entity = defaultRepo.findById(createdId)
+                val option = if (entity != null) {
+                    ConditionTreeOption(entity.id, entity.name)
+                } else {
+                    ConditionTreeOption(createdId, "新建条件树 ($createdId)")
+                }
+                ctx.select(option)
             }
         },
         UiCapabilities.edit { item, ctx ->
             val dialog = ConditionTreeDialog(initialSelectTreeId = item.id, managerId = managerIdProvider())
             dialog.showAndWait().ifPresent { editedId ->
                 onRefreshRequested()
-                ctx.select(ConditionTreeOption(editedId ?: item.id, item.name))
+                val targetId = editedId ?: item.id
+                val entity = defaultRepo.findById(targetId)
+                val option = if (entity != null) {
+                    ConditionTreeOption(entity.id, entity.name)
+                } else {
+                    ConditionTreeOption(targetId, item.name)
+                }
+                ctx.select(option)
             }
         },
         UiCapabilities.inspect { item, _ ->

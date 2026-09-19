@@ -13,14 +13,29 @@ import lin.bean.usePlan.ComboRelation
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import lin.ui.GroupDisplay
+import lin.ui.WorkbenchNavigator
+import lin.ui.card_group.CardGroupExtension
+import lin.ui.card_group.components.CardGroupCapabilities
+import lin.ui.components.action.ResourcePickerBar
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
-class ComboPlanEditor : VBox(12.0) {
+class ComboPlanEditor : VBox(12.0), KoinComponent {
+
+    private val navigator: WorkbenchNavigator by inject()
 
     private val detailTitle = Label("没有选中 Combo 编排")
     private val editorBox = VBox(12.0)
 
-    // 配置卡组上下文选择器
-    private val cardGroupSelector = ComboBox<CardGroupManagerConfig>()
+    // 声明式卡组方案选择器（包含查看详情与前往编辑能力）
+    private val cardGroupPicker = ResourcePickerBar(
+        promptText = "选择目标卡组方案...",
+        capabilities = CardGroupCapabilities.defaultSet(
+            onNavigateToManager = { manager ->
+                navigator.navigateTo(CardGroupExtension.TITLE, manager.cardGroupManagerId)
+            }
+        )
+    )
 
     // 双态合并配置表格
     private val bindingsTableView = TableView<BindingUiRow>()
@@ -28,7 +43,7 @@ class ComboPlanEditor : VBox(12.0) {
 
     // 配置表单输入项
     private val scoreSpinner = Spinner<Double>(-100.0, 100.0, 0.0, 0.5)
-    private val changeScoreSpinner = Spinner<Double>(-100.0, 100.0, 0.0, 0.5)
+    private val changeScoreSpinner = Spinner<Double>(-100.0, 100.0, 0.5, 0.5)
     private val relationCombo = ComboBox<String>()
     private val coreMutexCheck = CheckBox("核心组同回合硬互斥 (Core Mutex)")
     private val mustAdjacentCheck = CheckBox("必须相邻使用 (Adjacent)")
@@ -60,7 +75,7 @@ class ComboPlanEditor : VBox(12.0) {
         }
 
         // A. 配置卡组下拉选择框
-        cardGroupSelector.apply {
+        cardGroupPicker.comboBox.apply {
             maxWidth = Double.MAX_VALUE
             converter = object : javafx.util.StringConverter<CardGroupManagerConfig>() {
                 override fun toString(obj: CardGroupManagerConfig?): String = obj?.name ?: ""
@@ -76,7 +91,7 @@ class ComboPlanEditor : VBox(12.0) {
         val selectorContainer = VBox(5.0).apply {
             children.addAll(
                 Label("配置目标卡组 (Target Deck):").apply { style = "-fx-font-weight: bold; -fx-text-fill: #2c3e50;" },
-                cardGroupSelector
+                cardGroupPicker
             )
         }
 
@@ -230,7 +245,7 @@ class ComboPlanEditor : VBox(12.0) {
     fun syncAllManagers(managers: List<CardGroupManagerConfig>) {
         isUpdatingFromState = true
         try {
-            cardGroupSelector.items.setAll(managers)
+            cardGroupPicker.setItems(managers, retainSelection = true)
         } finally {
             isUpdatingFromState = false
         }
@@ -245,6 +260,7 @@ class ComboPlanEditor : VBox(12.0) {
         editorBox.isDisable = true
         btnDelete.isVisible = false
 
+        cardGroupPicker.clearSelection()
         obsBindingRows.clear()
         scoreSpinner.valueFactory.value = 0.0
         changeScoreSpinner.valueFactory.value = 0.0
@@ -272,7 +288,7 @@ class ComboPlanEditor : VBox(12.0) {
             ?: allManagers.firstOrNull()
         isUpdatingFromState = true
         try {
-            cardGroupSelector.value = activeManager
+            cardGroupPicker.selectedItem = activeManager
         } finally {
             isUpdatingFromState = false
         }
@@ -317,7 +333,7 @@ class ComboPlanEditor : VBox(12.0) {
 
         isUpdatingFromState = true
         try {
-            cardGroupSelector.value = finalManager
+            cardGroupPicker.selectedItem = finalManager
         } finally {
             isUpdatingFromState = false
         }
@@ -375,7 +391,7 @@ class ComboPlanEditor : VBox(12.0) {
             else -> ComboRelation.SCORE_ONLY
         }
         val id = if (isCreatingMode) null else selectedPlan?.id
-        val managerId = cardGroupSelector.value?.cardGroupManagerId
+        val managerId = cardGroupPicker.selectedItem?.cardGroupManagerId
         if (managerId.isNullOrBlank()) {
             Alert(Alert.AlertType.WARNING, "请选择目标卡组方案！").showAndWait()
             return

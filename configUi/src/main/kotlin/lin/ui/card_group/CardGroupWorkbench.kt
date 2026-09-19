@@ -41,5 +41,15 @@ class CardGroupWorkbench : SplitPane(), KoinComponent, ActiveAware {
     override fun onActive() {
         store.loadInitialData()
     }
+
+    /**
+     * 跨模块跳转定位：根据 managerId 选中对应的卡组方案
+     */
+    fun selectManagerById(managerId: String) {
+        val target = store.state.managers.find { it.entity?.id == managerId }
+        if (target != null) {
+            store.selectManager(target)
+        }
+    }
 }
 

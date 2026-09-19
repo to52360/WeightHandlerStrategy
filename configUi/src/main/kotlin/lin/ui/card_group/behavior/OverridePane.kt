@@ -11,7 +11,10 @@ import lin.bean.usePlan.UseStage
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.rule.tree.findOverride
 import lin.ui.card_group.WorkbenchStore
-import lin.ui.condition_tree.ConditionTreeDialog
+import lin.ui.components.action.ResourcePickerBar
+import lin.ui.condition_tree.components.ConditionTreeCapabilities
+import lin.ui.condition_tree.components.selectTreeId
+import lin.ui.condition_tree.components.selectedTreeId
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -57,23 +60,15 @@ class OverridePane(
         disableProperty().bind(disableWhen)
     }
 
-    private val conditionTreeCombo = ComboBox<ConditionTreeOption>().apply {
-        promptText = "选择条件树..."
-        prefWidth = 240.0
-        disableProperty().bind(disableWhen)
-    }
-
-    private val newTreeBtn = Button("新建").apply {
-        style = "-fx-background-color: #198754; -fx-text-fill: white; -fx-font-size: 11px;"
-        disableProperty().bind(disableWhen)
-    }
-    private val editTreeBtn = Button("编辑").apply {
-        style = "-fx-background-color: #0d6efd; -fx-text-fill: white; -fx-font-size: 11px;"
-        disableProperty().bind(disableWhen)
-    }
-    private val previewTreeBtn = Button("预览").apply {
-        style = "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-size: 11px;"
-        disableProperty().bind(disableWhen)
+    // 声明式通用条件树选择器（闭环新建/编辑/预览能力）
+    private val treePicker = ResourcePickerBar(
+        promptText = "选择条件树...",
+        capabilities = ConditionTreeCapabilities.defaultSet(
+            managerIdProvider = { store.state.selectedManagerItem?.entity?.id },
+            onRefreshRequested = { refreshConditionTreeOptions() }
+        )
+    ).apply {
+        comboBox.prefWidth = 240.0
     }
 
     private val conditionStageCombo = ComboBox<String>().apply {
@@ -120,10 +115,7 @@ class OverridePane(
             alignment = Pos.CENTER_LEFT
             children.addAll(
                 Label("条件树:").apply { style = "-fx-font-weight: bold;" },
-                conditionTreeCombo,
-                newTreeBtn,
-                editTreeBtn,
-                previewTreeBtn
+                treePicker
             )
         }
 
@@ -149,56 +141,8 @@ class OverridePane(
     }
 
     private fun setupButtonActions() {
-        newTreeBtn.setOnAction {
-            val currentManagerId = store.state.selectedManagerItem?.entity?.id
-            val dialog = ConditionTreeDialog(autoCreateDraft = true, managerId = currentManagerId)
-            dialog.showAndWait().ifPresent { createdId ->
-                refreshConditionTreeOptions()
-                selectTreeById(createdId)
-                emitConditionalStage()
-            }
-        }
-
-        editTreeBtn.setOnAction {
-            val selectedId = conditionTreeCombo.value?.id
-            if (selectedId.isNullOrEmpty()) {
-                Alert(Alert.AlertType.WARNING, "请先在下拉列表中选择一个条件树再进行编辑。").apply {
-                    headerText = "未选中条件树"
-                }.showAndWait()
-                return@setOnAction
-            }
-            val currentManagerId = store.state.selectedManagerItem?.entity?.id
-            val dialog = ConditionTreeDialog(initialSelectTreeId = selectedId, managerId = currentManagerId)
-            dialog.showAndWait().ifPresent { editedId ->
-                refreshConditionTreeOptions()
-                selectTreeById(editedId ?: selectedId)
-                emitConditionalStage()
-            }
-        }
-
-        previewTreeBtn.setOnAction {
-            val selectedId = conditionTreeCombo.value?.id
-            if (selectedId.isNullOrEmpty()) {
-                Alert(Alert.AlertType.INFORMATION, "当前未选择条件树。").showAndWait()
-                return@setOnAction
-            }
-            val entity = conditionTreeRepository.findById(selectedId)
-            if (entity == null) {
-                Alert(Alert.AlertType.ERROR, "未在数据库中找到 ID 为 [$selectedId] 的条件树配置。").showAndWait()
-            } else {
-                val content =
-                    "【条件树 ID】: ${entity.id}\n【条件树名称】: ${entity.name}\n【关联卡组 ID】: ${entity.managerId ?: "(全局共享)"}\n\n【节点配置 JSON 摘要】:\n${entity.configData}"
-                Alert(Alert.AlertType.INFORMATION, content).apply {
-                    title = "条件树预览"
-                    headerText = "条件树配置摘要详情"
-                }.showAndWait()
-            }
-        }
-
-        conditionTreeCombo.setOnShowing {
-            val currentId = conditionTreeCombo.value?.id
+        treePicker.comboBox.setOnShowing {
             refreshConditionTreeOptions()
-            selectTreeById(currentId)
         }
     }
 
@@ -231,7 +175,7 @@ class OverridePane(
             }
         }
 
-        conditionTreeCombo.valueProperty().addListener { _, _, _ -> emitConditionalStage() }
+        treePicker.comboBox.valueProperty().addListener { _, _, _ -> emitConditionalStage() }
         conditionStageCombo.valueProperty().addListener { _, _, _ -> emitConditionalStage() }
         conditionElseCombo.valueProperty().addListener { _, _, _ -> emitConditionalStage() }
     }
@@ -268,7 +212,7 @@ class OverridePane(
             if (cs != null) {
                 enableCSCheckBox.isSelected = true
                 refreshConditionTreeOptions()
-                selectTreeById(cs.conditionId)
+                treePicker.selectTreeId(cs.conditionId)
 
                 val csStageLabel = BehaviorDisplayMappers.stageToLabel(cs.stage.name)
                 if (conditionStageCombo.value != csStageLabel) conditionStageCombo.value = csStageLabel
@@ -277,7 +221,7 @@ class OverridePane(
                 if (conditionElseCombo.value != csElseLabel) conditionElseCombo.value = csElseLabel
             } else {
                 enableCSCheckBox.isSelected = false
-                conditionTreeCombo.value = null
+                treePicker.clearSelection()
                 conditionStageCombo.value = null
                 conditionElseCombo.value = null
             }
@@ -293,7 +237,7 @@ class OverridePane(
             replanCombo.value = null
             weightField.clear()
             enableCSCheckBox.isSelected = false
-            conditionTreeCombo.value = null
+            treePicker.clearSelection()
             conditionStageCombo.value = null
             conditionElseCombo.value = null
         } finally {
@@ -304,27 +248,8 @@ class OverridePane(
     private fun refreshConditionTreeOptions() {
         val currentManagerId = store.state.selectedManagerItem?.entity?.id
         val metaList = conditionTreeRepository.findMetaByManagerId(currentManagerId)
-        val options = mutableListOf<ConditionTreeOption>()
-        for ((id, name) in metaList) {
-            options.add(ConditionTreeOption(id, name))
-        }
-        conditionTreeCombo.items.setAll(options)
-    }
-
-    private fun selectTreeById(id: String?) {
-        if (id.isNullOrEmpty()) {
-            conditionTreeCombo.value = null
-            return
-        }
-        val matched = conditionTreeCombo.items.find { it.id == id }
-        if (matched != null) {
-            conditionTreeCombo.value = matched
-        } else {
-            // 不在已有列表中时（自定义/旧数据），创建一个临时回显项
-            val tempOption = ConditionTreeOption(id, "自定义条件树 ($id)")
-            conditionTreeCombo.items.add(tempOption)
-            conditionTreeCombo.value = tempOption
-        }
+        val options = metaList.map { (id, name) -> ConditionTreeOption(id, name) }
+        treePicker.setItems(options, retainSelection = true)
     }
 
     /** 联动提交到 Store */
@@ -334,7 +259,7 @@ class OverridePane(
             store.updateBindingConditionalStage(null)
             return
         }
-        val cid = conditionTreeCombo.value?.id?.takeIf { it.isNotEmpty() }
+        val cid = treePicker.selectedTreeId
         if (cid == null) {
             store.updateBindingConditionalStage(null)
             return

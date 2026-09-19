@@ -13,6 +13,7 @@ import lin.repository.card_group.ThresholdPatch
 import lin.repository.card_group.TimingOverride
 import lin.repository.card_purpose.PurposeTagRuleEntity
 import lin.repository.tree_config.TreeConfigEntity
+import lin.ui.components.action.ActionVariant
 
 /**
  * 单个用途的**声明草稿**（T-TG-037 / D-TG-019）—— 表格行 ↔ 编辑弹窗之间的载体。
@@ -297,19 +298,19 @@ class PresetPurposeTable : VBox(6.0) {
             alignment = Pos.CENTER_LEFT
             if (draft.isDeclared) {
                 val btnEdit = Button("编辑").apply {
-                    style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-padding: 2 8;"
+                    style = ActionVariant.PRIMARY.cssStyle + " -fx-cursor: hand; -fx-padding: 2 8;"
                     tooltip = Tooltip("编辑该用途的三维度声明")
                     setOnAction { openEditor(draft.tagId) }
                 }
                 val btnRemove = Button("移除").apply {
-                    style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-text-fill: #c0392b; -fx-padding: 2 8;"
+                    style = ActionVariant.DANGER.cssStyle + " -fx-cursor: hand; -fx-padding: 2 8;"
                     tooltip = Tooltip("清空该用途的全部声明，使其变回未声明状态")
                     setOnAction { clearDeclaration(draft.tagId) }
                 }
                 children.addAll(btnEdit, btnRemove)
             } else {
                 val btnDeclare = Button("声明").apply {
-                    style = "-fx-font-size: 11px; -fx-cursor: hand; -fx-background-color: #27ae60; -fx-text-fill: white; -fx-padding: 2 8;"
+                    style = ActionVariant.SUCCESS.cssStyle + " -fx-cursor: hand; -fx-padding: 2 8;"
                     tooltip = Tooltip("激活并配置该用途的策略声明")
                     setOnAction { openEditor(draft.tagId) }
                 }
