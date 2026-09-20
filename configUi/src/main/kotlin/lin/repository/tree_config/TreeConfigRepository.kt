@@ -23,7 +23,7 @@ class TreeConfigRepository(private val jdbcTemplate: JdbcTemplate) {
         """.trimIndent()
         jdbcTemplate.execute(treeConfigTable)
         // 表结构改动不编码进 repository 运行时 ALTER（见 sqlite-schema-migration skill）：
-        // 旧库迁移走独立脚本 docs/sql/migrations/*.sql，此处只保证新库建表结构正确。
+        // 旧库升级由人工备份后用 sqlite3 执行 ALTER，此处只保证新库建表结构正确。
 
         val leafConfigTable = """
             CREATE TABLE IF NOT EXISTS evaluator_leaf_config (

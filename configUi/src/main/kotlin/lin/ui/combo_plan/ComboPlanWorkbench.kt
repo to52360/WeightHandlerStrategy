@@ -22,7 +22,7 @@ import org.koin.core.component.inject
 
 class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
-    private var managerListener: javafx.beans.value.ChangeListener<in CardManagerEntity?>? = null
+    private var managerListener: ChangeListener<in CardManagerEntity?>? = null
 
     private val repository: ComboPlanDefinitionRepository by inject()
     private val cardGroupService: CardGroupService by inject()
@@ -34,8 +34,16 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
     private val obsPlans = FXCollections.observableArrayList<ComboPlanDefinition>()
     private val searchField = TextField()
 
-    // 右侧卡片式编辑器封装组件
-    private val editor = ComboPlanEditor()
+    // 右侧卡片式编辑器封装组件（保存/删除回调构造注入，杜绝 late-set 可空回调）
+    private val editor = ComboPlanEditor(
+        onSave = { form ->
+            store.savePlan(form)
+            isCreatingMode = false
+        },
+        onDelete = { id ->
+            store.deletePlan(id)
+        }
+    )
 
     private var isUpdatingFromState = false
     private var isCreatingMode = false
@@ -85,18 +93,6 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
         VBox.setVgrow(tableView, Priority.ALWAYS)
         leftPanel.children.addAll(toolBar, tableView)
-
-        // =====================================================================
-        // 2. 右侧编辑器交互回调绑定
-        // =====================================================================
-        editor.onSave = { form ->
-            store.savePlan(form)
-            isCreatingMode = false
-        }
-
-        editor.onDelete = { id ->
-            store.deletePlan(id)
-        }
 
         // 左右调整 SplitPane 整合
         this.items.addAll(leftPanel, editor)

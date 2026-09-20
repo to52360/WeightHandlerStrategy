@@ -18,8 +18,8 @@ class AuraBoostRepository(private val jdbcTemplate: JdbcTemplate) {
                 score REAL NOT NULL,
                 manager_id TEXT,
                 -- T-SR-012（open-questions Q-OQ-002）：启用开关。0 = 留库但不进引擎（临时停用）。
-                -- 迁移脚本见 docs/sql/migrations/2026-09-09_t-sr-012_add_aura_boost_enabled.sql
-                -- （CREATE TABLE IF NOT EXISTS 不迁移旧表，旧库必须跑脚本）
+                -- 旧库加列由人工备份后用 sqlite3 执行 ALTER
+                -- （CREATE TABLE IF NOT EXISTS 不迁移旧表）
                 enabled INTEGER NOT NULL DEFAULT 1
             );
         """.trimIndent()

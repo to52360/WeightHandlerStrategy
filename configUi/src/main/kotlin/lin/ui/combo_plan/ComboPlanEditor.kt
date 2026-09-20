@@ -2,7 +2,6 @@ package lin.ui.combo_plan
 
 import javafx.geometry.Insets
 import javafx.scene.control.Alert
-import javafx.scene.control.Button
 import javafx.scene.control.ButtonType
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.ComboPlanDefinition
@@ -13,12 +12,13 @@ import lin.ui.GroupDisplay
 import lin.ui.WorkbenchNavigator
 import lin.ui.card_group.CardGroupExtension
 import lin.ui.card_group.components.CardGroupCapabilities
-import lin.ui.components.action.ActionVariant
+import lin.ui.components.action.EditingOnlyAction
+import lin.ui.components.action.EditorActionBar
+import lin.ui.components.action.MutationAction
 import lin.ui.components.action.ResourcePickerBar
 import lin.ui.components.form.*
 import lin.ui.components.layout.SectionTitle
 import lin.ui.components.layout.applyEditorContainerStyle
-import lin.ui.components.layout.applyPrimaryAction
 import lin.ui.components.state.EditorHeaderBar
 import lin.ui.components.state.EditorState
 import lin.ui.components.table.RoleColumnSpec
@@ -27,8 +27,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class ComboPlanEditor(
-    var onSave: ((form: ComboPlanFormSnapshot) -> Unit)? = null,
-    var onDelete: ((id: String) -> Unit)? = null
+    private val onSave: (form: ComboPlanFormSnapshot) -> Unit,
+    private val onDelete: (id: String) -> Unit
 ) : VBox(12.0), KoinComponent {
 
     private val navigator: WorkbenchNavigator by inject()
@@ -123,9 +123,14 @@ class ComboPlanEditor(
         )
     )
 
-    // 保存和删除按钮
-    private val btnSave = Button("保存编排")
-    private val btnDelete = Button("删除编排")
+    // 编辑器动作栏：保存/删除以动作值声明，渲染与禁用/显隐由 EditorActionBar 多态编排
+    private val actionBar = EditorActionBar(
+        stateProperty = headerBar.stateProperty,
+        actions = listOf(
+            MutationAction(label = "保存编排") { performSave() },
+            EditingOnlyAction(label = "删除编排") { performDelete() }
+        )
+    )
 
     init {
         padding = Insets(15.0)
@@ -162,24 +167,16 @@ class ComboPlanEditor(
             )
         }
 
-        // 动作按钮区域（通过样式令牌标准化，消灭内联 CSS 字符串）
-        btnSave.applyPrimaryAction(ActionVariant.SUCCESS) { performSave() }
-        btnDelete.applyPrimaryAction(ActionVariant.DANGER) { performDelete() }
-
-        // 声明式状态联动：内容禁用与删除按钮显隐完全由状态机驱动
+        // 声明式状态联动：内容区禁用由状态机驱动（按钮禁用/显隐由 actionBar 内部多态编排）
         editorBox.disableProperty().bind(headerBar.isEditingDisabled)
-        btnDelete.visibleProperty().bind(headerBar.isDeleteVisible)
-        btnDelete.managedProperty().bind(btnDelete.visibleProperty())
 
         editorBox.children.addAll(
             selectorContainer,
             tableContainer,
-            paramForm,
-            btnSave,
-            btnDelete
+            paramForm
         )
 
-        children.addAll(headerBar, editorBox)
+        children.addAll(headerBar, editorBox, actionBar)
     }
 
     /**
@@ -298,7 +295,7 @@ class ComboPlanEditor(
         }
 
         val id = if (isCreating) null else currentPlan?.id
-        onSave?.invoke(
+        onSave(
             ComboPlanFormSnapshot(
                 managerId = managerId,
                 id = id,
@@ -326,7 +323,7 @@ class ComboPlanEditor(
         )
         confirm.showAndWait()
         if (confirm.result == ButtonType.YES) {
-            onDelete?.invoke(plan.id)
+            onDelete(plan.id)
         }
     }
 }

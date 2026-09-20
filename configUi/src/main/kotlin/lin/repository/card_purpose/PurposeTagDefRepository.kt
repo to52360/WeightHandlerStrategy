@@ -35,7 +35,7 @@ data class PurposeTagDefEntity(
  * 此前定义硬编码在 `DefaultPurposeTagProvider`，自定义标记无处登记；落库后白名单随之可增长。
  * 「可声明作用」候选集的**单一候选源**见 [declarableTagIds]（D-DP-004）。
  * 表结构改动不编码进 repository 运行时 ALTER（见 sqlite-schema-migration skill）：
- * 旧库迁移走 docs/sql/migrations 下的迁移脚本，此处只保证新库建表与内置种子。
+ * 旧库升级由人工备份后用 sqlite3 执行 ALTER，此处只保证新库建表与内置种子。
  * （注意：KDoc 内勿写连续的斜杠星号，Kotlin 块注释可嵌套，会吞掉后续代码。）
  */
 class PurposeTagDefRepository(private val jdbcTemplate: JdbcTemplate) {

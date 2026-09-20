@@ -106,7 +106,7 @@ data class DimensionItemEntity(
  *   仅靠 `scope` 区分（`PRESET` / `CARD_GROUP`），故不再各建一对表。
  *
  * 表结构改动不编码进 repository 运行时 ALTER（见 sqlite-schema-migration skill）：
- * 旧库迁移走 docs/sql/migrations 下的迁移脚本，此处只保证新库建表。
+ * 旧库升级由人工备份后用 sqlite3 执行 ALTER，此处只保证新库建表。
  */
 class StrategyPresetRepository(private val jdbcTemplate: JdbcTemplate) {
 

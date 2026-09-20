@@ -47,8 +47,8 @@ class CardGroupRepository(
             """.trimIndent()
         )
         // ⚠️ 存量库不会因 CREATE TABLE IF NOT EXISTS 而加列。
-        //    旧库升级需手动执行 docs/sql/migrations/ 下的迁移脚本（用 sqlite3 CLI），
-        //    不要在此处写自动 ALTER——迁移的时机与验证应留在人工可控的脚本里。
+        //    旧库升级需先备份，再用 sqlite3 CLI 手动执行 ALTER，
+        //    不要在此处写自动 ALTER——迁移的时机与验证应留在人工可控的操作里。
     }
 
     // ─────────────────────── Manager CRUD ──────────────────────────────────

@@ -27,7 +27,7 @@ data class PurposeTagRuleEntity(
  *
  * 与 [PurposeTagDefRepository] 的分工：定义表管「有哪些标记」，本表管「某些标记带来什么排序默认值」。
  * 表结构改动不编码进 repository 运行时 ALTER（见 sqlite-schema-migration skill）：
- * 旧库迁移走 docs/sql/migrations 下的迁移脚本，此处只保证新库建表与内置种子。
+ * 旧库升级由人工备份后用 sqlite3 执行 ALTER，此处只保证新库建表与内置种子。
  */
 class PurposeTagRuleRepository(private val jdbcTemplate: JdbcTemplate) {
 

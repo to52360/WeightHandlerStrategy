@@ -161,7 +161,7 @@ class CardGroupMembershipRoundTripTest {
      *
      * 这是迁移的正确性保证：`member_type` 列带 `NOT NULL DEFAULT 'STATIC'`，
      * 存量行自动落在默认值上，行为与迁移前完全一致。
-     * ⚠️ 存量库加列需手动执行 docs/sql/migrations/2026-08-31_t001_group_membership.sql，
+     * ⚠️ 存量库加列需先备份再用 sqlite3 手动执行 ALTER，
      * 代码不做自动 ALTER——故本用例用「已迁移的表结构 + 存量数据行」来锁定这个保证。
      */
     @Test
