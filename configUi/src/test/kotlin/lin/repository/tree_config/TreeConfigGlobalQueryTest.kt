@@ -3,6 +3,7 @@ package lin.repository.tree_config
 import lin.mcp.McpTestEnv
 import lin.repository.card_group.CardGroupRepository
 import lin.repository.card_group.CardManagerEntity
+import lin.repository.card_group.PresetSaveInput
 import lin.repository.card_group.StrategyPresetRepository
 import lin.repository.card_group.StrategyPresetService
 import lin.ui.service.TreeConfigService
@@ -109,7 +110,7 @@ class TreeConfigGlobalQueryTest : McpTestEnv() {
 
     @Test
     fun `findManagersByPresetId 与 listPresets 引用聚合正确`() {
-        val preset = presetService.savePreset(null, "TG_REF_PRESET", null, null, null)
+        val preset = presetService.savePreset(PresetSaveInput(null, "TG_REF_PRESET", null))
         assertNotNull(preset)
         testPresetId = preset!!.presetId
 

@@ -117,12 +117,12 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
         )
 
         val saveErr = presetStore.savePreset(
-            presetId = null,
-            name = "E2E全流程预设",
-            description = "端到端联调测试预设",
-            treeSelections = treeSelections,
-            timings = timings,
-            surplus = surplus
+            PresetSaveInput(
+                presetId = null,
+                name = "E2E全流程预设",
+                description = "端到端联调测试预设",
+                declaration = PresetDeclaration(treeSelections, timings, surplus, auraSelection = emptySet())
+            )
         )
         assertNull("保存预设成功", saveErr)
 
@@ -195,8 +195,8 @@ class PresetUiEndToEndWorkflowTest : McpTestEnv() {
         assertTrue("解除后引用计数应为 0", refsAfterUnlink.isEmpty())
 
         // 7. 预设工作台：执行物理删除（D-TG-016）
-        val deletedPreset = presetStore.deletePreset(presetId)
-        assertNotNull("预设删除成功", deletedPreset)
+        val deleteError = presetStore.deletePreset(presetId)
+        assertNull("预设删除成功", deleteError)
 
         val deletedDetail = presetService.findDetail(presetId)
         assertNull("预设已从数据库中物理删除", deletedDetail)

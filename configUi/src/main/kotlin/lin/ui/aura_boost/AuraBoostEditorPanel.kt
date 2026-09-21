@@ -9,30 +9,29 @@ import javafx.scene.layout.VBox
 import lin.repository.aura_boost.AuraBoostEntity
 import lin.repository.aura_boost.SaveAuraBoostInput
 import lin.repository.card_group.CardManagerEntity
+import lin.ui.components.action.ActionCondition
+import lin.ui.components.action.ActionVariant
+import lin.ui.components.action.EditorAction
+import lin.ui.components.action.EditorActionBar
+import lin.ui.components.action.InlineActionPresenter
 import lin.ui.components.action.ResourcePickerBar
 import lin.ui.components.layout.asConfigCard
+import lin.ui.components.state.EditorHeaderBar
+import lin.ui.components.state.EditorPhase
+import lin.ui.components.state.EditorState
 import lin.ui.condition_tree.components.ConditionTreeCapabilities
 import lin.ui.condition_tree.components.ConditionTreeOption
 import lin.ui.condition_tree.components.selectTreeId
 import lin.ui.condition_tree.components.selectedTreeId
 
-class AuraBoostEditorPanel : ScrollPane() {
+class AuraBoostEditorPanel(
+    private val onSave: (SaveAuraBoostInput) -> Unit,
+    private val onDelete: (String) -> Unit,
+    private val onRefreshTreesRequested: () -> Unit
+) : ScrollPane() {
 
-    var onSave: ((SaveAuraBoostInput) -> Unit)? = null
-    var onDelete: ((String) -> Unit)? = null
-    var onRefreshTreesRequested: (() -> Unit)? = null
-
-    // 状态保持
-    private var currentEntityId: String? = null
-
-    // UI Controls
-    private val titleLabel = Label("AuraBoost 配置详情").apply {
-        style = "-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;"
-    }
-    private val statusBadge = Label("请选择或新建配置").apply {
-        style =
-            "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-size: 11px;"
-    }
+    // 声明式状态标题栏：标题与徽标由 EditorState 相位驱动（不再手工 setStatusBadge；左对齐沿用原头部布局）
+    private val headerBar = EditorHeaderBar<AuraBoostEntity>(isCentered = false)
 
     private val idValueLabel = Label("(自动生成)").apply {
         style = "-fx-font-family: monospace; -fx-font-weight: bold; -fx-text-fill: #495057;"
@@ -47,7 +46,7 @@ class AuraBoostEditorPanel : ScrollPane() {
         promptText = "选择触发条件树...",
         capabilities = ConditionTreeCapabilities.defaultSet(
             managerIdProvider = { getCurrentManagerId() },
-            onRefreshRequested = { onRefreshTreesRequested?.invoke() }
+            onRefreshRequested = { onRefreshTreesRequested() }
         )
     )
 
@@ -56,7 +55,7 @@ class AuraBoostEditorPanel : ScrollPane() {
         promptText = "选择受益过滤条件树...",
         capabilities = ConditionTreeCapabilities.defaultSet(
             managerIdProvider = { getCurrentManagerId() },
-            onRefreshRequested = { onRefreshTreesRequested?.invoke() }
+            onRefreshRequested = { onRefreshTreesRequested() }
         )
     )
 
@@ -66,13 +65,27 @@ class AuraBoostEditorPanel : ScrollPane() {
         prefWidth = 120.0
     }
 
-    private val btnSave = Button("保存配置").apply {
-        style = "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 6 16;"
-    }
-    private val btnDelete = Button("删除配置").apply {
-        style = "-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 6 16;"
-        isDisable = true
-    }
+    // 编辑器动作栏：可用/可见由 EditorState 相位声明；横排右对齐以沿用原「卡片右下角」布局
+    private val actionBar = EditorActionBar(
+        stateProperty = headerBar.stateProperty,
+        presenter = InlineActionPresenter(alignment = Pos.CENTER_RIGHT),
+        actions = listOf(
+            // 原散装 btnSave 从未被禁用（含空态）⇒ 声明为「恒定可用」
+            EditorAction(
+                label = "保存配置",
+                variant = ActionVariant.SUCCESS,
+                enabledWhen = listOf(ActionCondition.Always),
+                handle = { handleSave() }
+            ),
+            // 原散装 btnDelete 仅编辑态可用、三态恒可见（灰着不消失）⇒ 可用条件收窄相位，可见条件缺省=恒可见
+            EditorAction(
+                label = "删除配置",
+                variant = ActionVariant.DANGER,
+                enabledWhen = listOf(ActionCondition.Phases(setOf(EditorPhase.EDITING))),
+                handle = { handleDelete() }
+            )
+        )
+    )
 
     private val contentBox = VBox(14.0)
 
@@ -83,7 +96,7 @@ class AuraBoostEditorPanel : ScrollPane() {
         contentBox.apply {
             padding = Insets(16.0)
             children.addAll(
-                buildHeaderBlock(),
+                headerBar,
                 buildBaseInfoCard(),
                 triggerPicker.asConfigCard(
                     title = "1. 触发条件树 (Condition Tree)",
@@ -93,20 +106,11 @@ class AuraBoostEditorPanel : ScrollPane() {
                     title = "2. 受益过滤条件树 (Target Condition Tree)",
                     description = "触发后，符合此条件树过滤的候选卡牌将获得额外加分（例如：法术且 cost ≤ 2）。"
                 ),
-                buildScoreAndActionCard()
+                buildScoreCard()
             )
         }
 
         content = contentBox
-
-        setupButtonActions()
-    }
-
-    private fun buildHeaderBlock(): HBox {
-        return HBox(12.0).apply {
-            alignment = Pos.CENTER_LEFT
-            children.addAll(titleLabel, statusBadge)
-        }
     }
 
     private fun buildBaseInfoCard(): VBox {
@@ -149,7 +153,7 @@ class AuraBoostEditorPanel : ScrollPane() {
         return grid
     }
 
-    private fun buildScoreAndActionCard(): VBox {
+    private fun buildScoreCard(): VBox {
         return VBox(12.0).apply {
             padding = Insets(12.0)
             style =
@@ -171,11 +175,6 @@ class AuraBoostEditorPanel : ScrollPane() {
                 style = "-fx-text-fill: #0d6efd; -fx-font-size: 11px;"
             }
 
-            val btnRow = HBox(12.0).apply {
-                alignment = Pos.CENTER_RIGHT
-                children.addAll(btnDelete, btnSave)
-            }
-
             children.addAll(
                 Label("广播评分与操作").apply {
                     style = "-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #495057;"
@@ -183,14 +182,9 @@ class AuraBoostEditorPanel : ScrollPane() {
                 scoreRow,
                 tipLabel,
                 Separator(),
-                btnRow
+                actionBar
             )
         }
-    }
-
-    private fun setupButtonActions() {
-        btnSave.setOnAction { handleSave() }
-        btnDelete.setOnAction { handleDelete() }
     }
 
     private fun handleSave() {
@@ -219,14 +213,15 @@ class AuraBoostEditorPanel : ScrollPane() {
             targetConditionId = targetCid,
             score = score,
             managerId = managerId,
-            existingId = currentEntityId
+            // 新建 or 更新由状态机相位决定（不再是面板自持的 id 副本）
+            existingId = (headerBar.state as? EditorState.Editing)?.entity?.id
         )
 
-        onSave?.invoke(input)
+        onSave(input)
     }
 
     private fun handleDelete() {
-        val id = currentEntityId ?: return
+        val id = (headerBar.state as? EditorState.Editing)?.entity?.id ?: return
         val alert = Alert(
             Alert.AlertType.CONFIRMATION,
             "确定要删除 AuraBoost 配置 [$id] 吗？此操作不可撤销。",
@@ -236,7 +231,7 @@ class AuraBoostEditorPanel : ScrollPane() {
         alert.headerText = "删除确认"
         alert.showAndWait().ifPresent { bt ->
             if (bt == ButtonType.YES) {
-                onDelete?.invoke(id)
+                onDelete(id)
             }
         }
     }
@@ -276,58 +271,60 @@ class AuraBoostEditorPanel : ScrollPane() {
         syncConditionTrees(treeOptions)
     }
 
-    fun loadEntity(
+    /**
+     * 按 [EditorState] 相位渲染编辑器（标题 / 徽标 / 表单内容 / 动作可用性）。
+     *
+     * ⚠️ 调用方（Workbench）须**仅在相位或实体变化时**调用——本方法是**过渡渲染**而非幂等重绘：
+     * 同相位重复调用会覆盖用户正在输入的草稿（新建态输到一半被左侧筛选刷新清掉）。
+     */
+    fun render(
+        state: EditorState<AuraBoostEntity>,
+        managers: List<CardManagerEntity>,
+        treeOptions: List<ConditionTreeOption>,
+        defaultManagerId: String?
+    ) {
+        headerBar.state = state
+        when (state) {
+            is EditorState.Empty -> applyEmpty()
+            is EditorState.Creating -> applyCreating(managers, treeOptions, defaultManagerId)
+            is EditorState.Editing -> applyEditing(state.entity, managers, treeOptions)
+        }
+    }
+
+    private fun applyEditing(
         entity: AuraBoostEntity,
         managers: List<CardManagerEntity>,
         treeOptions: List<ConditionTreeOption>
     ) {
-        currentEntityId = entity.id
-        setStatusBadge("编辑 ID: [${entity.id}]", "#0d6efd")
         idValueLabel.text = entity.id
-
         nameField.text = entity.name ?: ""
         scoreField.text = entity.score.toString()
-        btnDelete.isDisable = false
 
         syncEditorContext(managers, treeOptions, entity.managerId)
         triggerPicker.selectTreeId(entity.conditionId)
         targetPicker.selectTreeId(entity.targetConditionId)
     }
 
-    fun enterCreatingMode(
+    private fun applyCreating(
         managers: List<CardManagerEntity>,
-        defaultManagerIdSnapshot: String?,
-        treeOptions: List<ConditionTreeOption>
+        treeOptions: List<ConditionTreeOption>,
+        defaultManagerId: String?
     ) {
-        currentEntityId = null
-        setStatusBadge("新建模式", "#198754")
         idValueLabel.text = "(自动生成 8 位短 ID)"
-
         nameField.clear()
         scoreField.clear()
-        btnDelete.isDisable = true
 
-        syncEditorContext(managers, treeOptions, defaultManagerIdSnapshot)
+        syncEditorContext(managers, treeOptions, defaultManagerId)
         triggerPicker.clearSelection()
         targetPicker.clearSelection()
     }
 
-    fun clearEditor() {
-        currentEntityId = null
-        setStatusBadge("未选择配置", "#6c757d")
+    private fun applyEmpty() {
         idValueLabel.text = "-"
-
         nameField.clear()
         scoreField.clear()
-        btnDelete.isDisable = true
 
         triggerPicker.clearSelection()
         targetPicker.clearSelection()
-    }
-
-    private fun setStatusBadge(text: String, bgColor: String) {
-        statusBadge.text = text
-        statusBadge.style =
-            "-fx-background-color: $bgColor; -fx-text-fill: white; -fx-padding: 3 8; -fx-background-radius: 10; -fx-font-size: 11px;"
     }
 }

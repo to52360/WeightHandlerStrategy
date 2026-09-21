@@ -2,11 +2,12 @@ package lin.ui.strategy_preset
 
 import javafx.beans.property.ReadOnlyObjectProperty
 import javafx.beans.property.SimpleObjectProperty
+import lin.repository.card_group.PresetDetail
+import lin.repository.card_group.PresetSaveInput
 import lin.repository.card_group.PresetSummary
 import lin.repository.card_group.StrategyPresetService
-import lin.repository.card_group.SurplusOverride
-import lin.repository.card_group.TimingOverride
 import lin.ui.card_group.ActiveManagerHolder
+import lin.ui.components.state.EditorState
 import lin.ui.service.PresetCatalogLoader
 
 /**
@@ -112,46 +113,34 @@ class StrategyPresetStore(
     }
 
     /**
-     * 保存预设元数据（新建或重命名/修改描述）。
-     *
-     * ⚠️ treeSelections 与 timings 传 null，表示保留已有维度项不变（只更新名称与描述）。
+     * 仅保存预设元数据（新建 / 重命名 / 改描述），维度保持不变。
      *
      * @return 错误信息；null 表示保存成功
      */
     fun savePresetMetadata(presetId: String?, name: String, description: String?): String? =
-        savePreset(presetId, name, description, treeSelections = null, timings = null)
+        savePreset(PresetSaveInput(presetId, name, description))
 
     /**
-     * 保存完整预设（含元数据、树白名单、时序声明与惜售声明）。
+     * 保存预设（元数据 + 可选的策略声明四维度）。
      *
-     * ⚠️ 整体替换语义（StrategyPresetService 契约）：
-     * 各维度传 null 表示不修改；非 null 时按当前传入的内容整体替换。
+     * ⚠️ 整体替换语义（[StrategyPresetService.savePreset] 契约）：
+     * [PresetSaveInput.declaration] 传 null 表示不修改维度；非 null 时按传入内容整体替换。
      *
-     * @param surplus T-TG-029 惜售维度（独立于 timings）
      * @return 错误信息；null 表示保存成功
      */
-    fun savePreset(
-        presetId: String?,
-        name: String,
-        description: String?,
-        treeSelections: Map<String, Collection<String>>?,
-        timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>? = null,
-        auraSelection: Set<String>? = null
-    ): String? {
-        val cleanName = name.trim()
+    fun savePreset(input: PresetSaveInput): String? {
+        val cleanName = input.name.trim()
         if (cleanName.isBlank()) return "预设名称不能为空"
         if (cleanName.length > 60) return "预设名称过长（最多 60 字符）"
 
-        val targetId = presetId?.trim()?.takeIf { it.isNotBlank() }
+        val targetId = input.presetId?.trim()?.takeIf { it.isNotBlank() }
         val result = service.savePreset(
-            presetId = targetId,
-            name = cleanName,
-            description = description?.trim()?.takeIf { it.isNotBlank() },
-            treeSelections = treeSelections,
-            timings = timings,
-            surplus = surplus,
-            auraSelection = auraSelection
+            PresetSaveInput(
+                presetId = targetId,
+                name = cleanName,
+                description = input.description?.trim()?.takeIf { it.isNotBlank() },
+                declaration = input.declaration
+            )
         ) ?: return "更新失败：预设不存在 ($targetId)"
 
         // 保存成功后刷新数据并选中该预设
@@ -187,17 +176,45 @@ class StrategyPresetStore(
     }
 
     /**
-     * 删除预设（UI 层面在调用前已完成是否有引用的阻断拦截）。
+     * 删除预设。
+     *
+     * ⚠️ **引用守卫在此处（权威判据）**：仍被卡组引用时拒绝并返回原因文案。
+     * 原实现把这道守卫留在 UI 面板，是唯一防线——一旦某入口遗漏即静默删除被引用预设，
+     * 故下沉到 Store 单点（与 `savePreset` / `clonePreset` 同风格：返回错误文案，null = 成功）。
      *
      * ⚠️ D-TG-016 裁定：UI 删除是用户自主意图操作，直接物理删除不落快照（不可恢复）。
+     *
+     * @return 错误信息；null 表示删除成功
      */
-    fun deletePreset(presetId: String): Boolean {
-        val deleted = service.deletePreset(presetId) != null
-        if (deleted) {
-            stateProperty.set(state.copy(selectedPresetId = null, selectedDetail = null))
-            loadInitialData()
+    fun deletePreset(presetId: String): String? {
+        val references = service.findReferences(presetId)
+        if (references.isNotEmpty()) {
+            val refInfo = references.joinToString("\n") { "• ${it.managerName} (id: ${it.managerId})" }
+            return "该策略预设正被以下 ${references.size} 个卡组引用，已被系统阻断：\n\n$refInfo\n\n" +
+                    "请先前往「卡组分组管理」解除这些卡组的预设引用后重试。"
         }
-        return deleted
+
+        service.deletePreset(presetId)
+        stateProperty.set(state.copy(selectedPresetId = null, selectedDetail = null, isCreating = false))
+        loadInitialData()
+        return null
+    }
+
+    /**
+     * 编辑器状态（**单一事实源**）：标题 / 徽标 / 动作可用性全部由它驱动。
+     */
+    fun editorState(): EditorState<PresetDetail> {
+        val current = state
+        val detail = current.selectedDetail
+        return when {
+            current.isCreating -> EditorState.Creating("新建策略预设")
+            detail != null -> EditorState.Editing(
+                entity = detail,
+                title = "编辑策略预设",
+                badge = detail.preset.id
+            )
+            else -> EditorState.Empty("请在左侧选择或新建预设")
+        }
     }
 
     private fun filterPresets(presets: List<PresetSummary>, search: String): List<PresetSummary> {

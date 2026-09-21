@@ -16,6 +16,7 @@ import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.ActiveAware
 import lin.ui.GroupDisplay
 import lin.ui.card_group.ActiveManagerHolder
+import lin.ui.components.state.EditorStateTransition
 import lin.utils.addColumn
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -36,17 +37,26 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
 
     // 右侧卡片式编辑器封装组件（保存/删除回调构造注入，杜绝 late-set 可空回调）
     private val editor = ComboPlanEditor(
-        onSave = { form ->
-            store.savePlan(form)
-            isCreatingMode = false
-        },
-        onDelete = { id ->
-            store.deletePlan(id)
-        }
+        onSave = { form -> store.savePlan(form) },
+        onDelete = { id -> store.deletePlan(id) }
     )
 
-    private var isUpdatingFromState = false
-    private var isCreatingMode = false
+    /**
+     * 编辑器状态过渡器：状态变化才推送（不打断用户草稿），用户主动「新建」时 `force` 重置草稿。
+     *
+     * 机制单点在 `EditorStateTransition`（`D-DC-005`），工作台不自行比较快照。
+     */
+    private val editorTransition = EditorStateTransition(
+        stateProvider = { store.editorState() },
+        onTransition = { state ->
+            editor.render(
+                state = state,
+                allManagers = store.state.allManagers,
+                bindingMap = store.state.bindingMap,
+                defaultManagerId = activeManagerHolder.activeManagerId
+            )
+        }
+    )
 
     init {
         // =====================================================================
@@ -102,61 +112,47 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
         // 3. 事件绑定与状态驱动
         // =====================================================================
 
-        // 表格行选择改变监听
+        // 表格行选择改变监听（幂等回环防护：状态层已是该编排时不再回设，替代原 isUpdatingFromState 抑制）
         tableView.selectionModel.selectedItemProperty().addListener { _, _, selection ->
-            if (!isUpdatingFromState) {
-                isCreatingMode = false
+            if (selection != store.state.selectedPlan) {
                 store.selectPlan(selection)
             }
         }
 
         // 搜索栏内存模糊检索
         searchField.textProperty().addListener { _, _, text ->
-            store.updateFilters(text)
+            if (text.trim() != store.state.searchText) {
+                store.updateFilters(text)
+            }
         }
 
         // 响应状态层更新驱动 UI 刷新
         store.stateProperty().addListener { _, oldState, newState ->
-            isUpdatingFromState = true
-            try {
-                // A. 同步编辑器可用的卡组下拉选项列表
-                if (oldState.allManagers != newState.allManagers) {
-                    editor.syncAllManagers(newState.allManagers)
-                }
-
-                // B. 同步左侧表格源列表
-                if (oldState.filteredPlans != newState.filteredPlans) {
-                    obsPlans.setAll(newState.filteredPlans)
-                }
-
-                // C. 同步双向表格选中行
-                val currentSelection = tableView.selectionModel.selectedItem
-                if (newState.selectedPlan != currentSelection) {
-                    if (newState.selectedPlan == null) {
-                        if (!isCreatingMode) {
-                            tableView.selectionModel.clearSelection()
-                        }
-                    } else {
-                        val index = tableView.items.indexOfFirst { it.id == newState.selectedPlan.id }
-                        if (index >= 0) {
-                            tableView.selectionModel.select(index)
-                        }
-                    }
-                }
-
-                // D. 驱动编辑器数据绑定更新
-                val selectedPlan = newState.selectedPlan
-                if (selectedPlan == null) {
-                    if (!isCreatingMode) {
-                        editor.clearEditor()
-                    }
-                } else {
-                    isCreatingMode = false
-                    editor.loadPlan(selectedPlan, newState.allManagers, newState.bindingMap)
-                }
-            } finally {
-                isUpdatingFromState = false
+            // A. 同步编辑器可用的卡组下拉选项列表
+            if (oldState.allManagers != newState.allManagers) {
+                editor.syncAllManagers(newState.allManagers)
             }
+
+            // B. 同步左侧表格源列表
+            if (oldState.filteredPlans != newState.filteredPlans) {
+                obsPlans.setAll(newState.filteredPlans)
+            }
+
+            // C. 同步双向表格选中行
+            val currentSelection = tableView.selectionModel.selectedItem
+            if (newState.selectedPlan != currentSelection) {
+                if (newState.selectedPlan == null) {
+                    tableView.selectionModel.clearSelection()
+                } else {
+                    val index = tableView.items.indexOfFirst { it.id == newState.selectedPlan.id }
+                    if (index >= 0) {
+                        tableView.selectionModel.select(index)
+                    }
+                }
+            }
+
+            // D. 驱动编辑器：状态机 = store 单一事实源，仅相位/实体变化时过渡渲染（不打断草稿）
+            editorTransition.sync()
         }
 
     }
@@ -178,16 +174,11 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
      * 进入新建 Combo 编排模式，清空表单项以备录入
      */
     private fun enterCreatingMode() {
-        isCreatingMode = true
-        tableView.selectionModel.clearSelection()
-        store.selectPlan(null)
-        val managerIdSnapshot = activeManagerHolder.activeManagerId
-        editor.enterCreatingMode(store.state.allManagers, managerIdSnapshot)
+        store.enterCreatingMode()
+        // 用户主动点击「新建」= 显式重置草稿（sync 会因相位未变而幂等跳过，故走意图通道）
+        editorTransition.force()
     }
 
-    /**
-     * 高内聚抽取：用于渲染分组 ID 集合到前台可读中文名称列表的表格列工厂
-     */
     /**
      * 高内聚抽取：用于渲染分组 ID 集合到前台可读中文名称列表的表格列工厂扩展
      */

@@ -1,6 +1,8 @@
 package lin.ui.strategy_preset
 
 import lin.mcp.McpTestEnv
+import lin.repository.card_group.PresetDeclaration
+import lin.repository.card_group.PresetSaveInput
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.ThresholdPatch
@@ -91,7 +93,14 @@ class StrategyPresetEditorTest : McpTestEnv() {
         )
 
         // 1. 新建完整预设
-        val err = store.savePreset(null, "TG_FULL_PRESET", "完整预设测试", treeSelections, timings, surplus)
+        val err = store.savePreset(
+            PresetSaveInput(
+                presetId = null,
+                name = "TG_FULL_PRESET",
+                description = "完整预设测试",
+                declaration = PresetDeclaration(treeSelections, timings, surplus, auraSelection = emptySet())
+            )
+        )
         assertNull("保存应成功", err)
         val presetId = store.state.selectedPresetId
         assertNotNull(presetId)
@@ -122,7 +131,14 @@ class StrategyPresetEditorTest : McpTestEnv() {
 
     @Test
     fun `空预设整体保存合法且树项数为0`() {
-        val err = store.savePreset(null, "TG_EMPTY_PRESET", "空预设测试", emptyMap(), emptyMap())
+        val err = store.savePreset(
+            PresetSaveInput(
+                presetId = null,
+                name = "TG_EMPTY_PRESET",
+                description = "空预设测试",
+                declaration = PresetDeclaration(emptyMap(), emptyMap(), emptyMap(), emptySet())
+            )
+        )
         assertNull("保存空预设应成功", err)
         val presetId = store.state.selectedPresetId
         assertNotNull(presetId)

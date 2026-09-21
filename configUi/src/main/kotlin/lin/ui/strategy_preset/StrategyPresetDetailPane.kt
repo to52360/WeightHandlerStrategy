@@ -5,9 +5,22 @@ import javafx.geometry.Pos
 import javafx.scene.control.*
 import javafx.scene.layout.*
 import lin.repository.card_group.PresetDetail
-import lin.repository.card_group.StrategyPresetService
-import lin.repository.card_group.SurplusOverride
-import lin.repository.card_group.TimingOverride
+import lin.repository.card_group.PresetReference
+import lin.repository.card_group.PresetSaveInput
+import lin.ui.components.action.ActionCondition
+import lin.ui.components.action.ActionDecoration
+import lin.ui.components.action.ActionVariant
+import lin.ui.components.action.EditorAction
+import lin.ui.components.action.EditorActionBar
+import lin.ui.components.action.InlineActionPresenter
+import lin.ui.components.state.EditorHeaderBar
+import lin.ui.components.state.EditorPhase
+import lin.ui.components.state.EditorState
+
+/** 仅编辑态成立（本面板三个「需预设已落库」动作共用）。 */
+private val EDITING_ONLY_PHASE = listOf(
+    ActionCondition.Phases(setOf(EditorPhase.EDITING))
+)
 
 /**
  * 策略预设画像与影响总览看板面板（T-TG-016 / T-TG-017 / T-TG-037 优化版）。
@@ -16,37 +29,74 @@ import lin.repository.card_group.TimingOverride
  * 1. 本面板作为「预设画像与全局影响面看板」，承载基础信息、规模指标、已生效用途流、禁用告警看板与引用拓扑；
  * 2. 5 列大表深度编辑迁入独立全景弹窗 [StrategyPresetConfigDialog]（880×620px 宽视窗），彻底解决右侧窄栏空间不足痛点；
  * 3. 基础信息（名称、描述）支持在面板就地快速保存；深度策略声明一键唤出弹窗全景沉浸配置。
+ *
+ * 编辑器状态（Empty / Creating / Editing）由 Store 单一事实源产出，面板通过 [render] 消费（过渡渲染语义）。
  */
 class StrategyPresetDetailPane(
-    private val service: StrategyPresetService
+    /** 读当前工作台状态（弹窗渲染数据 + 引用拓扑来源）；**只读取，不缓存**，避免第四份状态 */
+    private val presetStateProvider: () -> StrategyPresetState,
+    /** 保存预设：元数据 + 可选策略声明（`declaration` 为 null = 维度保持不变） */
+    private val onSavePreset: (input: PresetSaveInput) -> Unit,
+    /** 物理删除预设 */
+    private val onDeletePreset: (presetId: String) -> Unit,
+    /** 另存为新预设（fork 派生，D-TG-017）：源预设 id + 新名称 + 新描述 */
+    private val onClonePreset: (sourceId: String, name: String, description: String?) -> Unit
 ) : VBox(10.0) {
 
-    /** 保存预设（含元数据 + 树白名单 + 时序声明 + 惜售声明 + 光环白名单，各维度传 null 表示保持不变） */
-    var onSavePreset: ((
-        presetId: String?,
-        name: String,
-        description: String?,
-        treeSelections: Map<String, Collection<String>>?,
-        timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>?,
-        auraSelection: Set<String>?
-    ) -> Unit)? = null
+    // ── 头部（标题/徽标由 EditorState 相位驱动）──
+    private val headerBar = EditorHeaderBar<PresetDetail>(isCentered = false)
 
-    /** 物理删除预设 */
-    var onDeletePreset: ((presetId: String) -> Unit)? = null
+    /**
+     * 编辑器动作栏（四键）。
+     *
+     * ⚠️ 四键**全部恒可见**（禁用态灰着而非消失），故不声明 `visibleIn`；
+     * 「配置策略 / 另存为 / 删除」都要求已落库预设 ⇒ `enabledIn` 收窄到仅编辑态
+     * （新建态必须先「保存基本信息」拿到 presetId，方能挂维度项——领域约束）。
+     */
+    private val actionBar = EditorActionBar(
+        stateProperty = headerBar.stateProperty,
+        presenter = InlineActionPresenter(alignment = Pos.CENTER_LEFT),
+        actions = listOf(
+            EditorAction(
+                label = "配置策略...",
+                variant = ActionVariant.PRIMARY,
+                enabledWhen = EDITING_ONLY_PHASE,
+                decorations = listOf(
+                    ActionDecoration.TooltipText("打开全景弹窗配置用途声明（树白名单、出牌时序、惜售门槛）与全局光环白名单")
+                ),
+                handle = { handleOpenConfigDialog() }
+            ),
+            EditorAction(
+                label = "保存基本信息",
+                variant = ActionVariant.SUCCESS,
+                decorations = listOf(
+                    ActionDecoration.TooltipText("仅保存预设名称与描述修改，不改变策略声明")
+                ),
+                handle = { handleSaveBasic() }
+            ),
+            EditorAction(
+                label = "另存为新预设",
+                variant = ActionVariant.SECONDARY,
+                enabledWhen = EDITING_ONLY_PHASE,
+                decorations = listOf(
+                    ActionDecoration.TooltipText("复制当前预设的「树白名单 + 时序声明 + 惜售声明 + 光环」为一个新预设（fork）")
+                ),
+                handle = { handleClone() }
+            ),
+            EditorAction(
+                label = "删除预设",
+                variant = ActionVariant.DANGER,
+                // 领域守卫：仍被卡组引用时禁用（引用数据在 Store 状态里 ⇒ 需工作台调 refreshActions 触发重算）
+                enabledWhen = EDITING_ONLY_PHASE + ActionCondition.Guard { !isCurrentPresetReferenced() },
+                decorations = listOf(
+                    ActionDecoration.TooltipText("删除该预设；仍被卡组引用时不可删除（引用关系见下方「被引用卡组」看板）")
+                ),
+                handle = { handleDelete() }
+            )
+        )
+    )
 
-    /** 另存为新预设（fork 派生，D-TG-017）：源预设 id + 新名称 + 新描述 */
-    var onClonePreset: ((sourceId: String, name: String, description: String?) -> Unit)? = null
-
-    // ── 头部与元数据 ──
-    private val headerLabel = Label("策略预设详情").apply {
-        style = "-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;"
-    }
-
-    private val createdAtLabel = Label().apply {
-        style = "-fx-font-size: 11px; -fx-text-fill: #95a5a6;"
-    }
-
+    // ── 元数据输入项 ──
     private val txtId = TextField().apply {
         isEditable = false
         style = "-fx-background-color: #ecf0f1; -fx-text-fill: #7f8c8d;"
@@ -61,26 +111,6 @@ class StrategyPresetDetailPane(
     private val txtDescription = TextField().apply {
         promptText = "预设描述（可选）..."
         HBox.setHgrow(this, Priority.ALWAYS)
-    }
-
-    // ── 操作按钮栏 ──
-    private val btnOpenConfigDialog = Button("配置策略...").apply {
-        style = "-fx-background-color: #2980b9; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 10;"
-        tooltip = Tooltip("打开全景弹窗配置用途声明（树白名单、出牌时序、惜售门槛）与全局光环白名单")
-    }
-
-    private val btnSaveBasic = Button("保存基本信息").apply {
-        style = "-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 10;"
-        tooltip = Tooltip("仅保存预设名称与描述修改，不改变策略声明")
-    }
-
-    private val btnClone = Button("另存为新预设").apply {
-        style = "-fx-background-color: #16a085; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 10;"
-        tooltip = Tooltip("复制当前预设的「树白名单 + 时序声明 + 惜售声明 + 光环」为一个新预设（fork）")
-    }
-
-    private val btnDelete = Button("删除预设").apply {
-        style = "-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 4 10;"
     }
 
     // ── 1. 规模指标卡片区 ──
@@ -106,18 +136,12 @@ class StrategyPresetDetailPane(
         style = "-fx-border-color: #bdc3c7; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-padding: 8px;"
     }
 
-    // ── 状态暂存 ──
-    private var currentState: StrategyPresetState? = null
-    private var currentPresetDetail: PresetDetail? = null
-    private var isCreatingMode = false
+    private val createdAtLabel = Label().apply {
+        style = "-fx-font-size: 11px; -fx-text-fill: #95a5a6;"
+    }
 
     init {
         padding = Insets(10.0)
-
-        val headerBox = HBox(10.0).apply {
-            alignment = Pos.CENTER_LEFT
-            children.addAll(headerLabel, createdAtLabel)
-        }
 
         val metaGrid = GridPane().apply {
             hgap = 8.0
@@ -128,11 +152,8 @@ class StrategyPresetDetailPane(
             add(txtName, 3, 0)
             add(Label("描述:"), 0, 1)
             add(txtDescription, 1, 1, 3, 1)
-        }
-
-        val buttonBox = HBox(10.0).apply {
-            alignment = Pos.CENTER_LEFT
-            children.addAll(btnOpenConfigDialog, btnSaveBasic, btnClone, btnDelete)
+            add(Label("创建于:"), 0, 2)
+            add(createdAtLabel, 1, 2, 3, 1)
         }
 
         // 组装 4 项微型指标卡
@@ -160,9 +181,9 @@ class StrategyPresetDetailPane(
 
         val scrollContent = VBox(10.0).apply {
             children.addAll(
-                headerBox,
+                headerBar,
                 metaGrid,
-                buttonBox,
+                actionBar,
                 metricsBar,
                 declaredSection,
                 disabledPurposesBoard,
@@ -178,8 +199,9 @@ class StrategyPresetDetailPane(
 
         children.add(scrollPane)
 
-        setupListeners()
-        clearForm()
+        // 初始空态（首次状态发射会经 EditorStateTransition 触发正式过渡渲染）
+        headerBar.state = EditorState.Empty("请在左侧选择或新建预设")
+        renderEmpty()
     }
 
     private fun buildMetricCard(title: String, valueLabel: Label, desc: String): VBox = VBox(2.0).apply {
@@ -192,52 +214,35 @@ class StrategyPresetDetailPane(
         )
     }
 
-    private fun setupListeners() {
-        // 打开全景配置弹窗
-        btnOpenConfigDialog.setOnAction {
-            handleOpenConfigDialog()
-        }
+    // ── 编辑器动作处理（四键由 actionBar 按条件派发，可用性判定不再散落于此）──
 
-        // 保存基本信息（仅名称 + 描述）
-        btnSaveBasic.setOnAction {
-            handleSaveBasic()
-        }
+    private fun currentDetail(): PresetDetail? = (headerBar.state as? EditorState.Editing)?.entity
 
-        // 删除预设
-        btnDelete.setOnAction {
-            val presetId = currentPresetDetail?.preset?.id ?: return@setOnAction
-            handleDelete(presetId)
-        }
+    /** 供工作台在每次状态发射后触发按钮条件重算（删除键的领域守卫依据在 Store 状态里）。 */
+    fun refreshActions() = actionBar.refresh()
 
-        // 另存为新预设
-        btnClone.setOnAction {
-            val sourceId = currentPresetDetail?.preset?.id ?: return@setOnAction
-            handleClone(sourceId)
-        }
+    /** 当前预设是否仍被卡组引用（删除键守卫依据；每次求值现读 Store 状态，不缓存快照）。 */
+    private fun isCurrentPresetReferenced(): Boolean {
+        val presetId = currentDetail()?.preset?.id ?: return false
+        return presetStateProvider().allPresets
+            .find { it.preset.id == presetId }?.referencedBy.orEmpty().isNotEmpty()
     }
 
     private fun handleOpenConfigDialog() {
-        val detail = currentPresetDetail
-        val state = currentState
-        if (detail == null || state == null) {
-            if (isCreatingMode) {
-                showAlert(Alert.AlertType.INFORMATION, "提示", "新建预设请先在上方输入名称并点击「保存基本信息」，生成预设后再进入策略全景配置。")
-            }
-            return
-        }
+        val detail = currentDetail() ?: return
 
         val dialog = StrategyPresetConfigDialog(
             presetDetail = detail,
-            state = state,
-            onSave = { treeSelections, timings, surplus, auraSelection ->
-                onSavePreset?.invoke(
-                    detail.preset.id,
-                    txtName.text.trim().ifBlank { detail.preset.name },
-                    txtDescription.text.trim().takeIf { it.isNotBlank() },
-                    treeSelections,
-                    timings,
-                    surplus,
-                    auraSelection
+            // 弹窗渲染数据（候选树 / 时序规则 / 用途全集 / 光环候选）取自已加载状态，避免面板再缓存一份
+            state = presetStateProvider(),
+            onSave = { declaration ->
+                onSavePreset(
+                    PresetSaveInput(
+                        presetId = detail.preset.id,
+                        name = txtName.text.trim().ifBlank { detail.preset.name },
+                        description = txtDescription.text.trim().takeIf { it.isNotBlank() },
+                        declaration = declaration
+                    )
                 )
             }
         )
@@ -245,41 +250,37 @@ class StrategyPresetDetailPane(
     }
 
     private fun handleSaveBasic() {
-        val name = txtName.text.trim()
-        if (name.isBlank()) {
-            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称不能为空")
-            return
-        }
-        if (name.length > 60) {
-            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称过长（最多 60 字符）")
-            return
-        }
+        val name = validatedNameOrNull(txtName.text) ?: return
 
-        val currentId = currentPresetDetail?.preset?.id
-        // 仅保存基本信息时，各维度传 null 表示保留既有维度项
-        onSavePreset?.invoke(
-            currentId,
-            name,
-            txtDescription.text.trim().takeIf { it.isNotBlank() },
-            null,
-            null,
-            null,
-            null
+        // 仅保存基本信息：declaration 缺省 = 保留既有维度项；presetId 为 null = 新建（由状态机相位决定）
+        onSavePreset(
+            PresetSaveInput(
+                presetId = currentDetail()?.preset?.id,
+                name = name,
+                description = txtDescription.text.trim().takeIf { it.isNotBlank() }
+            )
         )
     }
 
-    private fun handleDelete(presetId: String) {
-        val references = service.findReferences(presetId)
-        if (references.isNotEmpty()) {
-            val refInfo = references.joinToString("\n") { "• ${it.managerName} (id: ${it.managerId})" }
-            showAlert(
-                Alert.AlertType.WARNING,
-                "无法删除预设",
-                "该策略预设正被以下 ${references.size} 个卡组引用，已被系统阻断：\n\n$refInfo\n\n请先前往「卡组分组管理」解除这些卡组的预设引用后重试。"
-            )
-            return
+    /** 预设名称校验（新增与派生共用）：通过返回 trim 后名称；不通过弹提示并返回 null。 */
+    private fun validatedNameOrNull(raw: String): String? {
+        val name = raw.trim()
+        if (name.isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称不能为空")
+            return null
         }
+        if (name.length > 60) {
+            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称过长（最多 60 字符）")
+            return null
+        }
+        return name
+    }
 
+    private fun handleDelete() {
+        val presetId = currentDetail()?.preset?.id ?: return
+
+        // ⚠️ 引用守卫的**权威判据在 Store**（删除前预检并返回错误文案），此处只做用户确认；
+        //    原实现把守卫留在 UI 是唯一防线，一旦遗漏即静默删除被引用预设。
         val confirm = Alert(Alert.AlertType.CONFIRMATION).apply {
             title = "确认删除策略预设"
             headerText = "确定要删除预设 [${txtName.text}] 吗？"
@@ -287,11 +288,13 @@ class StrategyPresetDetailPane(
         }.showAndWait()
 
         if (confirm.isPresent && confirm.get() == ButtonType.OK) {
-            onDeletePreset?.invoke(presetId)
+            onDeletePreset(presetId)
         }
     }
 
-    private fun handleClone(sourceId: String) {
+    private fun handleClone() {
+        val source = currentDetail() ?: return
+        val sourceId = source.preset.id
         val sourceName = txtName.text.trim().ifBlank { sourceId }
         val dialog = TextInputDialog("$sourceName-副本").apply {
             title = "另存为新预设"
@@ -303,72 +306,94 @@ class StrategyPresetDetailPane(
         dialog.editor.promptText = "新预设名称（必填，<= 60 字符）..."
 
         val input = dialog.showAndWait().orElse(null) ?: return
-        val name = input.trim()
-        if (name.isBlank()) {
-            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称不能为空")
-            return
-        }
-        if (name.length > 60) {
-            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称过长（最多 60 字符）")
-            return
-        }
+        val name = validatedNameOrNull(input) ?: return
 
-        onClonePreset?.invoke(sourceId, name, null)
+        onClonePreset(sourceId, name, null)
     }
 
-    /** 同步展示当前预设详情或新建状态 */
-    fun updateState(state: StrategyPresetState) {
-        currentState = state
-
-        if (state.isCreating) {
-            enterCreatingMode(state)
-            return
+    /**
+     * 按 [EditorState] 相位渲染面板。
+     *
+     * ⚠️ **过渡渲染**：调用方（Workbench）须仅在相位或实体变化时调用（见 `EditorStateTransition`），
+     * 同相位重复调用会覆盖用户正在输入的名称/描述草稿。
+     *
+     * @param state 工作台状态（指标看板、用途名、引用拓扑的渲染数据来源）
+     * @param editorState 编辑器相位状态（标题/徽标/动作可用性的单一事实源）
+     */
+    fun render(state: StrategyPresetState, editorState: EditorState<PresetDetail>) {
+        headerBar.state = editorState
+        when (editorState) {
+            is EditorState.Empty -> renderEmpty()
+            is EditorState.Creating -> renderCreating(state)
+            is EditorState.Editing -> renderEditing(editorState.entity, state)
         }
+    }
 
-        val detail = state.selectedDetail
-        if (detail == null) {
-            clearForm()
-            return
-        }
-
-        isCreatingMode = false
-        currentPresetDetail = detail
-        headerLabel.text = "编辑策略预设"
+    private fun renderEditing(detail: PresetDetail, state: StrategyPresetState) {
         val timeStr = detail.preset.createdAt?.take(19)?.replace('T', ' ')
-        createdAtLabel.text = if (timeStr != null) "创建于: $timeStr" else ""
+        createdAtLabel.text = if (timeStr != null) timeStr else ""
 
         txtId.text = detail.preset.id
         txtName.text = detail.preset.name
         txtDescription.text = detail.preset.description ?: ""
-        btnOpenConfigDialog.isDisable = false
-        btnSaveBasic.isDisable = false
-        btnDelete.isDisable = false
-        btnClone.isDisable = false
 
-        // 1. 刷新规模指标卡片
+        // 1. 规模指标卡片
         val declaredTags = detail.treeSelections.keys
-        val totalTrees = detail.treeSelections.values.sumOf { it.size }
-        val timingCount = detail.timings.size
-        val auraCount = detail.auraSelection.size
-
         lblMetricPurposes.text = "${declaredTags.size}"
-        lblMetricTrees.text = "$totalTrees"
-        lblMetricTimings.text = "$timingCount"
-        lblMetricAuras.text = "$auraCount"
+        lblMetricTrees.text = "${detail.treeSelections.values.sumOf { it.size }}"
+        lblMetricTimings.text = "${detail.timings.size}"
+        lblMetricAuras.text = "${detail.auraSelection.size}"
 
-        // 2. 刷新已声明用途卡片流
+        // 2. 已声明用途卡片流
         renderDeclaredFlow(detail, state.tagDisplayNames)
 
-        // 3. 刷新被禁用用途看板（口径 = 树维度声明）
-        disabledPurposesBoard.updatePurposes(
-            state.purposeUniverse,
-            declaredTags,
-            state.tagDisplayNames
+        // 3. 被禁用用途看板（口径 = 树维度声明）
+        disabledPurposesBoard.updatePurposes(state.purposeUniverse, declaredTags, state.tagDisplayNames)
+
+        // 4. 引用关系
+        renderReferences(state.allPresets.find { it.preset.id == detail.preset.id }?.referencedBy.orEmpty())
+    }
+
+    private fun renderCreating(state: StrategyPresetState) {
+        createdAtLabel.text = ""
+        txtId.text = "(系统自动生成)"
+        txtName.text = ""
+        txtDescription.text = ""
+
+        lblMetricPurposes.text = "0"
+        lblMetricTrees.text = "0"
+        lblMetricTimings.text = "0"
+        lblMetricAuras.text = "0"
+
+        declaredFlow.children.setAll(
+            Label("新建预设尚未保存。请先在上方输入名称并点击「保存基本信息」。").apply {
+                style = "-fx-text-fill: #7f8c8d; -fx-font-size: 11px;"
+            }
         )
 
-        // 4. 刷新引用关系
-        val summary = state.allPresets.find { it.preset.id == detail.preset.id }
-        val refs = summary?.referencedBy.orEmpty()
+        disabledPurposesBoard.updatePurposes(state.purposeUniverse, emptySet(), state.tagDisplayNames)
+        referenceListLabel.text = "新建预设尚未被任何卡组引用"
+        referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
+    }
+
+    private fun renderEmpty() {
+        createdAtLabel.text = ""
+        txtId.text = ""
+        txtName.text = ""
+        txtDescription.text = ""
+
+        lblMetricPurposes.text = "-"
+        lblMetricTrees.text = "-"
+        lblMetricTimings.text = "-"
+        lblMetricAuras.text = "-"
+
+        declaredFlow.children.clear()
+        disabledPurposesBoard.updatePurposes(emptySet(), emptySet(), emptyMap())
+        referenceListLabel.text = "无"
+        referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
+    }
+
+    private fun renderReferences(refs: List<PresetReference>) {
         if (refs.isEmpty()) {
             referenceListLabel.text = "🌱 当前未被任何卡组引用（空闲资产，可安全重构或删除）"
             referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
@@ -415,58 +440,6 @@ class StrategyPresetDetailPane(
             }
             declaredFlow.children.add(badge)
         }
-    }
-
-    private fun enterCreatingMode(state: StrategyPresetState) {
-        isCreatingMode = true
-        currentPresetDetail = null
-        headerLabel.text = "➕ 新建策略预设"
-        createdAtLabel.text = ""
-        txtId.text = "(系统自动生成)"
-        txtName.text = ""
-        txtDescription.text = ""
-        btnOpenConfigDialog.isDisable = true
-        btnSaveBasic.isDisable = false
-        btnDelete.isDisable = true
-        btnClone.isDisable = true
-
-        lblMetricPurposes.text = "0"
-        lblMetricTrees.text = "0"
-        lblMetricTimings.text = "0"
-        lblMetricAuras.text = "0"
-
-        declaredFlow.children.clear()
-        declaredFlow.children.add(Label("新建预设尚未保存。请先在上方输入名称并点击「保存基本信息」。").apply {
-            style = "-fx-text-fill: #7f8c8d; -fx-font-size: 11px;"
-        })
-
-        disabledPurposesBoard.updatePurposes(state.purposeUniverse, emptySet(), state.tagDisplayNames)
-        referenceListLabel.text = "新建预设尚未被任何卡组引用"
-        referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
-    }
-
-    private fun clearForm() {
-        isCreatingMode = false
-        currentPresetDetail = null
-        headerLabel.text = "请在左侧选择或新建预设"
-        createdAtLabel.text = ""
-        txtId.text = ""
-        txtName.text = ""
-        txtDescription.text = ""
-        btnOpenConfigDialog.isDisable = true
-        btnSaveBasic.isDisable = true
-        btnDelete.isDisable = true
-        btnClone.isDisable = true
-
-        lblMetricPurposes.text = "-"
-        lblMetricTrees.text = "-"
-        lblMetricTimings.text = "-"
-        lblMetricAuras.text = "-"
-
-        declaredFlow.children.clear()
-        disabledPurposesBoard.updatePurposes(emptySet(), emptySet(), emptyMap())
-        referenceListLabel.text = "无"
-        referenceListLabel.style = "-fx-text-fill: #7f8c8d;"
     }
 
     /** 供工作台回显 Store 返回的失败原因 */

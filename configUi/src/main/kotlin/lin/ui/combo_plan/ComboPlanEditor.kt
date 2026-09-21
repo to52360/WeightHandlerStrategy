@@ -12,9 +12,8 @@ import lin.ui.GroupDisplay
 import lin.ui.WorkbenchNavigator
 import lin.ui.card_group.CardGroupExtension
 import lin.ui.card_group.components.CardGroupCapabilities
-import lin.ui.components.action.EditingOnlyAction
+import lin.ui.components.action.EditorAction
 import lin.ui.components.action.EditorActionBar
-import lin.ui.components.action.MutationAction
 import lin.ui.components.action.ResourcePickerBar
 import lin.ui.components.form.*
 import lin.ui.components.layout.SectionTitle
@@ -127,8 +126,8 @@ class ComboPlanEditor(
     private val actionBar = EditorActionBar(
         stateProperty = headerBar.stateProperty,
         actions = listOf(
-            MutationAction(label = "保存编排") { performSave() },
-            EditingOnlyAction(label = "删除编排") { performDelete() }
+            EditorAction.mutation(label = "保存编排") { performSave() },
+            EditorAction.editingOnly(label = "删除编排") { performDelete() }
         )
     )
 
@@ -147,6 +146,9 @@ class ComboPlanEditor(
             }
             valueProperty().addListener { _, oldVal, selection ->
                 if (selection != null && selection.cardGroupManagerId != oldVal?.cardGroupManagerId) {
+                    // 切换卡组 = 重置勾选：旧卡组的分组 id 对新卡组非法，避免残留 ID 被保存进新卡组
+                    selectedCoreGroupIds.clear()
+                    selectedDepGroupIds.clear()
                     repopulateBindingTable(selection)
                 }
             }
@@ -189,9 +191,27 @@ class ComboPlanEditor(
     /**
      * 清空编辑器表单项，回到默认的未选中置灰禁用状态
      */
-    fun clearEditor() {
-        headerBar.showEmpty("没有选中 Combo 编排")
+    /**
+     * 按 [EditorState] 相位渲染编辑器。
+     *
+     * ⚠️ **过渡渲染**：调用方（Workbench）须仅在相位或实体变化时调用（见 `EditorStateTransition`），
+     * 同相位重复调用会覆盖用户正在编辑的表单草稿。
+     */
+    fun render(
+        state: EditorState<ComboPlanDefinition>,
+        allManagers: List<CardGroupManagerConfig>,
+        bindingMap: Map<String, CardGroupBinding>,
+        defaultManagerId: String?
+    ) {
+        headerBar.state = state
+        when (state) {
+            is EditorState.Empty -> applyEmpty()
+            is EditorState.Creating -> applyCreating(allManagers, defaultManagerId)
+            is EditorState.Editing -> applyEditing(state.entity, allManagers, bindingMap)
+        }
+    }
 
+    private fun applyEmpty() {
         cardGroupPicker.clearSelection()
         selectedCoreGroupIds.clear()
         selectedDepGroupIds.clear()
@@ -199,12 +219,8 @@ class ComboPlanEditor(
         paramForm.reset()
     }
 
-    /**
-     * 新建 Combo 模式，激活编辑器表单并载入当前上下文快照为默认卡组。
-     */
-    fun enterCreatingMode(allManagers: List<CardGroupManagerConfig>, defaultManagerId: String?) {
-        headerBar.showCreating("新建 Combo 编排")
-
+    /** 新建模式：载入当前上下文快照为默认卡组。 */
+    private fun applyCreating(allManagers: List<CardGroupManagerConfig>, defaultManagerId: String?) {
         val activeManager = allManagers.find { it.cardGroupManagerId == defaultManagerId }
             ?: allManagers.find { it.enabled }
             ?: allManagers.firstOrNull()
@@ -222,25 +238,14 @@ class ComboPlanEditor(
         paramForm.reset()
     }
 
-    /**
-     * 编辑 Combo 模式，激活编辑器并加载绑定已有配置数据
-     */
-    fun loadPlan(
+    /** 编辑模式：加载绑定已有配置数据。 */
+    private fun applyEditing(
         plan: ComboPlanDefinition,
         allManagers: List<CardGroupManagerConfig>,
         bindingMap: Map<String, CardGroupBinding>
     ) {
-        headerBar.showEditing(plan, title = "编辑 Combo: ${plan.id}", badge = "Combo")
-
         // 核心高阶 UX：自动回溯推导当前的 Combo 究竟属于哪个卡组配置 (Deck)
-        val firstGroupId = plan.coreGroupIds.firstOrNull() ?: plan.depGroupIds.firstOrNull()
-        val targetManager = if (firstGroupId != null) {
-            val targetManagerId = bindingMap[firstGroupId]?.managerId
-            allManagers.find { it.cardGroupManagerId == targetManagerId }
-        } else null
-
-        // 定位卡组切换下拉框，默认到首个激活卡组
-        val finalManager = targetManager ?: allManagers.find { it.enabled } ?: allManagers.firstOrNull()
+        val finalManager = resolveTargetManager(plan, allManagers, bindingMap)
 
         cardGroupPicker.selectedItem = finalManager
 
@@ -273,12 +278,31 @@ class ComboPlanEditor(
     }
 
     /**
+     * 回溯推导当前 Combo 所属的卡组方案：取首个 core/dep 分组的归属 manager，兜底到启用卡组或首个。
+     */
+    private fun resolveTargetManager(
+        plan: ComboPlanDefinition,
+        allManagers: List<CardGroupManagerConfig>,
+        bindingMap: Map<String, CardGroupBinding>
+    ): CardGroupManagerConfig? {
+        val firstGroupId = plan.coreGroupIds.firstOrNull() ?: plan.depGroupIds.firstOrNull()
+        val targetManager = if (firstGroupId != null) {
+            val targetManagerId = bindingMap[firstGroupId]?.managerId
+            allManagers.find { it.cardGroupManagerId == targetManagerId }
+        } else null
+        return targetManager ?: allManagers.find { it.enabled } ?: allManagers.firstOrNull()
+    }
+
+    /**
      * 保存表单数据
      */
     private fun performSave() {
-        val currentPlan = (headerBar.state as? EditorState.Editing)?.entity
-        val isCreating = headerBar.state is EditorState.Creating
-        if (currentPlan == null && !isCreating) return
+        // 用 when 统一判别 + 取值，消除 as? 与 is 的混用（sealed 状态穷举）
+        val editingId = when (val state = headerBar.state) {
+            is EditorState.Editing -> state.entity.id
+            is EditorState.Creating -> null
+            is EditorState.Empty -> return
+        }
 
         val coreSelected = selectedCoreGroupIds.toSet()
         val depSelected = selectedDepGroupIds.toSet()
@@ -294,16 +318,15 @@ class ComboPlanEditor(
             return
         }
 
-        val id = if (isCreating) null else currentPlan?.id
         onSave(
             ComboPlanFormSnapshot(
                 managerId = managerId,
-                id = id,
+                id = editingId,
                 coreGroupIds = coreSelected,
                 depGroupIds = depSelected,
                 score = paramForm.getNumber("score"),
                 changeScore = paramForm.getNumber("changeScore"),
-                relation = paramForm.getSelect<ComboRelation>("relation"),
+                relation = paramForm.getSelect("relation"),
                 coreMutex = paramForm.getBoolean("coreMutex"),
                 mustAdjacent = paramForm.getBoolean("mustAdjacent")
             )

@@ -67,11 +67,15 @@ class CardGroupPresetIntegrationTest : McpTestEnv() {
 
     private fun createPreset(name: String): String {
         val res = presetService.savePreset(
-            presetId = null,
-            name = name,
-            description = "测试预设描述",
-            treeSelections = mapOf("DRAW" to listOf("tree-1")),
-            timings = mapOf("DRAW" to TimingOverride(defaultStage = "EARLY"))
+            PresetSaveInput(
+                presetId = null,
+                name = name,
+                description = "测试预设描述",
+                declaration = PresetDeclaration(
+                    treeSelections = mapOf("DRAW" to listOf("tree-1")),
+                    timings = mapOf("DRAW" to TimingOverride(defaultStage = "EARLY"))
+                )
+            )
         )
         assertNotNull(res)
         val id = res!!.presetId

@@ -1,6 +1,7 @@
 package lin.ui.strategy_preset
 
 import lin.mcp.McpTestEnv
+import lin.repository.card_group.PresetSaveInput
 import lin.repository.card_group.StrategyPresetRepository
 import lin.repository.card_group.StrategyPresetService
 import lin.ui.card_group.ActiveManagerHolder
@@ -43,8 +44,8 @@ class StrategyPresetStoreTest : McpTestEnv() {
 
     @Test
     fun `loadInitialData 加载预设列表并默认选中首项`() {
-        val p1 = service.savePreset(null, "TG_STORE_P1", "描述1", null, null)!!.presetId
-        val p2 = service.savePreset(null, "TG_STORE_P2", "描述2", null, null)!!.presetId
+        val p1 = service.savePreset(PresetSaveInput(null, "TG_STORE_P1", "描述1"))!!.presetId
+        val p2 = service.savePreset(PresetSaveInput(null, "TG_STORE_P2", "描述2"))!!.presetId
         createdPresetIds += listOf(p1, p2)
 
         store.loadInitialData()
@@ -58,8 +59,8 @@ class StrategyPresetStoreTest : McpTestEnv() {
 
     @Test
     fun `updateSearchText 能根据名称与描述过滤预设`() {
-        val p1 = service.savePreset(null, "SEARCH_ALPHA", "通用快攻", null, null)!!.presetId
-        val p2 = service.savePreset(null, "SEARCH_BETA", "慢速控制", null, null)!!.presetId
+        val p1 = service.savePreset(PresetSaveInput(null, "SEARCH_ALPHA", "通用快攻"))!!.presetId
+        val p2 = service.savePreset(PresetSaveInput(null, "SEARCH_BETA", "慢速控制"))!!.presetId
         createdPresetIds += listOf(p1, p2)
 
         store.loadInitialData()
@@ -109,20 +110,20 @@ class StrategyPresetStoreTest : McpTestEnv() {
 
     @Test
     fun `deletePreset 删除预设并刷新状态`() {
-        val p1 = service.savePreset(null, "TG_TO_DEL", "即将被删", null, null)!!.presetId
+        val p1 = service.savePreset(PresetSaveInput(null, "TG_TO_DEL", "即将被删"))!!.presetId
         store.loadInitialData()
         store.selectPreset(p1)
         assertEquals(p1, store.state.selectedPresetId)
 
-        val deleted = store.deletePreset(p1)
-        assertTrue("删除应成功", deleted)
+        val deleteError = store.deletePreset(p1)
+        assertNull("删除应成功", deleteError)
         assertFalse("列表中不应再包含该预设", store.state.allPresets.any { it.preset.id == p1 })
         assertNotEquals("当前选中的预设不能是被删的预设", p1, store.state.selectedPresetId)
     }
 
     @Test
     fun `enterCreatingMode 进入新建模式`() {
-        val p1 = service.savePreset(null, "TG_BEFORE_CREATE", null, null, null)!!.presetId
+        val p1 = service.savePreset(PresetSaveInput(null, "TG_BEFORE_CREATE", null))!!.presetId
         createdPresetIds += p1
         store.loadInitialData()
         store.selectPreset(p1)

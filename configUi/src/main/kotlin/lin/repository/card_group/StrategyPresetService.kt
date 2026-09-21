@@ -29,6 +29,36 @@ data class PresetDetail(
     val auraSelection: Set<String> = emptySet()
 )
 
+/**
+ * 预设「策略声明」的四维度**替换补丁**（保存入参的一段）。
+ *
+ * 语义：**逐维度独立** —— 某维度非 null = 该维度按传入内容**整体替换**；null = **保持原值不动**。
+ * （维度级独立声明是既有能力：消费侧也是维度级作用域，MCP 面允许「只改 timing 不改树」。）
+ */
+data class PresetDeclaration(
+    /** `用途 → 保留的树 id`；某用途出现但集合为空 = 该用途保留零棵树；**未出现的用途 = 未声明 ⇒ 全禁**。null = 不改。 */
+    val treeSelections: Map<String, Collection<String>>? = null,
+    /** 出牌时序声明（null = 不改）。 */
+    val timings: Map<String, TimingOverride>? = null,
+    /** 惜售门槛声明（T-TG-029 独立维度，与 timings 平行；null = 不改）。 */
+    val surplus: Map<String, SurplusOverride>? = null,
+    /** 光环白名单（D-DP-001；空集 = 声明为「不要任何全局光环」；null = 不改）。 */
+    val auraSelection: Set<String>? = null
+)
+
+/**
+ * 预设保存入参：元数据 + 可选的策略声明。
+ *
+ * @property presetId null = 新建（自动生成 id）；非 null = 更新（须已存在）
+ * @property declaration 四维度替换补丁；null = **四个维度全不修改**（只改元数据）
+ */
+data class PresetSaveInput(
+    val presetId: String?,
+    val name: String,
+    val description: String?,
+    val declaration: PresetDeclaration? = null
+)
+
 /** 预设的引用者。 */
 data class PresetReference(val managerId: String, val managerName: String)
 
@@ -140,43 +170,33 @@ class StrategyPresetService(
     /**
      * 新建或更新预设。
      *
-     * @param presetId null = 新建（自动生成 id）；非 null = 更新（须已存在）
-     * @param treeSelections null = **不修改**树选择；非 null = **整体替换**
-     *   （`用途 → 保留的树 id`；某用途出现但集合为空 = 该用途保留零棵树；**未出现的用途 = 未声明 ⇒ 全禁**）
-     * @param timings null = 不修改；非 null = 整体替换
-     * @param surplus null = 不修改；非 null = 整体替换（T-TG-029 惜售维度）
-     * @param auraSelection null = 不修改；非 null = 整体替换光环白名单（D-DP-001；空集 = 不要任何全局光环）
+     * 语义全部由 [PresetSaveInput] 承载：`declaration == null` = 只改元数据、维度保持原值；
+     * `declaration != null` = 四个维度按声明**整体替换**（各维度语义见 [PresetDeclaration]）。
+     *
      * @return null = 更新目标不存在
      */
-    fun savePreset(
-        presetId: String?,
-        name: String,
-        description: String?,
-        treeSelections: Map<String, Collection<String>>?,
-        timings: Map<String, TimingOverride>?,
-        surplus: Map<String, SurplusOverride>? = null,
-        auraSelection: Set<String>? = null
-    ): SavePresetResult? = tx.execute {
-        val id = presetId ?: UUID.randomUUID().toString().substring(0, 8)
+    fun savePreset(input: PresetSaveInput): SavePresetResult? = tx.execute {
+        val id = input.presetId ?: UUID.randomUUID().toString().substring(0, 8)
         val existing = presetRepository.findPresetById(id)
-        if (presetId != null && existing == null) return@execute null
+        if (input.presetId != null && existing == null) return@execute null
 
         presetRepository.savePreset(
             StrategyPresetEntity(
                 id = id,
-                name = name,
-                description = description,
+                name = input.name,
+                description = input.description,
                 createdAt = existing?.createdAt ?: Instant.now().toString()
             )
         )
-        treeSelections?.let { presetRepository.replaceTreeSelections(DimensionScope.PRESET, id, it) }
-        timings?.let { presetRepository.replaceTimings(DimensionScope.PRESET, id, it) }
-        surplus?.let { presetRepository.replaceSurplus(DimensionScope.PRESET, id, it) }
-        auraSelection?.let { presetRepository.replaceAuraSelection(DimensionScope.PRESET, id, it) }
+        val declaration = input.declaration
+        declaration?.treeSelections?.let { presetRepository.replaceTreeSelections(DimensionScope.PRESET, id, it) }
+        declaration?.timings?.let { presetRepository.replaceTimings(DimensionScope.PRESET, id, it) }
+        declaration?.surplus?.let { presetRepository.replaceSurplus(DimensionScope.PRESET, id, it) }
+        declaration?.auraSelection?.let { presetRepository.replaceAuraSelection(DimensionScope.PRESET, id, it) }
 
         SavePresetResult(
             presetId = id,
-            name = name,
+            name = input.name,
             treeItemCount = presetRepository.findTreeSelections(DimensionScope.PRESET, id).values.sumOf { it.size },
             timingCount = presetRepository.findTimings(DimensionScope.PRESET, id).size,
             surplusCount = presetRepository.findSurplus(DimensionScope.PRESET, id).size,

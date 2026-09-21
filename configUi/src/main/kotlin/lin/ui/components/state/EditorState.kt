@@ -27,6 +27,24 @@ sealed interface EditorState<out T> {
 }
 
 /**
+ * 编辑器状态**相位**：`EditorState<T>` 丢弃实体载荷（`Editing.entity`）后的投影。
+ *
+ * 用途：供 [lin.ui.components.action.EditorAction] 用**相位集合**声明「在哪些状态下可用 / 可见」
+ * （判定只依赖离散相位，不依赖载荷 ⇒ 应声明为值，而非散落的状态判断代码）。
+ */
+enum class EditorPhase { EMPTY, CREATING, EDITING }
+
+/**
+ * 相位投影**单点**（穷举 `when`：`EditorState` 新增子类时编译器强制补齐，不会两边漂移）。
+ */
+val EditorState<*>.phase: EditorPhase
+    get() = when (this) {
+        is EditorState.Empty -> EditorPhase.EMPTY
+        is EditorState.Creating -> EditorPhase.CREATING
+        is EditorState.Editing -> EditorPhase.EDITING
+    }
+
+/**
  * 声明式状态驱动标题栏：
  * 监听 EditorState<T> 自动响应渲染视觉色调与 Badge，并暴露基于状态的只读只写属性供外部按需联动。
  */
@@ -47,15 +65,9 @@ class EditorHeaderBar<T>(
         isVisible = false
     }
 
-    /** 派生属性：是否处于空态禁用中（当且仅当 state is Empty 时为 true） */
+    /** 派生属性：是否处于空态禁用中（当且仅当 state is Empty 时为 true）——供内容区 `disableProperty` 绑定 */
     val isEditingDisabled: BooleanBinding = Bindings.createBooleanBinding(
         { stateProperty.get() is EditorState.Empty },
-        stateProperty
-    )
-
-    /** 派生属性：删除按钮是否可见（当且仅当 state is Editing 时为 true） */
-    val isDeleteVisible: BooleanBinding = Bindings.createBooleanBinding(
-        { stateProperty.get() is EditorState.Editing },
         stateProperty
     )
 

@@ -8,6 +8,7 @@ import lin.repository.card_group.CardGroupService
 import lin.repository.combo_plan.ComboPlanDefinitionEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.ui.card_group.ActiveManagerHolder
+import lin.ui.components.state.EditorState
 import lin.utils.nextShortId
 
 /**
@@ -59,19 +60,22 @@ class ComboPlanStore(
 
         val prevSearchText = state.searchText
         val prevSelectedId = state.selectedPlan?.id
+        // 新建草稿相位跨刷新保持；刷新期间不回落成「选中了某编排」
+        val wasCreating = state.isCreating
 
         stateProperty.set(
             ComboPlanState(
                 allPlans = allPlans,
                 allManagers = managers,
                 bindingMap = bindingMap,
+                isCreating = wasCreating,
                 searchText = prevSearchText
             )
         )
 
         updateFilters(prevSearchText)
 
-        val newSelected = state.allPlans.find { it.id == prevSelectedId }
+        val newSelected = if (wasCreating) null else state.allPlans.find { it.id == prevSelectedId }
         stateProperty.set(state.copy(selectedPlan = newSelected))
     }
 
@@ -101,10 +105,32 @@ class ComboPlanStore(
     }
 
     /**
-     * 更新当前选中项
+     * 更新当前选中项（选中编排即退出新建草稿相位）。
      */
     fun selectPlan(plan: ComboPlanDefinition?) {
-        stateProperty.set(state.copy(selectedPlan = plan))
+        stateProperty.set(state.copy(selectedPlan = plan, isCreating = false))
+    }
+
+    /** 进入新建草稿相位（清空选中）。 */
+    fun enterCreatingMode() {
+        stateProperty.set(state.copy(selectedPlan = null, isCreating = true))
+    }
+
+    /**
+     * 编辑器状态（**单一事实源**）：标题 / 徽标 / 动作可用性全部由它驱动。
+     */
+    fun editorState(): EditorState<ComboPlanDefinition> {
+        val current = state
+        val selected = current.selectedPlan
+        return when {
+            current.isCreating -> EditorState.Creating("新建 Combo 编排")
+            selected != null -> EditorState.Editing(
+                entity = selected,
+                title = "编辑 Combo: ${selected.id}",
+                badge = "Combo"
+            )
+            else -> EditorState.Empty("没有选中 Combo 编排")
+        }
     }
 
     /**
@@ -127,6 +153,7 @@ class ComboPlanStore(
 
         repository.save(entity)
 
+        stateProperty.set(state.copy(isCreating = false))
         loadInitialData()
         val newSelected = state.allPlans.find { it.id == finalId }
         stateProperty.set(state.copy(selectedPlan = newSelected))
@@ -139,6 +166,7 @@ class ComboPlanStore(
         repository.deleteById(id)
 
         val wasSelected = state.selectedPlan?.id == id
+        stateProperty.set(state.copy(isCreating = false))
         loadInitialData()
 
         if (wasSelected) {

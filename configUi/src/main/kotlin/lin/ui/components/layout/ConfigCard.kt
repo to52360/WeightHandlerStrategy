@@ -25,7 +25,7 @@ class FormField(
                 prefWidth = labelWidth
             }
         }
-        HBox.setHgrow(content, Priority.ALWAYS)
+        setHgrow(content, Priority.ALWAYS)
         children.addAll(labelNode, content)
     }
 }

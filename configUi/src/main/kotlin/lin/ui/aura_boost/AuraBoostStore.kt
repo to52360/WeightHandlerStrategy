@@ -8,6 +8,7 @@ import lin.repository.aura_boost.SaveAuraBoostInput
 import lin.repository.card_group.CardGroupService
 import lin.repository.condition_tree.ConditionTreeConfigRepository
 import lin.ui.card_group.ActiveManagerHolder
+import lin.ui.components.state.EditorState
 
 class AuraBoostStore(
     private val service: AuraBoostConfigService,
@@ -31,6 +32,8 @@ class AuraBoostStore(
         val allEntities = service.loadAll()
         val prevSearchText = state.searchText
         val prevSelectedId = state.selectedEntity?.id
+        // 新建草稿相位跨刷新保持；刷新期间不回落成「选中了某实体」
+        val wasCreating = state.isCreating
         val currentFilterManagerId = state.filterManagerId ?: activeManagerHolder.activeManagerId
 
         stateProperty.set(
@@ -38,6 +41,7 @@ class AuraBoostStore(
                 allEntities = allEntities,
                 allManagers = managers,
                 conditionTreeMap = conditionTreeMap,
+                isCreating = wasCreating,
                 searchText = prevSearchText,
                 filterManagerId = currentFilterManagerId
             )
@@ -45,7 +49,7 @@ class AuraBoostStore(
 
         updateFilters(prevSearchText, currentFilterManagerId)
 
-        val newSelected = state.allEntities.find { it.id == prevSelectedId }
+        val newSelected = if (wasCreating) null else state.allEntities.find { it.id == prevSelectedId }
         stateProperty.set(state.copy(selectedEntity = newSelected))
     }
 
@@ -84,17 +88,40 @@ class AuraBoostStore(
     }
 
     /**
-     * 更新当前选中项
+     * 更新当前选中项（选中实体即退出新建草稿相位）。
      */
     fun selectEntity(entity: AuraBoostEntity?) {
-        stateProperty.set(state.copy(selectedEntity = entity))
+        stateProperty.set(state.copy(selectedEntity = entity, isCreating = false))
+    }
+
+    /** 进入新建草稿相位（清空选中）。 */
+    fun enterCreatingMode() {
+        stateProperty.set(state.copy(selectedEntity = null, isCreating = true))
     }
 
     /**
-     * 保存 AuraBoost 配置
+     * 编辑器状态（**单一事实源**）：标题 / 徽标 / 动作可用性全部由它驱动。
+     */
+    fun editorState(): EditorState<AuraBoostEntity> {
+        val current = state
+        val selected = current.selectedEntity
+        return when {
+            current.isCreating -> EditorState.Creating("新建 AuraBoost 配置")
+            selected != null -> EditorState.Editing(
+                entity = selected,
+                title = "编辑 AuraBoost 配置",
+                badge = selected.id
+            )
+            else -> EditorState.Empty("未选择配置")
+        }
+    }
+
+    /**
+     * 保存 AuraBoost 配置（保存即退出新建草稿相位，并选中落库实体）。
      */
     fun saveEntity(input: SaveAuraBoostInput): String {
         val id = service.save(input)
+        stateProperty.set(state.copy(isCreating = false))
         loadInitialData()
         val newSelected = state.allEntities.find { it.id == id }
         stateProperty.set(state.copy(selectedEntity = newSelected))
@@ -107,6 +134,7 @@ class AuraBoostStore(
     fun deleteEntity(id: String) {
         val wasSelected = state.selectedEntity?.id == id
         service.delete(id)
+        stateProperty.set(state.copy(isCreating = false))
         loadInitialData()
         if (wasSelected) {
             stateProperty.set(state.copy(selectedEntity = null))

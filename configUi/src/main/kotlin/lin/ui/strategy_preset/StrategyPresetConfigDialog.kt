@@ -8,9 +8,8 @@ import javafx.scene.layout.FlowPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import lin.repository.card_group.PresetDeclaration
 import lin.repository.card_group.PresetDetail
-import lin.repository.card_group.SurplusOverride
-import lin.repository.card_group.TimingOverride
 import lin.ui.components.action.ActionVariant
 import lin.ui.components.action.EntityCapability
 import lin.ui.components.action.ResourcePickerBar
@@ -32,12 +31,7 @@ import lin.ui.service.AuraBoostOption
 class StrategyPresetConfigDialog(
     private val presetDetail: PresetDetail,
     private val state: StrategyPresetState,
-    private val onSave: (
-        treeSelections: Map<String, Collection<String>>,
-        timings: Map<String, TimingOverride>,
-        surplus: Map<String, SurplusOverride>,
-        auraSelection: Set<String>
-    ) -> Unit
+    private val onSave: (declaration: PresetDeclaration) -> Unit
 ) : Dialog<Unit>() {
 
     private val purposeTable = PresetPurposeTable()
@@ -229,7 +223,7 @@ class StrategyPresetConfigDialog(
                 }
             }
 
-            onSave(treeSelections, timings, surplus, auraSelection)
+            onSave(PresetDeclaration(treeSelections, timings, surplus, auraSelection))
         }
     }
 

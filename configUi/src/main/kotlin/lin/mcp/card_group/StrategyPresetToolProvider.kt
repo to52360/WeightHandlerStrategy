@@ -8,6 +8,8 @@ import lin.repository.aura_boost.AuraBoostConfigService
 import lin.repository.card_group.AuraDelta
 import lin.repository.card_group.Dimension
 import lin.repository.card_group.DimensionItemResolver
+import lin.repository.card_group.PresetDeclaration
+import lin.repository.card_group.PresetSaveInput
 import lin.repository.card_group.StrategyPresetService
 import lin.repository.card_group.SurplusOverride
 import lin.repository.card_group.ThresholdPatch
@@ -334,13 +336,18 @@ class StrategyPresetToolProvider(
             requireGlobalAuraBoosts(auraBoostIds.orEmpty(), "auraBoostIds")
 
             val result = service.savePreset(
-                presetId = input.presetId?.trim()?.takeIf { it.isNotBlank() },
-                name = input.name.trim(),
-                description = input.description,
-                treeSelections = treeSelections,
-                timings = timings,
-                surplus = surplus,
-                auraSelection = auraBoostIds?.toSet()
+                PresetSaveInput(
+                    presetId = input.presetId?.trim()?.takeIf { it.isNotBlank() },
+                    name = input.name.trim(),
+                    description = input.description,
+                    // 逐维度传递：各维度 null = 不修改（与 MCP 面「省略即不改」的契约一致）
+                    declaration = PresetDeclaration(
+                        treeSelections = treeSelections,
+                        timings = timings,
+                        surplus = surplus,
+                        auraSelection = auraBoostIds?.toSet()
+                    )
+                )
             ) ?: return@typedTool mcpError("更新失败：预设不存在（presetId=${input.presetId}）")
 
             // 树维度**已声明**的用途从**保存后的库态**取（含空数组声明的行）——
