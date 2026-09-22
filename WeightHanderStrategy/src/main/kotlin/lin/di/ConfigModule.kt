@@ -34,15 +34,36 @@ val configModule = module {
         //根据 groupId 查找
         findBy { groupId -> (infoMap[groupId] ?: emptyList()).map { it.weightInfo } }
     }
-    single<WeightInfoFinder<BindingGroupId>> {
+    // ⚠️ 三个「路由键 finder」必须**各带限定符**并**显式成表**，不能靠 getAll()：
+    // 它们的 Koin 定义类型都是 `WeightInfoFinder<*>`（泛型被擦除）⇒ 无名注册会共用同一个 key
+    // 互相覆盖，只剩最后注册的那个。2026-09-22 宿主实测：`getAll<WeightInfoFinder<*>>()` 只收到
+    // CardBindingId 一个 ⇒ `RuleTreeBindingTask` 派发 GROUP / PURPOSE_TAG 树根时查不到 finder，
+    // 日志只留一行 `WARN 不支持类型`，**这两类绑定的评估树整体静默失效**（树分恒为 0）。
+    single<WeightInfoFinder<BindingGroupId>>(named(FINDER_BY_BINDING_GROUP)) {
         BindingGroupFinder(get(named("finderByTypeString")))
     }
-    single<WeightInfoFinder<PurposeTagBindingId>> {
+    single<WeightInfoFinder<PurposeTagBindingId>>(named(FINDER_BY_PURPOSE_TAG)) {
         PurposeTagFinder(get(named("finderByTypeString")))
     }
-    single<WeightInfoFinder<CardBindingId>> {
+    single<WeightInfoFinder<CardBindingId>>(named(FINDER_BY_CARD)) {
         CardBindingFinder(get(named("finderByTypeString")))
     }
 
-    single<ConfigDispatcher> { ConfigDispatcher(getAll(), getAll()) }
+    single<ConfigDispatcher> {
+        // handlers 走 getAll 没问题（那两个经 `bind ConfigHandler::class` 注册，各有独立 key）；
+        // bindInfoFind 必须显式列出——理由见上。
+        val finders: List<WeightInfoFinder<*>> = listOf(
+            get(named("finderByTypeString")),
+            get(named("finderByTypeDouble")),
+            get(named(FINDER_BY_BINDING_GROUP)),
+            get(named(FINDER_BY_PURPOSE_TAG)),
+            get(named(FINDER_BY_CARD)),
+        )
+        ConfigDispatcher(getAll(), finders)
+    }
 }
+
+/** 路由键 finder 的限定符；由 `KoinFinderWiringTest` 断言「一个都不能少」。 */
+const val FINDER_BY_BINDING_GROUP = "finderByBindingGroup"
+const val FINDER_BY_PURPOSE_TAG = "finderByPurposeTag"
+const val FINDER_BY_CARD = "finderByCard"

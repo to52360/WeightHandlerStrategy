@@ -55,12 +55,26 @@ if not exist "%PLUGIN_DIR%" mkdir "%PLUGIN_DIR%"
 
 echo.
 echo ============================================================
-echo  [3/3] Copy jars to: %PLUGIN_DIR%
+echo  [3/3] Copy jars
 echo ============================================================
+rem ---- 布局（单一资产目录）----
+rem   %PLUGIN_DIR%\WeightHandlerStrategy.jar           宿主插件位（HS-Script 只认这里，动不了）
+rem   %ASSET_DIR%\configUi.jar                        引擎资产目录：配置侧扩展(ModulesInfo SPI)
+rem                                                     + MCP/UI 主体（mcp.bat/ui.bat 的同级 -cp）
+rem 引擎只扫资产目录下的扩展 jar（JarClassLoader 单点）；放错位置会静默退化成
+rem 「纯引擎模式」（评估树/条件树/光环/combo/卡组绑定/用途标签整体不生效）。
+set "ASSET_DIR=%PLUGIN_DIR%\WeightHandlerStrategy"
+if not exist "%ASSET_DIR%" mkdir "%ASSET_DIR%"
+
 copy /y "%ENGINE_JAR%"   "%PLUGIN_DIR%\WeightHandlerStrategy.jar" >nul
-copy /y "%CONFIGUI_JAR%" "%PLUGIN_DIR%\configUi.jar" >nul
 if errorlevel 1 (
-    echo [FAILED] copy failed.
+    echo [FAILED] copy engine jar failed.
+    pause
+    exit /b 1
+)
+copy /y "%CONFIGUI_JAR%" "%ASSET_DIR%\configUi.jar" >nul
+if errorlevel 1 (
+    echo [FAILED] copy configUi jar failed: %ASSET_DIR%
     pause
     exit /b 1
 )
@@ -68,8 +82,9 @@ if errorlevel 1 (
 echo.
 echo [OK] Deployed:
 echo   %PLUGIN_DIR%\WeightHandlerStrategy.jar
-echo   %PLUGIN_DIR%\configUi.jar
+echo   %ASSET_DIR%\configUi.jar
 echo.
+echo 资产目录内 mcp.bat / ui.bat / plugin-config*.properties 为手工维护，本脚本不覆盖。
 echo Restart / reconnect MCP server, then delete_condition_tree etc.
 echo will be available.
 echo.

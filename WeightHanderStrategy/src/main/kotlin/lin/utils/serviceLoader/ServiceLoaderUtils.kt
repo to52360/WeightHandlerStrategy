@@ -7,12 +7,18 @@ import java.util.*
  * 不知要不要ioc,先object先
  */
 object ServiceLoaderUtils {
+    /** 扩展 jar 装载器：单点持有，装载与诊断共用同一次扫描结果。 */
+    private val jarLoader by lazy { JarClassLoader(parent = javaClass.classLoader) }
+
     val classLoader: ClassLoader by lazy {
-        JarClassLoader(parent = javaClass.classLoader).classLoader()?:run {
-            myLog.info { "不存在扩展类" }
+        jarLoader.classLoader() ?: run {
+            myLog.info { "不存在扩展类 —— ${jarLoader.diagnose()}" }
             javaClass.classLoader
         }
     }
+
+    /** 扩展装载诊断：候选目录与实际命中的 jar（「配置侧能力缺席」类故障据此点名落点）。 */
+    fun diagnose(): String = jarLoader.diagnose()
     private val serviceCache: MutableMap<Class<*>, Any> by lazy { mutableMapOf() }
 
      fun <T> loadServices(serviceType: Class<T>): List<T> {

@@ -14,6 +14,7 @@ import lin.repository.condition_tree.createConditionTreeConfigMapper
 import lin.repository.delete_snapshot.DeleteSnapshotRepository
 import lin.repository.delete_snapshot.SnapshotStore
 import lin.repository.tree_config.EvaluatorLeafConfigRepository
+import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.CardGroupBinding
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.*
@@ -21,6 +22,7 @@ import lin.ui.card_purpose.PurposeTagProvider
 import lin.ui.card_purpose.PurposeTagTreeBindingPolicy
 import lin.ui.card_purpose.SqlitePurposeTagIntentRuleProvider
 import lin.ui.card_purpose.SqlitePurposeTagProvider
+import lin.ui.condition_tree.validation.ConditionTreeValidator
 import lin.ui.service.TreeConfigService
 import lin.ui.service.createTreeConfigMapper
 import org.koin.core.module.Module
@@ -39,6 +41,12 @@ val strategyProviderModule = module {
         TransactionTemplate(DataSourceTransactionManager(dataSource))
     }
     single { CardGroupService(get(), get()) }
+
+    // 同 T-008 理由：下列两个 bean 在 configUi 侧只注册于 uiDBModule（UI 进程自己的 Koin），
+    // 而本模块被引擎**单独**经 SPI 装载 ⇒ 引擎侧解析 TreeConfigService / ConditionTreeConfigService
+    // 时会 NoDefinitionFoundException（评估树/条件树整体拿不到）。故在此自备，保持本模块自洽。
+    single { TreeConfigRepository(get()) }
+    single { ConditionTreeValidator(get()) }
 
     single {
         ComboPlanDefinitionRepository(get())
