@@ -7,12 +7,8 @@ import javafx.scene.layout.*
 import lin.repository.card_group.PresetDetail
 import lin.repository.card_group.PresetReference
 import lin.repository.card_group.PresetSaveInput
-import lin.ui.components.action.ActionCondition
-import lin.ui.components.action.ActionDecoration
-import lin.ui.components.action.ActionVariant
-import lin.ui.components.action.EditorAction
-import lin.ui.components.action.EditorActionBar
-import lin.ui.components.action.InlineActionPresenter
+import lin.ui.components.action.*
+import lin.ui.components.form.*
 import lin.ui.components.state.EditorHeaderBar
 import lin.ui.components.state.EditorPhase
 import lin.ui.components.state.EditorState
@@ -103,15 +99,23 @@ class StrategyPresetDetailPane(
         prefWidth = 130.0
     }
 
-    private val txtName = TextField().apply {
-        promptText = "预设名称（必填，<= 60 字符）..."
-        prefWidth = 200.0
-    }
-
-    private val txtDescription = TextField().apply {
-        promptText = "预设描述（可选）..."
-        HBox.setHgrow(this, Priority.ALWAYS)
-    }
+    // 声明式元数据输入（T-DC-010）：名称 Required + MaxLength(60) 替代散装 validatedNameOrNull 判空弹窗
+    private val presetMetaForm = DeclarativeForm(
+        defaultLabelWidth = 90.0,
+        specs = listOf(
+            TextFieldSpec(
+                id = "name",
+                label = "名称:",
+                prompt = "预设名称（必填，<= 60 字符）...",
+                constraints = NAME_CONSTRAINTS
+            ),
+            TextFieldSpec(
+                id = "description",
+                label = "描述:",
+                prompt = "预设描述（可选）..."
+            )
+        )
+    )
 
     // ── 1. 规模指标卡片区 ──
     private val lblMetricPurposes = Label("0").apply { style = "-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #27ae60;" }
@@ -148,10 +152,8 @@ class StrategyPresetDetailPane(
             vgap = 6.0
             add(Label("ID:"), 0, 0)
             add(txtId, 1, 0)
-            add(Label("名称:"), 2, 0)
-            add(txtName, 3, 0)
-            add(Label("描述:"), 0, 1)
-            add(txtDescription, 1, 1, 3, 1)
+            // 名称/描述由声明式表单承载（T-DC-010），横跨全宽置于 ID 下方
+            add(presetMetaForm, 0, 1, 4, 1)
             add(Label("创建于:"), 0, 2)
             add(createdAtLabel, 1, 2, 3, 1)
         }
@@ -239,8 +241,8 @@ class StrategyPresetDetailPane(
                 onSavePreset(
                     PresetSaveInput(
                         presetId = detail.preset.id,
-                        name = txtName.text.trim().ifBlank { detail.preset.name },
-                        description = txtDescription.text.trim().takeIf { it.isNotBlank() },
+                        name = presetMetaForm.getText("name").trim().ifBlank { detail.preset.name },
+                        description = presetMetaForm.getText("description").trim().takeIf { it.isNotBlank() },
                         declaration = declaration
                     )
                 )
@@ -250,30 +252,20 @@ class StrategyPresetDetailPane(
     }
 
     private fun handleSaveBasic() {
-        val name = validatedNameOrNull(txtName.text) ?: return
+        val problems = presetMetaForm.validate()
+        if (problems.isNotEmpty()) {
+            FormPrompt.showProblems(problems)
+            return
+        }
 
         // 仅保存基本信息：declaration 缺省 = 保留既有维度项；presetId 为 null = 新建（由状态机相位决定）
         onSavePreset(
             PresetSaveInput(
                 presetId = currentDetail()?.preset?.id,
-                name = name,
-                description = txtDescription.text.trim().takeIf { it.isNotBlank() }
+                name = presetMetaForm.getText("name").trim(),
+                description = presetMetaForm.getText("description").trim().takeIf { it.isNotBlank() }
             )
         )
-    }
-
-    /** 预设名称校验（新增与派生共用）：通过返回 trim 后名称；不通过弹提示并返回 null。 */
-    private fun validatedNameOrNull(raw: String): String? {
-        val name = raw.trim()
-        if (name.isBlank()) {
-            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称不能为空")
-            return null
-        }
-        if (name.length > 60) {
-            showAlert(Alert.AlertType.WARNING, "校验失败", "预设名称过长（最多 60 字符）")
-            return null
-        }
-        return name
     }
 
     private fun handleDelete() {
@@ -283,7 +275,7 @@ class StrategyPresetDetailPane(
         //    原实现把守卫留在 UI 是唯一防线，一旦遗漏即静默删除被引用预设。
         val confirm = Alert(Alert.AlertType.CONFIRMATION).apply {
             title = "确认删除策略预设"
-            headerText = "确定要删除预设 [${txtName.text}] 吗？"
+            headerText = "确定要删除预设 [${presetMetaForm.getText("name")}] 吗？"
             contentText = "⚠️ 注意：UI 界面操作将直接物理删除，不落快照（不可恢复）。如需可恢复删除请使用 MCP 工具。"
         }.showAndWait()
 
@@ -295,7 +287,7 @@ class StrategyPresetDetailPane(
     private fun handleClone() {
         val source = currentDetail() ?: return
         val sourceId = source.preset.id
-        val sourceName = txtName.text.trim().ifBlank { sourceId }
+        val sourceName = presetMetaForm.getText("name").trim().ifBlank { sourceId }
         val dialog = TextInputDialog("$sourceName-副本").apply {
             title = "另存为新预设"
             headerText = "将预设 [$sourceName] 的内容复制为一个新预设"
@@ -306,9 +298,19 @@ class StrategyPresetDetailPane(
         dialog.editor.promptText = "新预设名称（必填，<= 60 字符）..."
 
         val input = dialog.showAndWait().orElse(null) ?: return
-        val name = validatedNameOrNull(input) ?: return
+        // 弹窗输入独立于表单控件：直接走纯函数求值（复用同一组约束与呈现单点）
+        val problems = evaluateField(
+            fieldId = "name",
+            label = "名称",
+            constraints = NAME_CONSTRAINTS,
+            raw = input
+        )
+        if (problems.isNotEmpty()) {
+            FormPrompt.showProblems(problems)
+            return
+        }
 
-        onClonePreset(sourceId, name, null)
+        onClonePreset(sourceId, input.trim(), null)
     }
 
     /**
@@ -334,8 +336,8 @@ class StrategyPresetDetailPane(
         createdAtLabel.text = if (timeStr != null) timeStr else ""
 
         txtId.text = detail.preset.id
-        txtName.text = detail.preset.name
-        txtDescription.text = detail.preset.description ?: ""
+        presetMetaForm.setText("name", detail.preset.name)
+        presetMetaForm.setText("description", detail.preset.description ?: "")
 
         // 1. 规模指标卡片
         val declaredTags = detail.treeSelections.keys
@@ -357,8 +359,8 @@ class StrategyPresetDetailPane(
     private fun renderCreating(state: StrategyPresetState) {
         createdAtLabel.text = ""
         txtId.text = "(系统自动生成)"
-        txtName.text = ""
-        txtDescription.text = ""
+        presetMetaForm.setText("name", "")
+        presetMetaForm.setText("description", "")
 
         lblMetricPurposes.text = "0"
         lblMetricTrees.text = "0"
@@ -379,8 +381,8 @@ class StrategyPresetDetailPane(
     private fun renderEmpty() {
         createdAtLabel.text = ""
         txtId.text = ""
-        txtName.text = ""
-        txtDescription.text = ""
+        presetMetaForm.setText("name", "")
+        presetMetaForm.setText("description", "")
 
         lblMetricPurposes.text = "-"
         lblMetricTrees.text = "-"
@@ -453,6 +455,14 @@ class StrategyPresetDetailPane(
             this.headerText = null
             this.contentText = content
         }.showAndWait()
+    }
+
+    private companion object {
+        /** 预设名称约束（保存基本信息与另存为新预设弹窗共用；文案去字段前缀，呈现端带「名称」标签）。 */
+        val NAME_CONSTRAINTS = listOf(
+            FieldConstraint.Required("不能为空"),
+            FieldConstraint.MaxLength(60, "最多 60 字符")
+        )
     }
 }
 

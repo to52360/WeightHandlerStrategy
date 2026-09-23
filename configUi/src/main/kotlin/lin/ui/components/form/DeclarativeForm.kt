@@ -1,10 +1,6 @@
 package lin.ui.components.form
 
-import javafx.scene.control.CheckBox
-import javafx.scene.control.ComboBox
-import javafx.scene.control.Label
-import javafx.scene.control.Spinner
-import javafx.scene.control.Tooltip
+import javafx.scene.control.*
 import javafx.scene.layout.VBox
 import javafx.util.StringConverter
 import lin.ui.components.layout.FormField
@@ -48,6 +44,83 @@ data class SwitchFieldSpec(
     val tooltip: String? = null,
     val isDisabled: Boolean = false
 )
+
+/**
+ * 文本输入项规格（T-DC-010）：`id`/`label` 必填，`prompt`/`constraints` 开放缺省——
+ * 与 [lin.ui.components.action.EditorAction]「3 必填 + 开放列表」模式同构。
+ */
+data class TextFieldSpec(
+    val id: String,
+    val label: String,
+    val prompt: String? = null,
+    val constraints: List<FieldConstraint> = emptyList()
+) : FormItemSpec
+
+/**
+ * 文本字段约束：开放原子集合 + 组合子（与 [lin.ui.components.action.ActionCondition] 同构）。
+ *
+ * 每新增一种判定 = 加一个 sealed 子类型，规格结构永不再改；失败文案随原子数据携带。
+ * 求值为纯函数（不触碰 JavaFX 控件），失败返回文案、满足返回 null。
+ */
+sealed interface FieldConstraint {
+
+    /** 必填：raw 去空格后为空则失败。 */
+    data class Required(val message: String = "该字段不能为空") : FieldConstraint
+
+    /** 数字格式：非空但解析为 Double 失败则失败（空由 Required 负责）。 */
+    data class Decimal(val message: String = "请输入有效数字") : FieldConstraint
+
+    /** 最大长度。 */
+    data class MaxLength(val max: Int, val message: String = "最多 $max 字符") : FieldConstraint
+
+    // ── 组合子（递归包装，对应 ActionCondition.All/Any/Not 的位置）──
+
+    /** 全部成立（and）：任一失败即返回首个失败文案。 */
+    data class All(val constraints: List<FieldConstraint>) : FieldConstraint
+
+    /** 任一成立（or）：全部失败时返回首个失败文案。 */
+    data class Any(val constraints: List<FieldConstraint>) : FieldConstraint
+
+    /** 取反：内层失败（满足）则通过，内层通过则返回本约束文案。 */
+    data class Not(val constraint: FieldConstraint, val message: String = "不满足条件") : FieldConstraint
+}
+
+/** 纯函数求值：满足返回 null，不满足返回失败文案（单测 headless 可跑）。 */
+fun FieldConstraint.evaluate(raw: String): String? = when (this) {
+    is FieldConstraint.Required -> if (raw.isBlank()) message else null
+    is FieldConstraint.Decimal -> if (raw.isNotBlank() && raw.toDoubleOrNull() == null) message else null
+    is FieldConstraint.MaxLength -> if (raw.length > max) message else null
+    is FieldConstraint.All -> constraints.firstNotNullOfOrNull { it.evaluate(raw) }
+    is FieldConstraint.Any -> {
+        val failures = constraints.mapNotNull { it.evaluate(raw) }
+        if (failures.size == constraints.size) failures.firstOrNull() else null
+    }
+
+    is FieldConstraint.Not -> if (constraint.evaluate(raw) == null) message else null
+}
+
+/**
+ * 校验问题（纯数据，供呈现端 [FormPrompt] 消费）。
+ */
+data class FieldProblem(
+    val fieldId: String,
+    val label: String,
+    val message: String
+)
+
+/**
+ * 纯逻辑聚合校验：对单个字段的 raw 文本求值全部约束，产出问题列表（不触碰控件）。
+ * 供 `DeclarativeForm.validate()` 及脱离表单控件的独立输入（如克隆弹窗）复用。
+ */
+fun evaluateField(
+    fieldId: String,
+    label: String,
+    constraints: List<FieldConstraint>,
+    raw: String
+): List<FieldProblem> =
+    constraints.mapNotNull { constraint ->
+        constraint.evaluate(raw)?.let { FieldProblem(fieldId, label, it) }
+    }
 
 /**
  * 开关卡片分组规格
@@ -96,6 +169,8 @@ class DeclarativeForm(
     private val selectCombos = mutableMapOf<String, ComboBox<Any?>>()
     private val selectSpecs = mutableMapOf<String, SelectFieldSpec<*>>()
     private val switchChecks = mutableMapOf<String, CheckBox>()
+    private val textFields = mutableMapOf<String, TextField>()
+    private val textSpecs = mutableMapOf<String, TextFieldSpec>()
     private val defaultValues = mutableMapOf<String, Any?>()
 
     init {
@@ -104,6 +179,7 @@ class DeclarativeForm(
                 is NumberFieldSpec -> buildNumberField(spec)
                 is SelectFieldSpec<*> -> buildSelectField(spec)
                 is SwitchGroupSpec -> buildSwitchGroup(spec)
+                is TextFieldSpec -> buildTextField(spec)
             }
         }
     }
@@ -167,6 +243,17 @@ class DeclarativeForm(
         children.add(box)
     }
 
+    private fun buildTextField(spec: TextFieldSpec) {
+        val field = TextField().apply {
+            if (!spec.prompt.isNullOrBlank()) {
+                promptText = spec.prompt
+            }
+        }
+        textFields[spec.id] = field
+        textSpecs[spec.id] = spec
+        children.add(FormField(spec.label, field, defaultLabelWidth))
+    }
+
     /** 读取数值字段 */
     fun getNumber(id: String): Double =
         numberSpinners[id]?.value ?: (defaultValues[id] as? Double) ?: 0.0
@@ -195,6 +282,23 @@ class DeclarativeForm(
         switchChecks[id]?.isSelected = value
     }
 
+    /** 读取文本字段 */
+    fun getText(id: String): String = textFields[id]?.text.orEmpty()
+
+    /** 写入文本字段 */
+    fun setText(id: String, value: String) {
+        textFields[id]?.text = value
+    }
+
+    /**
+     * 校验带约束的文本字段：委托纯函数求值（[evaluateField]），产出问题列表。
+     * 呈现由 [FormPrompt] 单点负责，本方法不触碰任何弹窗。
+     */
+    fun validate(): List<FieldProblem> =
+        textSpecs.entries.flatMap { (id, spec) ->
+            evaluateField(id, spec.label, spec.constraints, textFields[id]?.text.orEmpty())
+        }
+
     /** 一键重置为声明的默认值 */
     @Suppress("UNCHECKED_CAST")
     fun reset() {
@@ -206,6 +310,9 @@ class DeclarativeForm(
         }
         for ((id, cb) in switchChecks) {
             cb.isSelected = defaultValues[id] as? Boolean ?: false
+        }
+        for ((_, field) in textFields) {
+            field.clear()
         }
     }
 }

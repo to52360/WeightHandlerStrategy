@@ -307,20 +307,26 @@ class ComboPlanEditor(
         val coreSelected = selectedCoreGroupIds.toSet()
         val depSelected = selectedDepGroupIds.toSet()
 
-        if (coreSelected.isEmpty() && depSelected.isEmpty()) {
-            Alert(Alert.AlertType.WARNING, "核心组与依赖组不能全部为空！").showAndWait()
-            return
-        }
-
         val managerId = cardGroupPicker.selectedItem?.cardGroupManagerId
-        if (managerId.isNullOrBlank()) {
-            Alert(Alert.AlertType.WARNING, "请选择目标卡组方案！").showAndWait()
+
+        // 校验问题聚合：统一走 FormPrompt 呈现单点（T-DC-006，聚合一次列出全部问题）
+        val problems = buildList {
+            if (coreSelected.isEmpty() && depSelected.isEmpty()) {
+                add(FieldProblem(fieldId = "binding", label = "卡组分组选择", message = "核心组与依赖组不能全部为空"))
+            }
+            if (managerId.isNullOrBlank()) {
+                add(FieldProblem(fieldId = "manager", label = "目标卡组", message = "请选择目标卡组方案"))
+            }
+        }
+        if (problems.isNotEmpty()) {
+            FormPrompt.showProblems(problems)
             return
         }
 
         onSave(
             ComboPlanFormSnapshot(
-                managerId = managerId,
+                // 校验已保证非空（problems 为空时不可达）；lambda 内判空不影响外置智能转换
+                managerId = managerId ?: return,
                 id = editingId,
                 coreGroupIds = coreSelected,
                 depGroupIds = depSelected,
