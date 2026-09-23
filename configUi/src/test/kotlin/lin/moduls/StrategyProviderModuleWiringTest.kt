@@ -19,7 +19,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource
 import java.nio.file.Files
 
 /**
- * 引擎启动链的**装配护栏**（T-MC-006）：把「引擎 modules + [strategyProviderModule]」装进一个 bare Koin 容器，
+ * 引擎启动链的**装配护栏**（T-FO-006）：把「引擎 modules + [strategyProviderModule]」装进一个 bare Koin 容器，
  * 逐个解析引擎启动真正会用到的东西——缺任何一个定义都会抛 `NoDefinitionFoundException`。
  *
  * ## 为什么测试在 configUi 而不是引擎

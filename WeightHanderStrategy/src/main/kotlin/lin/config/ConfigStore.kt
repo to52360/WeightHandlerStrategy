@@ -18,12 +18,17 @@ class ConfigStore(
     private val userDir: String = System.getProperty("user.dir")
 
     private fun load(resourceName: String): Properties {
+        // ⚠️ 取类加载器必须在 `Properties().apply { }` **之外**：块内写 `javaClass` 会解析到接收者
+        // `java.util.Properties`（java.base ⇒ `classLoader == null`），回落 `getSystemClassLoader()`
+        // ——那是宿主 launcher 的 app classpath，**不含本 jar** ⇒ classpath 默认层永远加载不到。
+        // 2026-09-22 实锤：部署后日志恒报「classpath 中未找到 engine.properties」，连带 `-D` 覆盖静默失效
+        // （覆盖只作用于 props 里已存在的键，键集为空则无从附着）。见 T-FO-009。
+        val loader = javaClass.classLoader ?: ClassLoader.getSystemClassLoader()
         val defaults = Properties().apply {
-            (javaClass.classLoader ?: ClassLoader.getSystemClassLoader())
-                .getResourceAsStream(resourceName)?.use { input ->
-                    load(input)
-                    logger.info("已加载 $resourceName (classpath)")
-                } ?: logger.info("classpath 中未找到 $resourceName")
+            loader.getResourceAsStream(resourceName)?.use { input ->
+                load(input)
+                logger.info("已加载 $resourceName (classpath)")
+            } ?: logger.info("classpath 中未找到 $resourceName")
         }
         return Properties().apply {
             putAll(defaults)

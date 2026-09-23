@@ -16,6 +16,7 @@ import lin.domain.use.UseDomain
 import lin.domain.use.plan.UsePlanBuilder
 import lin.domain.use.plan.UsePlanOrderer
 import lin.myLog
+import lin.utils.CardLogFormat
 import lin.warExt.my.base.getCost
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -89,7 +90,7 @@ class ComboDomain : KoinComponent {
      * 出牌策略
      */
     fun outCardStrategy() {
-        myLog.info { "执行出牌策略" }
+        myLog.info { "执行出牌策略 (剩余费用:${warManage.getCost()})" }
         executeEnvironment {
             findAndUse()
         }
@@ -111,7 +112,10 @@ class ComboDomain : KoinComponent {
             if (weightPlanner is ResultPlanner) {
                 when (val weightResult = weightPlanner.weightResult) {
                     is EndWeightResult -> {
-                        myLog.info { "找到需要使用的卡牌:${weightResult.bestCombination}" }
+                        myLog.info {
+                            "选定组合:${weightResult.bestCombination.size} 张\n" +
+                                    CardLogFormat.cards(weightResult.bestCombination)
+                        }
                         executeUseCard(weightResult)
                     }
 
@@ -139,7 +143,10 @@ class ComboDomain : KoinComponent {
      */
     private fun executeUseCard(weightResult: EndWeightResult) {
         val bestCombination = weightResult.bestCombination
-        myLog.info { "能够使用的卡牌:${weightResult.lessAbleUseCards()}" }
+        val lessAble = weightResult.lessAbleUseCards()
+        // 语义澄清（T-FO-011）：这里不是"能够使用的卡牌"（那是候选池），而是**落选但仍可用**的次优卡。
+        // 原措辞与上一行「选定组合」并列时极易读反，且其内容随逐卡权重全精度刷屏。
+        myLog.info { "落选候选(仍可用):${lessAble.size} 张\n${CardLogFormat.cards(lessAble)}" }
         // T-011/Q-009：bestCombination 已含主牌与余费牌（选牌层 fillSurplusCost 合并），
         // useCombo 统一按 UseStage 排序后一次性打出。
         // T-038b：**只有 [UseComboOutcome.FAILED] 才补偿**——余费填充归选牌层 fillSurplusCost（D-004），
@@ -215,9 +222,8 @@ class ComboDomain : KoinComponent {
 
         myLog.info {
             val finalWeight = bestCombinationCombo.sumOf { it.powerWeight }
-            val msg =
-                "找到最优出牌组合 (总费用: $needCost, 总权重: $finalWeight): $bestCombinationCombo"
-            msg
+            "出牌组合: 总费=$needCost 总分=${CardLogFormat.fixed(finalWeight)}\n" +
+                    CardLogFormat.cards(bestCombinationCombo)
         }
 
         var anyFailed = false
@@ -272,12 +278,12 @@ class ComboDomain : KoinComponent {
             if (BaseData.enableChangeWeight) {
                 val changeWeightResult = ChangeWeightResult(cards, warManage.parseComboCards(cards.toList()))
                 changeWeightResult.processChangeCard()
-
             } else {
+                // T-FO-011：本分支原先**零日志**（实战复盘「换牌一条记录都没有」的一半原因）。
+                myLog.info { "起手换牌: 宿主未启用换牌权重，按费用兜底全换 cost > ${EngineConfig.changeKeepCost}" }
                 cards.removeIf { card -> card.cost > EngineConfig.changeKeepCost }
             }
         }
-
     }
 
     fun executeDiscoverChooseCard(vararg cards: Card): Int {

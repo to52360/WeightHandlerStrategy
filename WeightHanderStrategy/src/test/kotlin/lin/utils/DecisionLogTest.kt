@@ -49,4 +49,36 @@ class DecisionLogTest {
             System.clearProperty("decision.log.enabled")
         }
     }
+
+    // ── T-FO-011：分类开关 ─────────────────────────────────────────────
+
+    @Test
+    fun `日志分类键已注册且默认空`() {
+        assertEquals(
+            "log.categories 必须注册进 engine.properties（空 = 只输出骨架日志）",
+            "",
+            ConfigStore("engine.properties").raw("log.categories")
+        )
+        assertTrue(EngineConfig.logCategories.isEmpty())
+    }
+
+    @Test
+    fun `默认配置下所有分类均为关`() {
+        // 骨架日志（每回合一行）不走分类开关；分类关闭只影响逐卡明细。
+        for (category in LogCategory.entries) {
+            assertEquals("分类 $category 默认应为关", false, DecisionLog.isEnabled(category))
+        }
+    }
+
+    @Test
+    fun `分类解析支持逗号分隔与大小写不敏感`() {
+        assertEquals(setOf(LogCategory.CHANGE, LogCategory.PICK), parseLogCategories("CHANGE, pick"))
+    }
+
+    @Test
+    fun `分类解析忽略非法值与 NONE 哨兵`() {
+        assertEquals(setOf(LogCategory.ORDER), parseLogCategories("ORDER,NOT_A_CATEGORY,NONE"))
+        assertTrue(parseLogCategories("").isEmpty())
+        assertTrue(parseLogCategories(null).isEmpty())
+    }
 }

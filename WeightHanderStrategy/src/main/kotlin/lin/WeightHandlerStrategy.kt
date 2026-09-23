@@ -5,10 +5,10 @@ import club.xiaojiawei.hsscriptbase.enums.RunModeEnum
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import club.xiaojiawei.hsscriptcardsdk.data.BaseData
 import club.xiaojiawei.hsscriptstrategysdk.DeckStrategy
+import lin.config.EngineConfig
 import lin.di.ModulesLoad
 import lin.domain.ComboDomain
 import org.koin.core.component.KoinComponent
-import org.koin.core.context.stopKoin
 
 
 /**
@@ -29,7 +29,13 @@ class WeightHandlerStrategy : DeckStrategy(), KoinComponent {
         }
         ModulesLoad().loadModules()
         comboDomain = ComboDomain()
-        stopKoin()
+        // ⚠️ 此处**不得** stopKoin()：装配虽已完成，但运行时仍有**懒解析**的 Koin 依赖，
+        // 关掉全局容器会让它们抛 `IllegalStateException: KoinApplication has not been started`
+        // （2026-09-22 实测出牌线程崩在 MyWarManage.cardInfoDao）。已知两处都在真实出牌路径上：
+        //   MyWarManage.cardInfoDao      —— baseCost → 查卡牌初始费用
+        //   WeightHandlerDomain.auraBoostEvaluator —— 光环评估
+        // 容器随插件实例存活；宿主重复加载本插件时由 ModulesLoad 先关旧容器兜底。
+        // （宿主自身不用 Koin——其 lib 与主 jar 内均无 koin 类——故保留全局容器无副作用。）
 
 
     }
@@ -61,7 +67,10 @@ class WeightHandlerStrategy : DeckStrategy(), KoinComponent {
         if (BaseData.enableChangeWeight) {
             comboDomain.executeChangeCard(cards)
         } else {
-            cards.removeIf { card -> card.cost > 2 }
+            // T-004：本兜底分支的费用上限须与另外两处同源（原为硬编码 2）。
+            // T-FO-011：补一行日志——否则「宿主未启用换牌权重」时整段换牌**完全无记录**。
+            myLog.info { "起手换牌: 宿主未启用换牌权重，按费用兜底全换 cost > ${EngineConfig.changeKeepCost}" }
+            cards.removeIf { card -> card.cost > EngineConfig.changeKeepCost }
         }
     }
 

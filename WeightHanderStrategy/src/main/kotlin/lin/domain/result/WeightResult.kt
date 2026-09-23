@@ -9,7 +9,9 @@ import lin.domain.context.NotWeight
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
 import lin.myLog
+import lin.utils.CardLogFormat
 import lin.utils.DecisionLog
+import lin.utils.LogCategory
 
 sealed class CmdPlanner
 object ContinuePlanner : CmdPlanner()
@@ -142,18 +144,20 @@ class EndWeightResult(
      * 落选**原因**细节（门控 / 费用）归 T-PV-004 门控日志，此处只标入选 / 未入选 / 硬禁三态。
      */
     private fun logSelectionDetail() {
-        if (!DecisionLog.enabled) return
+        if (!DecisionLog.isEnabled(LogCategory.PICK)) return
         val mainSet = mainCombination.toSet()
         val fillSet = fillCombination.toSet()
         val lessCost = (cost - costSum()).coerceAtLeast(0)
         val penalty = remainingCostPenalty(lessCost, cost) + comboPenalty(bestCombination.size)
-        DecisionLog.log {
+        DecisionLog.log(LogCategory.PICK) {
             buildString {
                 appendLine(
-                    "选牌结果: costSum=${costSum()}/$cost weightSum=${weightSum()} " +
-                            "penalty=$penalty effectiveScore=${bestCombination.sumOf { it.powerWeight } - penalty}"
+                    "选牌结果: costSum=${costSum()}/$cost weightSum=${CardLogFormat.fixed(weightSum())} " +
+                            "penalty=${CardLogFormat.fixed(penalty)} " +
+                            "effectiveScore=${CardLogFormat.fixed(bestCombination.sumOf { it.powerWeight } - penalty)}"
                 )
                 appendLine("  成员: ${bestCombination.joinToString { it.cardId() }}")
+                appendLine("  ⚠️ 量纲提示: base=costValue(等效费)→「分」；ts/aura 与余费填充层同轴→「费」。两者当前直加，不可当同一量纲比较。")
                 (_canUseCardsByHandler + _unUseCards).forEach { card ->
                     val other = card.extPowerWeight - card.tacticalScore - card.auraScore
                     val state = when {
@@ -164,13 +168,26 @@ class EndWeightResult(
                     }
                     appendLine(
                         "  ${card.cardId()}(${card.card.entityName}) cost=${card.cost()} " +
-                                "base=${card.baseValue} ts=${card.tacticalScore} aura=${card.auraScore} " +
-                                "other=$other ext=${card.extPowerWeight} power=${card.powerWeight} -> $state"
+                                "base=${CardLogFormat.fixed(card.baseValue)} ts=${CardLogFormat.fixed(card.tacticalScore)} " +
+                                "aura=${CardLogFormat.fixed(card.auraScore)} other=${CardLogFormat.fixed(other)} " +
+                                "ext=${CardLogFormat.fixed(card.extPowerWeight)} power=${CardLogFormat.fixed(card.powerWeight)} " +
+                                "combo声明=[${comboDeclared(card)}] -> $state"
                     )
                 }
             }
         }
     }
+
+    /**
+     * 该卡在 combo 里的**声明分**（`comboId:score`，多个逗号分隔；无则 `-`）。
+     *
+     * 只报声明值，**不重算实际采用量**——搜索里的 comboBonus 是随 counterpart/剪枝增量求值的
+     * （`DefaultFindBestCombination.evaluateNewComboBonus`），在日志侧复刻一次就是第二份判定逻辑
+     * （K-TG-007「同一事实两处组装必然单边漂移」）。要看实际采用总量，应由搜索把 achievedScore 报出来。
+     */
+    private fun comboDeclared(card: ComboCard): String =
+        card.comboEntries.joinToString(",") { "${it.comboId}:${CardLogFormat.fixed(it.score)}" }
+            .ifEmpty { "-" }
 
     /**
      * T-011/Q-009：余费统筹填充（选牌算法第二梯队，非执行阶段断层）。
@@ -198,10 +215,10 @@ class EndWeightResult(
      * 非 combo 成员且 `ts==0 && N>0`（未配/未命中树分 + 惜售挂号）。combo 成员豁免（D-005）为放行态。
      */
     private fun logFirstRoundGate(candidates: List<ComboCard>) {
-        if (!DecisionLog.enabled) return
+        if (!DecisionLog.isEnabled(LogCategory.PICK)) return
         val blocked = _canUseCardsByHandler.filterNot { it in candidates }
         if (blocked.isEmpty()) return
-        DecisionLog.log {
+        DecisionLog.log(LogCategory.PICK) {
             buildString {
                 appendLine("门控·第一轮: 进=${candidates.size}/${_canUseCardsByHandler.size}")
                 blocked.forEach { card ->
@@ -223,10 +240,10 @@ class EndWeightResult(
         pool: List<ComboCard>, candidates: List<ComboCard>,
         remainingCost: Int, isFull: Boolean, nDelta: Int
     ) {
-        if (!DecisionLog.enabled) return
+        if (!DecisionLog.isEnabled(LogCategory.PICK)) return
         val blocked = pool.filterNot { it in candidates }
         if (blocked.isEmpty()) return
-        DecisionLog.log {
+        DecisionLog.log(LogCategory.PICK) {
             buildString {
                 appendLine("门控·余费(空闲 $remainingCost 费, 满场=$isFull, nDelta=$nDelta): 进=${candidates.size}/${pool.size}")
                 blocked.forEach { card ->

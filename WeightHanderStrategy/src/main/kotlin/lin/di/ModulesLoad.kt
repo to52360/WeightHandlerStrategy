@@ -6,14 +6,23 @@ import lin.myLog
 import lin.serviceLoader.module.ModulesInfo
 import lin.serviceLoader.provider.StartupTask
 import lin.utils.serviceLoader.ServiceLoaderUtils
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
 class ModulesLoad {
     fun loadModules() {
+        // 宿主可能重复加载本插件（重载 / 换卡组 / 重开一局）：先关掉上一次的全局容器，
+        // 否则 startKoin 会因「已启动」直接抛 KoinApplicationAlreadyStartedException。
+        // 注意容器**不在装配后关闭**（见 WeightHandlerStrategy.init 的说明：运行时仍有懒解析依赖）。
+        if (GlobalContext.getOrNull() != null) {
+            myLog.debug { "检测到已存在的 Koin 容器，先关闭再重新装载（插件重载）" }
+            stopKoin()
+        }
         val koinApp = startKoin {
             modules(
                 dataModule,

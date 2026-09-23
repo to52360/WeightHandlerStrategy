@@ -312,10 +312,18 @@ class ComboCard(
         return card.entityId.hashCode() * 31
     }
 
+    /**
+     * 诊断用单行文本。
+     *
+     * 2026-09-22 修正两处：① 非 UNK 分支**缺闭合 `}`**（日志里整行不可解析）；
+     * ② 移除 `useGroupId`/`useGroupOrder` —— 二者是半死字段（见 [useGroupId] 上方 K-003 注记，
+     * 无排序/权重读取方），逐卡刷屏只增噪声。**对局日志请改用 [lin.utils.CardLogFormat]**（每卡一行、
+     * 定长小数），本方法仅作兜底。
+     */
     override fun toString(): String {
         if (card.entityName.startsWith("UNK"))
-            return "{id=${cardId()},weight=${powerWeight},useGroupId=${useGroupId},useGroupOrder=${useGroupOrder}}"
-        return "{id=${cardId()},name=${card.entityName},weight=${powerWeight},useGroupId=${useGroupId},useGroupOrder=${useGroupOrder}"
+            return "{id=${cardId()},weight=${powerWeight}}"
+        return "{id=${cardId()},name=${card.entityName},weight=${powerWeight}}"
     }
 
 }

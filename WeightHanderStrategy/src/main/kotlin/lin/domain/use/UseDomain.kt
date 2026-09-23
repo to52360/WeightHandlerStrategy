@@ -6,6 +6,9 @@ import lin.domain.context.ChangeAnimationTime
 import lin.domain.context.FourAnimationTime
 import lin.domain.context.UseAnimationTime
 import lin.myLog
+import lin.utils.CardLogFormat
+import lin.utils.DecisionLog
+import lin.utils.LogCategory
 import lin.warExt.my.base.getCost
 import lin.warExt.my.base.getHandCards
 
@@ -24,7 +27,7 @@ class UseDomain(val warManage: MyWarManage) {
                     return@isChangeByUseSuccess null
                 }
                 context.useSucceeded = warManage.tryUseCard(card)
-                myLog.info { "打出$card,使用结果:${context.useSucceeded}" }
+                myLog.info { "打出 ${CardLogFormat.card(card)} → ${if (context.useSucceeded) "成功" else "失败"}" }
                 if (context.useSucceeded && card.useIntent?.replanAfterUse == true)
                     context.replanRequested = true
                 card.useAfterStrategy?.executeAfterAction(context, this)
@@ -33,7 +36,7 @@ class UseDomain(val warManage: MyWarManage) {
                 }
                 if (context.useSucceeded) {
                     //超过指定测试应该不要等待时间了
-                    myLog.info { "打出等待动画" }
+                    DecisionLog.log(LogCategory.ANIM) { "等待打出动画 ${UseAnimationTime + context.extraAwaitMillis}ms" }
                     // 增加等待时间看看效果
                     Thread.sleep(UseAnimationTime + context.extraAwaitMillis)
                     //select 暂时这样处理发现,看一下有没有问题
@@ -51,7 +54,9 @@ class UseDomain(val warManage: MyWarManage) {
         }
         if (context.stateChanged) {
             if (!context.replanRequested) {
-                myLog.info { "有变化,重新查询combo,等待变化动画" }
+                // 骨架：状态确实变了（复盘关心）；动画等待归 ANIM 分类（刷屏无判读价值）。
+                myLog.info { "状态变化 → 重新查询 combo" }
+                DecisionLog.log(LogCategory.ANIM) { "等待变化动画 ${ChangeAnimationTime}ms" }
                 Thread.sleep(ChangeAnimationTime)
             }
             val existAbleUse = warManage.getHandCards().any { it.cost <= warManage.getCost() }
@@ -74,9 +79,9 @@ class UseDomain(val warManage: MyWarManage) {
         if (!context.useSucceeded) return
 
         val ticket = context.discoverTicket ?: return
-        myLog.info { "进入同步,等待发现" }
+        DecisionLog.log(LogCategory.ANIM) { "进入同步，等待发现（上限 ${FourAnimationTime}ms）" }
         ticket.await(FourAnimationTime)
-        myLog.info { "阻塞等待发现操作" }
+        DecisionLog.log(LogCategory.ANIM) { "发现同步结束，等待发现动画 ${ChangeAnimationTime}ms" }
         //等待发现动画
         Thread.sleep(ChangeAnimationTime)
         ticket.close()

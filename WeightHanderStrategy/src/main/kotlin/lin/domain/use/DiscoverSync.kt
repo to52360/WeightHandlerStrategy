@@ -3,6 +3,8 @@ package lin.domain.use
 import lin.domain.context.FourAnimationTime
 import lin.domain.context.UseAnimationTime
 import lin.myLog
+import lin.utils.DecisionLog
+import lin.utils.LogCategory
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,7 +36,7 @@ class DiscoverSync {
 
     fun waitFallbackIfNeeded() {
         if (fallbackCount.get() == 0) return
-        myLog.info { "尝试等待发现动作" }
+        DecisionLog.log(LogCategory.ANIM) { "尝试等待发现动作（兜底重试，上限 ${FourAnimationTime}ms）" }
         Thread.sleep(FourAnimationTime)
 
         repeat(MAX_RETRIES) {

@@ -1,6 +1,8 @@
 package lin.config
 
 import lin.bean.usePlan.UseStage
+import lin.utils.LogCategory
+import lin.utils.parseLogCategories
 
 /** 引擎层配置：加键只在本文件加一行。 */
 object EngineConfig {
@@ -85,6 +87,13 @@ object EngineConfig {
     // debug 在部署侧可能根本输出不出来 → 改由本开关控制，统一以 info 输出。
     // ⚠️ 本键必须在 engine.properties 注册：ConfigStore 只对已存在的键做 -D 系统属性覆盖。
     val decisionLogEnabled get() = store.boolean("decision.log.enabled", false)
+
+    // T-FO-011：日志**分类**明细开关（逗号分隔；值取 [LogCategory] 枚举名，非法值静默忽略）。
+    // 空 = 只输出骨架日志（每回合：执行策略 / 选定组合 / 打出结果）。
+    // 与 `decision.log.enabled` 的关系：后者为 true 时等价于**全类别开启**（向后兼容旧 SOP/文档）。
+    // ⚠️ 本键必须在 engine.properties 注册，否则外部文件写它无效（ConfigStore 只加载 props 里已存在的键）。
+    val logCategories: Set<LogCategory>
+        get() = parseLogCategories(store.raw("log.categories"))
 
     // timing
     val awaitAnimationTime get() = store.long("timing.await.animation", 1000)

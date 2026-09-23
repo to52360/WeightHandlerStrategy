@@ -2,7 +2,8 @@ package lin.domain.use
 
 import lin.domain.MatchState
 import lin.domain.context.AwaitAnimationTime
-import lin.myLog
+import lin.utils.DecisionLog
+import lin.utils.LogCategory
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -19,14 +20,14 @@ interface UseBeforeStrategy : UseStrategy {
 
 object UseAfterLClick : UseAfterStrategy {
     override fun afterExtAction(context: UseContext, useDomain: UseDomain) {
-        myLog.info { "等待地标动画" }
+        DecisionLog.log(LogCategory.ANIM) { "等待地标动画 ${AwaitAnimationTime}ms" }
         Thread.sleep(AwaitAnimationTime)
         val comboCard = context.card
         comboCard.card.action.lClick()
         useDomain.registerExpectedDiscover(context)
         useDomain.awaitExpectedDiscover(context)
         //避免没点到
-        myLog.info { "再点一下" }
+        DecisionLog.log(LogCategory.ANIM) { "再点一下（补点，等 ${AwaitAnimationTime}ms）" }
         Thread.sleep(AwaitAnimationTime)
         comboCard.card.action.lClick()
     }
