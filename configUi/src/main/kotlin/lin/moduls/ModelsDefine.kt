@@ -201,8 +201,8 @@ val uiDBModule = module {
     single { HsCardRepository(get()) }
 
     single { ComboPlanDefinitionRepository(get()) }
-    // T-TG-010：combo 的删除 / 恢复（顺带补上原本缺失的服务层）
-    single { ComboPlanService(get()) }
+    // T-TG-010：combo 的删除 / 恢复（顺带补上原本缺失的服务层）；D-DC-007：追加卡组服务依赖（保存校验单点）
+    single { ComboPlanService(get(), get()) }
     single { TemplateGroupRepository(get()) }
     single { OrthogonalTemplateRepository(get()) }
     // T-TG-021：快照域唯一入口（表存取 + 删除编排）—— 操作值由调用方传入，业务归各域

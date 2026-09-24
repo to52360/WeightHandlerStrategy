@@ -6,6 +6,7 @@ import javafx.scene.control.ButtonType
 import javafx.scene.layout.VBox
 import lin.bean.usePlan.ComboPlanDefinition
 import lin.bean.usePlan.ComboRelation
+import lin.repository.combo_plan.ComboPlanProblem
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import lin.ui.GroupDisplay
@@ -49,6 +50,9 @@ class ComboPlanEditor(
     // 选中的核心组与依赖组 ID 集合
     private val selectedCoreGroupIds = mutableSetOf<String>()
     private val selectedDepGroupIds = mutableSetOf<String>()
+
+    /** 上一次已渲染的卡组 id：勾选集合的合法性依附于它（切卡组 / 卡组消失都要重置）。 */
+    private var lastManagerId: String? = null
 
     // 通用多角色勾选表格（彻底消除特定 BindingUiRow 胶水模型与脆弱的 index 访问反模式）
     private val bindingTable = RoleSelectionTable<CardGroupBinding>(
@@ -144,12 +148,15 @@ class ComboPlanEditor(
                 override fun toString(obj: CardGroupManagerConfig?): String = obj?.name ?: ""
                 override fun fromString(string: String?): CardGroupManagerConfig? = null
             }
-            valueProperty().addListener { _, oldVal, selection ->
-                if (selection != null && selection.cardGroupManagerId != oldVal?.cardGroupManagerId) {
+            // 判据用自持的 lastManagerId 而非 oldVal：刷新选项列表换出等 id 新实例时不会误清草稿（D-DC-005 过渡语义）
+            valueProperty().addListener { _, _, selection ->
+                val newId = selection?.cardGroupManagerId
+                if (newId != lastManagerId) {
+                    lastManagerId = newId
                     // 切换卡组 = 重置勾选：旧卡组的分组 id 对新卡组非法，避免残留 ID 被保存进新卡组
                     selectedCoreGroupIds.clear()
                     selectedDepGroupIds.clear()
-                    repopulateBindingTable(selection)
+                    if (selection != null) repopulateBindingTable(selection) else bindingTable.clear()
                 }
             }
         }
@@ -249,11 +256,27 @@ class ComboPlanEditor(
 
         cardGroupPicker.selectedItem = finalManager
 
-        // 加载选中的角色 ID
+        // 加载选中的角色 ID：按当前卡组过滤 —— 兜底卡组路径下旧卡组的分组 id 对新卡组非法，不能带进来
+        val validIds = finalManager?.bindings?.map { it.id }?.toSet()
+        val coreIds = plan.coreGroupIds.filter { validIds == null || it in validIds }
+        val depIds = plan.depGroupIds.filter { validIds == null || it in validIds }
         selectedCoreGroupIds.clear()
-        selectedCoreGroupIds.addAll(plan.coreGroupIds)
+        selectedCoreGroupIds.addAll(coreIds)
         selectedDepGroupIds.clear()
-        selectedDepGroupIds.addAll(plan.depGroupIds)
+        selectedDepGroupIds.addAll(depIds)
+
+        val droppedIds = (plan.coreGroupIds - coreIds.toSet()) + (plan.depGroupIds - depIds.toSet())
+        if (droppedIds.isNotEmpty()) {
+            FormPrompt.showProblems(
+                listOf(
+                    FieldProblem(
+                        fieldId = "binding",
+                        label = "卡组分组选择",
+                        message = "以下分组不属于当前卡组，已取消勾选: $droppedIds"
+                    )
+                )
+            )
+        }
 
         // 加载该卡组下的分组并刷新表格勾选
         if (finalManager != null) {
@@ -304,32 +327,13 @@ class ComboPlanEditor(
             is EditorState.Empty -> return
         }
 
-        val coreSelected = selectedCoreGroupIds.toSet()
-        val depSelected = selectedDepGroupIds.toSet()
-
-        val managerId = cardGroupPicker.selectedItem?.cardGroupManagerId
-
-        // 校验问题聚合：统一走 FormPrompt 呈现单点（T-DC-006，聚合一次列出全部问题）
-        val problems = buildList {
-            if (coreSelected.isEmpty() && depSelected.isEmpty()) {
-                add(FieldProblem(fieldId = "binding", label = "卡组分组选择", message = "核心组与依赖组不能全部为空"))
-            }
-            if (managerId.isNullOrBlank()) {
-                add(FieldProblem(fieldId = "manager", label = "目标卡组", message = "请选择目标卡组方案"))
-            }
-        }
-        if (problems.isNotEmpty()) {
-            FormPrompt.showProblems(problems)
-            return
-        }
-
         onSave(
             ComboPlanFormSnapshot(
-                // 校验已保证非空（problems 为空时不可达）；lambda 内判空不影响外置智能转换
-                managerId = managerId ?: return,
+                // D-DC-007：本处零校验 —— 未选卡组留空，由保存单点判定并回传提示
+                managerId = cardGroupPicker.selectedItem?.cardGroupManagerId ?: "",
                 id = editingId,
-                coreGroupIds = coreSelected,
-                depGroupIds = depSelected,
+                coreGroupIds = selectedCoreGroupIds.toSet(),
+                depGroupIds = selectedDepGroupIds.toSet(),
                 score = paramForm.getNumber("score"),
                 changeScore = paramForm.getNumber("changeScore"),
                 relation = paramForm.getSelect("relation"),
@@ -337,6 +341,11 @@ class ComboPlanEditor(
                 mustAdjacent = paramForm.getBoolean("mustAdjacent")
             )
         )
+    }
+
+    /** 呈现保存单点的校验结果（判定在 `ComboPlanService.save`，此处只渲染 —— D-DC-007）。 */
+    fun showSaveProblems(problems: List<ComboPlanProblem>) {
+        FormPrompt.showProblems(problems.map { FieldProblem(it.fieldId, it.label, it.message) })
     }
 
     /**

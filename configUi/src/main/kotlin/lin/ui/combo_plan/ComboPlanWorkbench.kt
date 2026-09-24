@@ -13,6 +13,8 @@ import lin.bean.usePlan.ComboPlanDefinition
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.CardManagerEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanProblem
+import lin.repository.combo_plan.ComboPlanService
 import lin.ui.ActiveAware
 import lin.ui.GroupDisplay
 import lin.ui.card_group.ActiveManagerHolder
@@ -28,7 +30,16 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
     private val repository: ComboPlanDefinitionRepository by inject()
     private val cardGroupService: CardGroupService by inject()
     private val activeManagerHolder: ActiveManagerHolder by inject()
-    private val store = ComboPlanStore(repository, cardGroupService, activeManagerHolder)
+    private val comboPlanService: ComboPlanService by inject()
+    private val store = ComboPlanStore(
+        repository,
+        cardGroupService,
+        activeManagerHolder,
+        comboPlanService,
+        // D-DC-007：判定在保存单点，编辑器只负责呈现。
+        // ⚠️ 此处不可在构造 lambda 内直接引用 editor（editor 的回调又引用 store ⇒ 双向类型推断递归），走成员函数间接调用
+        onSaveRejected = { problems -> showSaveProblems(problems) }
+    )
 
     // 左侧工作台组件
     private val tableView = TableView<ComboPlanDefinition>()
@@ -155,6 +166,11 @@ class ComboPlanWorkbench : SplitPane(), KoinComponent, ActiveAware {
             editorTransition.sync()
         }
 
+    }
+
+    /** 转发保存单点的校验结果给编辑器呈现（成员函数形态，避免构造期与 editor 相互推断）。 */
+    private fun showSaveProblems(problems: List<ComboPlanProblem>) {
+        editor.showSaveProblems(problems)
     }
 
     override fun onActive() {

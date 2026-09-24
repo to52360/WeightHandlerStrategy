@@ -7,9 +7,11 @@ import lin.bean.usePlan.ComboRelation
 import lin.repository.card_group.CardGroupService
 import lin.repository.combo_plan.ComboPlanDefinitionEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanProblem
+import lin.repository.combo_plan.ComboPlanSaveResult
+import lin.repository.combo_plan.ComboPlanService
 import lin.ui.card_group.ActiveManagerHolder
 import lin.ui.components.state.EditorState
-import lin.utils.nextShortId
 
 /**
  * Combo 编辑器表单快照：一次性承载「编辑器 → 保存」链路的全部字段。
@@ -33,7 +35,10 @@ data class ComboPlanFormSnapshot(
 class ComboPlanStore(
     private val repository: ComboPlanDefinitionRepository,
     private val cardGroupService: CardGroupService,
-    private val activeManagerHolder: ActiveManagerHolder
+    private val activeManagerHolder: ActiveManagerHolder,
+    /** D-DC-007：保存走单点 `ComboPlanService.save`，校验不通过只回传问题由 UI 呈现。 */
+    private val comboPlanService: ComboPlanService,
+    private val onSaveRejected: (problems: List<ComboPlanProblem>) -> Unit
 ) {
 
     private val stateProperty = SimpleObjectProperty(ComboPlanState())
@@ -137,26 +142,31 @@ class ComboPlanStore(
      * 保存或新建 Combo 编排配置
      */
     fun savePlan(form: ComboPlanFormSnapshot) {
-        val finalId = form.id?.trim()?.takeIf { it.isNotEmpty() } ?: nextShortId()
-
-        val entity = ComboPlanDefinitionEntity(
-            managerId = form.managerId,
-            id = finalId,
-            coreGroupIds = form.coreGroupIds.joinToString(","),
-            depGroupIds = form.depGroupIds.joinToString(","),
-            score = form.score,
-            changeScore = form.changeScore,
-            coreMutex = form.coreMutex,
-            relation = form.relation.name,
-            mustAdjacent = form.mustAdjacent
+        // D-DC-007：id 留空 = 新建（短 id 由保存单点分配），校验亦在单点完成
+        val result = comboPlanService.save(
+            ComboPlanDefinitionEntity(
+                managerId = form.managerId,
+                id = form.id?.trim() ?: "",
+                coreGroupIds = form.coreGroupIds.joinToString(","),
+                depGroupIds = form.depGroupIds.joinToString(","),
+                score = form.score,
+                changeScore = form.changeScore,
+                coreMutex = form.coreMutex,
+                relation = form.relation.name,
+                mustAdjacent = form.mustAdjacent
+            )
         )
 
-        repository.save(entity)
+        when (result) {
+            is ComboPlanSaveResult.Saved -> {
+                stateProperty.set(state.copy(isCreating = false))
+                loadInitialData()
+                val newSelected = state.allPlans.find { it.id == result.id }
+                stateProperty.set(state.copy(selectedPlan = newSelected))
+            }
 
-        stateProperty.set(state.copy(isCreating = false))
-        loadInitialData()
-        val newSelected = state.allPlans.find { it.id == finalId }
-        stateProperty.set(state.copy(selectedPlan = newSelected))
+            is ComboPlanSaveResult.Rejected -> onSaveRejected(result.problems)
+        }
     }
 
     /**

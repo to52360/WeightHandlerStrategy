@@ -8,11 +8,12 @@ import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.combo_plan.ComboPlanDefinitionEntity
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
+import lin.repository.combo_plan.ComboPlanProblem
+import lin.repository.combo_plan.ComboPlanSaveResult
 import lin.repository.combo_plan.ComboPlanService
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import lin.ui.service.TreeConfigService
-import lin.utils.nextShortId
 
 /**
  * Combo 域 MCP 工具提供者（写工具 + 动作同文件，一个资源域一个包）：
@@ -57,82 +58,54 @@ class ComboPlanToolProvider(
                 id 为空时会自动分配 short ID；如果包含已有 id，则会覆盖保存该 Combo 方案。
             """.trimIndent()
         ) { input ->
-            val allManagers = cardGroupService.loadAll(onlyEnabled = false)
-            val manager = allManagers.find { m -> m.cardGroupManagerId == input.managerId }
-                ?: return@typedTool mcpError(
-                    "卡组/管理器不存在: ${input.managerId}。当前存在的卡组列表: ${
-                        allManagers.map {
-                            mapOf(
-                                "id" to it.cardGroupManagerId,
-                                "name" to it.name
-                            )
-                        }
-                    }"
-                )
-
-            if (input.coreGroupIds.isEmpty()) {
-                return@typedTool mcpError("coreGroupIds 核心分组 ID 列表不能为空，必须包含至少一个有效分组 ID")
-            }
-
-            if (input.depGroupIds.isEmpty()) {
-                return@typedTool mcpError("depGroupIds 依赖分组 ID 列表不能为空！Combo 方案必须包含核心组与依赖组才能构成协同加分或时序关联。")
-            }
-
-            val validBindingIds = manager.bindings.map { b -> b.id }.toSet()
-            val invalidCoreIds = input.coreGroupIds.filterNot { it in validBindingIds }
-            val invalidDepIds = input.depGroupIds.filterNot { it in validBindingIds }
-
-            if (invalidCoreIds.isNotEmpty() || invalidDepIds.isNotEmpty()) {
-                return@typedTool mcpError(
-                    "提供的分组 ID 不属于卡组 [${manager.name}] (${input.managerId})。" +
-                            "无效核心组: $invalidCoreIds, 无效依赖组: $invalidDepIds。" +
-                            "该卡组下的有效分组绑定列表: ${
-                                manager.bindings.map {
-                                    mapOf(
-                                        "id" to it.id,
-                                        "name" to it.name
-                                    )
-                                }
-                            }"
-                )
-            }
-
-            val relationEnum = try {
-                ComboRelation.valueOf(input.relation.uppercase())
-            } catch (_: Exception) {
-                return@typedTool mcpError(
-                    "未知 relation: ${input.relation}。合法选项: ${
-                        ComboRelation.entries.map { it.name }
-                    }"
-                )
-            }
-
-            val finalId = input.id?.trim()?.takeIf { it.isNotEmpty() } ?: nextShortId()
-
-            val entity = ComboPlanDefinitionEntity(
-                managerId = input.managerId,
-                id = finalId,
-                coreGroupIds = input.coreGroupIds.joinToString(","),
-                depGroupIds = input.depGroupIds.joinToString(","),
-                score = input.score,
-                changeScore = input.changeScore,
-                coreMutex = input.coreMutex,
-                relation = relationEnum.name,
-                mustAdjacent = input.mustAdjacent
-            )
-
-            repository.save(entity)
-
-            mcpSuccess(
-                mapOf(
-                    "saved" to true,
-                    "id" to finalId,
-                    "managerId" to input.managerId,
-                    "managerName" to manager.name
+            // D-DC-007：判定全在保存单点，本处只做入参转换与结果渲染
+            val result = comboPlanService.save(
+                ComboPlanDefinitionEntity(
+                    managerId = input.managerId,
+                    // id 留空 = 新建，短 id 由保存单点分配并回传
+                    id = input.id?.trim() ?: "",
+                    coreGroupIds = input.coreGroupIds.joinToString(","),
+                    depGroupIds = input.depGroupIds.joinToString(","),
+                    score = input.score,
+                    changeScore = input.changeScore,
+                    coreMutex = input.coreMutex,
+                    relation = input.relation.uppercase(),
+                    mustAdjacent = input.mustAdjacent
                 )
             )
+
+            when (result) {
+                is ComboPlanSaveResult.Saved -> mcpSuccess(
+                    mapOf(
+                        "saved" to true,
+                        "id" to result.id,
+                        "managerId" to input.managerId,
+                        "managerName" to result.managerName
+                    )
+                )
+
+                is ComboPlanSaveResult.Rejected -> mcpError(renderRejected(result.problems))
+            }
         }
     )
+
+    /** 渲染保存单点的校验问题：判定在 `ComboPlanService.save`，此处只补上候选列表便于 AI 重发。 */
+    private fun renderRejected(problems: List<ComboPlanProblem>): String =
+        problems.joinToString("\n") { problem ->
+            when (problem) {
+                is ComboPlanProblem.ManagerNotFound ->
+                    problem.message + "。当前存在的卡组列表: ${
+                        problem.available.map { mapOf("id" to it.cardGroupManagerId, "name" to it.name) }
+                    }"
+
+                is ComboPlanProblem.ForeignGroups ->
+                    problem.message + "。该卡组下的有效分组绑定列表: ${
+                        problem.validBindings.map { mapOf("id" to it.id, "name" to it.name) }
+                    }"
+
+                else -> problem.message
+            }
+        }
 
     // ── 能力实现（combo_plan 的 get / list）：具名私有函数，行为可点名 ──
 
