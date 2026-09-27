@@ -2,8 +2,10 @@ package lin.domain
 
 import club.xiaojiawei.hsscriptcardsdk.bean.Card
 import lin.bean.ComboCard
+import lin.bean.equivalentCostValue
 import lin.domain.context.NotWeight
 import lin.domain.context.UnUseWeight
+import lin.domain.context.tacticalContribution
 import lin.domain.result.EmptyWeightResult
 import lin.domain.result.EndWeightResult
 import lin.domain.result.WeightResult
@@ -105,16 +107,22 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
         }
         // D-007 回归「树分皆战术信号」：全树分进出牌总权重，同时整体作为战术信号存 ComboCard
         //（第一轮门控 / 余费门槛绕行 / fillValue 溢价消费）。Q-008 通道分离遗留待清理（T-018）。
-        total += treeResult.score
+        // D-FO-005 A-合流版（T-FO-014）：进 total 的是**换算后的分量**（分），不是 ts 原值（费）。
+        // ts 原值仍落存 tacticalScore 供门控/填充/排序按【费】读；分量落存 tacticalContribution 供日志诊断。
+        // E 取本卡 equivalentCostValue()（配置等效费 > 实时身材/2 > 实时费）——与填充层同一个 E，不另立口径。
         comboCard.tacticalScore = treeResult.score
+        comboCard.tacticalContribution = tacticalContribution(comboCard.equivalentCostValue(), treeResult.score)
+        total += comboCard.tacticalContribution
 
         // 1.5 push 广播分（独立 additive 通道，aura-boost D-004；光环加分只走 AuraBoost，评估树不写光环条件）
+        // D-FO-005：光环分与树分同语义（「命中 ⇒ 等效超模 X 费」），同批换算后进 total。
         val auraScore = auraBoostEvaluator.activeScore(comboCard, ruleEnv)
-        total += auraScore
-        // T-PV-003：光环分落存到卡上（仅诊断用，供 DecisionLog 逐卡分量区分三路来源）
         comboCard.auraScore = auraScore
+        comboCard.auraContribution = tacticalContribution(comboCard.equivalentCostValue(), auraScore)
+        total += comboCard.auraContribution
 
-        // 2. legacy handler 链（旧系统，兼容）
+        // 2. legacy handler 链（旧系统，兼容）——历史「分」值，与 baseValue 同轴，直加不再跨轴
+        // @verify K-FO-010: legacy handler 分的轴来源不明（历史值），本次按「分」直加只是「不再更坏」，轴归属未证明
         for (handler in weightHandlers) {
             val w = handler.cardWeightCompute(comboCard, warManage)
             if (w == UnUseWeight) {
@@ -124,7 +132,6 @@ class WeightHandlerDomain(val warManage: MyWarManage) : KoinComponent {
                 total += w
             }
         }
-
         return total
     }
 

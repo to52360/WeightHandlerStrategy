@@ -4,7 +4,6 @@ import lin.bean.ComboCard
 import lin.bean.cardExt.base.isMinion
 import lin.bean.passesFirstRoundCandidate
 import lin.bean.passesSurplusCandidate
-import lin.bean.surplusIdleThreshold
 import lin.domain.context.NotWeight
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
@@ -157,9 +156,12 @@ class EndWeightResult(
                             "effectiveScore=${CardLogFormat.fixed(bestCombination.sumOf { it.powerWeight } - penalty)}"
                 )
                 appendLine("  成员: ${bestCombination.joinToString { it.cardId() }}")
-                appendLine("  ⚠️ 量纲提示: base=costValue(等效费)→「分」；ts/aura 与余费填充层同轴→「费」。两者当前直加，不可当同一量纲比较。")
+                appendLine("  ✅ 量纲提示: 全为「分」——base=costValue(等效费)；ts/aura 已由 A-合流版换算成" +
+                        " costValue(E+ts)−costValue(E)（D-FO-005），与 base 同轴，直加合法。")
                 (_canUseCardsByHandler + _unUseCards).forEach { card ->
-                    val other = card.extPowerWeight - card.tacticalScore - card.auraScore
+                    // 「其余累加」= extPowerWeight 扣掉两路已换算分量后的残差（legacy handler 分 / 光环等）
+                    // @verify K-FO-009: 两种硬禁态（Banned 早退 / 评估后 unUse）下分量落存与累加不同步 ⇒ 残差失真（仅诊断，不影响决策）
+                    val other = card.extPowerWeight - card.tacticalContribution - card.auraContribution
                     val state = when {
                         card in mainSet -> "入选·主"   // 第一轮主组合（搜索选中 / fastPath 全收）
                         card in fillSet -> "入选·垫"   // 第二轮余费填充（fillSurplusCost 垫出）
@@ -168,8 +170,12 @@ class EndWeightResult(
                     }
                     appendLine(
                         "  ${card.cardId()}(${card.card.entityName}) cost=${card.cost()} " +
-                                "base=${CardLogFormat.fixed(card.baseValue)} ts=${CardLogFormat.fixed(card.tacticalScore)} " +
-                                "aura=${CardLogFormat.fixed(card.auraScore)} other=${CardLogFormat.fixed(other)} " +
+                                "base=${CardLogFormat.fixed(card.baseValue)} " +
+                                "ts=${CardLogFormat.fixed(card.tacticalScore)}(费)→" +
+                                "${CardLogFormat.fixed(card.tacticalContribution)}(分) " +
+                                "aura=${CardLogFormat.fixed(card.auraScore)}(费)→" +
+                                "${CardLogFormat.fixed(card.auraContribution)}(分) " +
+                                "other=${CardLogFormat.fixed(other)} " +
                                 "ext=${CardLogFormat.fixed(card.extPowerWeight)} power=${CardLogFormat.fixed(card.powerWeight)} " +
                                 "combo声明=[${comboDeclared(card)}] -> $state"
                     )
@@ -224,7 +230,7 @@ class EndWeightResult(
                 blocked.forEach { card ->
                     appendLine(
                         "  挡 ${card.cardId()}(${card.card.entityName}) cost=${card.cost()} ts=${card.tacticalScore} " +
-                                "N=${card.surplusIdleThreshold()} 原因=树分未命中(ts=0) 且 配了惜售 N>0（非 combo 成员）"
+                                "N=${card.idleThreshold} 原因=树分未命中(ts=0) 且 配了惜售 N>0（非 combo 成员）"
                     )
                 }
             }
@@ -254,11 +260,11 @@ class EndWeightResult(
                         card.isUnUse() -> "硬禁(isUnUse)"
                         isFull && card.isMinion() -> "满场随从不占位"
                         else -> {
-                            val n = (card.surplusIdleThreshold() - nDelta).coerceAtLeast(0)
+                            val n = (card.idleThreshold - nDelta).coerceAtLeast(0)
                             "战术未命中(ts=${card.tacticalScore}) 被 N 惜售: 空闲$remainingCost < cost ${card.cost()}+N $n (差 ${card.cost() + n - remainingCost})"
                         }
                     }
-                    appendLine("  挡 ${card.cardId()} cost=${card.cost()} ts=${card.tacticalScore} N=${card.surplusIdleThreshold()} 原因=$reason")
+                    appendLine("  挡 ${card.cardId()} cost=${card.cost()} ts=${card.tacticalScore} N=${card.idleThreshold} 原因=$reason")
                 }
             }
         }

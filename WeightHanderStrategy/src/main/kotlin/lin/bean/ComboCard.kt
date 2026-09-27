@@ -34,8 +34,11 @@ class ComboCard(
     val combinedConfig: CardCombinedConfig? = null,
     val card: Card,
     // 基础价值（固有物理价值）：配置等效费用分 / 随从身材分 / 法术费用兜底分 三分流结果，
-    // 由 MyWarManage.parseComboCard 经 calcBaseValue 一次性计算注入，与运行时战术分（extPowerWeight）正交叠加。
+    // 由 MyWarManage.parseComboCard 经 calcBaseValue 一次性计算注入，与运行时战术溢价（extPowerWeight）正交叠加。
     // 最终出牌权重：powerWeight = baseValue + extPowerWeight。
+    // 【量纲：分】—— 费经 `costValue(c) = 3.0·c^0.5`（[lin.domain.context.costValue]）**非线性凹映射**后的输出。
+    // A-合流版（D-FO-005 / T-FO-014）后 extPowerWeight 亦为分（树分/光环分经
+    // [lin.domain.context.tacticalContribution] 换算）⇒ 同轴直加合法，跨轴问题已修复。
     val baseValue: Double = 0.0
 ) {
 
@@ -113,6 +116,20 @@ class ComboCard(
     val groupSurplusIdleThreshold: Int?
         get() = if (shouldRecomputeBehavior()) GroupBehaviorRuntime.resolveSurplusGate(allGroupIds)
         else combinedConfig?.groupSurplusIdleThreshold
+
+    /**
+     * 余费门槛 N：覆盖链（T-FO-015）的**唯一读取入口**——所有消费方（第一轮门控 / 余费门 /
+     * 绝望前置 / 日志）一律读本字段，不再各自拼链（编排点见 [resolveIdleThreshold]）。
+     *
+     * `by lazy` = 构造后按需烘焙一次（粒度同 [predicateGroupIds]：每轮每卡一次）。
+     * **严禁改成急切求值**（combo-plan-model/K-002 教训）：覆盖链依赖的
+     * [groupSurplusIdleThreshold] / [useIntent] 都带谓词组运行时重算，急切求值 = 每张卡每次构造
+     * 就跑全部谓词组，且会拿到构造瞬间尚未就绪的重算结果。
+     *
+     * `nDelta`（绝望门槛减量）**故意不在此处**——它按血量阶梯变，是运行时减量而非覆盖链的一层，
+     * 由消费方在读数后自行相减（[passesSurplusGate]）。
+     */
+    val idleThreshold: Int by lazy { resolveIdleThreshold() }
 
     /**
      * 出牌意图：谓词组挂的 OVERRIDE（stageOverride / replanAfterUse / orderWeight）对成员生效。
@@ -203,23 +220,47 @@ class ComboCard(
     var useGroupOrder: Double = baseValue
 
     // 出牌权重（最终决策依据）：powerWeight = baseValue（基础价值） + extPowerWeight（战术溢价）。
+    // 【量纲：分】—— A-合流版（D-FO-005 / T-FO-014）后两项**同为分轴**：baseValue 是 costValue(等效费)，
+    // extPowerWeight 内含的树分/光环分已由 [lin.domain.context.tacticalContribution] 换算成分
+    // （legacy handler 分本就是分）⇒ 本标量是单一量纲，跨轴直加问题已修复。
     val powerWeight: Double
         get() = baseValue + extPowerWeight
 
     // 运行时加分累加器，初值 = BaseWeight（T-041 归零为 0.0，即无初始常数补贴）。
     // 注意它会进主搜索的 currentWeight，所以初值每 +1 就等于给「每张入选的牌」发 1 分线性补贴
     // ——与 comboPenalty（防堆砌）冲突，详见 EngineConfig.baseWeight 注释。
+    // 【量纲：分】写入方 = weightEvaluator 的 [tacticalContribution]（分）+ [auraContribution]（分）
+    // + legacy handler 分（历史值，同属分轴）。A-合流版后本字段不再含费值 ⇒ 与 baseValue 同轴直加合法。
     var extPowerWeight: Double = BaseWeight
 
     // 评估树战术信号（D-007 回归「树分皆战术信号」：全树分 general+tactical，由 weightEvaluator 写入）。
-    // 消费方：第一轮候选门控（T-008）、余费门槛绕行、fillValue 溢价（Q-024 费化后即费值，直加）。
+    // 消费方：第一轮候选门控（T-008）、余费门槛绕行、fillValue 溢价（Q-024 费化后即费值，直加）、
+    // 排序兜底键（[lin.domain.use.plan.UsePlanOrderer] 的 tactical 档）。
     // Q-008/T-007 的通道分离已无独立消费者（双费数模型取代其使命），通道字段遗留待清理（T-018）。
+    // 【量纲：费】T-PV-011 费化后配置侧直接配费值、`tacticalScoreScale` 换算层已退役
+    // （见 [lin.domain.context.ComboDefValue]）。语义 =「条件命中 ⇒ 这张牌等效**超模 ts 费**」。
+    // A-合流版（D-FO-005 / T-FO-014）后**两层判据不再矛盾**：填充层 `surplusFillValue = E + ts`
+    // 与门控/排序照旧按【费】读本字段（序数比较）；只有「进总分竞争」改用换算后的
+    // [tacticalContribution]（分）⇒ 跨轴直加问题已修复，本字段保持费值语义不变。
     var tacticalScore: Double = 0.0
 
     // T-PV-003（play-value-model）：光环广播分（AuraBoost 独立 additive 通道，aura-boost D-004）。
-    // 原本算完即并入 weightEvaluator 的 total、不落存，诊断时无法区分「树分 / 光环 / 其余累加」三路来源。
-    // **仅作决策日志（DecisionLog）的诊断分量，不参与任何权重计算**。
+    // 与 [auraContribution] 的分工：本字段是**费**原值（供诊断看配置侧填了多少费），
+    // 进总分竞争的是换算后的 [auraContribution]（分）。
+    // 【量纲：费】—— 与 tacticalScore 同批「费化」，`aura_boost.score` 是配置侧直接填的费值；
+    // A-合流版后不再被当作分直加（见 [auraContribution]）。
     var auraScore: Double = 0.0
+
+    // D-FO-005 A-合流版（T-FO-014）：树分【费】经 costValue 差分换算后的**分**（方案 B 分量落存）。
+    // 评估时由 [lin.domain.WeightHandlerDomain.weightEvaluator] 一次换算写入（E 取本卡 equivalentCostValue()）；
+    // **主搜索消费它**（[lin.domain.result.DefaultFindBestCombination] 读 extPowerWeight 里的本分量）。
+    // 与 [tacticalScore]（费，原值不变）的分工：门控/填充/排序照旧读费值，只有「进总分竞争」用本分量。
+    // 换算定义见 [lin.domain.context.tacticalContribution]；ts==0 时为 0.0。
+    var tacticalContribution: Double = 0.0
+
+    // D-FO-005 A-合流版（T-FO-014）：光环分【费】同批换算后的**分**（语义与树分同为「超模费」）。
+    // 与 [auraScore]（费，原值保留供诊断）并存——诊断看费值，竞争用分量。
+    var auraContribution: Double = 0.0
 
     /**
      * 权重累加方法

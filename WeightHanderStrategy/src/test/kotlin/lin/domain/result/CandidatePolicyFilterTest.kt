@@ -69,7 +69,7 @@ class CandidatePolicyFilterTest {
             card = createMockCard(cardId = "c1"),
             baseValue = 5.0
         )
-        assertEquals(2, card.surplusIdleThreshold())
+        assertEquals(2, card.idleThreshold)
         assertFalse(card.passesFirstRoundCandidate()) // N=2>0 且 ts=0 → 惜售
     }
 
@@ -84,7 +84,7 @@ class CandidatePolicyFilterTest {
             card = createMockCard(cardId = "c2"),
             baseValue = 5.0
         )
-        assertEquals(5, card.surplusIdleThreshold())
+        assertEquals(5, card.idleThreshold)
     }
 
     @Test
@@ -97,8 +97,52 @@ class CandidatePolicyFilterTest {
             card = createMockCard(cardId = "c3"),
             baseValue = 5.0
         )
-        assertEquals(1, card.surplusIdleThreshold())
+        assertEquals(1, card.idleThreshold)
         assertFalse(card.passesFirstRoundCandidate())
+    }
+
+    @Test
+    fun `N 解析链 四层皆缺时缺省为 0`() {
+        // 第四层（缺省 0）：逐卡 / 分组 / 标签预设三者皆未声明 → N=0（D-012「未配置 = 付得起即垫」）
+        val card = ComboCard(
+            combinedConfig = CardCombinedConfig(
+                weightInfo = CardWeightInfo("c4", 1.0),
+                useIntent = UseIntent()
+            ),
+            card = createMockCard(cardId = "c4"),
+            baseValue = 5.0
+        )
+        assertEquals(0, card.idleThreshold)
+        assertTrue(card.passesFirstRoundCandidate()) // N=0 无惜售诉求 → 无条件进第一轮
+    }
+
+    @Test
+    fun `idleThreshold 字段值即覆盖链结果 无额外覆盖`() {
+        // T-FO-015 收敛判据：字段不是「链的额外一层覆盖」，它读的就是链本身——
+        // 逐卡层命中时字段 == 逐卡值（不被分组/标签改写）；任一层单独命中时字段 == 该层值。
+        assertEquals(
+            2,
+            ComboCard(
+                combinedConfig = CardCombinedConfig(
+                    weightInfo = CardWeightInfo("m1", 1.0, surplusIdleThreshold = 2),
+                    groupSurplusIdleThreshold = 5,
+                    useIntent = UseIntent(tagDefaultSurplusIdleThreshold = 1)
+                ),
+                card = createMockCard(cardId = "m1"),
+                baseValue = 5.0
+            ).idleThreshold
+        )
+        // 与链的编排点返回值恒一致（同一事实两个读取面，收敛后它们必须相等）
+        val groupOnly = ComboCard(
+            combinedConfig = CardCombinedConfig(
+                weightInfo = CardWeightInfo("m2", 1.0),
+                groupSurplusIdleThreshold = 5,
+                useIntent = UseIntent(tagDefaultSurplusIdleThreshold = 1)
+            ),
+            card = createMockCard(cardId = "m2"),
+            baseValue = 5.0
+        )
+        assertEquals(groupOnly.resolveIdleThreshold(), groupOnly.idleThreshold)
     }
 
     // ── 第二轮 ──

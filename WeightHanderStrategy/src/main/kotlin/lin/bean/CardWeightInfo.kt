@@ -29,6 +29,9 @@ const val FirstUseGroupId = 20
  *   **D-007 小数位编码 v4（phase-1，存储侧约定）**：上游存储把「等效费(≤1 位小数) + 空闲放行门槛 N(百分位)」压在
  *   同一个数里（如 3.54 = 等效 3.5 费 / 垫后余量 4，D-012），由 DefCardWeightInfoProvide 解码拆分为
  *   本字段（≤1 位小数精度）+ [surplusIdleThreshold]。本字段经解码后恒 ≤1 位小数。
+ *   【量纲：费（存储编码值）】—— 字段本身是 费×100 的 v4 编码数（3.54 不是 3.54 费）；**解码后才是等效费**，
+ *   `decodeCostValue` → 等效费 E（费），再经 `costValue` 的三次方根凹映射后才成【分】存进
+ *   [ComboCard.baseValue]。⚠️ 直接读本字段参与算术 = 用了编码值当费（跨轴/跨语义）= 已知问题（T-FO-012 评分轴对齐）。
  * @param surplusIdleThreshold 空闲放行门槛 N（余费门槛，D-007 v4）：空闲费 ≥ N 才允许垫牌放行；
  *   null = 未配置 = 0 付得起即垫（D-005「无战术不死捏」）。解码自 powerWeight 小数位，取值 1~9。
  *   垫的价值 fillValue = 等效费 + 树分×scale（战术溢价另算，不占本编码位）。

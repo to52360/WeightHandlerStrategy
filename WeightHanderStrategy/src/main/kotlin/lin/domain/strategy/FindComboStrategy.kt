@@ -75,6 +75,11 @@ class ExtCostStrategy : FindComboStrategy {
         // 标签即路由声明——持有者由本策略接管（双世界比较，出牌时机写死在 find 阶段先于组合，不进 UsePlanOrderer）。
         // 机制牌（硬币）由 COINProvide.mechanismPurposes 启动期硬编码注入，用户亦可在配置面给其他牌打此标签。
         val extCostPredicate: FindRule = { it.hasPurposeTag(PurposeTagId.EXTRA_COST) }
+        // 【量纲：混轴（费 → 分/费比）】—— `CostWeight`(0.5) 是一条 **独立的「1 额外费折 0.5」换算率**，
+        // 与 `costValue` 的边际率（1 费 ≈ 1.5 分、4 费 ≈ 0.75 分）、`remainingCostPenalty` 的 0.35
+        // 三者互不相干 ⇒ 同一个「1 费」在引擎里被折成 0.5 / 1.5~0.75 / 0.35 三种值，不成体系；
+        // 且乘积 `-extCost × 0.5` 只作 `WeightResult.weightSum()`（混轴标量）上的减项 ⇒ 双世界比较本身不可靠
+        // = 已知问题（T-FO-012 评分轴对齐）。
         val extCostConfig: ExtCostConfig = { cost, extCostCards ->
             var reduceWeight = NotWeight
             val extCost = extCostCards.sumOf { it.extCost() }

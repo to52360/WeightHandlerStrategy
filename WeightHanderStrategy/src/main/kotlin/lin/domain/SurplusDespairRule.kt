@@ -1,6 +1,5 @@
 package lin.domain
 
-import lin.bean.surplusIdleThreshold
 import lin.config.EngineConfig
 import lin.rule.context.toWarView
 
@@ -34,7 +33,7 @@ fun WarInfo.surplusDespairNDelta(
     // 前置①场面承压：溢出伤害为正（空场/嘲讽全承 = 无压力，不绝望）且 ≥ 当前血量容忍度
     if (!(view.excessDamage > 0 && view.excessDamage >= view.ableAtcSum)) return 0
     // 前置②未来配合不可能：手牌无 N>0 惜售牌（配 N = 声明未来收益，有声明即未来希望）
-    if (handComboCards.any { it.surplusIdleThreshold() > 0 }) return 0
+    if (handComboCards.any { it.idleThreshold > 0 }) return 0
     // 幅度：血量阶梯（多档命中取最大）
     val blood = view.meBlood
     return parseDespairLadder(ladder)

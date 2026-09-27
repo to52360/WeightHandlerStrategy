@@ -39,7 +39,7 @@ fun ComboCard.passesFirstRoundCandidate(): Boolean {
     // T-PV-008（D-005）：combo 成员豁免本轮门槛——价值在组合里（comboBonus 搜索时算），
     // 单卡树分门槛对其无意义；进搜索后配合成立则入选、不成立则落选（落选即「等」）。
     if (isComboMember()) return true
-    return tacticalScore != 0.0 || surplusIdleThreshold() == 0
+    return tacticalScore != 0.0 || idleThreshold == 0
 }
 
 /**
@@ -75,10 +75,14 @@ fun ComboCard.passesSurplusCandidate(
 /**
  * 等效费 E（D-014 语义：卡牌固有等效费用，不含战术溢价）：配置等效费（解码后整数）> 随从实时身材 (atc+hp)/2
  * > 法术实时费。phase-1 近似：法术用实时费（D-014 baseValue 走数据库初始费保守线，缓存属 MyWarManage 不可达）。
+ * 【量纲：费】—— 三分支全部产出「费」：配置分支读 [CardWeightInfo.powerWeight]（v4 解码后即等效费），else 分支
+ * 用的是实时身材/实时费。**与 [surplusFillValue] 的第二项 tacticalScore（费）同轴，填充层因此自洽**
+ * （费 + 费），这也是本函数不属 T-FO-012 量纲失配点、反而是「正确轴」参照的原因。
  */
 fun ComboCard.equivalentCostValue(): Double {
     val configured = cardWeightInfo?.powerWeight ?: 0.0
     if (configured > 0.0) return configured
+    // @verify K-FO-005: 法术分支用「实时费」而 baseValue 法术兜底用「数据库初始费」——不同源；被减费到 0 费时战术贡献可超整卡基础分（5.3666）
     return if (card.isMinion()) (card.atc + card.health) / 2.0 else cost().toDouble()
 }
 
@@ -90,8 +94,19 @@ fun ComboCard.equivalentCostValue(): Double {
  * （[CardCombinedConfig.groupSurplusIdleThreshold]）> tag 默认（[UseIntent.tagDefaultSurplusIdleThreshold]，用途标签
  * 预设 N，T-026 替代原 candidatePolicy 预设）> 0。分组级解决「一类牌统一捏、不用逐卡设置」
  * （如解牌组统一 N=2 = 垫出后仍剩 2 费才肯垫）。
+ *
+ * **覆盖链唯一编排点**（T-FO-015）：除本函数外任何地方都不得重拼这条链——消费方读
+ * [ComboCard.idleThreshold]（其结果即本函数返回值）。
+ *
+ * 为何只能「构造后烘焙」而不能下沉启动期预算：链的第二层 [ComboCard.groupSurplusIdleThreshold] 与
+ * 第三层 [ComboCard.useIntent] 各自带**谓词组运行时重算**（组员运行时才确定），启动期拿不到它们的
+ * 最终值；下沉等于砍掉谓词组能力。故正确粒度 = 每轮每卡构造后按需求值一次
+ * （[ComboCard.idleThreshold] 的 `by lazy`），不是启动期常量。
+ *
+ * `nDelta`（绝望门槛减量）**不在此处**——它按血量阶梯变，是运行时减量而非覆盖的一层，
+ * 由消费方读数后自行相减（[passesSurplusGate]）。
  */
-fun ComboCard.surplusIdleThreshold(): Int =
+fun ComboCard.resolveIdleThreshold(): Int =
     cardWeightInfo?.surplusIdleThreshold
     // T-013：走 ComboCard 读取入口（含谓词组运行时解析），勿读 combinedConfig 静态预算
         ?: groupSurplusIdleThreshold
@@ -104,6 +119,9 @@ fun ComboCard.surplusIdleThreshold(): Int =
  * （更低的临界值，只在不浪费剩余费时垫出）。
  * T-027（Q-026 §2.1）：删 `max`，负分不再抹平——ts<0 以真实折价参与填充，防 [SurplusFillCombination] 的 `>0.0`
  * 软死捏过滤被击穿（极端负分 → fillValue ≤ 0 被自动剔除）。
+ * 【量纲：费】—— 两项均【费】（[equivalentCostValue] 费 + [ComboCard.tacticalScore] 费）⇒ **本层自洽，无跨轴相加**。
+ * A-合流版（D-FO-005 / T-FO-014）后主搜索亦已把 ts 换算成分（[lin.domain.context.tacticalContribution]）
+ * ⇒ 同一份 ts 两层判据**不再矛盾**：本层按费读（E+ts = 这张牌现在的总等效费），主搜索按分竞争。
  */
 fun ComboCard.surplusFillValue(): Double =
     equivalentCostValue() + tacticalScore
@@ -111,6 +129,7 @@ fun ComboCard.surplusFillValue(): Double =
 /**
  * 余费门槛（D-007 + D-012 垫后余量语义）：战术兑现（tacticalScore > 0）= 此刻价值兑现，直接放行（**优先填充**）；
  * 否则（含 ts<0 亏模、ts==0 无立场）空闲 ≥ 牌费 + N 才放行（N=「垫出后仍须剩 N 费」；「不贪心」= 直接配更小的 N）。
+ * N 读 [ComboCard.idleThreshold]（覆盖链唯一入口，T-FO-015；编排见 [resolveIdleThreshold]）。
  * D-011：nDelta（绝望门槛减量）降低 N，地板 0（付得起即垫；D-005「无普遍死捏」地板由未配置=0 表达）。
  * T-028：ts<0 在第二轮的行为由 [NegativeScorePolicy] 控制——
  * - NORMAL（默认）：ts<0 尊重 N，同 ts==0（N=0 折价补位 / N>0 惜售 held）；
@@ -122,5 +141,5 @@ fun ComboCard.surplusFillValue(): Double =
 fun ComboCard.passesSurplusGate(idleCost: Int, nDelta: Int = 0): Boolean {
     val bypassCondition = if (useIntent?.negativeScorePolicy == NegativeScorePolicy.AGGRESSIVE)
         tacticalScore != 0.0 else tacticalScore > 0.0
-    return bypassCondition || idleCost >= cost() + (surplusIdleThreshold() - nDelta).coerceAtLeast(0)
+    return bypassCondition || idleCost >= cost() + (idleThreshold - nDelta).coerceAtLeast(0)
 }

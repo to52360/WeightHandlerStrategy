@@ -5,7 +5,6 @@ import condition.createMockCard
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
 import lin.bean.ComboCard
-import lin.bean.surplusIdleThreshold
 import lin.bean.usePlan.ConditionalStageOverride
 import lin.bean.usePlan.GroupUseOverride
 import lin.bean.usePlan.PurposeTagId
@@ -96,8 +95,8 @@ class GroupBehaviorRuntimeTest {
         val spell = card(type = CardTypeEnum.SPELL)
         val minion = card(id = "M1", type = CardTypeEnum.MINION)
 
-        assertEquals(2, spell.surplusIdleThreshold())
-        assertEquals(0, minion.surplusIdleThreshold())
+        assertEquals(2, spell.idleThreshold)
+        assertEquals(0, minion.idleThreshold)
     }
 
     @Test
@@ -168,7 +167,7 @@ class GroupBehaviorRuntimeTest {
 
         // 静态预算原样返回，不进 GroupBehaviorRuntime
         assertEquals(UseStage.GENERAL, minion.useIntent?.stage)
-        assertEquals(1, minion.surplusIdleThreshold())
+        assertEquals(1, minion.idleThreshold)
     }
 
     @Test

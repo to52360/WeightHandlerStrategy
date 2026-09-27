@@ -43,7 +43,7 @@ class SkillPoolInclusionTest {
 
         val skill = harness.warManage.canUseCards.single()
         assertEquals(1.0, skill.equivalentCostValue(), "Q-013 缺省等效费 1")
-        assertEquals(0, skill.surplusIdleThreshold(), "缺省不注入门槛 N=0（付得起即垫，费门天然保证 Q-013 语义）")
+        assertEquals(0, skill.idleThreshold, "缺省不注入门槛 N=0（付得起即垫，费门天然保证 Q-013 语义）")
         assertTrue(skill.passesFirstRoundCandidate(), "N=0 无惜售诉求：自然入池参与第一轮竞争")
         assertTrue(skill.passesSurplusCandidate(remainingCost = 2, isFull = false), "空闲≥N 可垫")
     }

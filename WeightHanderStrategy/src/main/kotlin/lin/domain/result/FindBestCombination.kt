@@ -1,10 +1,12 @@
 package lin.domain.result
 
 import lin.bean.ComboCard
+import lin.bean.equivalentCostValue
 import lin.bean.groupIds
 import lin.bean.usePlan.CardComboEntry
 import lin.domain.context.comboPenalty
 import lin.domain.context.remainingCostPenalty
+import lin.domain.context.tacticalContribution
 import lin.utils.DecisionLog
 
 interface FindBestCombination {
@@ -131,9 +133,14 @@ object DefaultFindBestCombination : FindBestCombination {
                     if (comboBonus.isNaN()) continue
 
                     // 基础价值不衰减（D-013 方案 A）：物理价值恒定，堆砌惩罚统一由 comboPenalty 承担
+                    // D-FO-005 A-合流版（T-FO-014）：combo 分与 ts 同量纲（费），须经 costValue 差分换算成分才能与
+                    // baseValue（分）相加。**E 取受益卡**——加分落在「使组合成立的这张卡」（counterpart 已在场、
+                    // 本卡补位的那一侧），故取 card 自己的等效费；extPowerWeight 内含的树分/光环分已在评估侧换算，
+                    // 此处只换算 comboBonus 一项，无双重换算。
+                    val comboContribution =
+                        tacticalContribution(card.equivalentCostValue(), comboBonus)
                     val cardIncrementalWeight =
-                        card.baseValue + card.extPowerWeight + comboBonus
-
+                        card.baseValue + card.extPowerWeight + comboContribution
                     // 前进
                     currentCombination.add(card)
                     applyCardState(bindings.entries, bindings.groupIds)

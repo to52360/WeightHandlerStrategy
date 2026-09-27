@@ -4,10 +4,14 @@ import club.xiaojiawei.hsscriptcardsdk.enums.CardTypeEnum
 import lin.bean.CardCombinedConfig
 import lin.bean.CardWeightInfo
 import lin.domain.context.*
+import lin.bean.ComboCard
+import lin.bean.equivalentCostValue
+import lin.bean.surplusFillValue
 import lin.weightHandler.calcBaseValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import condition.createMockCard
 import kotlin.math.pow
 
 class ScoringModelTest {
@@ -135,5 +139,226 @@ class ScoringModelTest {
             configured != costValue(3.0) + costValue(6.0)
         )
         assertTrue("配置费用较低时不应高于身材兜底（证明未叠加）", configured < statOnly)
+    }
+
+    // ================================================================
+    // T-FO-012 Phase 0：量纲（评分轴）不变量测试
+    // 目的：把「轴方向」钉住，使将来动公式时不会静默漂移。
+    // 量纲约定：费（cost）→ 分（score）经 costValue 凹映射；填充层 fillValue 全程待在【费】轴。
+    // ================================================================
+
+    /**
+     * costValue 在【费 → 分】方向严格单调递增：费越高，折出的分越高（凹 ≠ 不增）。
+     * 这条不变量是「分轴」存在的前提——若哪天变平或回折，说明映射形态被改。
+     */
+    @Test
+    fun testCostValueStrictlyMonotonicInCost() {
+        var prev = costValue(0.0)
+        var cost = 0.5
+        while (cost <= CostValueMaxCost) {
+            val cur = costValue(cost)
+            assertTrue("costValue 应严格递增：costValue($cost)=$cur 未大于前值 $prev", cur > prev)
+            prev = cur
+            cost += 0.5
+        }
+        // 封顶之后转为弱单调（相等可接受），但不允许回折
+        assertTrue("超上限后不应回折", costValue(30.0) >= costValue(CostValueMaxCost))
+    }
+
+    /**
+     * 填充层量纲自洽性：fillValue = 等效费 E + ts，两项同为【费】。
+     * 固定 ts，E 变大 ⇒ fillValue 变大（且增量恰为 ΔE，证明是直加而非再缩放）。
+     */
+    @Test
+    fun testSurplusFillValueTracksEquivalentCost() {
+        val ts = 2.0
+        val small = ComboCard(card = createMockCard(cardId = "FILL_S", atc = 2, health = 3)) // E = 2.5
+        small.tacticalScore = ts
+        val big = ComboCard(card = createMockCard(cardId = "FILL_B", atc = 4, health = 6)) // E = 5.0
+        big.tacticalScore = ts
+
+        val eSmall = small.equivalentCostValue()
+        val eBig = big.equivalentCostValue()
+        assertTrue("等效费应随身材上升：$eSmall < $eBig", eBig > eSmall)
+
+        val fSmall = small.surplusFillValue()
+        val fBig = big.surplusFillValue()
+        assertTrue("E 变大时 fillValue 必须变大：$fSmall < $fBig", fBig > fSmall)
+        assertEquals("fillValue = E + ts（同轴直加，不得再缩放）", eSmall + ts, fSmall, 0.001)
+        assertEquals("fillValue = E + ts（同轴直加，不得再缩放）", eBig + ts, fBig, 0.001)
+        assertEquals("E 增量应原样传递到 fillValue", eBig - eSmall, fBig - fSmall, 0.001)
+    }
+
+    /**
+     * 填充层【费】轴：即使配置了等效费（费），fillValue 仍是费轴值（E + ts），不经 costValue 折成分。
+     * 与 [calcBaseValue] 的「配置费 → 分」路径形成正交对照（同一份配置费，两条路径两种量纲）。
+     */
+    @Test
+    fun testSurplusFillValueStaysOnCostAxisWithConfiguredCost() {
+        val card = createMockCard(cardId = "CFG_FILL", atc = 1, health = 1)
+        val config = CardCombinedConfig(weightInfo = CardWeightInfo(cardId = "CFG_FILL", powerWeight = 4.0))
+        val comboCard = ComboCard(combinedConfig = config, card = card)
+        comboCard.tacticalScore = 1.5
+
+        assertEquals("E 应直接取配置等效费（费）", 4.0, comboCard.equivalentCostValue(), 0.001)
+        assertEquals("fillValue 应停在费轴（E + ts）", 5.5, comboCard.surplusFillValue(), 0.001)
+        assertEquals(
+            "同一份配置费：baseValue 折成分（3.0·√4），fillValue 留在费 —— 两轴并存是**刻意的**：" +
+                    "填充层按费算机会成本，主搜索按分竞争（A-合流版 D-FO-005 已把树分换算成分，二者不再矛盾）",
+            costValue(4.0), calcBaseValue(card, config, 0), 0.001
+        )
+        assertTrue("两轴数值不等（凹映射不可逆）", comboCard.surplusFillValue() != calcBaseValue(card, config, 0))
+    }
+
+    // ================================================================
+    // T-FO-014（D-FO-005 A-合流版）：tacticalContribution 不变量测试
+    // 换算 = costValue(E + ts) − costValue(E)；把「树分经凹函数折成分」这一语义钉住。
+    // ================================================================
+
+    /** ts == 0 必须恒零——门控语义（ts≠0 / ts>0）与填充层都依赖「未命中 = 零贡献」。 */
+    @Test
+    fun testTacticalContributionZeroWhenTsZero() {
+        assertEquals(0.0, tacticalContribution(0.0, 0.0), 1e-9)
+        assertEquals(0.0, tacticalContribution(4.5, 0.0), 1e-9)
+        assertEquals(0.0, tacticalContribution(9.0, 0.0), 1e-9)
+    }
+
+    /** E 固定、ts > 0 ⇒ 贡献 > 0（命中即加分，不得为负或零）。 */
+    @Test
+    fun testTacticalContributionPositiveWhenTsPositive() {
+        listOf(0.0, 1.0, 2.5, 4.5, 9.0).forEach { e ->
+            val c = tacticalContribution(e, 3.2)
+            assertTrue("E=$e 时 ts=3.2 的贡献应为正，实际 $c", c > 0.0)
+        }
+    }
+
+    /**
+     * 凹函数边际递减作用于战术收益：同一份 ts，E 越大贡献越小（严格递减）。
+     * 这是 A-合流版区别于「朴素版把 ts 当独立白牌」的核心性质。
+     */
+    @Test
+    fun testTacticalContributionDecreasingInEquivalentCost() {
+        val ts = 3.2
+        val contributions = listOf(1.0, 2.5, 4.5, 6.0, 9.0).map { e -> tacticalContribution(e, ts) }
+        for (i in 1 until contributions.size) {
+            assertTrue(
+                "同一 ts=$ts 应随 E 增大而贡献递减：第 ${i - 1} 项 ${contributions[i - 1]} 未大于第 $i 项 ${contributions[i]}",
+                contributions[i - 1] > contributions[i]
+            )
+        }
+    }
+
+    /**
+     * 锚点对照：E=4.5、ts=3.2 → 1.9607 分；E=9、ts=3.2 → 0.4868 分（**公式实算值**）。
+     *
+     * ⚠️ 专项 §10.3 表格原记 3.66 / 1.89 与公式实算不符（T-FO-014 实施时复算发现，已在专项 §十二 记录）。
+     * 本测试以公式实算为准——它同时钉住两个真性质：① 同一份 ts 对贵牌贡献更小；
+     * ② E+ts 超过 `MaxCost`(10) 时被 costValue 封顶 ⇒ 高费牌战术贡献被大幅压缩（E=9 时仅 0.49）。
+     */
+    @Test
+    fun testTacticalContributionMatchesComputedAnchors() {
+        val mid = tacticalContribution(4.5, 3.2)
+        val core = tacticalContribution(9.0, 3.2)
+        assertEquals("E=4.5、ts=3.2 应折出 1.9607 分", 1.9607, mid, 0.001)
+        assertEquals("E=9、ts=3.2 应折出 0.4868 分（E+ts 超 MaxCost 被封顶）", 0.4868, core, 0.001)
+        assertTrue("核心牌（E=9）的战术贡献应小于中费牌（E=4.5）", core < mid)
+    }
+
+    /**
+     * 封顶边界：E+ts 超过 `CostValueMaxCost` 后贡献不再增长（被 costValue 的上限截断）。
+     * 这是 A-合流版对「极高费牌 + 高树分」的实际抑制强度——实施期观察项，非缺陷。
+     */
+    @Test
+    fun testTacticalContributionCappedByMaxCost() {
+        val atCap = tacticalContribution(CostValueMaxCost - 1.0, 1.0)
+        val beyondCap = tacticalContribution(CostValueMaxCost - 1.0, 5.0)
+        assertEquals(
+            "E+ts 越过上限后贡献相同（差分只到封顶点为止）",
+            atCap, beyondCap, 1e-9
+        )
+    }
+
+    /**
+     * §11.4 的「贡献 < ts」需要限定条件：仅当**边际率 < 1**（即 √E > 1.5 ⇒ E > 2.25）时成立。
+     * 在 E 很小（尤其 E=0）时凹函数在原点的斜率极大 ⇒ 贡献反而**大于** ts。
+     * 这是 A-合流版的真实边界（低费牌的战术收益被凹函数放大），与「高费牌收益被压缩」互为两面。
+     */
+    @Test
+    fun testTacticalContributionBelowTsOnlyAboveMarginalBoundary() {
+        val ts = 3.2
+        // E ≥ 2.5：边际率 < 1 ⇒ 差分 < ts
+        listOf(2.5, 4.5, 6.0).forEach { e ->
+            val c = tacticalContribution(e, ts)
+            assertTrue("E=$e 时应满足 贡献($c) < ts($ts)", c < ts)
+        }
+        // E = 0（0 费牌）：原点斜率极大 ⇒ 贡献 > ts
+        val zeroCost = tacticalContribution(0.0, ts)
+        assertTrue("E=0 时凹函数原点溢价应使贡献($zeroCost) > ts($ts)", zeroCost > ts)
+    }
+
+    /** ts 为负（亏模）时贡献为负，且不会因 E+ts 跌破 0 而产出 NaN（下界钳制）。 */
+    @Test
+    fun testTacticalContributionNegativeTsStaysFinite() {
+        val mild = tacticalContribution(4.5, -2.0)
+        assertTrue("负 ts 应折出负贡献，实际 $mild", mild < 0.0)
+        assertTrue("负 ts 贡献不应为 NaN", !mild.isNaN())
+
+        // E + ts < 0（如 E=1、ts=-4）：钳制到 0 费地板，仍为有限值且不继续变负
+        val extreme = tacticalContribution(1.0, -4.0)
+        assertTrue("E+ts<0 时不应产出 NaN，实际 $extreme", !extreme.isNaN())
+        assertEquals("E+ts<0 应钳制在「亏到 0 费地板」= −costValue(E)", -costValue(1.0), extreme, 1e-9)
+    }
+
+    /**
+     * 与填充层口径一致性：换算用的 E 必须与 `surplusFillValue` 同源（都取 `equivalentCostValue()`），
+     * 且三分支口径可验证——配置等效费 > 实时身材/2 > 实时费。
+     */
+    @Test
+    fun testTacticalContributionUsesSameEquivalentCostAsFillLayer() {
+        // 随从（无配置）⇒ E = (atc+hp)/2
+        val minion = ComboCard(card = createMockCard(cardId = "AC_M", atc = 4, health = 5))
+        assertEquals("随从分支 E = 实时身材 (atc+hp)/2", 4.5, minion.equivalentCostValue(), 0.001)
+
+        // 配置等效费优先于身材
+        val cfgCard = createMockCard(cardId = "AC_C", atc = 4, health = 5)
+        val cfg = CardCombinedConfig(weightInfo = CardWeightInfo(cardId = "AC_C", powerWeight = 6.0))
+        val configured = ComboCard(combinedConfig = cfg, card = cfgCard)
+        assertEquals("配置分支优先取等效费", 6.0, configured.equivalentCostValue(), 0.001)
+
+        // 关键：换算函数对该 E 的输出与「直接用 E 值」一致（证明生产侧传的就是这个 E）
+        assertEquals(
+            "换算基准 E 与填充层同源",
+            tacticalContribution(minion.equivalentCostValue(), 3.2),
+            tacticalContribution(4.5, 3.2), 1e-9
+        )
+        assertTrue(
+            "配置等效费更高 ⇒ 同一 ts 的换算贡献更小（凹性）",
+            tacticalContribution(configured.equivalentCostValue(), 3.2) < tacticalContribution(minion.equivalentCostValue(), 3.2)
+        )
+    }
+
+    /**
+     * ⚠️ 哨兵直通（回归防护，2026-09-23 审查发现）：`ts = UnUseWeight(-100)` 必须**原样返回**。
+     *
+     * 它经 `total` 抵达 `WeightHandlerDomain.processWeight` 的 `calWeight == UnUseWeight ⇒ unUse()`
+     * 硬禁分支。若被换算压成 `−costValue(E)`（约 −9.5），该分支永不命中 ⇒ 绝对禁出的牌静默复活。
+     */
+    @Test
+    fun testTacticalContributionPassesUnUseSentinelThrough() {
+        listOf(0.0, 1.0, 4.5, 9.0).forEach { e ->
+            assertEquals("哨兵必须原样返回（不得换算），E=$e", UnUseWeight, tacticalContribution(e, UnUseWeight), 1e-9)
+        }
+    }
+
+    /**
+     * NaN / 无穷防护：非有限输入返回 0.0，绝不产出 NaN
+     * （NaN 会污染 powerWeight ⇒ `canUse()` 恒 false，牌被静默判为不可用且不带 unUse 标记 = 无痕故障）。
+     */
+    @Test
+    fun testTacticalContributionGuardsNonFiniteInput() {
+        assertEquals("ts=NaN 应回落 0.0", 0.0, tacticalContribution(4.5, Double.NaN), 1e-9)
+        assertEquals("E=NaN 应回落 0.0", 0.0, tacticalContribution(Double.NaN, 3.2), 1e-9)
+        assertEquals("ts=+∞ 应回落 0.0", 0.0, tacticalContribution(4.5, Double.POSITIVE_INFINITY), 1e-9)
+        assertEquals("ts=-∞ 应回落 0.0", 0.0, tacticalContribution(4.5, Double.NEGATIVE_INFINITY), 1e-9)
     }
 }
