@@ -2,12 +2,11 @@ package lin.moduls
 
 import lin.bean.CardCombinedConfig
 import lin.config.ConfigDispatcher
-import lin.di.CONFIG_BINDING_STEPS
+import lin.di.StartupPlan
 import lin.di.configModule
 import lin.di.infraModule
 import lin.di.ruleModule
 import lin.serviceLoader.provider.*
-import lin.utils.startup.ConfigBindingStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,8 +36,10 @@ import java.nio.file.Files
  *
  * ## 同时守住的第二件事
  *
- * Koin 把定义按 **(primaryType, qualifier)** 归档 —— 同类型 + 无条件符的多次 `single<>` 会互相覆盖。
- * 故本测试断言 `getAll<ConfigBindingStep>()` 拿到**全部 7 个步骤**（而非最后一个）。
+ * 配置装配步骤**一个不少、且顺序正确**。2026-09-22 的前身：Koin 按 `(primaryType, qualifier)` 归档，
+ * 同类型 + 无条件符的 7 个 `single<ConfigBindingStep>` 互相覆盖 ⇒ 实测只剩最后一个（其余维度静默不装配）。
+ * 当时靠「列表 + 限定符」绕开；`D-FO-009` 起清单**不再经容器**（[StartupPlan] 直接构造），
+ * 故本测试改为直接断言清单单点（步骤集合 + 顺序），并断言容器内已无 `StartupTask` 绑定。
  */
 class StrategyProviderModuleWiringTest {
 
@@ -75,23 +76,30 @@ class StrategyProviderModuleWiringTest {
         koin.get<AuraBoostConfigProvider>().also { resolved += "AuraBoostConfigProvider" }
         // 树绑定链（2026-09-22 finder 覆盖 bug 的现场）
         koin.get<ConfigDispatcher>().also { resolved += "ConfigDispatcher" }
-        // 启动任务（CardConfigBindingTask 构造时即解析全部步骤）
-        val startupTasks = koin.getAll<StartupTask>().also { resolved += "StartupTask×${it.size}" }
+        // 启动任务（T-FO-010 / D-FO-009：已不进容器 ⇒ 断言清单单点 + 容器内无 StartupTask 绑定）
+        val steps = StartupPlan.configBindingSteps().also { resolved += "configBindingSteps×${it.size}" }
+        val startupTasks = StartupPlan.startupTasks().also { resolved += "startupTasks×${it.size}" }
         println(">>> resolved=$resolved")
 
-        assertTrue("启动任务不应为空", startupTasks.isNotEmpty())
+        assertEquals("七个配置装配步骤一个不少", 7, steps.size)
+        assertEquals("两个启动任务一个不少", 2, startupTasks.size)
+        assertTrue("容器内不应再注册 StartupTask（过程不进容器）", koin.getAll<StartupTask>().isEmpty())
     }
 
     @Test
     fun `七个配置绑定步骤一个都不能少`() {
-        val steps = engineWiringKoin().koin.get<List<ConfigBindingStep>>(named(CONFIG_BINDING_STEPS))
+        // T-FO-010 / D-FO-009：清单已不进容器 ⇒ 直接断言单点函数（顺序即执行顺序，故连顺序一起钉住）
+        val steps = StartupPlan.configBindingSteps()
         val names = steps.map { it::class.simpleName }
         println(">>> steps=${names.size} $names")
 
         assertEquals(
-            "步骤数量不对 ⇒ 某个配置维度不会参与装配。实际: $names",
-            7,
-            steps.size,
+            "步骤集合/顺序不对 ⇒ 某个配置维度不会参与装配或装配次序错。实际: $names",
+            listOf(
+                "WeightInfoStep", "GroupIndexStep", "GroupBehaviorStep", "PredicateGroupStep",
+                "PurposeStep", "CardPurposeBehaviorStep", "ComboStep",
+            ),
+            names,
         )
     }
 }

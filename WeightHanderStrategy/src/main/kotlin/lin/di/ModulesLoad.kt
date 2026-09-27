@@ -4,7 +4,6 @@ import lin.lifecycle.LifecycleRegister
 import lin.lifecycle.LifecycleRegisterImpl
 import lin.myLog
 import lin.serviceLoader.module.ModulesInfo
-import lin.serviceLoader.provider.StartupTask
 import lin.utils.serviceLoader.ServiceLoaderUtils
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.loadKoinModules
@@ -45,7 +44,7 @@ class ModulesLoad {
                 loadKoinModules(it.loadModules())
             }
         }
-        // 执行启动任务，如配置装配与规则树绑定
-        koinApp.koin.getAll<StartupTask>().forEach { it.execute() }
+        // 执行启动任务（D-FO-002 / D-FO-009：过程不进容器 ⇒ 直接 new；依赖仍从容器取）
+        StartupPlan.startupTasks().forEach { it.execute() }
     }
 }
