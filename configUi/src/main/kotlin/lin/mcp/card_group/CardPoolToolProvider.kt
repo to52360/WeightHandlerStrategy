@@ -8,6 +8,7 @@ import lin.mcp.*
 import lin.mcp.action.*
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
+import lin.repository.card_group.SurplusGateValidator
 import lin.serviceLoader.cardInfoProvide.decodeCostValue
 import lin.serviceLoader.cardInfoProvide.encodeCostValue
 import lin.utils.HearthstoneDeckCodeParser
@@ -23,7 +24,9 @@ class CardPoolToolProvider(
     /** 卡池查询服务（本 Provider 的 list/get 用）。 */
     private val sourceService: CardGroupQueryService,
     /** 删除/恢复走本域服务（T-TG-010 Z3）。 */
-    private val groupService: CardGroupService
+    private val groupService: CardGroupService,
+    /** 惜售门槛可满足性校验（T-FO-018 / K-FO-011）：牌费 + N 不得超过法力上限。 */
+    private val surplusGateValidator: SurplusGateValidator
 ) : McpToolProvider {
 
     override val actions: List<ResourceActions> = listOf(
@@ -93,6 +96,19 @@ class CardPoolToolProvider(
         ) { input ->
             if (input.fileName.isBlank()) return@typedTool mcpError("fileName 参数不能为空")
             if (input.cards.isEmpty()) return@typedTool mcpError("cards 列表不能为空")
+
+            // T-FO-018（K-FO-011）：惜售门槛可满足性写侧校验——牌费 + N 超过法力上限时该牌平时永远垫不出，
+            // 属静默硬禁 ⇒ 保存即拒收。判据在 SurplusGateValidator 单点，勿在本处另写一遍。
+            val gateViolations = input.cards.flatMap { item ->
+                surplusGateValidator.violations(listOf(item.cardId), item.surplusIdleThreshold, "逐卡声明")
+            }
+            if (gateViolations.isNotEmpty()) {
+                return@typedTool mcpError(
+                    "惜售门槛不可满足（牌费 + N 超过法力上限 ${SurplusGateValidator.MANA_CAP}），已拒收：\n" +
+                            gateViolations.joinToString("\n") { "  - $it" } +
+                            "\n请下调 N，或对该卡传 0 清除门槛。"
+                )
+            }
 
             val existingConfig = CardGroupJsonParser.loadByFileName(input.fileName)
                 ?: return@typedTool mcpError("卡池文件不存在: ${input.fileName}.cardgroup。请先用 parse_hearthstone_deck_code 创建卡池文件，或检查文件名是否正确。可用 list(resource=card_pool) 查看已有卡池。")

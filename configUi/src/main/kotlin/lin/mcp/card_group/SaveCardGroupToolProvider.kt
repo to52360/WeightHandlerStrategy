@@ -8,6 +8,7 @@ import lin.dao.CardGroupJsonParser
 import lin.mcp.*
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.ManagerSaveCommand
+import lin.repository.card_group.SurplusGateValidator
 import lin.repository.condition_tree.ConditionTreeConfigService
 import lin.repository.condition_tree.createConditionTreeConfigMapper
 import lin.repository.condition_tree.resolveConditionTreeReference
@@ -27,7 +28,9 @@ import lin.utils.nextShortId
  */
 class SaveCardGroupToolProvider(
     private val groupService: CardGroupService,
-    private val conditionTreeService: ConditionTreeConfigService
+    private val conditionTreeService: ConditionTreeConfigService,
+    /** 惜售门槛可满足性校验（T-FO-018 / K-FO-011）：牌费 + N 不得超过法力上限。 */
+    private val surplusGateValidator: SurplusGateValidator
 ) : McpToolProvider {
 
     private val conditionTreeMapper = createConditionTreeConfigMapper()
@@ -200,6 +203,22 @@ class SaveCardGroupToolProvider(
                                     "分组 [${bi.name}] 的 surplusIdleThreshold 无效: $gate，" +
                                             "取值 1~9（传 0 = 清除组级门槛，null = 保留原值）"
                                 )
+                            }
+                            // T-FO-018（K-FO-011）：组级门槛对该组**静态成员**逐张校验可满足性
+                            // （谓词组 cardIds 为空、成员运行时才定 ⇒ 本处不适用，由 T-FO-001 体检覆盖）。
+                            // 判据在 SurplusGateValidator 单点，勿在本处另写一遍。
+                            if (membership is GroupMembership.Static) {
+                                val violations = surplusGateValidator.violations(
+                                    membership.cardIds, gate, "分组 ${bi.name}"
+                                )
+                                if (violations.isNotEmpty()) {
+                                    throw McpBadInput(
+                                        "分组 [${bi.name}] 的门槛 $gate 不可满足" +
+                                                "（牌费 + N 超过法力上限 ${SurplusGateValidator.MANA_CAP}）：\n" +
+                                                violations.joinToString("\n") { "  - $it" } +
+                                                "\n请下调 N，或把费高的牌移出该组 / 传 0 用逐卡门槛覆盖。"
+                                    )
+                                }
                             }
                             (existing?.behaviors ?: emptyList()).withSurplusGate(gate)
                         }

@@ -20,6 +20,7 @@ import lin.repository.card_group.CardGroupCascadeDeleteService
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_group.DimensionItemResolver
 import lin.repository.card_group.StrategyPresetService
+import lin.repository.card_group.SurplusGateValidator
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.card_purpose.PurposeTagRuleRepository
@@ -82,14 +83,16 @@ val mcpModule = module {
     single {
         SaveCardGroupToolProvider(
             get<CardGroupService>(),
-            get<ConditionTreeConfigService>()
+            get<ConditionTreeConfigService>(),
+            get<SurplusGateValidator>()
         )
     } bind McpToolProvider::class
     single {
         CardPoolToolProvider(
             get<HsCardRepository>(),
             get<CardGroupQueryService>(),
-            get<CardGroupService>()
+            get<CardGroupService>(),
+            get<SurplusGateValidator>()
         )
     } bind McpToolProvider::class
     single { TemplateToolProvider(get(), get()) } bind McpToolProvider::class
