@@ -52,7 +52,7 @@ class GetDispatcher(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<GetInput>(
             name = "get",
-            description = "读取单个资源详情。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / draft），id 为资源标识。id 语义因资源而异（card_pool=fileName、card_group=managerId、purpose_tag=tagId、draft=draftId、其余=资源 id），不确定时先调 tool_capabilities 查询。"
+            description = "读取单个资源详情。resource 指定资源类型，id 为资源标识；支持面与各资源 id 语义先用 tool_capabilities 查询。"
         ) { input ->
             val capability = registry.get(input.resource)
             if (capability == null) {
@@ -76,7 +76,7 @@ class ListDispatcher(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<ListInput>(
             name = "list",
-            description = "列出资源列表。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / capability_background），可选 managerId 按卡组过滤（仅部分资源支持）。不确定支持面时先调 tool_capabilities 查询。"
+            description = "列出资源列表。resource 指定资源类型，可选 managerId 按卡组过滤（支持面见 tool_capabilities）。"
         ) { input ->
             val capability = registry.list(input.resource)
             if (capability == null) {
@@ -105,7 +105,7 @@ class DeleteDispatcher(
     override fun provide(): List<McpToolHandler> = listOf(
         typedTool<DeleteInput>(
             name = "delete",
-            description = "删除一个已保存的资源配置。resource 指定资源类型（evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset），id 为资源标识（card_pool=fileName、card_group=managerId、其余=资源 id）。删除语义（引用校验/恢复快照/级联）因资源而异，详见 tool_capabilities 详情。删除前会落快照，可经 restore_snapshot 恢复。"
+            description = "删除一个已保存的资源配置（删除前落快照，可经 restore_snapshot 恢复）。resource 指定资源类型，id 为资源标识；各资源的删除语义（引用校验 / 级联 / 快照范围）见 tool_capabilities 详情。"
         ) { input ->
             val capability = registry.delete(input.resource)
             if (capability == null) {

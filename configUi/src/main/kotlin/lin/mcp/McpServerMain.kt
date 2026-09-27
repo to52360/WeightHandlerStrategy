@@ -94,7 +94,12 @@ class MyMcpServer(
 
         var server = McpServer.sync(transportProvider)
             .serverInfo("deck-plugin-market-config", "0.1.0")
-            .instructions("提供卡牌策略配置生成所需的元数据查询、评估树校验和保存工具。")
+            .instructions(
+                "写类工具两种语义：整体替换（不传 = 不改 / 空值 = 清空）与缺省保留原值——改前先 get 取原值，改后用 get 复查。" +
+                        "引用类字段（bindingId / conditionId / aura_boost id / presetId / 卡池文件名）只能引用已存在对象，先用 list 取 id。" +
+                        "资源类型、各资源 id 语义与删除语义（引用校验 / 级联 / 快照范围）用 tool_capabilities 查询；" +
+                        "不传 resource 时同时返回 databasePath 与 cwd，动工前先查以确认本轮写入哪个库（两库数据不同步）。"
+            )
 
         tools.forEach { handler ->
             val tool = McpSchema.Tool.builder()

@@ -99,25 +99,25 @@ internal inline fun mcpDeleteAction(block: () -> Map<String, Any?>): McpToolResu
 
 /** get 大工具输入：resource 判别 + 通用 id（语义因资源而异，用 tool_capabilities 详情查询确认）。id 可空以让 resource 校验优先于 id 缺失报错。 */
 data class GetInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / draft。完整支持面与各资源 id 语义用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持面由本进程动态注册，用 tool_capabilities 查支持矩阵与各资源 id 语义。")
     val resource: String,
-    @field:JsonPropertyDescription("资源标识。id 语义因资源而异（card_pool=fileName、card_group=managerId、purpose_tag=tagId、draft=draftId、其余=资源 id），务必先用 tool_capabilities 确认。")
+    @field:JsonPropertyDescription("资源标识。各资源的 id 语义不同，用 tool_capabilities 详情确认。")
     val id: String? = null
 )
 
 /** list 大工具输入：resource 判别 + 可选 managerId 过滤。 */
 data class ListInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset / tree_template / capability_background。完整支持面用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持面由本进程动态注册，用 tool_capabilities 查支持矩阵。")
     val resource: String,
-    @field:JsonPropertyDescription("可选：按卡组 managerId 过滤（evaluator_tree / combo_plan / condition_tree / aura_boost / capability_background 支持，其余资源忽略此字段）。")
+    @field:JsonPropertyDescription("可选：按卡组 managerId 过滤。仅部分资源支持，支持面用 tool_capabilities 查询。")
     val managerId: String? = null
 )
 
 /** delete 大工具输入：resource 判别 + 通用 id。id 可空以让 resource 校验优先于 id 缺失报错。 */
 data class DeleteInput(
-    @field:JsonPropertyDescription("资源类型。支持：evaluator_tree / combo_plan / card_group / card_pool / condition_tree / aura_boost / purpose_tag / strategy_preset。完整支持面与各资源删除语义用 tool_capabilities 查询。")
+    @field:JsonPropertyDescription("资源类型。支持面由本进程动态注册，用 tool_capabilities 查支持矩阵与各资源删除语义。")
     val resource: String,
-    @field:JsonPropertyDescription("资源标识 id（card_pool=fileName、card_group=managerId、其余=资源 id）。")
+    @field:JsonPropertyDescription("资源标识。各资源的 id 语义不同，用 tool_capabilities 详情确认。")
     val id: String? = null
 )
 

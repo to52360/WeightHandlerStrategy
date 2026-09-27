@@ -50,7 +50,7 @@ class StrategyCoverageToolProvider(
             name = "strategy_coverage",
             description = """
                 策略覆盖总览（进度恢复 / 续接诊断）。一次返回指定卡组全部分组及其策略覆盖状态，
-                替代人工交叉对照 evaluator_tree / combo_plan / aura_boost / purpose_tag 多个查询。
+                替代人工分别查询评估树 / combo / 光环 / 用途标签多个工具。
                 分组 status：COVERED（有评估树绑定 / combo / AuraBoost 评分机制）> ORCHESTRATED（仅 stageOverride /
                 conditionalStage 排序机制）> UNCOVERED（无任何机制）。
                 同时输出：
@@ -58,7 +58,7 @@ class StrategyCoverageToolProvider(
                 - tagOnlyCards：有用途标签、但不在任何分组、且无 CARD 单卡树的卡（标签只够全局兜底，无卡组特异性
                   正向出牌策略，覆盖质量缺口——注意"有标签 ≠ 有评分覆盖"）
                 - cardTrees：该卡组卡池中被 CARD 绑定单卡树覆盖的卡清单（CARD 树是全局资源，按卡池归属展示；
-                  单卡微观规则如"神性圣契非 0 费卡手扣分"走 CARD 绑定）
+                  单卡微观规则走 CARD 绑定）
                 managerId 由 card_group(action=LIST) 获取；不传则返回全部卡组。
             """.trimIndent()
         ) { input ->

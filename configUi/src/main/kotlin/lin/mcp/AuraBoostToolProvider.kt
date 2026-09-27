@@ -98,8 +98,8 @@ class AuraBoostToolProvider(
             name = "save_aura_boost",
             description = """
                 创建或更新一条 Push 广播评分配置（AuraBoost）。
-                语义：触发条件树命中（如"莱妮莎在场"）→ 给受益过滤条件树命中的卡 +score（**费值**）。
-                additive 通道：加分（费值）与评估树加分相加，光环加分只走 AuraBoost，评估树不写光环条件（防双倍计分）。
+                语义：触发条件树命中时，给受益过滤条件树命中的卡 +score（**费值**）。
+                additive 通道：光环加分与评估树加分相加；光环加分只走 AuraBoost，评估树不写光环条件（防双倍计分）。
 
                 【条件树两种提供方式（二选一，互斥）】
                 - 复用已有条件树：conditionId / targetConditionId 传已有树 id（来自 list(resource=condition_tree)）
@@ -183,7 +183,7 @@ private data class SaveAuraBoostMcpInput(
     val targetConditionId: String? = null,
     @field:JsonPropertyDescription("受益过滤条件树内联 JSON（一次性树，无需先建模板）：完整条件树 JSON 文本 {id,name,root}。与 targetConditionId 互斥：提供此字段时自动建树。")
     val targetConditionTreeJson: String? = null,
-    @field:JsonPropertyDescription("命中后加给受益卡的费值（1 分 = 0.4 费，如 3.2 = 原 8 分；按「≈ 典型卡等效费」标定）。")
+    @field:JsonPropertyDescription("命中后加给受益卡的费值（按「≈ 该场景典型卡的等效费」标定）。")
     val score: Double,
     @field:JsonPropertyDescription("归属卡组 managerId（可选，来自 list(resource=card_group)）。不传 = 全局行（候选池，需被预设白名单纳入才生效）。")
     val managerId: String? = null,

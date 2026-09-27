@@ -50,7 +50,9 @@ class SaveCardGroupToolProvider(
         typedTool<SaveCardGroupInput>(
             name = "save_card_group",
             description = """创建或更新卡牌分组方案（**仅分组定义**：name/cardIds/description，或谓词组的条件）。
-- 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案，为空则自动按 managerName/sourceFile 覆盖更新已有方案
+- ⚠️ 不传 existingId 时，系统按 managerName/sourceFile 匹配**已有同名/同源方案并覆盖更新**（不是新建）——
+  确要新建须让 managerName 与 sourceFile 都不与现有方案重合；续接任务前先 card_group(action=LIST) 确认。
+- 正常模式（创建/更新）：提供 sourceFile + bindings；existingId 非空时更新该方案
 - 克隆模式：提供 cloneFrom，以该方案为蓝本创建副本，含所有 binding 与 behavior，managerName 缺省自动加「副本」后缀
 - **分步提交**：本工具只提交分组归属（cardIds 或谓词组条件），不设置出牌策略；分组更新时保留已配置的策略（stageOverride/conditionalStage）。
   出牌阶段策略用 `group_override` 单独配置。
@@ -241,8 +243,8 @@ stageOverride：覆盖出牌阶段（FIRST/SETUP/MID/LATE/GENERAL/LAST，时序�
 conditionalStage：条件化阶段——conditionalStageConditionId 或 conditionalStageConditionTreeJson（二选一）+
 conditionalStageStage（必填）+ conditionalStageElseStage（可选）；条件树命中→conditionalStageStage，未命中→elseStage
 （缺省沿用默认推导）。不提供 conditionalStage 相关字段则保留原值。
-典型场景：莱妮莎/奥尔多侍从/斩星巨刃等引擎牌设 stageOverride=SETUP 使其优先打出；过牌与增幅牌顺序随手牌动态反转；
-解牌组配 🚪余费门槛 N（save_card_group，垫后余量语义）实现「战术才动、垫后余量不够不将就」的整组意图。"""
+典型场景：关键引擎牌设 stageOverride 使其优先打出；过牌与增幅牌顺序随手牌动态反转；
+解牌组用分组级余费门槛 N（save_card_group）实现「战术才动、垫后余量不够不将就」的整组意图。"""
         ) { input ->
             val binding = groupService.loadAll()
                 .flatMap { it.bindings }
@@ -368,7 +370,7 @@ private data class SaveCardGroupBindingInput(
     val conditionTreeJson: String? = null,
     @field:JsonPropertyDescription("可选：谓词组是否纳入卡池外的卡（衍生/发现/随机生成）。true=纳入、false=仅卡池内、缺省回落卡组级 defaultIncludeDerived（再回落 false）。仅谓词组有效，静态组忽略。")
     val includeDerived: Boolean? = null,
-    @field:JsonPropertyDescription("可选：分组级余费门槛 N（垫后余量语义：放行 ⟺ 空闲 ≥ 牌费 + N，垫出后仍须剩 N 费）——一类牌统一捏、不用逐卡设置（如解牌组统一 2 = 垫出后仍剩 2 费才肯垫，取值 1~9）。提供则设置，缺省保留原值；传 0 = 清除组级门槛（还原付得起即垫）；空=未配置=付得起即垫（逐卡小数位仍优先）。注意：门槛只影响余费垫牌放行，不改变主搜索资格——主搜索资格由战术分（评估树 ts>0）决定，超低收益牌想「不进主搜索」需让评估树给非正分并配 N 控制垫出。")
+    @field:JsonPropertyDescription("可选：分组级余费门槛 N（垫后余量语义：放行 ⟺ 空闲 ≥ 牌费 + N，垫出后仍须剩 N 费），取值 1~9——一类牌统一捏、不用逐卡设置。提供则设置，缺省保留原值；传 0 = 清除组级门槛（还原付得起即垫）；空 = 未配置 = 付得起即垫（逐卡值仍优先）。门槛只影响余费垫牌放行，不改变主搜索资格（主搜索资格由战术分决定）。")
     val surplusIdleThreshold: Int? = null
 )
 

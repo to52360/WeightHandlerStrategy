@@ -5,15 +5,7 @@ import lin.bean.usePlan.UseStage
 import lin.mcp.*
 import lin.mcp.action.*
 import lin.repository.aura_boost.AuraBoostConfigService
-import lin.repository.card_group.AuraDelta
-import lin.repository.card_group.Dimension
-import lin.repository.card_group.DimensionItemResolver
-import lin.repository.card_group.PresetDeclaration
-import lin.repository.card_group.PresetSaveInput
-import lin.repository.card_group.StrategyPresetService
-import lin.repository.card_group.SurplusOverride
-import lin.repository.card_group.ThresholdPatch
-import lin.repository.card_group.TimingOverride
+import lin.repository.card_group.*
 import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.tree_config.TreeConfigRepository
 import lin.rule.tree.EvaluatorTreeBindingType
@@ -71,9 +63,8 @@ data class DeckExclusionScopeInput(
 
 data class PurposeTimingInput(
     @field:JsonPropertyDescription(
-        "用途标签 ID。⚠️ 只有**可声明作用**能被声明：内置 5 个作用（SAVE_LIFE / CLEAN / GREED / VALUE / DRAW_CARD），" +
-                "或已**晋级**的自定义标记（save_purpose_tag_def(declarable=true)）；其余（FINISH / EXTRA_COST 等" +
-                "查询 / 路由标签、未晋级标记）没有编排行为 ⇒ 传入会被报错拒绝。用 list(resource=purpose_tag) 看 declarable。"
+        "用途标签 ID。⚠️ 只有**可声明作用**能被声明（内置作用，或已 save_purpose_tag_def(declarable=true) 晋级的自定义标记）；" +
+                "其余（查询 / 路由标签、未晋级标记）没有编排行为 ⇒ 传入会被报错拒绝。用 list(resource=purpose_tag) 看 declarable。"
     )
     val tagId: String,
 
@@ -101,7 +92,7 @@ data class PurposeTimingInput(
  */
 data class PurposeSurplusInput(
     @field:JsonPropertyDescription(
-        "用途标签 ID。⚠️ 同 timings：只有**可声明作用**能被声明（内置 5 个，或已晋级的自定义标记），" +
+        "用途标签 ID。⚠️ 同 timings：只有**可声明作用**能被声明，" +
                 "清单外的 tagId 会被报错拒绝（用 list(resource=purpose_tag) 看 declarable）。"
     )
     val tagId: String,
@@ -306,18 +297,15 @@ class StrategyPresetToolProvider(
                   （id 由 list(resource=aura_boost) 取）。
                   ⚠️ **未引用预设的卡组 = 无全局光环**；**卡组私有光环**不受白名单约束（归属即拥有）。
 
-                ⚠️ **可声明的用途 = 可声明作用**（内置 5 个作用，或已**晋级**的自定义标记 ——
+                ⚠️ **可声明的用途 = 可声明作用**（内置作用，或已**晋级**的自定义标记 ——
                   见 list(resource=purpose_tag) 的 declarable 字段）：
-                  `timings` / `surplus` 里出现清单外的 tagId 会被**报错拒绝**（FINISH / EXTRA_COST 等查询 / 路由标签
-                  没有编排行为，其时机请用评估树 / 战术分表达；自定义标记请先 save_purpose_tag_def(declarable=true)）。
-                  树维度不受此限（其 key 是树实际绑定的标记）。
+                  `timings` / `surplus` 里出现清单外的 tagId 会被**报错拒绝**（查询 / 路由标签没有编排行为，
+                  其时机请用评估树 / 战术分表达）；树维度不受此限（其 key 是树实际绑定的标记）。
 
                 粒度：树维度是 **(用途, 树)** —— 一棵树绑了多个用途时，各自独立取舍（实现是按用途收窄绑定）。
 
                 ⚠️ 解析链为「卡组私有（组级/卡级） > 消费方增量项 > 预设声明 > 全局行（仅作缺省值） > 内置默认」；
                   切换预设或卡组后**需重启**引擎装配（配置侧装配期一次性解析）。
-                删除预设走 delete(resource=strategy_preset)：**仍被卡组引用时拒绝**（回显引用卡组），
-                  需先 save_card_group_preset（不带 presetId）解除引用；删除前落快照，可 restore_snapshot 恢复。
             """.trimIndent()
         ) { input ->
             if (input.name.isBlank()) throw McpBadInput("name 不能为空")
@@ -429,22 +417,18 @@ class StrategyPresetToolProvider(
         typedTool<SaveCardGroupPresetDeltaInput>(
             name = "save_card_group_preset_delta",
             description = """
-                设置卡组的**用途增量项**（③微调层）—— 在引用的预设之上做小偏差调整。
+                设置卡组的**用途增量项**（微调层）—— 在引用的预设之上做小偏差调整。
+                各旋钮的完整语义见对应入参说明，此处只给两点跨字段约定：
+                ⚠️ **替换粒度不同**：`timings` / `surplus` / `excludeTreeSelections` / 去重通道是**整体替换**
+                  （不传 = 不改 / 空数组 = 清空）；而光环三档 `extraAuraBoostIds` / `excludedAuraBoostIds` /
+                  `auraScoreOverrides` **各自 null = 该档不改**（只改一档时另两档保留现值）。
+                ⚠️ `excludePurposes`（用途级全禁）与 `excludeScopes`（维度级）对同一 tag **双写会报错**；光环 extra 与 exclude 传同 id 也报错。
 
-                - **excludeTreeSelections**：本卡组在某用途下**再排除**若干棵树（只能减，不能启用被预设禁用的树）；
-                - **timings**：本卡组对该用途的**时序声明**（逐字段压过预设声明；也可**自行声明预设没声明的用途**）；
-                - **surplus**：本卡组对该用途的**惜售门槛**声明（独立维度，同"压过预设"语义）。
-                - **extraAuraBoostIds / excludedAuraBoostIds / auraScoreOverrides**：本卡组的**光环增量**三档
-                  （独立维度）—— 在白名单基础上**再减** / 白名单外**补声明** / **覆盖分值**。
-                  ⚠️ 三档**各自 null = 该档不改**（与 timings / surplus 的「整维度替换」不同）；extra 与 exclude 传同 id 报错。
-                - **excludePurposes**：本卡组**不使用**的用途（「去除」通道，**用途级**）—— 该用途**整体退出本卡组**：
-                  规则被减掉（**无规则、不回落全局默认值**）+ 其用途树一并停用。
-                  与 `excludeTreeSelections` 是**粗 / 细两层**（树排除 = 用途照用时挑掉某几棵树）。
 
                 ⚠️ 这是"共享预设 + 本卡组微调"的正规通道：想整套换掉请改用「不引用预设 + 自己的精细分组」，
                   而不是在这里逐项排除；**整体替换**语义（不传 = 不改 / 空数组 = 清空）。
                 ⚠️ 未声明的用途 = 无规则（阶段回落 GENERAL），声明里没写的字段回落全局行。
-                ⚠️ **可声明的用途 = 内置作用**（同 save_strategy_preset，当前 5 个）：清单外 tagId 会被报错拒绝。
+                ⚠️ 可声明作用范围同 save_strategy_preset（清单外 tagId 会被报错拒绝）。
                 ⚠️ 改完需重启引擎装配才生效。
             """.trimIndent()
         ) { input ->

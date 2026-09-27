@@ -6,11 +6,7 @@ import lin.mcp.*
 import lin.mcp.action.*
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
-import lin.repository.combo_plan.ComboPlanDefinitionEntity
-import lin.repository.combo_plan.ComboPlanDefinitionRepository
-import lin.repository.combo_plan.ComboPlanProblem
-import lin.repository.combo_plan.ComboPlanSaveResult
-import lin.repository.combo_plan.ComboPlanService
+import lin.repository.combo_plan.*
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import lin.ui.service.TreeConfigService
@@ -54,8 +50,10 @@ class ComboPlanToolProvider(
             name = "save_combo_plan",
             description = """
                 创建或修改 Combo 战术编排方案。
-                会校验 managerId 以及 coreGroupIds/depGroupIds 是否属于该卡组的有效绑定条目；
-                id 为空时会自动分配 short ID；如果包含已有 id，则会覆盖保存该 Combo 方案。
+                coreGroupIds / depGroupIds 只能引用**分组绑定条目** id（来自 get(resource=card_group) 的 bindings[].id）——
+                单卡（CARD 绑定）不能进 combo，参与联动的卡须在建分组时就归入独立分组。
+                会校验 managerId 与两组 id 是否属于该卡组的有效绑定条目；
+                id 为空时自动分配 short ID，传已有 id 则覆盖保存该方案。
             """.trimIndent()
         ) { input ->
             // D-DC-007：判定全在保存单点，本处只做入参转换与结果渲染
@@ -292,7 +290,7 @@ private data class SaveComboPlanInput(
     @field:JsonPropertyDescription("依赖卡牌分组 ID 列表（绑定条目 id），不能为空。Combo 方案必须包含核心组与依赖组才能构成协同")
     val depGroupIds: List<String> = emptyList(),
 
-    @field:JsonPropertyDescription("Combo 加分（**费值**：1 分 = 0.4 费，如 4.0 ≈ 原 10 分；负值如 -2.0 表达软惩罚）。【纯排序配方：固定 0】仅表达先后顺序不加分时必填 0，此时配合 relation=CORE_BEFORE_DEP/DEP_BEFORE_CORE 即为纯排序（如「先铺场再清场」的出牌次序），不会扭曲权重竞争")
+    @field:JsonPropertyDescription("Combo 加分（**费值**；负值表达软惩罚）。【纯排序配方：固定 0】仅表达先后顺序、不加分时必填 0，配合 relation=CORE_BEFORE_DEP / DEP_BEFORE_CORE 即为纯排序，不会扭曲权重竞争")
     val score: Double = 0.0,
 
     @field:JsonPropertyDescription("【起手换牌专用】组合协同加分（费值）：本 Combo 的核心组与依赖组的牌在起手**同时保留**时，给该保留子集额外加此费值——表达「A、B 单留都一般，一起留才值钱」（单卡 changeWeight 只能表达单卡价值）。默认 0 = 不加成。⚠️只影响起手换牌，**不影响出牌评分**（出牌协同加分是 score）；同一个 Combo 在一次起手评分中只计一次")

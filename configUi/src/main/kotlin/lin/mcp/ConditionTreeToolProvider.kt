@@ -53,13 +53,10 @@ class ConditionTreeToolProvider(
                 创建或更新一棵条件树（组合逻辑模板），**仅一次性树需要**（或需在多消费方间复用时建模板）：
                 消费方（save_aura_boost 的 conditionTreeJson、save_card_group 的 conditionalStageConditionTreeJson）
                 已支持直接内联 treeJson 一步创建，无需先调本工具。
-                treeJson 传「完整条件树 JSON 的字符串」：{id, name, root}，root 为节点对象。
-                叶子 payload 两种：ConditionRef（引用编码条件，conditionId + args）或
-                PipelineRef（正交管道：sourceId + transforms + operatorId + operatorArgs + refId）。
-                条件树参数（ConditionRef.args / PipelineRef.operatorArgs / transform 参数）直接存树内，
-                GET 读取原样返回；评估树 CONDITION_TREE 叶子引用时叶子 args 优先、树内参数兜底
-                （最终值 = 消费方覆盖 > 树内默认）。
-                可从 get(resource=condition_tree) 拿现有树复制修改后回传；管道积木用 list_orthogonal_components 查询。
+                treeJson 传「完整条件树 JSON 的字符串」：{id, name, root}。叶子节点结构与示例模板见
+                list_orthogonal_components 的 orthogonal_leaf_json_templates（含各参数位点）。
+                树内参数作为默认值，被消费方引用时叶子 args 优先（最终值 = 消费方覆盖 > 树内默认）。
+                可从 get(resource=condition_tree) 拿现有树复制修改后回传。
                 提供 existingId 更新已有树，否则新建（自动生成 8 位短 id）。
             """.trimIndent()
         ) { input ->

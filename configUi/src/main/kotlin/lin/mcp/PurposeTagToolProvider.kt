@@ -43,9 +43,8 @@ data class PurposeTagSummaryDto(
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
     @field:JsonPropertyDescription(
-        "**是否可声明作用**：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
-                "自定义标记需先经 save_purpose_tag_def(declarable=true) 晋级）。" +
-                "⚠️ 内置 7 个里的 FINISH / EXTRA_COST 恒 false（它们是查询 / 路由标签，无编排行为）。"
+        "**是否可声明作用**：true = 该标记可被预设 / 卡组增量项声明时序与惜售（自定义标记需先经 " +
+                "save_purpose_tag_def(declarable=true) 晋级）；false = 无编排行为，不可声明。"
     )
     val declarable: Boolean = false,
     @field:JsonPropertyDescription("是否内置战略用途（内置行的 declarable 由代码常量决定，写侧忽略该入参）")
@@ -74,9 +73,8 @@ data class PurposeTagDetailDto(
     @field:JsonPropertyDescription("用途绑定：继承哪个战略用途的行为。null = 纯标记（零编排副作用，仅供条件树查询）")
     val boundPurpose: String? = null,
     @field:JsonPropertyDescription(
-        "**是否可声明作用**：true = 该标记可被预设 / 卡组增量项声明时序与惜售（内置 5 个作用恒 true；" +
-                "自定义标记需先经 save_purpose_tag_def(declarable=true) 晋级）。" +
-                "⚠️ 内置 7 个里的 FINISH / EXTRA_COST 恒 false（它们是查询 / 路由标签，无编排行为）。"
+        "**是否可声明作用**：true = 该标记可被预设 / 卡组增量项声明时序与惜售（自定义标记需先经 " +
+                "save_purpose_tag_def(declarable=true) 晋级）；false = 无编排行为，不可声明。"
     )
     val declarable: Boolean = false,
     @field:JsonPropertyDescription("是否内置战略用途（内置行的 declarable 由代码常量决定，写侧忽略该入参）")
@@ -123,18 +121,17 @@ data class SavePurposeTagDefInput(
     val description: String? = null,
 
     @field:JsonPropertyDescription(
-        "用途绑定：指向某个战略用途的 tagId。null = 纯标记（零编排副作用，仅供条件树查询）；" +
-                "指定 = 继承该战略用途的排序兜底与评估层绑定。" +
-                "只允许一层，且目标只能是战略用途（SAVE_LIFE / CLEAN / GREED / FINISH / VALUE / EXTRA_COST / DRAW_CARD），" +
-                "禁止绑到自定义标记。"
+        "用途绑定：指向某个战略用途的 tagId（内置清单，用 list(resource=purpose_tag) 的 builtin 字段确认）。" +
+                "null = 纯标记（零编排副作用，仅供条件树查询）；指定 = 继承该战略用途的排序兜底与评估层绑定。" +
+                "只允许一层，且目标只能是战略用途，禁止绑到自定义标记。"
     )
     val boundPurpose: String? = null,
 
     @field:JsonPropertyDescription(
         "**晋级为「可声明作用」**：true = 该自定义标记可被预设 / 卡组增量项声明时序与惜售，" +
                 "拥有自己的编排行为；false = 降级回不可声明（仍被声明引用时会被拒绝）；null = 不修改。" +
-                "⚠️ 与 boundPurpose **互斥**（绑定的语义是「继承某作用的行为」，晋级是「自己就是作用」）——" +
-                "同时成立会报错，请先解绑。⚠️ 内置 7 个忽略该入参（其可声明性由代码常量决定）。"
+                "⚠️ 与 boundPurpose **互斥**（绑定 = 继承某作用的行为，晋级 = 自己就是作用），同时成立会报错，请先解绑。" +
+                "内置标记忽略该入参（其可声明性由内置清单决定）。"
     )
     val declarable: Boolean? = null
 )
@@ -221,8 +218,7 @@ class PurposeTagToolProvider(
                 ⚠️ 绑定只允许一层，目标只能是战略用途（内置那 7 个），禁止绑到自定义标记。
                 ⚠️ 晋级与绑定**互斥**（继承别人的行为 vs 自己就是作用）：同时传会报错，请先解绑再晋级。
                 ⚠️ 降级（declarable = false）时若仍被预设 / 卡组 Delta 的声明引用 ⇒ 报错拒绝。
-                内置标记（SAVE_LIFE / CLEAN / GREED / FINISH / VALUE / EXTRA_COST / DRAW_CARD）可改显示名，
-                但其 boundPurpose 恒为 null、declarable 由内置清单决定（入参被忽略）。
+                内置标记可改显示名，但其 boundPurpose 恒为 null、declarable 由内置清单决定（入参被忽略）。
                 `declarable` 的实际取值用 list / get(resource=purpose_tag) 查看。
 
                 ⚠️ 已知限制（实现形态 A：展开式）：改绑定后**已打标的卡不会回溯**——
