@@ -25,6 +25,18 @@ val CostValueExponent: Double get() = EngineConfig.costValueExponent
 val CostValueMaxCost: Double get() = EngineConfig.costValueMaxCost
 val SpellCostValueWeight: Double get() = EngineConfig.spellCostValueWeight
 
+/**
+ * 战术探针侧上限（T-FO-016 封顶挪位，派生自 [CostValueMaxCost]，**不新增配置键**）。
+ *
+ * 取值 = `CostValueMaxCost × 2 = 20`。用途仅供 [tacticalContribution] 的**探针**自变量 `E + ts`
+ * 封顶——只挡异常配置（如 ts 填 50），不参与日常标定：正常 ts ≤ 4 ⇒ E 触达 10 时 `E + ts ≤ 14 < 20`，
+ * 故本上限**在正常配置下永不触达**，改动对低/中费牌零影响。
+ *
+ * 与锚点侧 [CostValueMaxCost] 的分工（T-FO-016 核心）：锚点 `E` 仍沿用 `CostValueMaxCost`（保持
+ * 「基础价值封顶」语义不变），只有探针 `E + ts` 用本上限 ⇒ 差分不再因「两端同被封顶」而恒 0。
+ */
+val TacticalMaxCost: Double get() = CostValueMaxCost * 2
+
 // Q-024 量纲费化（T-PV-011）：评估树/combo/AuraBoost 直接配费值，tacticalScoreScale 已退役。
 // 战术分不再有「分→费」换算层——双量纲（选牌层 1分=1费 / 填充层 1分=0.4费）消灭。
 
@@ -32,9 +44,15 @@ val SpellCostValueWeight: Double get() = EngineConfig.spellCostValueWeight
 // 表达炉石「低费抢节奏溢价、高费卡手/怕解贬值」的非线性经济规律（指数 0.5 = √cost）。
 // 三类输入：① 配置等效费用（powerWeight，weight=CostValueWeight）；② 随从等效费用 (atc+hp)/2（实时身材，weight=CostValueWeight）；
 // ③ 法术初始费用（数据库，weight=SpellCostValueWeight，更保守）。
-// 上限 MaxCost（默认 10）封顶「夸张身材」（如实时 buff 到 30/30）与异常费用，避免基础价值虚高。
-fun costValue(cost: Double, weight: Double = CostValueWeight): Double =
-    weight * cost.coerceAtMost(CostValueMaxCost).pow(CostValueExponent)
+// 上限封顶「夸张身材」（如实时 buff 到 30/30）与异常费用，避免基础价值虚高。锚点场景用默认
+// maxCost=CostValueMaxCost(10)；T-FO-016 封顶挪位后，战术探针场景显式传 TacticalMaxCost(20)，使
+// 「锚点 E 沿用 10 / 探针 E+ts 用独立上限」可区分（否则两端同被 10 封顶 ⇒ 高费牌战术贡献恒 0）。
+fun costValue(
+    cost: Double,
+    weight: Double = CostValueWeight,
+    maxCost: Double = CostValueMaxCost
+): Double =
+    weight * cost.coerceAtMost(maxCost).pow(CostValueExponent)
 
 // 剩余法力惩罚原语：使用解耦后的 PenaltyWeight (使 PenaltyWeight < CostWeight，防止低费单卡负分)
 // 【量纲：费派生标量】—— 自变量 remainingCost/totalCost 全为【费】，输出是「费」的非线性标量（√剩余费 × 占比^指数）。
@@ -62,7 +80,7 @@ fun comboPenalty(cardsCount: Int): Double {
  * 语义 =「条件命中 ⇒ 这张牌等效**超模 ts 费**」：E 是卡牌固有等效费（[lin.bean.equivalentCostValue]），
  * `E + ts` 是命中后的总等效费；两者都经同一条 `costValue` 凹函数折成分，差值即战术收益。
  * 由此**凹函数的边际递减同样作用于战术收益**——同一份 ts 对贵牌贡献小、对便宜牌贡献大
- * （实算：E=4.5 的 ts=3.2 → 1.96 分；E=9 的 ts=3.2 → 0.49 分，后者因 `E+ts` 超上限被封顶）。
+ * （实算：E=4.5 的 ts=3.2 → 1.9607 分；E=9 → 1.4785 分；E=10 → 1.4127 分）。
  *
  * 消费侧一次换算后落存 [lin.bean.ComboCard.tacticalContribution] / `auraContribution`（方案 B 分量落存），
  * 故主搜索与日志拿到的是**分**，与 [lin.bean.ComboCard.baseValue]（分）同轴直加合法。
@@ -75,17 +93,22 @@ fun comboPenalty(cardsCount: Int): Double {
  * 2. NaN 防护：`ts` 非有限时返回 0.0。NaN 会经 `total` 污染 `powerWeight` ⇒ `canUse()` 恒 false，
  *    牌被静默判为不可用且不带 `unUse` 标记（无痕故障）。当前无构造 NaN 树分的路径，此为防御。
  * 3. 下界钳制：负 ts 可能使 `E + ts` 跌破 0 费，而 `costValue` 对负底数返回 NaN。故把自变量饱和到 0：
- *    `E + ts ≤ 0` ⇒ 贡献 = `−costValue(E)`（亏到 0 费地板为止，不再继续变负）。上界由 `costValue`
- *    自身的 `MaxCost` 封顶承担。
+ *    `E + ts ≤ 0` ⇒ 贡献 = `−costValue(E)`（亏到 0 费地板为止，不再继续变负）。
+ *
+ * ## 上界（T-FO-016 封顶挪位，两条独立上限）
+ * - **锚点** `E` 沿用 `CostValueMaxCost`（默认 10）——「基础价值封顶」语义不变。
+ * - **探针** `E + ts` 用独立上限 [TacticalMaxCost]（`CostValueMaxCost × 2`）。
+ *   挪位前两端同用 10 ⇒ `E ≥ 10` 的牌差分**恒 0**（战术激励完全失效，非「被压小」）；
+ *   挪位后只有 `E + ts > 20` 才封顶，而正常 ts ≤ 4 ⇒ 日常零影响，仅挡异常配置。
  */
 fun tacticalContribution(equivalentCost: Double, ts: Double): Double {
     if (ts == 0.0) return 0.0
     if (ts == UnUseWeight) return ts
     if (!ts.isFinite() || !equivalentCost.isFinite()) return 0.0
-    val base = equivalentCost.coerceAtLeast(0.0)
-    val shifted = (equivalentCost + ts).coerceAtLeast(0.0)
-    // @verify K-FO-004: 上界由 costValue 的 MaxCost 封顶承担，高费牌（E=9,ts=3.2）战术贡献被压到 0.4868（不封顶则 1.4785）
-    return costValue(shifted) - costValue(base)
+    val base = equivalentCost.coerceAtLeast(0.0)              // 锚点：由 costValue 默认 maxCost 封顶
+    val shifted = (equivalentCost + ts).coerceAtLeast(0.0)     // 探针：用独立上限
+    // @verify K-FO-004: 封顶已挪位（探针走 TacticalMaxCost），待实战校准强度——E=9/ts=3.2 → 1.4785（挪位前 0.4868）
+    return costValue(shifted, maxCost = TacticalMaxCost) - costValue(base)
 }
 
 

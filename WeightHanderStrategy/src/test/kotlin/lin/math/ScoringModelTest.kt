@@ -249,33 +249,49 @@ class ScoringModelTest {
     }
 
     /**
-     * 锚点对照：E=4.5、ts=3.2 → 1.9607 分；E=9、ts=3.2 → 0.4868 分（**公式实算值**）。
+     * 锚点对照：E=4.5、ts=3.2 → 1.9607 分；E=9、ts=3.2 → 1.4785 分（**公式实算值**）。
      *
-     * ⚠️ 专项 §10.3 表格原记 3.66 / 1.89 与公式实算不符（T-FO-014 实施时复算发现，已在专项 §十二 记录）。
-     * 本测试以公式实算为准——它同时钉住两个真性质：① 同一份 ts 对贵牌贡献更小；
-     * ② E+ts 超过 `MaxCost`(10) 时被 costValue 封顶 ⇒ 高费牌战术贡献被大幅压缩（E=9 时仅 0.49）。
+     * ⚠️ 数字演进：E=9 的贡献原为 **0.4868**（锚点与探针同用 MaxCost=10 ⇒ `E+ts` 被封顶压缩）；
+     * T-FO-016 封顶挪位后探针改用 [TacticalMaxCost]（20），贡献变为 **1.4785**。
+     * E=4.5 未触封顶 ⇒ 改动前后均为 1.9607（**低/中费牌零变化**）。
      */
     @Test
     fun testTacticalContributionMatchesComputedAnchors() {
         val mid = tacticalContribution(4.5, 3.2)
         val core = tacticalContribution(9.0, 3.2)
-        assertEquals("E=4.5、ts=3.2 应折出 1.9607 分", 1.9607, mid, 0.001)
-        assertEquals("E=9、ts=3.2 应折出 0.4868 分（E+ts 超 MaxCost 被封顶）", 0.4868, core, 0.001)
+        assertEquals("E=4.5、ts=3.2 应折出 1.9607 分（未触封顶，挪位不影响）", 1.9607, mid, 0.001)
+        assertEquals("E=9、ts=3.2 应折出 1.4785 分（探针走 TacticalMaxCost，不再被封顶压缩）", 1.4785, core, 0.001)
         assertTrue("核心牌（E=9）的战术贡献应小于中费牌（E=4.5）", core < mid)
     }
 
     /**
-     * 封顶边界：E+ts 超过 `CostValueMaxCost` 后贡献不再增长（被 costValue 的上限截断）。
-     * 这是 A-合流版对「极高费牌 + 高树分」的实际抑制强度——实施期观察项，非缺陷。
+     * 探针上限（T-FO-016）：`TacticalMaxCost` 只挡**异常输入**。
+     *
+     * 挪位前锚点与探针共用 `MaxCost`(10) ⇒ `E ≥ 10` 的牌差分**恒 0**（战术激励完全失效）；
+     * 挪位后只有 `E + ts > TacticalMaxCost`(20) 才封顶。故：
+     * ① `ts` 异常极大（50）时贡献被钳在探针上限；② 正常范围 `ts ≤ 4` 完全不受影响。
      */
     @Test
-    fun testTacticalContributionCappedByMaxCost() {
-        val atCap = tacticalContribution(CostValueMaxCost - 1.0, 1.0)
-        val beyondCap = tacticalContribution(CostValueMaxCost - 1.0, 5.0)
+    fun testTacticalContributionCappedByTacticalMaxCostOnlyForAbnormalInput() {
+        // ① 只挡异常输入：ts=50 与 ts=5 在 E=19 时同被探针上限钳住（差分只到封顶点为止）
+        val abnormal = tacticalContribution(19.0, 50.0)
+        val atCap = tacticalContribution(19.0, 5.0)
+        assertEquals("ts=50 应被探针上限钳制，与恰好触达上限时相等", atCap, abnormal, 1e-9)
         assertEquals(
-            "E+ts 越过上限后贡献相同（差分只到封顶点为止）",
-            atCap, beyondCap, 1e-9
+            "探针封顶值 = costValue(TacticalMaxCost, maxCost = TacticalMaxCost) − costValue(19)",
+            costValue(TacticalMaxCost, maxCost = TacticalMaxCost) - costValue(19.0), abnormal, 1e-9
         )
+        assertTrue("探针上限不得回落到 MaxCost 口径（否则 E=19 贡献为 0）", abnormal > 0.0)
+
+        // ② 正常 ts ≤ 4 不受探针上限影响：E=16 + ts=4 = 20 恰在上限内，与不封顶的公式完全一致
+        val e = 16.0
+        listOf(1.0, 2.4, 3.2, 4.0).forEach { ts ->
+            assertEquals(
+                "ts=$ts（≤4）时不应触达探针上限",
+                costValue(e + ts, maxCost = TacticalMaxCost) - costValue(e), tacticalContribution(e, ts), 1e-9
+            )
+            assertTrue("ts=$ts 对 E=$e 的贡献应为正", tacticalContribution(e, ts) > 0.0)
+        }
     }
 
     /**
@@ -335,6 +351,39 @@ class ScoringModelTest {
             "配置等效费更高 ⇒ 同一 ts 的换算贡献更小（凹性）",
             tacticalContribution(configured.equivalentCostValue(), 3.2) < tacticalContribution(minion.equivalentCostValue(), 3.2)
         )
+    }
+
+    /**
+     * T-FO-017 法术锚点统一：法术分支的 E 取**数据库初始费**（[ComboCard.initialCost]），不再是实时费。
+     *
+     * 回归点：被减费到 0 的法术原先 E=0 ⇒ 战术贡献被凹函数原点溢价放大到 5.367（**可超整卡基础分 4.5**）；
+     * 统一后 E=9 ⇒ 贡献回归正常量级 1.4785。同时填充层 `E + ts` 由 3.2 → 12.2（**已批准的连带变更**：
+     * 减费法术更倾向被垫出）。
+     */
+    @Test
+    fun testSpellEquivalentCostUsesInitialCostNotRealtimeCost() {
+        // 法术：实时费 = 0（被减费），数据库初始费 = 9
+        val spell = ComboCard(
+            combinedConfig = CardCombinedConfig(
+                weightInfo = CardWeightInfo(cardId = "T_FO_017_SPELL", powerWeight = 0.0)
+            ),
+            card = createMockCard(cardId = "T_FO_017_SPELL", cardType = CardTypeEnum.SPELL, cost = 0),
+            initialCost = 9
+        )
+        assertEquals("法术锚点应取数据库初始费（原行为为实时费 0.0）", 9.0, spell.equivalentCostValue(), 1e-9)
+
+        spell.tacticalScore = 3.2
+        assertEquals("填充层随之停在费轴：E + ts = 9 + 3.2", 12.2, spell.surplusFillValue(), 0.001)
+        assertEquals(
+            "战术贡献回归正常量级（原实时费 E=0 时为 5.367，可超整卡基础分）",
+            1.4785, tacticalContribution(spell.equivalentCostValue(), spell.tacticalScore), 0.001
+        )
+
+        // 缺失（initialCost = 0，如衍生卡 / 查不到）⇒ 回落实时费，防锚点被抹成 0
+        val fallback = ComboCard(
+            card = createMockCard(cardId = "T_FO_017_FALLBACK", cardType = CardTypeEnum.SPELL, cost = 3)
+        )
+        assertEquals("initialCost 缺失时回落实时费", 3.0, fallback.equivalentCostValue(), 1e-9)
     }
 
     /**

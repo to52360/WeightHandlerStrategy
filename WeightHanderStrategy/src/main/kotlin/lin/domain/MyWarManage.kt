@@ -176,7 +176,10 @@ class MyWarManage(override val war: War) : WarInfo, KoinComponent {
         return ComboCard(
             combinedConfig = combinedConfig,
             card = card,
-            baseValue = calcBaseValue(card, combinedConfig, baseCost)
+            baseValue = calcBaseValue(card, combinedConfig, baseCost),
+            // T-FO-017：同一份 baseCost 同时喂 baseValue 与 initialCost（等效费锚点），
+            // 使填充层 E 与基础分法术分支同源；非「无配置法术」时为 0，等效费分支不读它。
+            initialCost = baseCost
         )
     }
 

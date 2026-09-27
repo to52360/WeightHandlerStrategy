@@ -39,7 +39,16 @@ class ComboCard(
     // 【量纲：分】—— 费经 `costValue(c) = 3.0·c^0.5`（[lin.domain.context.costValue]）**非线性凹映射**后的输出。
     // A-合流版（D-FO-005 / T-FO-014）后 extPowerWeight 亦为分（树分/光环分经
     // [lin.domain.context.tacticalContribution] 换算）⇒ 同轴直加合法，跨轴问题已修复。
-    val baseValue: Double = 0.0
+    val baseValue: Double = 0.0,
+    // T-FO-017 法术锚点统一：**数据库初始费**（非实时费），仅「无配置法术」兜底换算用。
+    // 同一份值同时喂两条链——[baseValue] 的法术分支（[lin.weightHandler.calcBaseValue]）与
+    // [equivalentCostValue] 的法术分支——使「基础分」与「战术换算锚点」共用同一 E（原先一个用
+    // 初始费、一个用实时费，被减费到 0 的法术战术贡献可反超整卡基础分）。
+    // 由 MyWarManage.parseComboCard 注入其已有的 baseCost 缓存；随从/已配置牌不适用 ⇒ 保持 0。
+    // 配置等效费存在时本字段不生效（两处分支都先取配置值）。
+    // ⚠️ 技能（MyWarManage.parseSkillCard）刻意**不注入**本参数：其缺省注入的配置等效费恒为 1.0 /
+    //    配置态恒 > 0，等效费分支先返回 ⇒ 拿不到本字段（保持 0 无行为差异），且技能非「法术兜底」语义。
+    val initialCost: Int = 0
 ) {
 
     val cardWeightInfo = combinedConfig?.weightInfo

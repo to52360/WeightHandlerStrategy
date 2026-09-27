@@ -74,16 +74,25 @@ fun ComboCard.passesSurplusCandidate(
 
 /**
  * 等效费 E（D-014 语义：卡牌固有等效费用，不含战术溢价）：配置等效费（解码后整数）> 随从实时身材 (atc+hp)/2
- * > 法术实时费。phase-1 近似：法术用实时费（D-014 baseValue 走数据库初始费保守线，缓存属 MyWarManage 不可达）。
+ * > **法术数据库初始费**（T-FO-017 锚点统一）。
  * 【量纲：费】—— 三分支全部产出「费」：配置分支读 [CardWeightInfo.powerWeight]（v4 解码后即等效费），else 分支
- * 用的是实时身材/实时费。**与 [surplusFillValue] 的第二项 tacticalScore（费）同轴，填充层因此自洽**
+ * 用的是实时身材与**初始费**。**与 [surplusFillValue] 的第二项 tacticalScore（费）同轴，填充层因此自洽**
  * （费 + 费），这也是本函数不属 T-FO-012 量纲失配点、反而是「正确轴」参照的原因。
+ *
+ * **法术分支与 [lin.weightHandler.calcBaseValue] 同源（数据库初始费）**：E 取 [ComboCard.initialCost]，
+ * 使「基础分」与「战术换算锚点」用同一个费用口径（T-FO-017 修掉原先「基础分用初始费 / 锚点用实时费」
+ * 的不同源，该不同源会让被减费到 0 的法术战术贡献反超整卡基础分）。
+ * ⚠️ **该分支同时被填充层 `fillValue = E + ts` 消费** ⇒ 减费法术的 E 变大（如初始 9 费被减到 0，E 由 0→9）
+ * ⇒ 更倾向被垫出（属**已批准的连带变更**，非缺陷）。
+ * `initialCost` 为 0（缺失 / 衍生卡 / 查不到）时回落实时费，防锚点被抹成 0。
  */
 fun ComboCard.equivalentCostValue(): Double {
     val configured = cardWeightInfo?.powerWeight ?: 0.0
     if (configured > 0.0) return configured
-    // @verify K-FO-005: 法术分支用「实时费」而 baseValue 法术兜底用「数据库初始费」——不同源；被减费到 0 费时战术贡献可超整卡基础分（5.3666）
-    return if (card.isMinion()) (card.atc + card.health) / 2.0 else cost().toDouble()
+    // @verify K-FO-005: 锚点已统一（法术分支改用 initialCost 数据库初始费），待实战校准
+    return if (card.isMinion()) (card.atc + card.health) / 2.0
+    else if (initialCost > 0) initialCost.toDouble()
+    else cost().toDouble()
 }
 
 /**
