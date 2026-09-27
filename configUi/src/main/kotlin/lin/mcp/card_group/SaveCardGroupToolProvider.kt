@@ -161,6 +161,9 @@ class SaveCardGroupToolProvider(
             } else {
                 emptyMap()
             }
+            // T-FO-018（K-FO-011）：分组级门槛可满足性**提示**（不阻断）——判据只见数据库初始费，而引擎用实时费；
+            // 减费卡可能实际可满足 ⇒ 只提示（见 SurplusGateValidator KDoc）。判据在单点，勿在本处另写。
+            val gateWarnings = mutableListOf<String>()
             // 分步语义：只更新分组定义（cardIds/description/surplusIdleThreshold），保留已有策略（behaviors）——
             // 出牌阶段策略由 save_group_override 单独维护；surplusIdleThreshold 提供则设置分组级余费门槛（缺省保留原值）。
             val bindings = input.bindings.map { bi ->
@@ -204,21 +207,13 @@ class SaveCardGroupToolProvider(
                                             "取值 1~9（传 0 = 清除组级门槛，null = 保留原值）"
                                 )
                             }
-                            // T-FO-018（K-FO-011）：组级门槛对该组**静态成员**逐张校验可满足性
+                            // T-FO-018（K-FO-011）：组级门槛对该组**静态成员**逐张做可满足性提示
                             // （谓词组 cardIds 为空、成员运行时才定 ⇒ 本处不适用，由 T-FO-001 体检覆盖）。
                             // 判据在 SurplusGateValidator 单点，勿在本处另写一遍。
                             if (membership is GroupMembership.Static) {
-                                val violations = surplusGateValidator.violations(
+                                gateWarnings += surplusGateValidator.violations(
                                     membership.cardIds, gate, "分组 ${bi.name}"
                                 )
-                                if (violations.isNotEmpty()) {
-                                    throw McpBadInput(
-                                        "分组 [${bi.name}] 的门槛 $gate 不可满足" +
-                                                "（牌费 + N 超过法力上限 ${SurplusGateValidator.MANA_CAP}）：\n" +
-                                                violations.joinToString("\n") { "  - $it" } +
-                                                "\n请下调 N，或把费高的牌移出该组 / 传 0 用逐卡门槛覆盖。"
-                                    )
-                                }
                             }
                             (existing?.behaviors ?: emptyList()).withSurplusGate(gate)
                         }
@@ -244,7 +239,7 @@ class SaveCardGroupToolProvider(
                     "managerName" to managerName,
                     "bindingIds" to bindings.map { it.id },
                     "bindings" to bindings.map { bindingView(it) }
-                )
+                ) + if (gateWarnings.isEmpty()) emptyMap() else mapOf("warnings" to gateWarnings)
             )
         },
 

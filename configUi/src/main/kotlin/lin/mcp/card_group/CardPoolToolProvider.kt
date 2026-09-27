@@ -97,17 +97,11 @@ class CardPoolToolProvider(
             if (input.fileName.isBlank()) return@typedTool mcpError("fileName 参数不能为空")
             if (input.cards.isEmpty()) return@typedTool mcpError("cards 列表不能为空")
 
-            // T-FO-018（K-FO-011）：惜售门槛可满足性写侧校验——牌费 + N 超过法力上限时该牌平时永远垫不出，
-            // 属静默硬禁 ⇒ 保存即拒收。判据在 SurplusGateValidator 单点，勿在本处另写一遍。
-            val gateViolations = input.cards.flatMap { item ->
+            // T-FO-018（K-FO-011）：惜售门槛可满足性**提示**（不阻断）——判据只见数据库初始费，
+            // 而引擎用实时费；减费卡可能实际可满足 ⇒ 只提示、不拒收（见 SurplusGateValidator KDoc）。
+            // 判据在 SurplusGateValidator 单点，勿在本处另写一遍。
+            val gateWarnings = input.cards.flatMap { item ->
                 surplusGateValidator.violations(listOf(item.cardId), item.surplusIdleThreshold, "逐卡声明")
-            }
-            if (gateViolations.isNotEmpty()) {
-                return@typedTool mcpError(
-                    "惜售门槛不可满足（牌费 + N 超过法力上限 ${SurplusGateValidator.MANA_CAP}），已拒收：\n" +
-                            gateViolations.joinToString("\n") { "  - $it" } +
-                            "\n请下调 N，或对该卡传 0 清除门槛。"
-                )
             }
 
             val existingConfig = CardGroupJsonParser.loadByFileName(input.fileName)
@@ -150,7 +144,7 @@ class CardPoolToolProvider(
                     "savedPath" to savedPath.toString(),
                     "totalCardCount" to finalConfigs.size,
                     "updatedCardCount" to input.cards.size
-                )
+                ) + if (gateWarnings.isEmpty()) emptyMap() else mapOf("warnings" to gateWarnings)
             )
         }
     )
