@@ -24,6 +24,7 @@ import lin.repository.card_group.SurplusGateValidator
 import lin.repository.card_purpose.CardPurposeRepository
 import lin.repository.card_purpose.PurposeTagDefRepository
 import lin.repository.card_purpose.PurposeTagRuleRepository
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.repository.card_purpose.PurposeTagService
 import lin.repository.combo_plan.ComboPlanDefinitionRepository
 import lin.repository.combo_plan.ComboPlanService
@@ -163,6 +164,15 @@ val mcpModule = module {
             get<AuraBoostConfigService>(),
             get<ConditionTreeConfigService>(),
             get<CardPurposeRepository>()
+        )
+    } bind McpToolProvider::class
+    // T-FO-019（Q-FO-004 层 1）：配置体检（只读、只提示）——「机制对不对」，与 coverage（「有没有机制」）互补
+    single {
+        StrategyDiagnosticsToolProvider(
+            get<CardGroupService>(),
+            get<CardPurposeRepository>(),
+            get<PurposeTagIntentRuleProvider>(),
+            get<HsCardRepository>()
         )
     } bind McpToolProvider::class
     // 动作索引单例：get / list / delete / restore 四条链路共用（索引只建一次；lazy 取 providers 避循环依赖）
