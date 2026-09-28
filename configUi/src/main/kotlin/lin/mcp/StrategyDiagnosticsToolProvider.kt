@@ -6,7 +6,7 @@ import lin.mcp.diagnostics.DiagnosticCheck
 import lin.mcp.diagnostics.DiagnosticContext
 import lin.mcp.diagnostics.DiagnosticResult
 import lin.mcp.diagnostics.ManagerScope
-import lin.mcp.diagnostics.SurplusFeasibilityCheck
+import lin.mcp.diagnostics.surplusFeasibilityCheck
 import lin.repository.HsCardRepository
 import lin.repository.card_group.CardGroupService
 import lin.repository.card_purpose.CardPurposeRepository
@@ -37,9 +37,9 @@ class StrategyDiagnosticsToolProvider(
     private val cardRepo: HsCardRepository
 ) : McpToolProvider {
 
-    /** 体检项清单（扩展点：加一行即接入）。 */
+    /** 体检项清单（扩展点：加一行即接入；函数引用直接当值用，见 [DiagnosticCheck] 的值化说明）。 */
     private val checks: List<DiagnosticCheck> = listOf(
-        SurplusFeasibilityCheck(),
+        DiagnosticCheck("surplusFeasibility", "余费门槛可满足性（按生效 N）", ::surplusFeasibilityCheck),
     )
 
     override fun provide(): List<McpToolHandler> = listOf(
@@ -65,10 +65,8 @@ class StrategyDiagnosticsToolProvider(
             val ctx = buildContext(input.managerId)
             val selected = checks.filter { input.checks.isNullOrEmpty() || it.id in input.checks }
             val results = selected.map { check ->
-                runCatching { check.run(ctx) }.getOrElse { e ->
+                check to runCatching { check.run(ctx) }.getOrElse { e ->
                     DiagnosticResult(
-                        id = check.id,
-                        title = check.title,
                         summary = mapOf("failed" to (e.message ?: e.toString())),
                         items = emptyList()
                     )
@@ -87,13 +85,13 @@ class StrategyDiagnosticsToolProvider(
                         "scannedCards" to ctx.cardIdsInScope().size,
                         "note" to "读侧近似：配置面 + 静态成员；详见各 check 的 caveats"
                     ),
-                    "checks" to results.map {
+                    "checks" to results.map { (check, result) ->
                         mapOf(
-                            "id" to it.id,
-                            "title" to it.title,
-                            "summary" to it.summary,
-                            "caveats" to it.caveats,
-                            "items" to it.items
+                            "id" to check.id,
+                            "title" to check.title,
+                            "summary" to result.summary,
+                            "caveats" to result.caveats,
+                            "items" to result.items
                         )
                     }
                 )

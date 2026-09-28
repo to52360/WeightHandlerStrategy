@@ -71,6 +71,12 @@ class StrategyDiagnosticsTest : McpTestEnv() {
             "体检项必须声明近似边界（caveats 非空）",
             (checks[0]["caveats"] as? List<*>).orEmpty().isNotEmpty()
         )
+        // 空结果可自证：summary 必须给出「扫描实质」，否则 flagged=0 无法区分真干净与没读到值
+        @Suppress("UNCHECKED_CAST")
+        val summary = checks[0]["summary"] as? Map<String, Any?>
+        assertNotNull("应返回 summary", summary)
+        assertTrue("summary 应含扫描实质 cardsWithPositiveN", summary!!.containsKey("cardsWithPositiveN"))
+        assertTrue("summary 应含来源分布 byBasis", summary.containsKey("byBasis"))
     }
 
     /** ② 分组级 N=1 + 初始费 10 ⇒ 应被列出，且给出生效来源（basis 指分组层）。 */
@@ -82,7 +88,8 @@ class StrategyDiagnosticsTest : McpTestEnv() {
         val resp = call("strategy_diagnostics", """{"managerId":"$managerId"}""")
         assertFalse("体检应成功：${resp.contentJson}", resp.isError)
 
-        val items = (checksOf(resp).first()["items"] as? List<Map<String, Any?>>).orEmpty()
+        val checks = checksOf(resp)
+        val items = (checks.first()["items"] as? List<Map<String, Any?>>).orEmpty()
         val hit = items.firstOrNull { it["cardId"] == expensiveCard }
         assertNotNull("应列出 $expensiveCard：${resp.contentJson}", hit)
         assertEquals("生效 N 应为分组层给的 1", 1, hit!!["effectiveN"])
@@ -91,6 +98,15 @@ class StrategyDiagnosticsTest : McpTestEnv() {
             hit["effectiveBasis"].toString().contains("分组")
         )
         assertEquals("应带上数据库初始费", 10, hit["dataBaseCost"])
+
+        // 扫描实质：本卡只有分组层给了 N ⇒ cardsWithPositiveN=1 且来源分布指分组
+        @Suppress("UNCHECKED_CAST")
+        val summary = checks.first()["summary"] as Map<String, Any?>
+        assertEquals("应统计出 1 张有生效 N 的卡", 1, (summary["cardsWithPositiveN"] as Number).toInt())
+        assertTrue(
+            "来源分布应命中分组层：${summary["byBasis"]}",
+            summary["byBasis"].toString().contains("分组")
+        )
     }
 
     /** ③ 对照组：不设门槛（N=0）⇒ 不误报。 */
@@ -102,7 +118,12 @@ class StrategyDiagnosticsTest : McpTestEnv() {
         val resp = call("strategy_diagnostics", """{"managerId":"$managerId"}""")
         assertFalse("体检应成功：${resp.contentJson}", resp.isError)
 
-        val items = (checksOf(resp).first()["items"] as? List<Map<String, Any?>>).orEmpty()
+        val checks = checksOf(resp)
+        val items = (checks.first()["items"] as? List<Map<String, Any?>>).orEmpty()
         assertTrue("不应报出任何卡：$items", items.isEmpty())
+        // 且扫描实质必须暴露「本卡组没有配门槛」⇒ 让「0 条」这件事可被复核，而不是被当成「体检通过」
+        @Suppress("UNCHECKED_CAST")
+        val summary = checks.first()["summary"] as Map<String, Any?>
+        assertEquals("未配门槛时 cardsWithPositiveN 应为 0", 0, (summary["cardsWithPositiveN"] as Number).toInt())
     }
 }
