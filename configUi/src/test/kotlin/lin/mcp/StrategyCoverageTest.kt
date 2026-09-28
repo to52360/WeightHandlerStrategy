@@ -1,9 +1,15 @@
 package lin.mcp
 
+import lin.bean.usePlan.UseStage
 import lin.dao.CardGroupJsonParser
 import lin.dao.CardWeightConfig
+import lin.mcp.coverage.CardCoverageClass
 import lin.mcp.coverage.CoverageKind
+import lin.mcp.coverage.classifyCardCoverage
 import lin.mcp.coverage.coverageSources
+import lin.mcp.coverage.tagTimingEntries
+import lin.rule.tree.CardGroupBinding
+import lin.rule.tree.GroupMembership
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -99,38 +105,94 @@ class StrategyCoverageTest : McpTestEnv() {
     private fun coverageOf(group: Map<String, Any?>): Map<String, Any?> =
         group["coverage"] as Map<String, Any?>
 
-    /** ① 四类来源声明式注册：键顺序与 kind 是契约（加一类覆盖语义 = 在此清单加一行）。 */
+    /** ① 五类来源声明式注册：键顺序与 kind 是契约（加一类覆盖语义 = 在此清单加一行）。 */
     @Test
     fun `覆盖来源清单键顺序与类别固定`() {
         assertEquals(
             "来源键顺序 = 输出 coverage 字段顺序（先评分后编排）",
-            listOf("evaluatorTrees", "combo", "auraBoost", "orchestration"),
+            listOf("evaluatorTrees", "combo", "auraBoost", "orchestration", "tagTiming"),
             coverageSources.map { it.key }
         )
         assertEquals(
-            "前三类为评分来源，orchestration 为编排来源",
+            "前三类为评分来源，后两类为编排来源",
             listOf(
-                CoverageKind.SCORING, CoverageKind.SCORING, CoverageKind.SCORING, CoverageKind.ORCHESTRATION
+                CoverageKind.SCORING, CoverageKind.SCORING, CoverageKind.SCORING,
+                CoverageKind.ORCHESTRATION, CoverageKind.ORCHESTRATION
             ),
             coverageSources.map { it.kind }
         )
 
         // 空快照下每个来源都必须返回空列表（Provider 依赖「无覆盖 ⇒ 空列表」而非 null）
-        val empty = ConfigSnapshot(
-            managers = emptyList(),
-            bindingsById = emptyMap(),
-            managerMeta = emptyMap(),
-            cardPools = emptyMap(),
-            tagsByCard = emptyMap(),
-            treeByBinding = emptyMap(),
-            cardTreeByCard = emptyMap(),
-            comboByGroup = emptyMap(),
-            boostByGroup = emptyMap()
-        )
         coverageSources.forEach { source ->
-            assertTrue("来源 ${source.key} 在空快照下应返回空列表", source.entriesFor("no_such_binding", empty).isEmpty())
+            assertTrue(
+                "来源 ${source.key} 在空快照下应返回空列表",
+                source.entriesFor("no_such_binding", emptySnapshot()).isEmpty()
+            )
         }
     }
+
+    /** S3：卡级分类单点——四态互斥且穷尽，三张清单的判据不再各写一遍。 */
+    @Test
+    fun `卡级分类四态互斥且穷尽`() {
+        // 有 CARD 树 ⇒ CARD_TREE（无论是否在组：有单卡规则就不算缺口）
+        assertEquals(CardCoverageClass.CARD_TREE, classifyCardCoverage(inGroup = true, hasTag = false, hasCardTree = true))
+        assertEquals(CardCoverageClass.CARD_TREE, classifyCardCoverage(inGroup = false, hasTag = true, hasCardTree = true))
+        // 在组（无 CARD 树）⇒ IN_GROUP：有分组级策略，不进任何缺口清单
+        assertEquals(CardCoverageClass.IN_GROUP, classifyCardCoverage(inGroup = true, hasTag = true, hasCardTree = false))
+        // 不在组、有标签 ⇒ TAG_ONLY（只有全局兜底）
+        assertEquals(CardCoverageClass.TAG_ONLY, classifyCardCoverage(inGroup = false, hasTag = true, hasCardTree = false))
+        // 其余 ⇒ BARE
+        assertEquals(CardCoverageClass.BARE, classifyCardCoverage(inGroup = false, hasTag = false, hasCardTree = false))
+    }
+
+    /** S4：标签级时序来源——命中标签的默认 stage/orderWeight；无编排效果的标签规则不计入。 */
+    @Test
+    fun `标签级时序来源按有效编排过滤`() {
+        val bindingId = "b_tag_timing"
+        val snap = snapshotWith(
+            bindingsById = mapOf(
+                bindingId to CardGroupBinding(
+                    id = bindingId,
+                    managerId = "m1",
+                    name = "带标签组",
+                    membership = GroupMembership.Static(listOf("CARD_A", "CARD_B"))
+                )
+            ),
+            tagsByCard = mapOf("CARD_A" to listOf("CLEAN"), "CARD_B" to listOf("VALUE")),
+            tagIntentByTag = mapOf(
+                "CLEAN" to TagIntent(UseStage.MID, 1.0),      // 有效编排：非 GENERAL + 有权重
+                "VALUE" to TagIntent(UseStage.GENERAL, 0.0)   // 不表达编排 ⇒ 过滤掉
+            )
+        )
+        val entries = tagTimingEntries(bindingId, snap)
+        assertEquals("只应保留 CLEAN 一条：$entries", 1, entries.size)
+        assertEquals("CLEAN", entries[0]["tag"])
+        assertEquals("MID", entries[0]["defaultStage"])
+        assertEquals(1.0, entries[0]["defaultOrderWeight"])
+
+        assertTrue("未知分组应返回空列表", tagTimingEntries("no_such_binding", snap).isEmpty())
+    }
+
+    /** 空快照（各来源都无命中）——纯单测用。 */
+    private fun emptySnapshot(): ConfigSnapshot = snapshotWith()
+
+    /** 只填需要的索引，其余留空的快照（纯单测夹具）。 */
+    private fun snapshotWith(
+        bindingsById: Map<String, CardGroupBinding> = emptyMap(),
+        tagsByCard: Map<String, List<String>> = emptyMap(),
+        tagIntentByTag: Map<String, TagIntent> = emptyMap()
+    ): ConfigSnapshot = ConfigSnapshot(
+        managers = emptyList(),
+        bindingsById = bindingsById,
+        managerMeta = emptyMap(),
+        cardPools = emptyMap(),
+        tagsByCard = tagsByCard,
+        treeByBinding = emptyMap(),
+        cardTreeByCard = emptyMap(),
+        comboByGroup = emptyMap(),
+        boostByGroup = emptyMap(),
+        tagIntentByTag = tagIntentByTag
+    )
 
     /** ②③ 端到端：status 由 kind 驱动，四个来源各自命中时 coverage 形态正确。 */
     @Test

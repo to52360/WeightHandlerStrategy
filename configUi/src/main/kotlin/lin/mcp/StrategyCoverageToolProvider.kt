@@ -1,8 +1,10 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
+import lin.mcp.coverage.CardCoverageClass
 import lin.mcp.coverage.CoverageKind
 import lin.mcp.coverage.CoverageSource
+import lin.mcp.coverage.classifyCardCoverage
 import lin.mcp.coverage.coverageSources
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
@@ -79,9 +81,18 @@ class StrategyCoverageToolProvider(
         val groups = mgr.bindings.map { binding -> buildGroupView(binding, snap) }
 
         val groupedCardIds = mgr.bindings.flatMap { it.cardIds }.toSet()
+
+        // 卡级分类单点（§2.3）：三张清单全部由 classifyCardCoverage 派生，判据不再各写一遍
+        val classified = poolCards.associateWith { cardId ->
+            classifyCardCoverage(
+                inGroup = cardId in groupedCardIds,
+                hasTag = !snap.tagsByCard[cardId].isNullOrEmpty(),
+                hasCardTree = snap.cardTreeByCard.containsKey(cardId)
+            )
+        }
         // CARD 树清单：该卡组卡池中被 CARD 绑定单卡树覆盖的卡（cardId -> 树列表）
         val cardTrees = poolCards
-            .filter { snap.cardTreeByCard.containsKey(it) }
+            .filter { classified[it] == CardCoverageClass.CARD_TREE }
             .map { cardId ->
                 mapOf(
                     "cardId" to cardId,
@@ -92,18 +103,12 @@ class StrategyCoverageToolProvider(
             }
         // 裸卡 = 不在任何分组、无用途标签、且无 CARD 单卡树（有 CARD 树即视为已有评分机制，非裸奔）
         val uncoveredCards = poolCards
-            .filter { cardId ->
-                cardId !in groupedCardIds && snap.tagsByCard[cardId].isNullOrEmpty() &&
-                        !snap.cardTreeByCard.containsKey(cardId)
-            }
+            .filter { classified[it] == CardCoverageClass.BARE }
             .map { cardId -> mapOf("cardId" to cardId, "purposeTags" to snap.tagsByCard[cardId].orEmpty()) }
         // 有标签无激励卡 = 有用途标签、但不在任何分组、且无 CARD 单卡树（标签只够全局兜底，无卡组特异性正向出牌策略）
         // 正是 uncoveredCards 判定中"因有标签而被漏报"的那部分卡，单独成清单暴露覆盖质量缺口。
         val tagOnlyCards = poolCards
-            .filter { cardId ->
-                cardId !in groupedCardIds && !snap.tagsByCard[cardId].isNullOrEmpty() &&
-                        !snap.cardTreeByCard.containsKey(cardId)
-            }
+            .filter { classified[it] == CardCoverageClass.TAG_ONLY }
             .map { cardId -> mapOf("cardId" to cardId, "purposeTags" to snap.tagsByCard[cardId].orEmpty()) }
 
         val uncoveredGroupIds = groups.asSequence()

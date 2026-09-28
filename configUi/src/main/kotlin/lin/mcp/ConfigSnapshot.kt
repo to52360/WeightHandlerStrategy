@@ -1,5 +1,7 @@
 package lin.mcp
 
+import lin.bean.usePlan.PurposeTagIntentRule
+import lin.bean.usePlan.UseStage
 import lin.dao.CardGroupConfig
 import lin.dao.CardGroupJsonParser
 import lin.repository.aura_boost.AuraBoostConfigService
@@ -15,6 +17,7 @@ import lin.rule.condition.collectConditionRefs
 import lin.rule.tree.CardGroupBinding
 import lin.rule.tree.CardGroupManagerConfig
 import lin.rule.tree.EvaluatorTreeBindingType
+import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
 import lin.ui.service.TreeConfigService
 
 /**
@@ -33,6 +36,7 @@ import lin.ui.service.TreeConfigService
  * - [comboByGroup] / [boostByGroup]：**按 `managerId` 过滤**（combo/aura 是卡组从属资源）——
  *   传 null = 全部。
  * - [bindingsById]：分组 id → 分组本体（覆盖来源需按 id 回查行为声明）。
+ * - [tagIntentByTag]：标签 → 默认意图（stage / orderWeight），来源 = `purpose_tag_rule` 表。
  */
 class ConfigSnapshot(
     val managers: List<CardGroupManagerConfig>,
@@ -43,8 +47,18 @@ class ConfigSnapshot(
     val treeByBinding: Map<String, List<Map<String, String>>>,
     val cardTreeByCard: Map<String, List<Map<String, String>>>,
     val comboByGroup: Map<String, List<Pair<ComboPlanDefinitionEntity, String>>>,
-    val boostByGroup: Map<String, List<Pair<AuraBoostEntity, String>>>
+    val boostByGroup: Map<String, List<Pair<AuraBoostEntity, String>>>,
+    val tagIntentByTag: Map<String, TagIntent>
 )
+
+/**
+ * 标签的默认意图摘要（快照层的小值类：只带**时序**相关字段，不把整条引擎规则搬过来）。
+ *
+ * 之所以在快照层再包一层而不是直接持 [PurposeTagIntentRule]：只读工具需要的是
+ * 「这个标签默认排在哪一段、排序权重多少」，其余字段（priority / replan / N）各有专职来源，
+ * 混在一起会让消费方误用（例如用标签的 N 去当生效 N——那是体检侧跨三层解析后的结果）。
+ */
+data class TagIntent(val stage: UseStage, val orderWeight: Double)
 
 /**
  * 快照装配器（**单点**）：把 6 类配置来源读一遍并解析成 [ConfigSnapshot]。
@@ -58,7 +72,8 @@ class ConfigSnapshotAssembler(
     private val comboPlanRepository: ComboPlanDefinitionRepository,
     private val auraBoostService: AuraBoostConfigService,
     private val conditionTreeService: ConditionTreeConfigService,
-    private val cardPurposeRepository: CardPurposeRepository
+    private val cardPurposeRepository: CardPurposeRepository,
+    private val purposeTagIntentRuleProvider: PurposeTagIntentRuleProvider
 ) {
 
     /**
@@ -125,7 +140,11 @@ class ConfigSnapshotAssembler(
             treeByBinding = treeByBinding,
             cardTreeByCard = cardTreeByCard,
             comboByGroup = comboByGroup,
-            boostByGroup = boostByGroup
+            boostByGroup = boostByGroup,
+            // 标签默认意图（`purpose_tag_rule`，SPI 读，与引擎 UseIntentDeriver 同源）；
+            // 表为空 = 「未声明 = 无规则」的合法终态（T-TG-008）
+            tagIntentByTag = purposeTagIntentRuleProvider.rules()
+                .associate { rule -> rule.tagId.value to TagIntent(rule.defaultStage, rule.defaultOrderWeight) }
         )
     }
 

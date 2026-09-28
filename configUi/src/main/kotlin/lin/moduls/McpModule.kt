@@ -164,7 +164,8 @@ val mcpModule = module {
             get<ComboPlanDefinitionRepository>(),
             get<AuraBoostConfigService>(),
             get<ConditionTreeConfigService>(),
-            get<CardPurposeRepository>()
+            get<CardPurposeRepository>(),
+            get<PurposeTagIntentRuleProvider>()
         )
     }
     single {

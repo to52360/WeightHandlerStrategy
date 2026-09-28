@@ -7,7 +7,7 @@ import lin.rule.tree.findOverride
  * 全部覆盖来源（**声明式注册清单**：加一类覆盖语义，就在此加一行 + 写一个下面的函数）。
  *
  * 顺序 = 输出 `coverage` 视图的字段顺序（[associate] 保序），也是「先看什么」的默认阅读顺序：
- * 评估树 → combo → 光环 → 编排。
+ * 评估树 → combo → 光环 → 分组级编排 → 标签级时序。
  *
  * 注册方式刻意是**类内直构造**，不进 Koin（`D-FO-009`：同类型 + 无条件符的容器列表会互相覆盖；
  * 这些来源也无需替身/生命周期 ⇒ 属"过程"，不是"服务"）。
@@ -17,6 +17,7 @@ val coverageSources: List<CoverageSource> = listOf(
     CoverageSource("combo", CoverageKind.SCORING, ::comboEntries),
     CoverageSource("auraBoost", CoverageKind.SCORING, ::auraBoostEntries),
     CoverageSource("orchestration", CoverageKind.ORCHESTRATION, ::orchestrationEntries),
+    CoverageSource("tagTiming", CoverageKind.ORCHESTRATION, ::tagTimingEntries),
 )
 
 /** 评估树覆盖：GROUP 绑定到本分组的树摘要（`id` / `name`）。 */
