@@ -39,7 +39,6 @@ build/
 .DS_Store
 /log/weightHandler.log
 /临时2/
-/WeightHanderStrategy/dependency-reduced-pom.xml
 /absolute/
 /.agents
 /implementation
@@ -56,3 +55,5 @@ build/
 /weightHandlerStrategy.db
 /architecture-context/
 architecture-context/
+/release/dist/
+/release/package.log

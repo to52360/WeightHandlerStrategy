@@ -118,6 +118,9 @@
                                     <goal>shade</goal>
                                 </goals>
                                 <configuration>
+                                    <!-- 不生成 dependency-reduced-pom.xml：它是构建产物，写进源码目录
+                                         会污染工作区（历史上靠 .gitignore 屏蔽，屏蔽的是症状不是成因）。 -->
+                                    <createDependencyReducedPom>false</createDependencyReducedPom>
                                     <artifactSet>
                                         <includes>
                                             <include>io.insert-koin:*</include>

@@ -530,18 +530,35 @@ class StrategyPresetTest : McpTestEnv() {
         assertEquals(deck, mine.get("referencedBy").get(0).get("managerId").asText())
     }
 
-    /** 防描述漂移：get/list 输入的资源枚举必须含 strategy_preset（AGENTS「改响应字段须同步描述」）。 */
+    /**
+     * 防漂移（描述泛化后）：get/list 的支持面不再枚举在入参描述里，改由**注册表动态产出**、
+     * 经 tool_capabilities 查询 ⇒ 本用例断言两件事：
+     * ① 支持面本体（tool_capabilities 支持矩阵）里 get/list 都含 strategy_preset（注册面没丢）；
+     * ② get/list 的入参描述确实指向 tool_capabilities（描述与查询入口未失联）。
+     */
     @Test
-    fun `get 与 list 的资源枚举含 strategy_preset`() {
+    fun `get 与 list 的支持面含 strategy_preset 且描述指向查询入口`() {
+        val matrix = call("tool_capabilities")
+        assertEquals(false, matrix.isError)
+        val caps = mapper.readTree(matrix.contentJson)
+        assertTrue(
+            "支持矩阵 get 应含 strategy_preset: ${caps.get("get")}",
+            caps.get("get").any { it.asText() == "strategy_preset" }
+        )
+        assertTrue(
+            "支持矩阵 list 应含 strategy_preset: ${caps.get("list")}",
+            caps.get("list").any { it.asText() == "strategy_preset" }
+        )
+
         fun resourceDesc(cls: Class<*>) =
             cls.getDeclaredField("resource").getAnnotation(JsonPropertyDescription::class.java).value
         assertTrue(
-            "GetInput 资源枚举应含 strategy_preset",
-            resourceDesc(GetInput::class.java).contains("strategy_preset")
+            "GetInput 描述应指向 tool_capabilities（支持面以查询为准）",
+            resourceDesc(GetInput::class.java).contains("tool_capabilities")
         )
         assertTrue(
-            "ListInput 资源枚举应含 strategy_preset",
-            resourceDesc(ListInput::class.java).contains("strategy_preset")
+            "ListInput 描述应指向 tool_capabilities（支持面以查询为准）",
+            resourceDesc(ListInput::class.java).contains("tool_capabilities")
         )
     }
 }

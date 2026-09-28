@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration debug="false">
+    <!-- MCP stdio 专用：stdout 只能有 JSON-RPC，日志必须走 stderr + 文件 -->
+    <property name="logLevel" value="WARN"/>
+    <property name="logPath" value="log"/>
+
+    <!-- stderr 控制台（MCP 安全，不污染 stdout） -->
+    <appender name="stderr" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 文件日志（持久化，查历史问题） -->
+    <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <File>${logPath}/mcp.log</File>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <FileNamePattern>${logPath}/mcp-%d{yyyy-MM-dd}.%i.log</FileNamePattern>
+            <MaxFileSize>5MB</MaxFileSize>
+            <MaxHistory>3</MaxHistory>
+            <TotalSizeCap>100MB</TotalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 静默第三方库 -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+    <logger name="reactor" level="WARN"/>
+    <logger name="io.modelcontextprotocol" level="WARN"/>
+
+    <!-- lin 包 DEBUG -->
+    <logger name="lin" level="DEBUG"/>
+
+    <root level="${logLevel}">
+        <appender-ref ref="stderr"/>
+        <appender-ref ref="file"/>
+    </root>
+</configuration>

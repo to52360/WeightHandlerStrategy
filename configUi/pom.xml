@@ -122,21 +122,36 @@
                                     <goal>shade</goal>
                                 </goals>
                                 <configuration>
+                                    <!-- 不生成 dependency-reduced-pom.xml：它是构建产物，写进源码目录
+                                         会污染工作区（本模块曾被误提交进仓库，改动噪音 500+ 行）。 -->
+                                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                                    <!-- 判据 = 宿主 lib 里没有的才打进来：以「真实运行宿主自己的 lib\」为准
+                                         （它提供 kotlin / jackson / spring / slf4j / logback / sqlite /
+                                         javafx / hs-script SDK 等公共库）。本地测试环境里手工补装的 jar
+                                         不是契约，照它推断必然漂移。
+                                         背景：不打进 jar 的依赖就得靠"旁边再放一个依赖目录"来补，
+                                         那正是历史上 mcp-lib\ 出现的成因（宿主的第二份影子副本）。 -->
                                     <artifactSet>
                                         <includes>
-                                            <!-- 只打 configUi 独有的依赖，主项目 ../lib/* 已有的不打 -->
+                                            <!-- MCP stdio 服务端及其专属传递依赖 -->
                                             <include>io.modelcontextprotocol.sdk:*</include>
                                             <include>io.projectreactor:*</include>
                                             <include>org.reactivestreams:*</include>
-                                            <!-- mcp-json-jackson2 的传递依赖 -->
+                                            <!-- mcp-json-jackson2 / json schema 校验的传递依赖 -->
                                             <include>com.networknt:*</include>
                                             <include>com.ethlo.time:*</include>
                                             <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
                                             <include>org.yaml:snakeyaml</include>
-                                            <!-- -->
+                                            <!-- MCP 工具入参 JSON Schema 生成 -->
                                             <include>com.github.victools:*</include>
                                             <include>com.fasterxml:classmate</include>
+                                            <!-- 连接池 -->
                                             <include>com.zaxxer:HikariCP</include>
+                                            <!-- 依赖注入：引擎 jar 里也 shade 了一份，但 configUi 以
+                                                 mcp.bat/ui.bat 独立启动时不该依赖"启动参数里恰好带了引擎 jar" -->
+                                            <include>io.insert-koin:*</include>
+                                            <!-- kotlinx-serialization 的 KMP 运行时（co.touchlab stately） -->
+                                            <include>co.touchlab:*</include>
                                         </includes>
                                     </artifactSet>
                                     <transformers>
