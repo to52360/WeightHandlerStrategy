@@ -1,15 +1,12 @@
 package lin.mcp
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
-import lin.dao.CardGroupJsonParser
 import lin.mcp.diagnostics.DiagnosticCheck
 import lin.mcp.diagnostics.DiagnosticContext
 import lin.mcp.diagnostics.DiagnosticResult
 import lin.mcp.diagnostics.ManagerScope
 import lin.mcp.diagnostics.surplusFeasibilityCheck
 import lin.repository.HsCardRepository
-import lin.repository.card_group.CardGroupService
-import lin.repository.card_purpose.CardPurposeRepository
 import lin.rule.tree.findSurplusGate
 import lin.serviceLoader.cardInfoProvide.decodeCostValue
 import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
@@ -31,8 +28,7 @@ import lin.serviceLoader.provider.PurposeTagIntentRuleProvider
  * - 输出**必须**带 `caveats`（近似边界）——本工具的全部结论都建立在"配置面 + 读侧近似解析"之上。
  */
 class StrategyDiagnosticsToolProvider(
-    private val cardGroupService: CardGroupService,
-    private val cardPurposeRepository: CardPurposeRepository,
+    private val assembler: ConfigSnapshotAssembler,
     private val purposeTagIntentRuleProvider: PurposeTagIntentRuleProvider,
     private val cardRepo: HsCardRepository
 ) : McpToolProvider {
@@ -100,19 +96,19 @@ class StrategyDiagnosticsToolProvider(
     )
 
     /**
-     * 装配只读体检快照（**单点**）：解析链三层各读一次库，供全部体检项共享。
+     * 装配只读体检上下文（**单点**）：N 解析链三层各读一次，供全部体检项共享。
+     *
+     * 配置来源走 [ConfigSnapshotAssembler]（与 `strategy_coverage` 同一份装配代码，避免两套读法各自漂移）。
      *
      * @param managerId 不传 = 当前启用卡组（标签层只有对它准确）；传值 = 该卡组
      */
     private fun buildContext(managerId: String?): DiagnosticContext {
-        val managers = cardGroupService.loadAll()
-        val metaById = cardGroupService.loadAllManagers().associateBy { it.id }
-        val poolsByFile = CardGroupJsonParser.loadAllCardGroups().toMap()
+        val snap = assembler.assemble(managerId)
 
         val scoped = if (managerId != null) {
-            managers.filter { it.cardGroupManagerId == managerId }
+            snap.managers.filter { it.cardGroupManagerId == managerId }
         } else {
-            managers.filter { metaById[it.cardGroupManagerId]?.enabled == true }
+            snap.managers.filter { snap.managerMeta[it.cardGroupManagerId]?.enabled == true }
         }
 
         val poolNByCard = mutableMapOf<String, Int>()
@@ -120,8 +116,8 @@ class StrategyDiagnosticsToolProvider(
         val bindingNameByCard = mutableMapOf<String, String>()
 
         val scopes = scoped.map { mgr ->
-            val meta = metaById[mgr.cardGroupManagerId]
-            val poolCards = meta?.sourceFile?.let { poolsByFile[it] }?.cards.orEmpty()
+            val meta = snap.managerMeta[mgr.cardGroupManagerId]
+            val poolCards = meta?.sourceFile?.let { snap.cardPools[it] }?.cards.orEmpty()
             // ① 逐卡层 N：.cardgroup 的 powerWeight v4 解码（百分位 = 门槛；0/null = 未声明）
             poolCards.forEach { card ->
                 val n = card.powerWeight?.let { decodeCostValue(it).surplusIdleThreshold } ?: return@forEach
@@ -145,13 +141,11 @@ class StrategyDiagnosticsToolProvider(
             )
         }
 
-        val tagsByCard = cardPurposeRepository.findAll()
-            .associate { it.cardId to it.purposeTags.split(",").map(String::trim).filter(String::isNotBlank) }
         // ③ 标签层 N：当前启用卡组上下文下**合并后**的规则（未声明 = 无规则 = N 不生效，与 D-TG-018 同构）
         val tagNByRule = purposeTagIntentRuleProvider.rules()
             .mapNotNull { rule -> rule.defaultSurplusIdleThreshold?.let { rule.tagId.value to it } }
             .toMap()
-        val tagNByCard = tagsByCard.mapValues { (_, tags) ->
+        val tagNByCard = snap.tagsByCard.mapValues { (_, tags) ->
             // 多标签取 max（与引擎 UseIntentDeriver 的保守方向合并一致）
             tags.mapNotNull { tagNByRule[it] }.maxOrNull() ?: 0
         }.filterValues { it > 0 }
@@ -162,7 +156,7 @@ class StrategyDiagnosticsToolProvider(
             bindingNByCard = bindingNByCard,
             bindingNameByCard = bindingNameByCard,
             tagNByCard = tagNByCard,
-            tagsByCard = tagsByCard,
+            tagsByCard = snap.tagsByCard,
             cardRepo = cardRepo
         )
     }

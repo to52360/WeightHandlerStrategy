@@ -156,8 +156,9 @@ val mcpModule = module {
             get<PurposeTagService>()
         )
     } bind McpToolProvider::class
+    // 只读配置快照装配器（单点）：strategy_coverage / strategy_diagnostics 共享同一份读取路径
     single {
-        StrategyCoverageToolProvider(
+        ConfigSnapshotAssembler(
             get<CardGroupService>(),
             get<TreeConfigService>(),
             get<ComboPlanDefinitionRepository>(),
@@ -165,12 +166,14 @@ val mcpModule = module {
             get<ConditionTreeConfigService>(),
             get<CardPurposeRepository>()
         )
+    }
+    single {
+        StrategyCoverageToolProvider(get<ConfigSnapshotAssembler>())
     } bind McpToolProvider::class
     // T-FO-019（Q-FO-004 层 1）：配置体检（只读、只提示）——「机制对不对」，与 coverage（「有没有机制」）互补
     single {
         StrategyDiagnosticsToolProvider(
-            get<CardGroupService>(),
-            get<CardPurposeRepository>(),
+            get<ConfigSnapshotAssembler>(),
             get<PurposeTagIntentRuleProvider>(),
             get<HsCardRepository>()
         )
